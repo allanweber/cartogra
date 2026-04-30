@@ -1,0 +1,24 @@
+# CODEOWNERS
+# Each line is a file pattern followed by one or more owners.
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global fallback
+*                           @cartogra/core
+
+# Services
+services/gateway/**         @cartogra/platform
+services/registry/**        @cartogra/platform
+services/ingestion/**       @cartogra/platform
+services/topology/**        @cartogra/platform
+services/contract/**        @cartogra/platform
+services/intelligence/**    @cartogra/platform
+
+# Shared
+shared/**                   @cartogra/core
+
+# Frontend
+frontend/**                 @cartogra/frontend
+
+# Infrastructure
+infra/**                    @cartogra/platform
+.github/**                  @cartogra/core

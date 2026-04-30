@@ -709,7 +709,7 @@ plugins {
 }
 
 subprojects {
-    group = "dev.cartogra"
+    group = "io.cartogra"
     version = "0.1.0-SNAPSHOT"
 
     repositories {

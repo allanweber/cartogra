@@ -1,0 +1,44 @@
+# Gradle
+.gradle/
+build/
+out/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# VS Code
+.vscode/
+!.vscode/extensions.json
+
+# Node / Frontend
+frontend/node_modules/
+frontend/.vinxi/
+frontend/.output/
+frontend/dist/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Docker
+docker-compose.override.yml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets / credentials
+*.pem
+*.key
+*.p12
+
+# Logs
+*.log
+
+# Test output
+reports/
