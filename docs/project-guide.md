@@ -270,6 +270,14 @@ cartogra/
 └── CONTRIBUTING.md
 ```
 
+## 1.1 Documentation Map
+
+- `docs/adr/README.md` is the ADR index; `docs/adr/TEMPLATE.md` is the template for future decisions.
+- `docs/adr/ADR-0001-postgresql-over-graph-database.md` and `docs/adr/ADR-0002-scm-provider-abstraction.md` record the first accepted architecture decisions.
+- `docs/architecture/system-overview.md`, `docs/architecture/data-model.md`, and `docs/architecture/kafka-topics.md` are the canonical architecture references for boundaries, persistence, and event topology.
+- `docs/api/gateway.openapi.yaml`, `docs/api/registry.openapi.yaml`, `docs/api/topology.openapi.yaml`, `docs/api/contract.openapi.yaml`, and `docs/api/intelligence.openapi.yaml` are the API-first service contracts and should be updated in the service phases that implement them.
+- `docs/runbooks/local-development.md`, `docs/runbooks/deployment.md`, and `docs/runbooks/incident-response.md` are the operational entry points for contributors, deploys, and incidents.
+
 ### Build System (Gradle Multi-Module)
 
 Frontend install/run, dependency setup for TanStack Start/Query/Router/Table/Forms, and the **UI design workflow** (shape → craft loop with the `impeccable` skill, DESIGN.md/PRODUCT.md context files, phase-by-phase screen list) are documented in `docs/frontend-setup.md`.
@@ -1019,10 +1027,13 @@ Week 2, Day 1-2: Frontend Skeleton
 - [ ] Verify: frontend loads at localhost:3000
 
 Week 2, Day 2-3: ADR Foundation
-- [ ] Commit docs/adr/TEMPLATE.md
-- [ ] Commit docs/adr/README.md (empty index)
-- [ ] Write and commit ADR-0001 (PostgreSQL over graph database)
-- [ ] Write and commit ADR-0002 (SCM provider abstraction)
+- [x] Commit docs/adr/TEMPLATE.md
+- [x] Commit docs/adr/README.md
+- [x] Write and commit ADR-0001 (PostgreSQL over graph database)
+- [x] Write and commit ADR-0002 (SCM provider abstraction)
+- [x] Add architecture reference docs: `docs/architecture/system-overview.md`, `docs/architecture/data-model.md`, `docs/architecture/kafka-topics.md`
+- [x] Add API specs: `docs/api/gateway.openapi.yaml`, `docs/api/registry.openapi.yaml`, `docs/api/topology.openapi.yaml`, `docs/api/contract.openapi.yaml`, `docs/api/intelligence.openapi.yaml`
+- [x] Add runbooks: `docs/runbooks/local-development.md`, `docs/runbooks/deployment.md`, `docs/runbooks/incident-response.md`
 
 Week 2, Day 3-5: First Public Content
 - [ ] Publish blog post: "Why your service catalog is always wrong"

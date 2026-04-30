@@ -192,7 +192,7 @@ Map from [project-scope.md](project-scope.md) §14:
 - **S0.3 Local stack:** `docker-compose.yml` — PostgreSQL, Kafka (e.g. Redpanda), Redis; optional `docker-compose.dev.yml` ([implementation guide §1, §10](project-guide.md)).
 - **S0.4 CI:** `ci.yml` — **Java 25** + **Spring Boot 4.0** pinned in root BOM ([project-scope.md](project-scope.md) §3); `./gradlew build`, tests, Trivy; path to frontend lint/test when scaffold exists ([scope §8](project-scope.md)).
 - **S0.5 Data:** Flyway **initial** migrations: `tenants`, `teams`, `users`, `scm_connections` per scope §7 (registry service owns migrations as in guide).
-- **S0.6 Docs:** `docs/adr/TEMPLATE.md`, `docs/adr/README.md`, architecture stubs; **`docs/api/gateway.openapi.yaml` + `registry.openapi.yaml`** stubbed with **envelope** response components per [project-guide.md](project-guide.md) §2.
+- **S0.6 Docs:** `docs/adr/TEMPLATE.md`, `docs/adr/README.md`, architecture stubs, and initial runbooks; **`docs/api/gateway.openapi.yaml` + `docs/api/registry.openapi.yaml`** stubbed with **envelope** response components per [project-guide.md](project-guide.md) §2, with `docs/api/topology.openapi.yaml`, `docs/api/contract.openapi.yaml`, and `docs/api/intelligence.openapi.yaml` allowed as forward-looking stubs refined in later service phases.
 
 ### User stories (Phase 0)
 
@@ -255,11 +255,13 @@ Map from [project-scope.md](project-scope.md) §14:
 
 17. `docs/adr/TEMPLATE.md`, `docs/adr/README.md` (empty table).
 18. `docs/architecture/system-overview.md` linking to scope diagram; `data-model.md` pointing to registry tables delivered in P0/P1; `kafka-topics.md` listing **planned** topics with “status: not yet provisioned.”
-19. `docs/api/registry.openapi.yaml` + **`docs/api/gateway.openapi.yaml`:** default **envelope** wrappers (`data` + `traceId`), **standard error** schema, **`X-Trace-Id`** header documented; gateway auth paths marked “Phase 1” if not implemented in P0.
+19. `docs/api/registry.openapi.yaml` + `docs/api/gateway.openapi.yaml`: default **envelope** wrappers (`data` + `traceId`), **standard error** schema, **`X-Trace-Id`** header documented; gateway auth paths marked “Phase 1” if not implemented in P0.
+20. `docs/api/topology.openapi.yaml`, `docs/api/contract.openapi.yaml`, and `docs/api/intelligence.openapi.yaml`: service-level API stubs may exist ahead of implementation, but must be refined in Phases 2, 3, and 4 respectively.
+21. `docs/runbooks/local-development.md`, `docs/runbooks/deployment.md`, and `docs/runbooks/incident-response.md`: create initial operational runbooks in Phase 0 and expand them as delivery moves from local-only to staged and on-call operation.
 
 **Observability (minimal)**
 
-20. **Structured JSON logging** in registry + gateway + ingestion with **same trace id** as OTel span; verify a single request produces matching **`traceparent` → traceId** in logs (local doc or test).
+22. **Structured JSON logging** in registry + gateway + ingestion with **same trace id** as OTel span; verify a single request produces matching **`traceparent` → traceId** in logs (local doc or test).
 
 ### Build-in public — Phase 0 (explicit deliverable IDs)
 
@@ -415,7 +417,7 @@ Map from [project-scope.md](project-scope.md) §14:
 - **Week 7 — Schema + persistence:** Flyway for dependencies + drifts + materialized view; repositories; uniqueness rules; soft delete behavior; refresh MV strategy (on commit vs scheduled).
 - **Week 8 — Algorithms + API:** Implement blast radius, cycles, SPOF queries; REST controllers; integration tests with fixed graph fixtures.
 - **Week 9 — Event-driven graph builder:** Kafka consumers; idempotent edge upsert; emit `dependency-events`; OTel worker producing `topology.otel-spans` consumer path.
-- **Week 10 — Frontend + perf + BIP:** D3 visualization; what-if blast radius UX; document p95 latency on N edges; publish ADR-0003/0006 + posts.
+- **Week 10 — Frontend + perf + BIP:** D3 visualization; what-if blast radius UX; document p95 latency on N edges; update `docs/api/topology.openapi.yaml`; publish ADR-0003/0006 + posts.
 
 ### Granular engineering checklist (Phase 2)
 
@@ -431,6 +433,7 @@ Map from [project-scope.md](project-scope.md) §14:
 10. OTel: `OtelSpanWorker` parses span attributes → candidate edges; integration test with fixture span batch.
 11. Frontend: `components/graph/*` force layout; zoom/pan; node click panel (upstream/downstream lists); mode toggle; drift overlay legend.
 12. Observability: metrics for MV refresh, consumer lag, query latency histograms.
+13. Docs: keep `docs/api/topology.openapi.yaml` aligned with graph, impact, cycle, SPOF, and drift endpoints.
 
 ### Build-in public — Phase 2
 
@@ -487,7 +490,7 @@ Map from [project-scope.md](project-scope.md) §14:
 - **Week 12 — Compatibility engine:** Diff algorithm; golden tests; consumer impact analysis; `POST /contracts/{id}/check`.
 - **Week 13 — Outbox + Kafka + notifications:** Transactional outbox write; relay service; publish `schema-events` / `check-events`; notification fan-out worker; webhook integration tests.
 - **Week 14 — CI extensions:** GitHub Action + Azure Task wrapping `/ci/check`; example workflows in `docs/`; marketplace packaging checklist (icons, branding, versioning).
-- **Week 15 — UI polish + spec discovery + BIP:** Wire ingestion → contract registration; Contract Hub UI; BIP + marketplace publish.
+- **Week 15 — UI polish + spec discovery + BIP:** Wire ingestion → contract registration; Contract Hub UI; update `docs/api/contract.openapi.yaml`; extend `docs/runbooks/deployment.md` and `docs/runbooks/incident-response.md` for contract checks and notifications; BIP + marketplace publish.
 
 ### Granular engineering checklist (Phase 3)
 
@@ -503,6 +506,7 @@ Map from [project-scope.md](project-scope.md) §14:
 10. Ingestion: on repo scan, publish `spec.openapi.found` / `spec.asyncapi.found`; contract processor registers contracts idempotently.
 11. Frontend: side-by-side diff viewer (highlight added/removed/required); matrix heatmap; timeline of versions; breaking queue UI.
 12. Security: `/ci/check` accepts **tenant API key** header **`X-Cartogra-Api-Key`** only (v1—**no HMAC**); keys hashed at rest; rotation UX; document abuse case “leaked key” ([project-scope.md](project-scope.md) §3; [project-guide.md](project-guide.md) §3).
+13. Docs: keep `docs/api/contract.openapi.yaml` aligned with contract CRUD, versioning, compatibility, and CI-check endpoints; extend runbooks for CI integration and notification troubleshooting.
 
 ### Build-in public — Phase 3
 
@@ -557,7 +561,7 @@ Map from [project-scope.md](project-scope.md) §14:
 - **Week 16 — Service skeleton + safety:** Intelligence module; prompt loading; Anthropic integration behind interface; secrets; record `analysis_runs` + tokens.
 - **Week 17 — NL query:** SQL generation guardrails (allowlist tables, read-only transaction, row limits); `nl_query_log`; feedback; caching.
 - **Week 18 — Deterministic + LLM analysis:** Anti-pattern jobs consuming topology/registry/contract projections; persist `anti_pattern_findings` with evidence JSON; health score; digest.
-- **Week 19 — Frontend + evaluation + BIP:** Chat UI; findings feed; dashboards; offline evaluation set; ADR-0005 + posts.
+- **Week 19 — Frontend + evaluation + BIP:** Chat UI; findings feed; dashboards; offline evaluation set; update `docs/api/intelligence.openapi.yaml`; ADR-0005 + posts.
 
 ### Granular engineering checklist (Phase 4)
 
@@ -573,6 +577,7 @@ Map from [project-scope.md](project-scope.md) §14:
 10. Observability: token usage metrics; cost estimation dashboard (Grafana panel optional).
 11. Frontend: chat components; streaming optional; findings list with severity chips; health score trend using Recharts.
 12. Tests: mock Anthropic in CI; golden tests for prompt formatting; evaluation notebook optional.
+13. Docs: keep `docs/api/intelligence.openapi.yaml` aligned with NL query, findings, health score, and digest endpoints.
 
 ### Build-in public — Phase 4
 
@@ -603,7 +608,7 @@ Map from [project-scope.md](project-scope.md) §14:
 - **S5.2 Observability:** OTel → Jaeger; Micrometer → Prometheus; Grafana dashboards; structured logs ([scope §8](project-scope.md)).
 - **S5.3 Demo:** “Acme Fintech” seed via `seed/seed-data.json` + loader; guest read-only; scenarios from [implementation guide §7](project-guide.md).
 - **S5.4 Ops:** DLQ topic + replay admin API ([scope §6](project-scope.md)); ingestion health in Operations view ([scope §5](project-scope.md)).
-- **S5.5 Docs:** Docusaurus site; ADR index complete; runbooks ([scope §11](project-scope.md)).
+- **S5.5 Docs:** Docusaurus site; ADR index complete; runbooks (`docs/runbooks/local-development.md`, `docs/runbooks/deployment.md`, `docs/runbooks/incident-response.md`) kept current and cross-linked from the docs site ([scope §11](project-scope.md)).
 
 ### User stories (Phase 5)
 

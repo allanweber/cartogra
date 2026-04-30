@@ -1,0 +1,834 @@
+openapi: "3.1.0"
+info:
+  title: Cartogra Registry API
+  version: "0.1.0"
+  description: |
+    Service CRUD, team ownership, SCM connections, and CI contract checks.
+
+    **Authentication:** All endpoints require a valid JWT (cookie or Bearer token issued by the Gateway).
+    The Gateway injects `X-Tenant-Id` — clients must not set this header.
+
+    **CI endpoints** (`/ci/*`) accept `X-Cartogra-Api-Key` instead of JWT.
+
+    **Response envelope**:
+    - Success: `{ "data": <T>, "traceId": "<32-hex>" }`
+    - Error: `{ "error": { "code", "message", "details" }, "traceId": "<32-hex>" }`
+    - Header: `X-Trace-Id: <same 32-hex traceId>`
+
+servers:
+  - url: http://localhost:8081
+    description: Local development (direct)
+  - url: http://localhost:8080/api/registry
+    description: Local development (via Gateway)
+
+tags:
+  - name: services
+    description: Service catalog CRUD
+  - name: teams
+    description: Team management
+  - name: scm-connections
+    description: SCM provider connections (GitHub App, Azure DevOps)
+  - name: ci
+    description: CI/CD integration endpoints — API key auth only
+  - name: health
+    description: Liveness and readiness probes
+
+paths:
+  # ── Services ───────────────────────────────────────────────────────────────
+
+  /services:
+    get:
+      summary: List services for the authenticated tenant
+      operationId: listServices
+      tags: [services]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SizeParam"
+        - name: teamId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: healthStatus
+          in: query
+          schema:
+            type: string
+            enum: [healthy, degraded, unknown]
+        - name: q
+          in: query
+          description: Full-text search on name and description
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paginated list of services
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServicePageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      summary: Register a new service
+      operationId: createService
+      tags: [services]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServiceRequest"
+      responses:
+        "201":
+          description: Service registered
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /services/{serviceId}:
+    get:
+      summary: Get service by ID
+      operationId: getService
+      tags: [services]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ServiceIdParam"
+      responses:
+        "200":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    patch:
+      summary: Update service metadata
+      operationId: updateService
+      tags: [services]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ServiceIdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateServiceRequest"
+      responses:
+        "200":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      summary: Soft-delete a service
+      operationId: deleteService
+      tags: [services]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ServiceIdParam"
+      responses:
+        "204":
+          description: Service soft-deleted
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /services/{serviceId}/history:
+    get:
+      summary: Service change history (append-only audit log)
+      operationId: getServiceHistory
+      tags: [services]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ServiceIdParam"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SizeParam"
+      responses:
+        "200":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceHistoryPageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Teams ──────────────────────────────────────────────────────────────────
+
+  /teams:
+    get:
+      summary: List teams for the authenticated tenant
+      operationId: listTeams
+      tags: [teams]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      summary: Create a new team
+      operationId: createTeam
+      tags: [teams]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTeamRequest"
+      responses:
+        "201":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── SCM Connections ────────────────────────────────────────────────────────
+
+  /scm-connections:
+    get:
+      summary: List SCM connections for the tenant
+      operationId: listScmConnections
+      tags: [scm-connections]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScmConnectionListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      summary: Add a new SCM connection
+      operationId: createScmConnection
+      tags: [scm-connections]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateScmConnectionRequest"
+      responses:
+        "201":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScmConnectionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /scm-connections/{connectionId}:
+    delete:
+      summary: Remove SCM connection
+      operationId: deleteScmConnection
+      tags: [scm-connections]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: connectionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── CI ─────────────────────────────────────────────────────────────────────
+
+  /ci/check:
+    post:
+      summary: Submit a contract check from CI pipeline
+      description: |
+        Used by GitHub Action and Azure DevOps task. Authenticated with `X-Cartogra-Api-Key`.
+        **Not wrapped in the standard envelope** — responds with a flat result for easy CI script parsing.
+      operationId: ciCheck
+      tags: [ci]
+      security:
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CiCheckRequest"
+      responses:
+        "200":
+          description: Check result
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CiCheckResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: Breaking changes detected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CiCheckResult"
+
+  # ── Health ────────────────────────────────────────────────────────────────
+
+  /actuator/health/live:
+    get:
+      summary: Liveness probe
+      operationId: liveness
+      tags: [health]
+      responses:
+        "200":
+          description: Service alive
+
+  /actuator/health/ready:
+    get:
+      summary: Readiness probe
+      operationId: readiness
+      tags: [health]
+      responses:
+        "200":
+          description: Service ready
+        "503":
+          description: Service not ready
+
+# ── Components ─────────────────────────────────────────────────────────────
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: cartogra_session
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Cartogra-Api-Key
+
+  headers:
+    XTraceId:
+      description: OTel trace ID — 32 lowercase hex characters, no dashes
+      schema:
+        type: string
+        pattern: "^[0-9a-f]{32}$"
+
+  parameters:
+    ServiceIdParam:
+      name: serviceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    SizeParam:
+      name: size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  schemas:
+    # ── Envelope ─────────────────────────────────────────────────────────────
+
+    ApiResponse:
+      description: Standard success envelope
+      type: object
+      required: [data, traceId]
+      properties:
+        data:
+          description: Response payload
+        traceId:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
+          example: "a3f1c8d2e4b5f6a7b8c9d0e1f2a3b4c5"
+
+    ApiError:
+      description: Standard error envelope
+      type: object
+      required: [error, traceId]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+        traceId:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
+
+    Page:
+      description: Pagination metadata
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+
+    # ── Service ───────────────────────────────────────────────────────────────
+
+    ServiceDto:
+      type: object
+      required: [id, tenantId, name, healthStatus, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        teamId:
+          type: string
+          format: uuid
+          nullable: true
+        repositoryUrl:
+          type: string
+          nullable: true
+        techStack:
+          type: object
+          additionalProperties: true
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+        healthStatus:
+          type: string
+          enum: [healthy, degraded, unknown]
+        lastDeployedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateServiceRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 1000
+        teamId:
+          type: string
+          format: uuid
+        repositoryUrl:
+          type: string
+          format: uri
+        techStack:
+          type: object
+          additionalProperties: true
+        metadata:
+          type: object
+          additionalProperties: true
+
+    UpdateServiceRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+        teamId:
+          type: string
+          format: uuid
+          nullable: true
+        repositoryUrl:
+          type: string
+          format: uri
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+
+    ServiceResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/ServiceDto"
+
+    ServicePageResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                content:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/ServiceDto"
+                page:
+                  $ref: "#/components/schemas/Page"
+
+    ServiceHistoryEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        serviceId:
+          type: string
+          format: uuid
+        snapshot:
+          $ref: "#/components/schemas/ServiceDto"
+        changedBy:
+          type: string
+          format: uuid
+          nullable: true
+        changedAt:
+          type: string
+          format: date-time
+
+    ServiceHistoryPageResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                content:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/ServiceHistoryEntry"
+                page:
+                  $ref: "#/components/schemas/Page"
+
+    # ── Team ──────────────────────────────────────────────────────────────────
+
+    TeamDto:
+      type: object
+      required: [id, tenantId, name, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slackChannel:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateTeamRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        slackChannel:
+          type: string
+
+    TeamResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/TeamDto"
+
+    TeamListResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/TeamDto"
+
+    # ── SCM Connection ─────────────────────────────────────────────────────────
+
+    ScmConnectionDto:
+      type: object
+      required: [id, tenantId, provider, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        provider:
+          type: string
+          enum: [github, azure_devops]
+        installationId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateScmConnectionRequest:
+      type: object
+      required: [provider]
+      properties:
+        provider:
+          type: string
+          enum: [github, azure_devops]
+        installationId:
+          type: string
+          description: GitHub App installation ID
+        credentials:
+          type: object
+          description: Encrypted provider credentials (PAT/SP for Azure DevOps)
+          additionalProperties: true
+
+    ScmConnectionResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/ScmConnectionDto"
+
+    ScmConnectionListResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/ScmConnectionDto"
+
+    # ── CI ────────────────────────────────────────────────────────────────────
+
+    CiCheckRequest:
+      type: object
+      required: [serviceId, specType, specContent]
+      properties:
+        serviceId:
+          type: string
+          format: uuid
+        specType:
+          type: string
+          enum: [openapi, asyncapi]
+        specContent:
+          type: string
+          description: Raw YAML or JSON spec content
+
+    CiCheckResult:
+      description: Flat result (not wrapped in envelope) — for easy CI script parsing
+      type: object
+      required: [result, checkId]
+      properties:
+        checkId:
+          type: string
+          format: uuid
+        result:
+          type: string
+          enum: [compatible, warning, breaking]
+        findings:
+          type: array
+          items:
+            type: object
+            properties:
+              severity:
+                type: string
+                enum: [breaking, warning, info]
+              path:
+                type: string
+              description:
+                type: string
+        traceId:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
+
+  responses:
+    BadRequest:
+      description: Invalid request payload or parameters
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/XTraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
+    Unauthorized:
+      description: Missing or invalid authentication
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/XTraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
+    Forbidden:
+      description: Authenticated but not authorised
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/XTraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
+    NotFound:
+      description: Resource not found
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/XTraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
+    Conflict:
+      description: Resource already exists
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/XTraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"

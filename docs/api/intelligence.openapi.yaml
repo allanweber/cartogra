@@ -1,0 +1,712 @@
+openapi: "3.1.0"
+info:
+  title: Cartogra Intelligence API
+  version: "0.1.0"
+  description: |
+    AI-powered insights: natural language queries, architecture health scores, anti-pattern detection, and weekly digests.
+
+    **Authentication:** JWT cookie or Bearer token (Gateway-issued). Gateway injects `X-Tenant-Id`.
+
+    **Response envelope**:
+    - Success: `{ "data": <T>, "traceId": "<32-hex>" }`
+    - Error: `{ "error": { "code", "message", "details" }, "traceId": "<32-hex>" }`
+    - Header: `X-Trace-Id: <same 32-hex traceId>`
+
+    **Note:** AI endpoints are rate-limited per tenant. Check `Retry-After` on `429` responses.
+
+servers:
+  - url: http://localhost:8084
+    description: Local development (direct)
+  - url: http://localhost:8080/api/intelligence
+    description: Local development (via Gateway)
+
+tags:
+  - name: query
+    description: Natural language queries against the service graph
+  - name: health
+    description: Architecture health scores per service
+  - name: anti-patterns
+    description: Detected architectural anti-patterns
+  - name: digest
+    description: Weekly architecture digest generation
+  - name: probes
+    description: Liveness and readiness probes
+
+paths:
+  # ── Natural language query ─────────────────────────────────────────────────
+
+  /query:
+    post:
+      summary: Ask a natural language question about the service ecosystem
+      description: |
+        Translates the question into graph/database queries using Claude and returns a structured answer.
+
+        Examples:
+        - "Show me all services owned by Team Payments that haven't been deployed in 90 days"
+        - "What's the blast radius if the auth service goes down?"
+        - "Which services have no declared owners?"
+      operationId: naturalLanguageQuery
+      tags: [query]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NlQueryRequest"
+      responses:
+        "200":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NlQueryResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /query/history:
+    get:
+      summary: List past natural language queries for the tenant
+      operationId: listQueryHistory
+      tags: [query]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SizeParam"
+      responses:
+        "200":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryHistoryPageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /query/{queryId}/feedback:
+    post:
+      summary: Submit feedback on a query result
+      operationId: submitQueryFeedback
+      tags: [query]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: queryId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QueryFeedbackRequest"
+      responses:
+        "204":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Health scores ─────────────────────────────────────────────────────────
+
+  /health-scores:
+    get:
+      summary: List architecture health scores for all services
+      operationId: listHealthScores
+      tags: [health]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: minScore
+          in: query
+          schema:
+            type: number
+            minimum: 0
+            maximum: 100
+        - name: maxScore
+          in: query
+          schema:
+            type: number
+            minimum: 0
+            maximum: 100
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SizeParam"
+      responses:
+        "200":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthScorePageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /health-scores/{serviceId}:
+    get:
+      summary: Get current health score for a specific service
+      operationId: getHealthScore
+      tags: [health]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthScoreResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /health-scores/{serviceId}/recompute:
+    post:
+      summary: Trigger an on-demand health score recomputation
+      operationId: recomputeHealthScore
+      tags: [health]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "202":
+          description: Recomputation accepted — result available asynchronously
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecomputeAcceptedResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # ── Anti-patterns ─────────────────────────────────────────────────────────
+
+  /anti-patterns:
+    get:
+      summary: List detected architectural anti-patterns for the tenant
+      operationId: listAntiPatterns
+      tags: [anti-patterns]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: patternType
+          in: query
+          schema:
+            type: string
+            enum: [circular_dependency, god_service, orphaned_service, tight_coupling_cluster, stale_service]
+        - name: serviceId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SizeParam"
+      responses:
+        "200":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AntiPatternPageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Digest ────────────────────────────────────────────────────────────────
+
+  /digest/latest:
+    get:
+      summary: Get the latest generated architecture digest
+      operationId: getLatestDigest
+      tags: [digest]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DigestResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: No digest generated yet
+
+  /digest/generate:
+    post:
+      summary: Trigger on-demand digest generation
+      operationId: generateDigest
+      tags: [digest]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "202":
+          description: Generation accepted — check `/digest/latest` when complete
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # ── Health probes ─────────────────────────────────────────────────────────
+
+  /actuator/health/live:
+    get:
+      summary: Liveness probe
+      operationId: liveness
+      tags: [probes]
+      responses:
+        "200":
+          description: Service alive
+
+  /actuator/health/ready:
+    get:
+      summary: Readiness probe
+      operationId: readiness
+      tags: [probes]
+      responses:
+        "200":
+          description: Service ready
+        "503":
+          description: Service not ready
+
+# ── Components ─────────────────────────────────────────────────────────────
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: cartogra_session
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  headers:
+    XTraceId:
+      description: OTel trace ID — 32 lowercase hex characters, no dashes
+      schema:
+        type: string
+        pattern: "^[0-9a-f]{32}$"
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    SizeParam:
+      name: size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  schemas:
+    ApiResponse:
+      type: object
+      required: [data, traceId]
+      properties:
+        data: {}
+        traceId:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
+
+    ApiError:
+      type: object
+      required: [error, traceId]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+        traceId:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
+
+    Page:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+
+    # ── NL Query ──────────────────────────────────────────────────────────────
+
+    NlQueryRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          minLength: 3
+          maxLength: 1000
+          example: "Show me all services owned by Team Payments that haven't been deployed in 90 days"
+
+    NlQueryAnswer:
+      type: object
+      required: [summary]
+      properties:
+        summary:
+          type: string
+          description: Human-readable answer text
+        serviceIds:
+          type: array
+          description: Service IDs referenced in the answer
+          items:
+            type: string
+            format: uuid
+        data:
+          type: object
+          additionalProperties: true
+          description: Structured data backing the answer (counts, lists, etc.)
+        model:
+          type: string
+          description: Claude model used
+
+    NlQueryResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [queryId, query, answer, latencyMs]
+              properties:
+                queryId:
+                  type: string
+                  format: uuid
+                query:
+                  type: string
+                answer:
+                  $ref: "#/components/schemas/NlQueryAnswer"
+                latencyMs:
+                  type: integer
+
+    NlQueryHistoryEntry:
+      type: object
+      required: [id, queryText, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        queryText:
+          type: string
+        feedback:
+          type: string
+          enum: [positive, negative]
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    QueryHistoryPageResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                content:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/NlQueryHistoryEntry"
+                page:
+                  $ref: "#/components/schemas/Page"
+
+    QueryFeedbackRequest:
+      type: object
+      required: [feedback]
+      properties:
+        feedback:
+          type: string
+          enum: [positive, negative]
+
+    # ── Health Score ──────────────────────────────────────────────────────────
+
+    ScoreFactor:
+      type: object
+      required: [name, score, weight]
+      properties:
+        name:
+          type: string
+          example: "deployment_recency"
+        score:
+          type: number
+          minimum: 0
+          maximum: 100
+        weight:
+          type: number
+          minimum: 0
+          maximum: 1
+        explanation:
+          type: string
+
+    HealthScoreDto:
+      type: object
+      required: [id, serviceId, score, computedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        serviceId:
+          type: string
+          format: uuid
+        score:
+          type: number
+          minimum: 0
+          maximum: 100
+        factors:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScoreFactor"
+        computedAt:
+          type: string
+          format: date-time
+
+    HealthScoreResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/HealthScoreDto"
+
+    HealthScorePageResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                content:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/HealthScoreDto"
+                page:
+                  $ref: "#/components/schemas/Page"
+
+    RecomputeAcceptedResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                serviceId:
+                  type: string
+                  format: uuid
+                estimatedCompletionSeconds:
+                  type: integer
+
+    # ── Anti-patterns ─────────────────────────────────────────────────────────
+
+    AntiPatternDto:
+      type: object
+      required: [id, patternType, detectedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        patternType:
+          type: string
+          enum: [circular_dependency, god_service, orphaned_service, tight_coupling_cluster, stale_service]
+        affectedServiceIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        severity:
+          type: string
+          enum: [critical, high, medium, low]
+        description:
+          type: string
+        recommendation:
+          type: string
+        detectedAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    AntiPatternPageResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                content:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/AntiPatternDto"
+                page:
+                  $ref: "#/components/schemas/Page"
+
+    # ── Digest ────────────────────────────────────────────────────────────────
+
+    DigestSection:
+      type: object
+      required: [title, content]
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+        serviceIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    DigestDto:
+      type: object
+      required: [id, generatedAt, sections]
+      properties:
+        id:
+          type: string
+          format: uuid
+        generatedAt:
+          type: string
+          format: date-time
+        periodStart:
+          type: string
+          format: date-time
+        periodEnd:
+          type: string
+          format: date-time
+        sections:
+          type: array
+          items:
+            $ref: "#/components/schemas/DigestSection"
+
+    DigestResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/DigestDto"
+
+  responses:
+    BadRequest:
+      description: Invalid request payload or parameters
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/XTraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
+    Unauthorized:
+      description: Missing or invalid authentication
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/XTraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
+    NotFound:
+      description: Resource not found
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/XTraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
+    TooManyRequests:
+      description: Rate limit exceeded — AI endpoint quota
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/XTraceId"
+        Retry-After:
+          description: Seconds until the rate limit resets
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"

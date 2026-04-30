@@ -1,0 +1,693 @@
+openapi: "3.1.0"
+info:
+  title: Cartogra Topology API
+  version: "0.1.0"
+  description: |
+    Dependency graph management, blast radius analysis, cycle detection, SPOF scoring, and drift detection.
+
+    **Authentication:** JWT cookie or Bearer token (Gateway-issued). Gateway injects `X-Tenant-Id`.
+
+    **Response envelope**:
+    - Success: `{ "data": <T>, "traceId": "<32-hex>" }`
+    - Error: `{ "error": { "code", "message", "details" }, "traceId": "<32-hex>" }`
+    - Header: `X-Trace-Id: <same 32-hex traceId>`
+
+servers:
+  - url: http://localhost:8082
+    description: Local development (direct)
+  - url: http://localhost:8080/api/topology
+    description: Local development (via Gateway)
+
+tags:
+  - name: dependencies
+    description: Declare and manage service dependency edges
+  - name: graph
+    description: Graph queries — blast radius, cycles, SPOF, ancestry
+  - name: drift
+    description: Declared vs observed dependency drift
+  - name: health
+    description: Liveness and readiness probes
+
+paths:
+  # ── Dependencies ──────────────────────────────────────────────────────────
+
+  /dependencies:
+    get:
+      summary: List dependency edges for the tenant
+      operationId: listDependencies
+      tags: [dependencies]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: sourceServiceId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: targetServiceId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: dependencyType
+          in: query
+          schema:
+            type: string
+            enum: [declared, observed]
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SizeParam"
+      responses:
+        "200":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DependencyPageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      summary: Declare a dependency edge between two services
+      operationId: createDependency
+      tags: [dependencies]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDependencyRequest"
+      responses:
+        "201":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DependencyResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /dependencies/{dependencyId}:
+    delete:
+      summary: Remove a declared dependency edge (soft delete)
+      operationId: deleteDependency
+      tags: [dependencies]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: dependencyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Graph queries ─────────────────────────────────────────────────────────
+
+  /graph/blast-radius/{serviceId}:
+    get:
+      summary: Compute blast radius — all transitive dependents of a service
+      description: |
+        Uses a recursive CTE to traverse the dependency graph upstream.
+        Returns all services that would be impacted if the given service becomes unavailable.
+      operationId: getBlastRadius
+      tags: [graph]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: maxDepth
+          in: query
+          description: Maximum traversal depth (default 10, max 25)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 25
+            default: 10
+        - name: dependencyType
+          in: query
+          schema:
+            type: string
+            enum: [declared, observed, both]
+            default: both
+      responses:
+        "200":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlastRadiusResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /graph/cycles:
+    get:
+      summary: Detect circular dependencies in the tenant graph
+      operationId: detectCycles
+      tags: [graph]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CycleListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /graph/spof:
+    get:
+      summary: Identify single points of failure (high fan-in, no redundancy)
+      operationId: getSpof
+      tags: [graph]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: minDependents
+          in: query
+          description: Minimum transitive dependent count to qualify as SPOF candidate
+          schema:
+            type: integer
+            minimum: 1
+            default: 3
+      responses:
+        "200":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpofListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /graph/ancestors/{serviceId}:
+    get:
+      summary: Get all transitive dependencies of a service (upstream tree)
+      operationId: getAncestors
+      tags: [graph]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: maxDepth
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 25
+            default: 10
+      responses:
+        "200":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AncestorTreeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Drift ─────────────────────────────────────────────────────────────────
+
+  /drift:
+    get:
+      summary: List active dependency drifts (declared ≠ observed)
+      operationId: listDrifts
+      tags: [drift]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: driftType
+          in: query
+          schema:
+            type: string
+            enum: [undeclared, missing]
+        - name: serviceId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SizeParam"
+      responses:
+        "200":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriftPageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /drift/{driftId}/resolve:
+    post:
+      summary: Mark a drift as resolved
+      operationId: resolveDrift
+      tags: [drift]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: driftId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Health ────────────────────────────────────────────────────────────────
+
+  /actuator/health/live:
+    get:
+      summary: Liveness probe
+      operationId: liveness
+      tags: [health]
+      responses:
+        "200":
+          description: Service alive
+
+  /actuator/health/ready:
+    get:
+      summary: Readiness probe
+      operationId: readiness
+      tags: [health]
+      responses:
+        "200":
+          description: Service ready
+        "503":
+          description: Service not ready
+
+# ── Components ─────────────────────────────────────────────────────────────
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: cartogra_session
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  headers:
+    XTraceId:
+      description: OTel trace ID — 32 lowercase hex characters, no dashes
+      schema:
+        type: string
+        pattern: "^[0-9a-f]{32}$"
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    SizeParam:
+      name: size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  schemas:
+    ApiResponse:
+      type: object
+      required: [data, traceId]
+      properties:
+        data: {}
+        traceId:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
+
+    ApiError:
+      type: object
+      required: [error, traceId]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+        traceId:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
+
+    Page:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+
+    # ── Dependency ────────────────────────────────────────────────────────────
+
+    DependencyDto:
+      type: object
+      required: [id, tenantId, sourceServiceId, targetServiceId, dependencyType, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        sourceServiceId:
+          type: string
+          format: uuid
+        targetServiceId:
+          type: string
+          format: uuid
+        dependencyType:
+          type: string
+          enum: [declared, observed]
+        protocol:
+          type: string
+          enum: [http, grpc, kafka, db]
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateDependencyRequest:
+      type: object
+      required: [sourceServiceId, targetServiceId, dependencyType]
+      properties:
+        sourceServiceId:
+          type: string
+          format: uuid
+        targetServiceId:
+          type: string
+          format: uuid
+        dependencyType:
+          type: string
+          enum: [declared, observed]
+        protocol:
+          type: string
+          enum: [http, grpc, kafka, db]
+        metadata:
+          type: object
+          additionalProperties: true
+
+    DependencyResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/DependencyDto"
+
+    DependencyPageResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                content:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/DependencyDto"
+                page:
+                  $ref: "#/components/schemas/Page"
+
+    # ── Graph ─────────────────────────────────────────────────────────────────
+
+    GraphNode:
+      type: object
+      required: [serviceId, depth]
+      properties:
+        serviceId:
+          type: string
+          format: uuid
+        depth:
+          type: integer
+        path:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    BlastRadiusResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [rootServiceId, affectedCount, nodes]
+              properties:
+                rootServiceId:
+                  type: string
+                  format: uuid
+                affectedCount:
+                  type: integer
+                maxDepthReached:
+                  type: boolean
+                nodes:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/GraphNode"
+
+    Cycle:
+      type: object
+      required: [path]
+      properties:
+        path:
+          description: Ordered list of service IDs forming the cycle
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    CycleListResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [cycleCount, cycles]
+              properties:
+                cycleCount:
+                  type: integer
+                cycles:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/Cycle"
+
+    SpofCandidate:
+      type: object
+      required: [serviceId, transitiveDependentCount, directDependentCount]
+      properties:
+        serviceId:
+          type: string
+          format: uuid
+        transitiveDependentCount:
+          type: integer
+        directDependentCount:
+          type: integer
+        hasRedundancy:
+          type: boolean
+
+    SpofListResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/SpofCandidate"
+
+    AncestorTreeResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [rootServiceId, ancestorCount, nodes]
+              properties:
+                rootServiceId:
+                  type: string
+                  format: uuid
+                ancestorCount:
+                  type: integer
+                maxDepthReached:
+                  type: boolean
+                nodes:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/GraphNode"
+
+    # ── Drift ─────────────────────────────────────────────────────────────────
+
+    DriftDto:
+      type: object
+      required: [id, tenantId, driftType, detectedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        sourceServiceId:
+          type: string
+          format: uuid
+          nullable: true
+        targetServiceId:
+          type: string
+          format: uuid
+          nullable: true
+        driftType:
+          type: string
+          enum: [undeclared, missing]
+          description: |
+            `undeclared` — observed edge with no matching declared dependency.
+            `missing` — declared edge with no matching observed traffic.
+        detectedAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    DriftPageResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                content:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/DriftDto"
+                page:
+                  $ref: "#/components/schemas/Page"
+
+  responses:
+    BadRequest:
+      description: Invalid request payload or parameters
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/XTraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
+    Unauthorized:
+      description: Missing or invalid authentication
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/XTraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
+    NotFound:
+      description: Resource not found
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/XTraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
+    Conflict:
+      description: Resource already exists
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/XTraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
