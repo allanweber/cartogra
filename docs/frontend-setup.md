@@ -79,6 +79,89 @@ npm run build
 npm run preview
 ```
 
+---
+
+## UI Design Workflow (Impeccable)
+
+All frontend features follow this design-first loop before writing production code.
+
+### Context files
+
+| File | Purpose | Edit when |
+|------|---------|----------|
+| `DESIGN.md` | Visual tokens — colors, typography, spacing, elevation | Design system changes |
+| `PRODUCT.md` | Strategic register — users, purpose, personality, anti-references | Product positioning changes |
+
+Both files live at the repository root. The `impeccable` skill reads them automatically on every run via `npx skills add pbakaus/impeccable` (already installed).
+
+### The loop: shape → craft
+
+**Step 1 — Shape (discovery interview)**
+
+Run `/shape <feature>` before writing any code for a new screen or significant UI flow. The shape interview asks structured questions about users, tasks, data, states, and constraints, then produces a design brief. Confirm the brief before moving to craft.
+
+```
+/shape authentication page
+/shape catalog home
+/shape dependency graph view
+/shape contract matrix
+/shape intelligence panel
+```
+
+**Step 2 — Provide a reference design (optional but recommended)**
+
+Attach a screenshot or image in chat; the skill analyzes and implements it.
+
+Images and `/shape` are complementary: use `/shape` to align on intent, then attach a screenshot to constrain the visual execution.
+
+**Step 3 — Craft (implementation)**
+
+After the brief is confirmed, run `/impeccable craft <feature>`. The skill:
+
+1. Loads `DESIGN.md` and `PRODUCT.md` for token and strategy context
+2. Inventories the visual reference (mockup, screenshot, or shape brief)
+3. Emits a visual direction note (typography decisions, color application, spatial strategy)
+4. Implements production-ready files using: TanStack Router file-based routes, TanStack Forms, TanStack Query, shadcn/ui components, Tailwind for all layout and spacing
+5. Covers all required states: default, loading (shadcn `Skeleton`), error (`Alert` with `traceId`), field validation, submitting, empty, edge cases
+
+```
+/impeccable craft authentication page
+/impeccable craft catalog home
+/impeccable craft dependency graph view
+```
+
+**Step 4 — Polish and audit (as needed)**
+
+```
+/impeccable polish <feature>    # Final quality pass before shipping
+/impeccable audit <feature>     # Accessibility, performance, anti-pattern check
+/impeccable adapt <feature>     # Responsive / mobile pass
+```
+
+### File outputs
+
+The craft step produces files in these locations:
+
+```
+frontend/src/routes/<feature>/      # TanStack Router file-based routes
+frontend/src/components/<feature>/  # Named-export React components
+```
+
+Rule: **named exports only**, one component per file, file name matches component name in `PascalCase`. No default-exported components.
+
+### Phase mapping
+
+| Phase | Screens to craft before shipping |
+|-------|-----------------------------------|
+| **0** | App shell, root layout, error boundary, 404 |
+| **1** | Login, Register, Forgot password, Verify email, Catalog home, SCM connections |
+| **2** | Dependency graph (D3), blast radius panel, SPOF/cycle findings |
+| **3** | Contract hub, compatibility matrix, CI check detail |
+| **4** | Intelligence panel, NL query, anti-pattern feed, health score |
+| **5** | Operations view, digest page, admin/settings |
+
+Run `/shape` at the start of each phase's frontend workstream. Run `/impeccable craft` per screen. Run `/impeccable audit` before the phase gate.
+
 ## Test
 
 ```bash

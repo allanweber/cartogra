@@ -272,7 +272,7 @@ cartogra/
 
 ### Build System (Gradle Multi-Module)
 
-Frontend install/run and dependency setup for TanStack Start/Query/Router/Table/Forms is documented in `docs/frontend-setup.md`.
+Frontend install/run, dependency setup for TanStack Start/Query/Router/Table/Forms, and the **UI design workflow** (shape → craft loop with the `impeccable` skill, DESIGN.md/PRODUCT.md context files, phase-by-phase screen list) are documented in `docs/frontend-setup.md`.
 
 Backend install/run and local infrastructure setup is documented in `docs/backend-setup.md`.
 
