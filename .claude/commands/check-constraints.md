@@ -17,7 +17,7 @@ Arguments: $ARGUMENTS
    - [ ] **X-Trace-Id**: every `ResponseEntity` sets `X-Trace-Id` header
    - [ ] **traceId source**: extracted from `Span.current().getSpanContext().getTraceId()` — NOT hardcoded, NOT UUID
    - [ ] **No JPA**: no `@Entity`, `@GeneratedValue`, `@OneToMany`, `@ManyToOne`, `EntityManager`, `JpaRepository` — Spring Data JDBC only
-   - [ ] **Constructor injection**: no `@Autowired` field injection — `@RequiredArgsConstructor` only
+   - [ ] **Constructor injection**: no `@Autowired` field injection — use explicit constructors only
    - [ ] **Records for DTOs**: request/response types are `record`, not mutable classes
    - [ ] **tenant_id**: domain tables and queries include `tenant_id`; extracted from `X-Tenant-Id` header
    - [ ] **Optional usage**: `Optional` used as return type only — never as field or parameter

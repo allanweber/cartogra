@@ -33,10 +33,13 @@ Arguments: $ARGUMENTS
    ```java
    @RestController
    @RequestMapping("/api/v1/<resource>")
-   @RequiredArgsConstructor
    public class XyzController {
 
        private final XyzUseCase xyzUseCase;
+
+       public XyzController(XyzUseCase xyzUseCase) {
+           this.xyzUseCase = xyzUseCase;
+       }
 
        @GetMapping("/{id}")
        public ResponseEntity<ApiResponse<XyzResponse>> getById(
@@ -81,7 +84,7 @@ Arguments: $ARGUMENTS
    - [ ] Response includes `{"data": ..., "traceId": "..."}` — NOT a flat object
    - [ ] `X-Trace-Id` header is set on every response
    - [ ] `traceId` is extracted from `Span.current().getSpanContext().getTraceId()` (32 hex chars)
-   - [ ] Controller uses constructor injection (`@RequiredArgsConstructor`)
+   - [ ] Controller uses explicit constructor injection (no `@Autowired`)
    - [ ] Request/response types are records (not mutable classes)
    - [ ] `tenant_id` is extracted from the `X-Tenant-Id` header (injected by gateway)
    - [ ] Error responses also include `traceId` and `X-Trace-Id` header

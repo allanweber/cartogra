@@ -26,6 +26,7 @@
 | Persistence | `spring-boot-starter-data-jdbc` + PostgreSQL | JPA / Hibernate / `EntityManager` |
 | Migrations | Flyway (per-service) | Liquibase, `ddl-auto` |
 | Messaging | Apache Kafka | RabbitMQ, SQS |
+| Internal sync RPC | gRPC (`spring-grpc` 1.x, protobuf) | REST between services, Feign clients, `RestClient` for internal calls |
 | Cache / Rate-limit | Redis | Memcached |
 | Graph queries | Hand-written SQL + recursive CTEs | Graph DB, Neo4j |
 | Tracing | OpenTelemetry (OTLP) | Zipkin client, Sleuth |
@@ -48,7 +49,8 @@
 - Read this file fully before writing any code
 - Add `tenant_id UUID NOT NULL` to EVERY new domain table
 - Wrap ALL Spring REST responses in the envelope (except webhook receivers)
-- Propagate OTel `traceparent` to ALL downstream HTTP calls and Kafka messages
+- Propagate OTel `traceparent` to ALL downstream HTTP calls, gRPC calls, and Kafka messages
+- Use gRPC for ALL direct service-to-service synchronous calls — `.proto` files live in `shared:contracts`
 - Use constructor injection in ALL Spring beans
 - Set resource requests AND limits on EVERY K8s container
 - Use `for_each` (not `count`) in Terraform for removable resources
@@ -65,6 +67,8 @@
 - Expose actuator `*` in production
 - Concatenate SQL strings — always use named params
 - Run `terraform destroy` in CI without a human approval gate
+- Use REST/HTTP for direct service-to-service calls — use gRPC
+- Define `.proto` files inside a service module — they belong in `shared:contracts`
 
 ## Java 25 Rules
 
@@ -96,10 +100,10 @@
 
 ## Spring Boot 4.0 Rules
 
-**Requirements:** Java 21+ (25 recommended) · Spring Framework 7.x · Jakarta EE 11 · Servlet 6.1 · Gradle 8.14+ or 9.x
+**Requirements:** Java 21+ (25 recommended) · Spring Framework 7.x · Jakarta EE 11 · Servlet 6.1 · Gradle 9.5.0+
 
 - Constructor injection ONLY — NEVER `@Autowired` field injection (hidden deps, untestable)
-- Use `@RequiredArgsConstructor` (Lombok) for brevity
+- Use explicit constructors for all Spring beans
 - Grouped config: `@ConfigurationProperties(prefix = "app.x")` + `@Validated` — NEVER `@Value` for multi-property groups
 - Config validation: JSR-380 (`@NotNull`, `@NotEmpty`, `@Email`, `@Positive`, `@Size`); nullable: use `org.jspecify.annotations.Nullable` — NEVER `org.springframework.lang.Nullable` (removed)
 - Global error handling: `@RestControllerAdvice` — NEVER expose stack traces to clients

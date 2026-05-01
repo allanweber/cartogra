@@ -46,13 +46,16 @@ Arguments: $ARGUMENTS
 4. **Create Producer** in `infrastructure/kafka/` (if producer or both):
    ```java
    @Component
-   @RequiredArgsConstructor
    public class <EventType>Producer {
 
        private final KafkaTemplate<String, Object> kafkaTemplate;
+       private final String topic;
 
-       @Value("${app.kafka.topics.<topic-key>}")
-       private String topic;
+       public <EventType>Producer(KafkaTemplate<String, Object> kafkaTemplate,
+                                  @Value("${app.kafka.topics.<topic-key>}") String topic) {
+           this.kafkaTemplate = kafkaTemplate;
+           this.topic = topic;
+       }
 
        public void publish(<EventType>Event event) {
            ProducerRecord<String, Object> record =
@@ -72,7 +75,6 @@ Arguments: $ARGUMENTS
 5. **Create Consumer** in `infrastructure/kafka/` (if consumer or both):
    ```java
    @Component
-   @RequiredArgsConstructor
    public class <EventType>Consumer {
 
        @KafkaListener(topics = "${app.kafka.topics.<topic-key>}", groupId = "${spring.kafka.consumer.group-id}")

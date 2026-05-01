@@ -187,8 +187,8 @@ Map from [project-scope.md](project-scope.md) §14:
 
 ### Specs (Phase 0)
 
-- **S0.1 Repository:** Structure matches [implementation guide §1](project-guide.md) (`.github/`, `docs/`, `services/*`, `shared/*`, `frontend/`, `infra/docker-compose/`, `seed/` placeholders).
-- **S0.2 Build:** Root Gradle multi-module; **Initializr-aligned** `services/gateway` + `services/registry` + `services/ingestion` stubs ([project-guide.md](project-guide.md) §6); **`spring-boot-starter-data-jdbc`** on domain services (registry, ingestion), **not** `data-jpa`; `shared:common` with `EventEnvelope`, tenant/service IDs; all three apps start, health-check, and export **OTel** (OTLP endpoint configurable, can point to local collector or `none`).
+- ~~**S0.1 Repository:** Structure matches [implementation guide §1](project-guide.md) (`.github/`, `docs/`, `services/*`, `shared/*`, `frontend/`, `infra/docker-compose/`, `seed/` placeholders).~~
+- ~~**S0.2 Build:** Root Gradle multi-module; **Initializr-aligned** `services/gateway` + `services/registry` + `services/ingestion` stubs ([project-guide.md](project-guide.md) §6); **`spring-boot-starter-data-jdbc`** on domain services (registry, ingestion), **not** `data-jpa`; `shared:common` with `EventEnvelope`, tenant/service IDs; all three apps start, health-check, and export **OTel** (OTLP endpoint configurable, can point to local collector or `none`).~~
 - **S0.3 Local stack:** `docker-compose.yml` — PostgreSQL, Kafka (e.g. Redpanda), Redis; optional `docker-compose.dev.yml` ([implementation guide §1, §10](project-guide.md)).
 - **S0.4 CI:** `ci.yml` — **Java 25** + **Spring Boot 4.0** pinned in root BOM ([project-scope.md](project-scope.md) §3); `./gradlew build`, tests, Trivy; path to frontend lint/test when scaffold exists ([scope §8](project-scope.md)).
 - **S0.5 Data:** Flyway **initial** migrations: `tenants`, `teams`, `users`, `scm_connections` per scope §7 (registry service owns migrations as in guide).

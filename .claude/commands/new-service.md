@@ -28,9 +28,12 @@ Arguments: $ARGUMENTS
        implementation("org.flywaydb:flyway-core")
        implementation("io.micrometer:micrometer-tracing-bridge-otel")
        implementation("io.opentelemetry:opentelemetry-exporter-otlp")
-       implementation("org.projectlombok:lombok")
        runtimeOnly("org.postgresql:postgresql")
        testImplementation("org.springframework.boot:spring-boot-starter-test")
+       // gRPC — include both if the service exposes AND calls internal gRPC APIs
+       // Remove either block if the service only acts as server or only as client
+       implementation(project(":shared:contracts"))
+       implementation("org.springframework.grpc:spring-grpc-spring-boot-starter:$springGrpcVersion")
    }
    ```
 
@@ -38,7 +41,7 @@ Arguments: $ARGUMENTS
    - `api/` — Controllers, request/response records, mappers
    - `domain/` — Aggregate roots, value objects, domain events
    - `application/` — Use case interfaces and implementations
-   - `infrastructure/` — JDBC repositories, Kafka producers/consumers, HTTP clients
+   - `infrastructure/` — JDBC repositories, Kafka producers/consumers, gRPC clients and server implementations
    - `config/` — Spring beans, security config, OTel config
 
 4. **Create `Application.java`** in the root package:
@@ -127,3 +130,6 @@ Arguments: $ARGUMENTS
     - [ ] All future domain tables will need `tenant_id UUID NOT NULL`
     - [ ] Dockerfile uses multi-stage, non-root user, `MaxRAMPercentage=75`
     - [ ] First migration file exists
+    - [ ] No `.proto` files defined inside this service — all contracts belong in `shared:contracts`
+    - [ ] gRPC server implementations are in `infrastructure/grpc/`, annotated `@GrpcService`
+    - [ ] gRPC clients are in `infrastructure/grpc/`, inject channel via `@GrpcClient`

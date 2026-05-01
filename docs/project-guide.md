@@ -718,8 +718,9 @@ subprojects {
 }
 
 // Shared dependency constraints
-extra["springCloudVersion"] = "2023.0.2"
-extra["testcontainersVersion"] = "1.19.8"
+extra["springCloudVersion"] = "2025.1.1"
+extra["testcontainersVersion"] = "2.0.5"
+extra["jacksonVersion"] = "3.1.2"
 extra["flywayVersion"] = "10.15.0"
 ```
 

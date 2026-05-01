@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package io.cartogra.registry.v1;
+
+option java_package = "io.cartogra.grpc.registry.v1";
+option java_multiple_files = true;
+option java_outer_classname = "RegistryProto";
+
+import "io/cartogra/common/v1/common.proto";
+
+// Internal gRPC API exposed by the registry service.
+// External clients always use the Gateway REST API — never call this directly.
+service RegistryService {
+  // Fetch a single service by ID.
+  rpc GetService (GetServiceRequest) returns (ServiceResponse);
+
+  // List services with pagination.
+  rpc ListServices (ListServicesRequest) returns (ListServicesResponse);
+
+  // Server-side streaming: push service change events to the caller.
+  rpc WatchServices (WatchServicesRequest) returns (stream ServiceEvent);
+}
+
+// ── Requests ────────────────────────────────────────────────────────────────
+
+message GetServiceRequest {
+  io.cartogra.common.v1.TenantContext tenant     = 1;
+  string                              service_id = 2;
+}
+
+message ListServicesRequest {
+  io.cartogra.common.v1.TenantContext tenant = 1;
+  io.cartogra.common.v1.PageRequest   page   = 2;
+}
+
+message WatchServicesRequest {
+  io.cartogra.common.v1.TenantContext tenant = 1;
+}
+
+// ── Responses ───────────────────────────────────────────────────────────────
+
+message ServiceResponse {
+  string id          = 1;
+  string tenant_id   = 2;
+  string name        = 3;
+  string description = 4;
+  string team        = 5;
+  string created_at  = 6; // ISO-8601
+  string updated_at  = 7; // ISO-8601
+}
+
+message ListServicesResponse {
+  repeated ServiceResponse             services  = 1;
+  io.cartogra.common.v1.PageInfo       page_info = 2;
+}
+
+// ── Streaming messages ───────────────────────────────────────────────────────
+
+message ServiceEvent {
+  EventType       type    = 1;
+  ServiceResponse service = 2;
+
+  enum EventType {
+    EVENT_TYPE_UNSPECIFIED = 0;
+    CREATED                = 1;
+    UPDATED                = 2;
+    DELETED                = 3;
+  }
+}
