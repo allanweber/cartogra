@@ -25,7 +25,7 @@ Service catalogs go stale because they're updated manually. Cartogra solves this
 ## Services
 
 | Service | Port | Role |
-|---------|------|------|
+| ------- | ---- | ---- |
 | `gateway` | 8080 | Auth, routing, tenant injection, rate limiting |
 | `registry` | 8081 | Service CRUD, team ownership, temporal history |
 | `topology` | 8082 | Dependency graph, blast radius, cycle detection |
@@ -41,10 +41,11 @@ Service catalogs go stale because they're updated manually. Cartogra solves this
 **Prerequisites:** Docker, JDK 25, Node 22+, pnpm
 
 ```bash
-# 1. Start the local stack (Postgres, Kafka/Redpanda, Redis)
-docker compose -f infra/docker-compose/docker-compose.yml up -d
+# 1. Copy env vars and start the local dev stack
+cp .env.example .env
+cd infra/docker-compose && docker compose -f docker-compose.dev.yml up -d
 
-# 2. Run all services
+# 2. Run all services (from repo root)
 ./gradlew bootRun
 
 # 3. Start the frontend
@@ -57,10 +58,36 @@ See [docs/runbooks/local-development.md](docs/runbooks/local-development.md) for
 
 ---
 
+## Local Infrastructure
+
+The local stack lives in `infra/docker-compose/`. All services connect via `localhost` using the env-var defaults in `.env.example`.
+
+```bash
+# Production-equivalent stack (Postgres, Kafka, Valkey, OTel Collector, Jaeger)
+cd infra/docker-compose && docker compose up -d
+
+# Dev stack — same services + Kafka UI at localhost:8086
+cd infra/docker-compose && docker compose -f docker-compose.dev.yml up -d
+```
+
+**Containers and UIs (dev stack):**
+
+| Container | Host port(s) | UI / access |
+| --------- | ------------ | ----------- |
+| PostgreSQL | 5436 | `psql -h localhost -p 5436 -U cartogra -d cartogra` |
+| Valkey | 6380 | Key/value store (Redis-compatible) |
+| Kafka | 9092 | Kafka broker |
+| Jaeger | 16686 | [http://localhost:16686](http://localhost:16686) — distributed trace viewer |
+| OTel Collector | 4317 (gRPC), 4318 (HTTP) | OTLP ingest endpoint |
+| Kafka UI _(dev only)_ | 8086 | [http://localhost:8086](http://localhost:8086) — topic and message browser |
+| Valkey UI _(dev only)_ | 8087 | [http://localhost:8087](http://localhost:8087) — Redis Commander key/value browser |
+
+---
+
 ## Documentation
 
 | Doc | Purpose |
-|-----|---------|
+| --- | ------- |
 | [docs/architecture/system-overview.md](docs/architecture/system-overview.md) | Architecture and service map |
 | [docs/architecture/data-model.md](docs/architecture/data-model.md) | Database schema per service |
 | [docs/architecture/kafka-topics.md](docs/architecture/kafka-topics.md) | Kafka topic inventory |
