@@ -36,7 +36,7 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 ### System design and UX foundation
 
-- [ ] 0.1 [DOCS] Create `DESIGN.md` at the repo root with visual design tokens: color palette, typography scale, spacing system, elevation levels, and border-radius values that all frontend phases will share.
+- [x] 0.1 [DOCS] Create `DESIGN.md` at the repo root with visual design tokens: color palette, typography scale, spacing system, elevation levels, and border-radius values that all frontend phases will share.
 - [ ] 0.2 [DOCS] Create `PRODUCT.md` at the repo root with the product register: target users, product purpose, personality and tone, anti-references (what Cartogra should never feel like), and per-phase screen inventory.
 - [ ] 0.3 [UI] Run `/shape app shell` to produce a confirmed design brief for the root layout, navigation sidebar, error boundary, and 404 page before writing any Phase 0 frontend code.
 
