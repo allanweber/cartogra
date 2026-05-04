@@ -2,7 +2,7 @@
 
 ## Register
 
-product
+Cartogra — living service registry and dependency intelligence platform for engineering teams operating multi-service environments. Surfaces real-time service ownership, dependency risk, contract health, and architectural anti-patterns so high-stakes technical decisions are made in seconds, not hours.
 
 ## Users
 
@@ -43,3 +43,58 @@ The tone should be clear and direct, never vague, and focused on actionable conf
 - Reduced-motion support for all non-essential animations.
 - Color-blind-safe status signaling that does not rely on color alone.
 - Maintain clear contrast and readable hierarchy for dense data views.
+
+## Screen Inventory
+
+### Phase 0 — Foundation
+
+| Screen | Route | Purpose |
+|--------|-------|---------|
+| App Shell | `_layout.tsx` (all routes) | Root layout: sidebar navigation, header, error boundary |
+| 404 | `*` | Not-found fallback |
+
+### Phase 1 — Auth + Registry
+
+| Screen | Route | Purpose |
+|--------|-------|---------|
+| Login | `/login` | Email/password and OAuth sign-in |
+| Register | `/register` | Account creation with email OTP verification flow |
+| Verify Email | `/verify-email` | OTP entry and confirmation |
+| Forgot Password | `/forgot-password` | Password reset initiation |
+| OAuth Handoff | `/auth/callback` | OAuth provider callback and session creation |
+| Catalog List | `/catalog` | Service list with filters, health badges, orphan highlights |
+| Catalog Detail | `/catalog/$serviceId` | Service profile: dependencies, contracts, history, ownership |
+| SCM Connections | `/settings/connections` | Connect and manage GitHub / Azure DevOps integrations |
+
+### Phase 2 — Topology
+
+| Screen | Route | Purpose |
+|--------|-------|---------|
+| Dependency Graph | `/graph` | D3 force graph: zoom, pan, declared/observed toggle, drift overlays |
+| Impact Panel | `/graph` (panel) | Blast radius highlight, upstream/downstream detail, SPOF and cycle warnings |
+
+### Phase 3 — Contract Guardian
+
+| Screen | Route | Purpose |
+|--------|-------|---------|
+| Contract Hub | `/contracts` | Contract list; breaking-change queue with status badges |
+| Diff Viewer | `/contracts/$contractId/diff` | Side-by-side spec diff with required/added/removed highlights |
+| Compatibility Matrix | `/contracts/matrix` | Producer × consumer heatmap: green/yellow/red compatibility |
+| Version Timeline | `/contracts/$contractId/history` | Chronological spec evolution for a single contract |
+| CI Check Detail | `/contracts/checks/$checkId` | Full output and resolution controls for a single check run |
+
+### Phase 4 — Intelligence
+
+| Screen | Route | Purpose |
+|--------|-------|---------|
+| Intelligence Panel | `/intelligence` | NL query input, answer rendering, optional generated-SQL disclosure |
+| Anti-Pattern Feed | `/intelligence` (section) | Severity-ranked findings with acknowledge/resolve actions |
+| Health Score | `/intelligence` (section) | Health score trend chart and latest digest summary |
+| Digest | `/intelligence/digest` | Full weekly digest with drill-down recommendations |
+
+### Phase 5 — Production
+
+| Screen | Route | Purpose |
+|--------|-------|---------|
+| Operations View | `/ops` | Connector health, recent platform events, Kafka lag, observability links |
+| Settings / Admin | `/settings` | Tenant config, API key management, notification rules, team admin |
