@@ -65,7 +65,7 @@ VITE_API_BASE_URL=http://localhost:8080
 npm run dev
 ```
 
-Expected local frontend URL: `http://localhost:3000` (or the configured frontend port).
+Expected local frontend URL: `http://localhost:3006` (or the configured frontend port).
 
 ## Build
 

@@ -38,7 +38,7 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 - [x] 0.1 [DOCS] Create `DESIGN.md` at the repo root with visual design tokens: color palette, typography scale, spacing system, elevation levels, and border-radius values that all frontend phases will share.
 - [x] 0.2 [DOCS] Create `PRODUCT.md` at the repo root with the product register: target users, product purpose, personality and tone, anti-references (what Cartogra should never feel like), and per-phase screen inventory.
-- [ ] 0.3 [UI] Run `/shape app shell` to produce a confirmed design brief for the root layout, navigation sidebar, error boundary, and 404 page before writing any Phase 0 frontend code.
+- [x] 0.3 [UI] Run `/shape app shell` to produce a confirmed design brief for the root layout, navigation sidebar, error boundary, and 404 page before writing any Phase 0 frontend code.
 
 ### Repository and governance
 
@@ -83,16 +83,16 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 ### Frontend shell
 
-- [ ] 0.30 [UI] Initialize TanStack Start with TypeScript strict mode, ESLint (flat config), Prettier, and Tailwind CSS configured from `DESIGN.md` tokens.
-- [ ] 0.31 [UI] Run `npx shadcn@latest init` and install the base component set: Button, Card, Alert, AlertDescription, Skeleton, Input, Badge, Separator, Sheet, and Tooltip.
-- [ ] 0.32 [UI] Set up TanStack Router file-based routing with placeholder route files for Catalog (`/catalog`), Graph (`/graph`), Contracts (`/contracts`), Intelligence (`/intelligence`), and Operations (`/ops`).
-- [ ] 0.33 [UI] Implement `apiFetch<T>` in `frontend/src/lib/api.ts` with Cartogra envelope parsing, `ApiError` class carrying `code`, `message`, and `traceId`, and `X-Trace-Id` header extraction.
-- [ ] 0.34 [UI] Set up Zustand store skeleton in `frontend/src/stores/` with a tenant-scoped slice pattern; do not use Context for global state.
-- [ ] 0.35 [UI] Configure vitest with happy-dom and React Testing Library; add `npm run test` and `npm run typecheck` scripts.
-- [ ] 0.36 [UI] Create `frontend/.env.local` with `VITE_API_BASE_URL=http://localhost:8080`; add `frontend/.env.local.example` to the repo and `.env.local` to `.gitignore`.
-- [ ] 0.37 [UI] Craft the app shell, `AppLayout` component with sidebar navigation, root error boundary, and 404 page using `/impeccable craft app shell`. All outputs must use named exports, shadcn/ui primitives, and Tailwind for layout.
+- [x] 0.30 [UI] Initialize TanStack Start with TypeScript strict mode, ESLint (flat config), Prettier, and Tailwind CSS configured from `DESIGN.md` tokens.
+- [x] 0.31 [UI] Run `npx shadcn@latest init` and install the base component set: Button, Card, Alert, AlertDescription, Skeleton, Input, Badge, Separator, Sheet, and Tooltip.
+- [x] 0.32 [UI] Set up TanStack Router file-based routing with placeholder route files for Catalog (`/catalog`), Graph (`/graph`), Contracts (`/contracts`), Intelligence (`/intelligence`), and Operations (`/ops`).
+- [x] 0.33 [UI] Implement `apiFetch<T>` in `frontend/src/lib/api.ts` with Cartogra envelope parsing, `ApiError` class carrying `code`, `message`, and `traceId`, and `X-Trace-Id` header extraction.
+- [x] 0.34 [UI] Set up Zustand store skeleton in `frontend/src/stores/` with a tenant-scoped slice pattern; do not use Context for global state.
+- [x] 0.35 [UI] Configure vitest with happy-dom and React Testing Library; add `npm run test` and `npm run typecheck` scripts.
+- [x] 0.36 [UI] Create `frontend/.env.local` with `VITE_API_BASE_URL=http://localhost:8080`; add `frontend/.env.local.example` to the repo and `.env.local` to `.gitignore`.
+- [x] 0.37 [UI] Craft the app shell, `AppLayout` component with sidebar navigation, root error boundary, and 404 page using `/impeccable craft app shell`. All outputs must use named exports, shadcn/ui primitives, and Tailwind for layout.
 - [ ] 0.38 [UI] Run `/impeccable audit` on all Phase 0 screens before the phase gate; address any blocking accessibility or responsiveness findings.
-- [ ] 0.39 [INFRA] Add frontend CI tasks: `npm ci`, ESLint check, TypeScript type-check, and `vitest --passWithNoTests`.
+- [x] 0.39 [INFRA] Add frontend CI tasks: `pnpm install --frozen-lockfile`, ESLint check, TypeScript type-check, and `vitest --passWithNoTests`.
 
 ### Core documentation
 

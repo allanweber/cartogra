@@ -24,6 +24,7 @@ frontend/dist/
 .env
 .env.*
 !.env.example
+!frontend/.env.local.example
 
 # Docker
 docker-compose.override.yml
