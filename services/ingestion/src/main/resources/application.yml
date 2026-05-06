@@ -5,9 +5,9 @@ spring:
     virtual:
       enabled: true
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5436}/${DB_NAME:cartogra}
-    username: ${DB_USER:cartogra}
-    password: ${DB_PASSWORD:cartogra}
+    url: jdbc:postgresql://localhost:5436/cartogra
+    username: cartogra
+    password: cartogra
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -31,13 +31,20 @@ management:
       probability: 1.0
     export:
       otlp:
-        enabled: ${MANAGEMENT_TRACING_EXPORT_OTLP_ENABLED:true}
+        enabled: true
   opentelemetry:
     tracing:
       export:
         otlp:
-          endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+          endpoint: http://localhost:4318/v1/traces
           transport: http
+  otlp:
+    metrics:
+      export:
+        url: http://localhost:4318/v1/metrics
+    logging:
+      export:
+        endpoint: http://localhost:4318/v1/logs
 
 logging:
   pattern:

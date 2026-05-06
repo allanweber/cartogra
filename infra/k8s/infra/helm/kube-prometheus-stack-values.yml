@@ -1,0 +1,88 @@
+prometheus:
+  prometheusSpec:
+    image:
+      repository: quay.io/prometheus/prometheus
+      tag: v3.4.0
+    retention: 30d
+    enableRemoteWriteReceiver: true
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: "2"
+        memory: 2Gi
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 65534
+      fsGroup: 65534
+    additionalScrapeConfigs:
+      - job_name: otel-collector
+        static_configs:
+          - targets: ["otel-collector.infra.svc.cluster.local:8889"]
+
+grafana:
+  image:
+    repository: grafana/grafana
+    tag: "12.0.0"
+  adminPassword: "${GRAFANA_ADMIN_PASSWORD}"
+  grafana.ini:
+    feature_toggles:
+      enable: traceqlEditor metricsSummary
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 472
+    fsGroup: 472
+  additionalDataSources:
+    - name: Tempo
+      type: tempo
+      uid: tempo
+      access: proxy
+      url: http://tempo.infra.svc.cluster.local:3100
+      jsonData:
+        tracesToLogsV2:
+          datasourceUid: loki
+          spanStartTimeShift: "-1m"
+          spanEndTimeShift: "1m"
+          filterByTraceID: true
+        tracesToMetrics:
+          datasourceUid: prometheus
+          spanStartTimeShift: "-1m"
+          spanEndTimeShift: "1m"
+          tags:
+            - { key: service.name, value: service }
+        serviceMap:
+          datasourceUid: prometheus
+        nodeGraph:
+          enabled: true
+        lokiSearch:
+          datasourceUid: loki
+    - name: Loki
+      type: loki
+      uid: loki
+      access: proxy
+      url: http://loki-gateway.infra.svc.cluster.local:80
+      jsonData:
+        derivedFields:
+          - name: TraceID
+            matcherType: label
+            matcherRegex: traceId
+            url: "${__value.raw}"
+            datasourceUid: tempo
+            urlDisplayLabel: "View in Tempo"
+
+kubeStateMetrics:
+  enabled: true
+
+nodeExporter:
+  enabled: true
+
+alertmanager:
+  enabled: true

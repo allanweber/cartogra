@@ -68,10 +68,10 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 ### Local runtime and containers
 
-- [ ] 0.19 [INFRA] Finalize `infra/docker-compose/docker-compose.yml` with PostgreSQL 16, Redis-compatible cache, Kafka-compatible broker, OTel collector, Jaeger, healthchecks, and named volumes.
-- [ ] 0.20 [INFRA] Finalize `infra/docker-compose/otel-collector.yml` to receive OTLP and export to Jaeger.
-- [ ] 0.21 [INFRA] Finalize `infra/docker-compose/docker-compose.dev.yml` with local observability helpers such as a Kafka/Redpanda console.
-- Note 2026-05-05: `infra/docker-compose/docker-compose.dev.yml` now includes a local pgAdmin helper on port `8088` for inspecting the PostgreSQL dev database; the broader 0.21 compose finalization remains open.
+- [x] 0.19 [INFRA] Finalize `infra/docker-compose/docker-compose.yml` with PostgreSQL 16, Redis-compatible cache, Kafka-compatible broker, healthchecks, and named volumes.
+- [x] 0.20 [INFRA] Finalize `infra/docker-compose/otel-collector.yml` to receive OTLP and export traces→Tempo, metrics→Prometheus, logs→Loki (LGTM stack; supersedes Jaeger — see ADR-0008).
+- [x] 0.21 [INFRA] Finalize `infra/docker-compose/docker-compose.dev.yml` with LGTM observability stack (Tempo, Loki, Prometheus, Grafana) and dev helpers (Kafka UI, Valkey UI, pgAdmin).
+- Note 2026-05-06: LGTM stack replaces Jaeger; Grafana on port 3001, full three-signal correlation (traces + logs + metrics).
 - [ ] 0.22 [INFRA] Add a root `.env.example` covering local ports, DB credentials, Kafka, Redis, and OTel settings.
 - [ ] 0.23 [INFRA] Add multi-stage Dockerfiles for registry, gateway, and ingestion with Temurin 25, non-root user, and `MaxRAMPercentage=75`.
 - [ ] 0.24 [INFRA] Add a frontend Dockerfile stub or document why frontend image creation is intentionally deferred beyond Phase 0.
@@ -447,7 +447,7 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 ### Observability, DLQ, and operations
 
-- [ ] 5.11 [INFRA] Finalize the staging OTel, Jaeger, Prometheus, and Grafana path.
+- [ ] 5.11 [INFRA] Finalize the staging OTel, Tempo, Loki, Prometheus, and Grafana path (K8s Helm values in `infra/k8s/infra/helm/`; run `install.sh`).
 - [ ] 5.12 [INFRA] Add alerts for consumer lag, elevated error rate, and critical-path failures.
 - [ ] 5.13 [CODE] Implement the dead-letter topic path and replay admin API with audit logging.
 - [ ] 5.14 [UI] Craft the Operations view for connector health, recent platform events, lag visibility, and observability links using `/impeccable craft operations view`.

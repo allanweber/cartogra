@@ -43,16 +43,17 @@ Copy `.env.example` to `.env`. The following variables are required to start all
 ## 3. Start infrastructure
 
 ```bash
-docker compose -f infra/docker-compose/docker-compose.yml up -d postgres valkey kafka jaeger otel-collector
+docker compose -f infra/docker-compose/docker-compose.dev.yml up -d \
+  postgres valkey kafka tempo loki prometheus otel-collector grafana
 ```
 
 Wait for healthy status:
 
 ```bash
-docker compose ps
+docker compose -f infra/docker-compose/docker-compose.dev.yml ps
 ```
 
-Expected: all containers `(healthy)` or `Up`. Kafka may take 20–30 seconds on first start.
+Expected: all containers `(healthy)` or `Up`. Kafka may take 20–30 seconds on first start. Tempo and Loki must be healthy before `otel-collector` starts.
 
 ---
 
@@ -130,13 +131,17 @@ This creates:
 | URL | Purpose |
 |-----|---------|
 | `http://localhost:3000` | Frontend |
+| `http://localhost:3001` | Grafana (traces + logs + metrics) |
 | `http://localhost:8080/actuator/health` | Gateway health |
 | `http://localhost:8081/actuator/health` | Registry health |
 | `http://localhost:5436` | PostgreSQL (`psql -U postgres -d cartogra`) |
 | `http://localhost:6379` | Redis (`redis-cli`) |
 | `http://localhost:9092` | Kafka bootstrap |
-| `http://localhost:16686` | Jaeger UI (traces) |
-| `http://localhost:3001` | Grafana (metrics) |
+| `http://localhost:9090` | Prometheus (direct query) |
+| `http://localhost:3200` | Tempo HTTP API |
+| `http://localhost:8086` | Kafka UI |
+| `http://localhost:8087` | Valkey UI |
+| `http://localhost:8088` | pgAdmin |
 
 ---
 
@@ -170,7 +175,7 @@ netstat -ano | findstr :8081     # Windows (then taskkill /PID <PID> /F)
 ### Kafka consumer lag not clearing
 
 ```bash
-docker compose restart kafka
+docker compose -f infra/docker-compose/docker-compose.dev.yml restart kafka
 # Wait 15 seconds, then restart the consumer service
 ./gradlew :services:topology:bootRun
 ```
@@ -180,15 +185,38 @@ docker compose restart kafka
 Never edit a committed Flyway migration. If you need to fix a mistake, create a new migration (`V00N__fix_...`). If on a local-only branch, drop and recreate the database:
 
 ```bash
-docker compose down -v postgres
-docker compose up -d postgres
+docker compose -f infra/docker-compose/docker-compose.dev.yml down -v postgres
+docker compose -f infra/docker-compose/docker-compose.dev.yml up -d postgres
 ./gradlew :services:registry:flywayMigrate
 ```
 
-### OTel traces not appearing in Jaeger
+### OTel traces not appearing in Grafana/Tempo
 
-Check the `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` env var in your shell or run configuration. Default: `http://localhost:4318/v1/traces`. Ensure the `otel-collector` and `jaeger` containers are running:
+Check `OTEL_EXPORTER_OTLP_ENDPOINT` in your shell (default: `http://localhost:4317`). Verify the observability stack is running and healthy:
 
 ```bash
-docker compose -f infra/docker-compose/docker-compose.yml up -d jaeger otel-collector
+docker compose -f infra/docker-compose/docker-compose.dev.yml ps
+# tempo, loki, prometheus, otel-collector, grafana should all be (healthy)
 ```
+
+Query Tempo directly to confirm traces are arriving:
+
+```bash
+curl "http://localhost:3200/api/search?limit=5"
+```
+
+Query Loki directly to confirm logs are arriving:
+
+```bash
+curl -G "http://localhost:3100/loki/api/v1/query" \
+  --data-urlencode 'query={service_name="gateway"}' \
+  --data-urlencode 'limit=5'
+```
+
+Query Prometheus to confirm metrics are arriving:
+
+```bash
+curl "http://localhost:9090/api/v1/query?query=cartogra_jvm_memory_used_bytes"
+```
+
+Open `http://localhost:3001` → Explore → Tempo Search to browse traces. Click any span to navigate to correlated Loki logs and RED metrics panels.

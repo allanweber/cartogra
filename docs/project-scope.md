@@ -1028,7 +1028,7 @@ Merge to main:
 
 ### Observability
 
-- **Distributed Tracing:** **OpenTelemetry** Java agent/SDK in **all** JVM services; export OTLP to a collector. Trace backends can be Jaeger, Grafana Tempo, or vendor — the standard is OTLP + trace IDs in logs and API envelopes.
+- **Distributed Tracing:** **OpenTelemetry** Java agent/SDK in **all** JVM services; export OTLP to the collector → **Grafana Tempo**. The standard is OTLP + trace IDs in logs and API envelopes.
 - **Metrics:** Micrometer → **Prometheus** (scrape) → **Grafana** dashboards (RED/USE, JVM, Kafka lag, business KPIs)
 - **Logging:** Structured JSON with **traceId** / span fields matching OTel; ship to **Grafana Loki**, ELK, or cloud logging — goal is query-by-trace and Grafana correlation
 - **Business Metrics:** Custom dashboards for services tracked, contracts validated, AI query patterns
@@ -1261,7 +1261,7 @@ Building in public isn't just about sharing progress — it's about demonstratin
 | **Integrations** | GitHub API, Azure DevOps API, Kubernetes API, Slack API, Microsoft Teams, OpenTelemetry |
 | **Containers** | Docker (all apps and services), Kubernetes, Helm |
 | **CI/CD** | GitHub Actions, Azure Pipelines (extension) |
-| **Observability** | OpenTelemetry (all services), Prometheus, Grafana (+ trace/log backend via OTLP/Loki or Jaeger as deployed) |
+| **Observability** | OpenTelemetry (all services), Prometheus, Grafana Tempo (traces), Grafana Loki (logs), Grafana (dashboards + correlation) |
 | **IaC** | Terraform |
 | **Testing** | JUnit 5, Testcontainers, Vitest, Playwright, k6 |
 | **Feature Flags** | Unleash |

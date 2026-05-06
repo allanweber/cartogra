@@ -518,7 +518,7 @@ GET    /intelligence/digests/latest   # Latest weekly digest
 
 **Applies to Cartogra Java / Spring REST APIs only** (gateway + registry, topology, contract, intelligence, ingestion HTTP). **Webhook endpoints** use provider payloads, not this envelope. Nested `data` payloads (e.g. lists) stay inside `data`; **`traceId` is always at the top level** next to `data` or `error`.
 
-**`traceId` format:** Always the **OpenTelemetry trace id**: exactly **32 lowercase hex characters** (example below). It matches `SpanContext.getTraceId()` and the trace id segment inside W3C **`traceparent`**. Use the same value in logs and when searching Grafana/Jaeger/Tempo.
+**`traceId` format:** Always the **OpenTelemetry trace id**: exactly **32 lowercase hex characters** (example below). It matches `SpanContext.getTraceId()` and the trace id segment inside W3C **`traceparent`**. Use the same value in logs and when searching Grafana Tempo or Loki.
 
 ```json
 // Success (example: paginated list inside data)

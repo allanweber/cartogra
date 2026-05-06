@@ -1,7 +1,7 @@
 # ADR-0007 — Local Development Infrastructure (S0.3)
 
 **Date:** 2026-05-01
-**Status:** Accepted
+**Status:** Accepted — §4 superseded by [ADR-0008](ADR-0008-lgtm-observability-stack.md)
 **Deciders:** Platform team
 
 ---
@@ -15,7 +15,7 @@ were required:
 
 1. **Kafka broker** — which image and cluster mode
 2. **Cache layer** — Redis or an alternative
-3. **Observability pipeline** — whether to run OTel Collector + Jaeger and where to place them
+3. **Observability pipeline** — which backends to use and where to place the OTel Collector
 4. **Developer tooling** — Kafka UI, JVM debugger attachment
 
 ---
@@ -56,37 +56,34 @@ BSD-licensed successor with full wire-protocol compatibility.
 
 ---
 
-### 3. OTel Collector in the main compose (production-like topology)
+### 3. OTel Collector in the dev overlay (production-like topology)
 
-**Decision:** Include `otel/opentelemetry-collector-contrib:0.151.0` in `docker-compose.yml`
-(not the dev overlay). Services export OTLP to `localhost:4317`; the collector forwards to
-Jaeger over the internal container network.
+**Decision:** Include `otel/opentelemetry-collector-contrib:0.151.0` in `docker-compose.dev.yml`
+alongside the LGTM observability backends. Services export OTLP to `localhost:4317`; the
+collector fans out to Tempo (traces), Loki (logs), and Prometheus (metrics) over the internal
+container network.
 
 **Rationale:** In production, a collector sidecar or DaemonSet sits between services and the
-observability backend. Replicating this topology locally means:
+observability backends. Replicating this topology locally means:
 
 - Services configure a single env var (`OTEL_EXPORTER_OTLP_ENDPOINT`) that points at the
-  collector in all environments. Only the collector's exporter destination changes per environment.
+  collector in all environments. Only the collector's exporter destinations change per environment.
 - Collector-side features (batching, sampling, attribute filtering, routing to multiple backends)
   are exercised locally, not just in staging.
-- No direct service → Jaeger wiring that would not exist in production.
+- No direct service → backend wiring that would not exist in production.
 
-Jaeger receives spans from the collector on port `4317` (internal network only). The Jaeger UI
-is exposed at `localhost:16686`. Services never talk directly to Jaeger.
-
-Note: Jaeger v2 is built on the OTel Collector framework and no longer exposes the legacy admin
-port `14269`. The Docker healthcheck targets the query HTTP server at `16686` instead.
+The base `docker-compose.yml` stays pure infra (Postgres + Valkey + Kafka). Observability
+services live in the dev overlay so they do not bloat CI or minimal local runs.
 
 ---
 
-### 4. Jaeger 2.17.0
+### 4. LGTM Observability Stack
 
-**Decision:** Use `jaegertracing/jaeger:2.17.0`.
+**Decision:** Use Grafana Tempo (traces), Grafana Loki (logs), and Prometheus (metrics) as
+local observability backends, with Grafana as the single correlation UI.
 
-**Rationale:** Jaeger v2 natively receives OTLP via gRPC. The legacy Jaeger agent
-(UDP-based, deprecated) and the older `all-in-one` Thrift/binary Jaeger protocol are not needed.
-A single container replaces the older `all-in-one + agent` setup. v2.17.0 is the current stable
-release as of 2026-05-01.
+See [ADR-0008](ADR-0008-lgtm-observability-stack.md) for the full rationale, signal pipeline
+detail, and K8s deployment plan.
 
 ---
 
@@ -132,10 +129,10 @@ restarts the relevant `bootRun` process.
   using env-var defaults that exactly match the compose port bindings.
 - Valkey 8 is a drop-in replacement: zero code changes when `spring-boot-starter-data-redis` or
   any Lettuce-based client is added in future sprints.
-- OTel collector is the single configuration knob for changing trace backends per environment.
-  Services need no code changes to point at a different backend.
-- The dev overlay pattern is reusable — Prometheus and Grafana can be added to
-  `docker-compose.dev.yml` in Phase 5 without touching the main compose.
+- OTel collector is the single configuration knob for changing observability backends per
+  environment. Services need no code changes to point at different backends.
+- The dev overlay hosts the full LGTM stack (Tempo, Loki, Prometheus, Grafana) without touching
+  the base compose used by CI.
 
 ### Negative / Trade-offs
 
@@ -154,9 +151,8 @@ restarts the relevant `bootRun` process.
 | Kafka 3.9.0 (ZooKeeper optional) | Still bundles ZooKeeper support; Spring Kafka 4.x targets 4.0 API surface; no benefit over 4.0 |
 | Redpanda instead of Apache Kafka | Wire-compatible but a different binary; introduces potential behaviour differences for KRaft controller APIs used by Spring Kafka 4.x |
 | Redis 7.x | SSPL license incompatible with open-source redistribution; project aims to remain Apache 2.0 compatible |
-| Direct service → Jaeger (no collector) | Diverges from production topology; loses collector-side sampling and routing flexibility |
-| Jaeger v1 all-in-one | Deprecated; requires legacy Jaeger protocol instead of OTLP; no active development |
-| OTel Collector in dev overlay only | CI and other non-dev environments would need to wire services directly to Jaeger, diverging from production |
+| Direct service → observability backend (no collector) | Diverges from production topology; loses collector-side batching, sampling, and multi-backend routing |
+| OTel Collector in base compose only | Observability backends (Tempo, Loki, Prometheus, Grafana) are dev-only; coupling the collector to the base compose pulls in those deps for CI |
 
 ---
 
@@ -166,5 +162,5 @@ restarts the relevant `bootRun` process.
 - [Valkey project](https://valkey.io/)
 - [Redis SSPL license change announcement](https://redis.io/blog/redis-adopts-dual-source-available-licensing/)
 - [OTel Collector contrib releases](https://github.com/open-telemetry/opentelemetry-collector-contrib/releases)
-- [Jaeger v2 documentation](https://www.jaegertracing.io/docs/2.0/)
+- [ADR-0008 — LGTM Observability Stack](ADR-0008-lgtm-observability-stack.md)
 - [ADR-0003 — gRPC for internal service communication](ADR-0003-grpc-for-internal-service-communication.md)

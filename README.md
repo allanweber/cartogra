@@ -41,9 +41,8 @@ Service catalogs go stale because they're updated manually. Cartogra solves this
 **Prerequisites:** Docker, JDK 25, Node 22+, pnpm
 
 ```bash
-# 1. Copy env vars and start the local dev stack
-cp .env.example .env
-cd infra/docker-compose && docker compose -f docker-compose.dev.yml up -d
+# 1. Start the local dev stack
+cd infra/docker-compose && docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 
 # 2. Run all services (from repo root)
 ./gradlew bootRun
@@ -63,35 +62,65 @@ See [docs/runbooks/local-development.md](docs/runbooks/local-development.md) for
 The local stack lives in `infra/docker-compose/`. All services connect via `localhost` using the env-var defaults in `.env.example`.
 
 ```bash
-# Production-equivalent stack (Postgres, Kafka, Valkey, OTel Collector, Jaeger)
-cd infra/docker-compose && docker compose up -d
+# Base infra only (Postgres, Kafka, Valkey)
+cd infra/docker-compose && docker compose -f docker-compose.yml up -d
 
-# Dev stack — same services + Kafka UI, Valkey UI, and pgAdmin
-cd infra/docker-compose && docker compose -f docker-compose.dev.yml up -d
+# Full dev stack — base infra + observability + developer UIs
+cd infra/docker-compose && docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 ```
 
-**Containers and UIs (dev stack):**
+**Containers and ports (full dev stack):**
 
 | Container | Host port(s) | UI / access |
 | --------- | ------------ | ----------- |
 | PostgreSQL | 5436 | `psql -h localhost -p 5436 -U cartogra -d cartogra` |
 | Valkey | 6380 | Key/value store (Redis-compatible) |
 | Kafka | 9092 | Kafka broker |
-| Jaeger | 16686 | [http://localhost:16686](http://localhost:16686) — distributed trace viewer |
-| OTel Collector | 4317 (gRPC), 4318 (HTTP) | OTLP ingest endpoint |
+| OTel Collector | 4317 (gRPC), 4318 (HTTP) | OTLP ingest from all services |
+| Grafana _(dev only)_ | 3001 | [http://localhost:3001](http://localhost:3001) — traces, logs, metrics correlation UI |
+| Tempo _(dev only)_ | 3200 | Distributed trace backend (HTTP API) |
+| Prometheus _(dev only)_ | 9090 | [http://localhost:9090](http://localhost:9090) — metrics query and scrape target |
 | Kafka UI _(dev only)_ | 8086 | [http://localhost:8086](http://localhost:8086) — topic and message browser |
 | Valkey UI _(dev only)_ | 8087 | [http://localhost:8087](http://localhost:8087) — Redis Commander key/value browser |
 | pgAdmin _(dev only)_ | 8088 | [http://localhost:8088](http://localhost:8088) — PostgreSQL browser and query UI |
 
-The dev-stack pgAdmin container is configured for local-only convenience with `SERVER_MODE=False` and `MASTER_PASSWORD_REQUIRED=False`, so it should not prompt for the normal pgAdmin web login or a separate master password.
+Grafana is pre-configured with Tempo, Loki, and Prometheus datasources and cross-signal correlation. Open **Explore → Tempo Search** to browse traces, then click any span to jump to correlated Loki logs and RED metrics.
 
-If you override those settings, use pgAdmin with the default login `admin@cartogra.dev` and password `cartogra` unless you also override `PGADMIN_DEFAULT_EMAIL` or `PGADMIN_DEFAULT_PASSWORD` in `.env`.
+The dev-stack pgAdmin container is configured for local-only convenience with `SERVER_MODE=False` and `MASTER_PASSWORD_REQUIRED=False`. Default login: `admin@cartogra.dev` / `cartogra` (or whatever you set in `PGADMIN_DEFAULT_EMAIL` / `PGADMIN_DEFAULT_PASSWORD` in `.env`). The local Postgres server is pre-loaded as `Cartogra Local Postgres` — connect via host `host.docker.internal`, port `5436`, database `cartogra`, user `cartogra`.
 
-The dev container also pins the desktop-mode user to `admin@cartogra.dev` so auto-login works with the persisted pgAdmin data volume instead of looking for pgAdmin's built-in default desktop account.
+---
 
-pgAdmin also preloads the local Postgres server as `Cartogra Local Postgres` using host `host.docker.internal` and port `5436`, which routes from the pgAdmin container to the host-mapped Postgres port.
+## Configuration
 
-Connect to the local database from pgAdmin with host `host.docker.internal`, port `5436`, database `cartogra`, username `cartogra`, and the same password you set in `POSTGRES_PASSWORD`.
+**Local development requires no environment variables.** All service defaults (database, Kafka, Redis, OTel endpoints) are hardcoded in each service's `application.yml`. Docker Compose infra defaults are inlined in `docker-compose.dev.yml`.
+
+For non-local environments (CI, staging, production) override via standard [Spring Boot env var binding](https://docs.spring.io/spring-boot/reference/features/external-config.html#features.external-config.typesafe-configuration-properties.relaxed-binding.environment-variables) — dots become underscores, e.g. `spring.datasource.url` → `SPRING_DATASOURCE_URL`.
+
+### `gateway` (port 8080)
+
+| Variable | Description | Example value |
+| -------- | ----------- | ------------- |
+| `SPRING_CLOUD_GATEWAY_SERVER_WEBFLUX_ROUTES_0_URI` | Registry service address | `http://registry:8081` |
+| `MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT` | Trace exporter (HTTP) | `http://otel-collector:4318/v1/traces` |
+| `MANAGEMENT_OTLP_METRICS_EXPORT_URL` | Metrics exporter (HTTP) | `http://otel-collector:4318/v1/metrics` |
+| `MANAGEMENT_OTLP_LOGGING_EXPORT_ENDPOINT` | Log exporter (HTTP) | `http://otel-collector:4318/v1/logs` |
+
+### `registry` (port 8081) · `ingestion` (port 8085)
+
+These services share the same database and OTel config shape. Future DB-backed services follow the same pattern.
+
+| Variable | Description | Example value |
+| -------- | ----------- | ------------- |
+| `SPRING_DATASOURCE_URL` | JDBC connection string | `jdbc:postgresql://postgres:5432/cartogra` |
+| `SPRING_DATASOURCE_USERNAME` | Database user | `cartogra` |
+| `SPRING_DATASOURCE_PASSWORD` | Database password | _(inject from secret)_ |
+| `MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT` | Trace exporter (HTTP) | `http://otel-collector:4318/v1/traces` |
+| `MANAGEMENT_OTLP_METRICS_EXPORT_URL` | Metrics exporter (HTTP) | `http://otel-collector:4318/v1/metrics` |
+| `MANAGEMENT_OTLP_LOGGING_EXPORT_ENDPOINT` | Log exporter (HTTP) | `http://otel-collector:4318/v1/logs` |
+
+### `topology` · `contract` · `intelligence` _(not yet scaffolded)_
+
+Will follow the same pattern as `registry` once added.
 
 ---
 

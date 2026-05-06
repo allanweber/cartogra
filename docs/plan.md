@@ -295,7 +295,7 @@ flowchart TB
 
 ### MVP boundary
 
-- **In:** Helm umbrella + per-service charts; Terraform modules for at least one cloud reference; GitHub Actions deploy staging; observability stack (OTel → Jaeger, Micrometer → Prometheus, Grafana); structured logging aggregation documented; Acme Fintech seed + loader; guest read-only demo mode; Operations UI (ingestion health, recent platform events); DLQ topic + replay admin API; Docusaurus docs site; Playwright E2E smoke; k6 load tests on critical paths.
+- **In:** Helm umbrella + per-service charts; Terraform modules for at least one cloud reference; GitHub Actions deploy staging; observability stack (OTel → Tempo + Loki + Prometheus, Grafana for correlation); structured logging aggregation documented; Acme Fintech seed + loader; guest read-only demo mode; Operations UI (ingestion health, recent platform events); DLQ topic + replay admin API; Docusaurus docs site; Playwright E2E smoke; k6 load tests on critical paths.
 - **Defer:** Multi-region active-active; enterprise SSO hardening beyond demo OAuth; paid hosting SLAs.
 
 ### Definition of Done

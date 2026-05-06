@@ -203,7 +203,7 @@ Post-mortems are shared in `#engineering-all` within 48 hours of resolution.
 |----------|-----|
 | Grafana — service overview | `http://grafana.internal/d/cartogra-overview` |
 | Grafana — Kafka consumer lag | `http://grafana.internal/d/cartogra-kafka` |
-| Jaeger — trace search | `http://jaeger.internal` |
+| Grafana — trace search (Tempo) | `http://grafana.internal/explore` |
 | PagerDuty — active incidents | `https://app.pagerduty.com` |
 | AWS CloudWatch — EKS logs | AWS Console → CloudWatch → Log groups → `/aws/eks/cartogra-prod` |
 | Status page | `https://status.cartogra.io` |
