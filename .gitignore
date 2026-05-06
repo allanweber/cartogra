@@ -52,3 +52,5 @@ build
 
 # Ignore Kotlin plugin data
 .kotlin
+.claude/mcp.json
+.mcp.json

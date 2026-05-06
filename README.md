@@ -1,6 +1,6 @@
 # Cartogra
 
-[![CI](https://github.com/your-org/cartogra/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/cartogra/actions/workflows/ci.yml)
+[![CI](https://github.com/allanweber/cartogra/actions/workflows/ci.yml/badge.svg)](https://github.com/allanweber/cartogra/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 **Cartogra** is a living service registry and dependency intelligence platform for engineering teams managing distributed systems at scale.

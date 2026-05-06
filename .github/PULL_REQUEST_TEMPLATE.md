@@ -19,3 +19,5 @@
 - [ ] No hardcoded credentials
 - [ ] Tests pass locally (`./gradlew build`)
 - [ ] No CRITICAL/HIGH CVEs introduced (Trivy)
+- [ ] Docs updated where relevant (ADR, OpenAPI spec, runbook)
+- [ ] OTel `traceparent` propagated on all new HTTP, gRPC, and Kafka calls

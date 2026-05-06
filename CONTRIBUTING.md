@@ -74,6 +74,24 @@ See [docs/runbooks/local-development.md](docs/runbooks/local-development.md).
 
 ---
 
+## Branch Protection
+
+`main` branch protection must be configured in **GitHub → Settings → Branches** before the first external collaborator joins:
+
+| Setting | Required value |
+| ------- | -------------- |
+| Require a pull request before merging | Enabled |
+| Required approving reviews | 1 |
+| Dismiss stale reviews on new push | Enabled |
+| Required status checks | `build-and-test`, `trivy`, `frontend-ci` |
+| Require branches to be up to date | Enabled |
+| Restrict force pushes | Disabled for everyone |
+| Allow deletions | Disabled |
+
+These settings are not enforced via GitHub Actions — they must be applied manually or via Terraform/`gh` CLI by a repo admin.
+
+---
+
 ## Questions
 
 Open a GitHub Discussion or use the architecture discussion issue template for design questions.
