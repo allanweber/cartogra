@@ -43,7 +43,7 @@ Copy `.env.example` to `.env`. The following variables are required to start all
 ## 3. Start infrastructure
 
 ```bash
-docker compose up -d postgres redis kafka zookeeper
+docker compose -f infra/docker-compose/docker-compose.yml up -d postgres valkey kafka jaeger otel-collector
 ```
 
 Wait for healthy status:
@@ -93,7 +93,7 @@ Open one terminal per service, or use the IntelliJ "Run Configurations":
 ./gradlew :services:ingestion:bootRun
 ```
 
-Each service logs `Started <Name>Application` when ready. OTel traces will print to stdout in dev profile.
+Each service logs `Started <Name>Application` when ready.
 
 ---
 
@@ -132,7 +132,7 @@ This creates:
 | `http://localhost:3000` | Frontend |
 | `http://localhost:8080/actuator/health` | Gateway health |
 | `http://localhost:8081/actuator/health` | Registry health |
-| `http://localhost:5432` | PostgreSQL (`psql -U postgres -d cartogra`) |
+| `http://localhost:5436` | PostgreSQL (`psql -U postgres -d cartogra`) |
 | `http://localhost:6379` | Redis (`redis-cli`) |
 | `http://localhost:9092` | Kafka bootstrap |
 | `http://localhost:16686` | Jaeger UI (traces) |
@@ -187,8 +187,8 @@ docker compose up -d postgres
 
 ### OTel traces not appearing in Jaeger
 
-Check the `OTEL_EXPORTER_OTLP_ENDPOINT` env var in `.env`. Default: `http://localhost:4317`. Ensure the `otel-collector` container is running:
+Check the `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` env var in your shell or run configuration. Default: `http://localhost:4318/v1/traces`. Ensure the `otel-collector` and `jaeger` containers are running:
 
 ```bash
-docker compose up -d otel-collector jaeger
+docker compose -f infra/docker-compose/docker-compose.yml up -d jaeger otel-collector
 ```

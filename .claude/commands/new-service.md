@@ -60,7 +60,7 @@ Arguments: $ARGUMENTS
      application:
        name: <name>-service
      datasource:
-       url: jdbc:postgresql://${DB_HOST:localhost}:5432/${DB_NAME:<name>_db}
+       url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5436}/${DB_NAME:<name>_db}
        username: ${DB_USER:cartogra}
        password: ${DB_PASSWORD:secret}
      flyway:

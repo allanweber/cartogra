@@ -55,6 +55,8 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] 0.11 [CODE] Harden `services:gateway` for Spring Cloud Gateway, OTel tracing, `traceparent` propagation, `X-Trace-Id` response header handling, and virtual threads.
 - [ ] 0.12 [CODE] Harden `services:ingestion` for Spring Data JDBC, explicit Flyway, virtual threads, and a health-only Phase 0 stub.
 - [ ] 0.13 [CODE] Add one sample endpoint that proves the HTTP response envelope and returns `{ "data": ..., "traceId": "..." }` plus the matching `X-Trace-Id` header.
+- Note 2026-05-05: `services:registry` and `services:ingestion` now include `org.flywaydb:flyway-database-postgresql`, which fixes Flyway startup against PostgreSQL 16.13 while the broader hardening work in 0.10 and 0.12 remains open.
+- Note 2026-05-05: `services:registry` and `services:ingestion` now use separate Flyway history tables in the shared local Postgres database so each service can keep its own `V001+` migration sequence without checksum collisions.
 
 ### Database baseline
 
@@ -69,6 +71,7 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] 0.19 [INFRA] Finalize `infra/docker-compose/docker-compose.yml` with PostgreSQL 16, Redis-compatible cache, Kafka-compatible broker, OTel collector, Jaeger, healthchecks, and named volumes.
 - [ ] 0.20 [INFRA] Finalize `infra/docker-compose/otel-collector.yml` to receive OTLP and export to Jaeger.
 - [ ] 0.21 [INFRA] Finalize `infra/docker-compose/docker-compose.dev.yml` with local observability helpers such as a Kafka/Redpanda console.
+- Note 2026-05-05: `infra/docker-compose/docker-compose.dev.yml` now includes a local pgAdmin helper on port `8088` for inspecting the PostgreSQL dev database; the broader 0.21 compose finalization remains open.
 - [ ] 0.22 [INFRA] Add a root `.env.example` covering local ports, DB credentials, Kafka, Redis, and OTel settings.
 - [ ] 0.23 [INFRA] Add multi-stage Dockerfiles for registry, gateway, and ingestion with Temurin 25, non-root user, and `MaxRAMPercentage=75`.
 - [ ] 0.24 [INFRA] Add a frontend Dockerfile stub or document why frontend image creation is intentionally deferred beyond Phase 0.

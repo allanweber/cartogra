@@ -1,0 +1,17 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Cartogra Local Postgres",
+      "Group": "Cartogra",
+      "Host": "host.docker.internal",
+      "Port": 5436,
+      "MaintenanceDB": "cartogra",
+      "Username": "cartogra",
+      "SSLMode": "prefer",
+      "ConnectionParameters": {
+        "connect_timeout": 10,
+        "sslmode": "prefer"
+      }
+    }
+  }
+}

@@ -5,12 +5,13 @@ spring:
     virtual:
       enabled: true
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:cartogra}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5436}/${DB_NAME:cartogra}
     username: ${DB_USER:cartogra}
     password: ${DB_PASSWORD:cartogra}
   flyway:
     enabled: true
     locations: classpath:db/migration
+    table: flyway_schema_history_registry
 
 server:
   port: 8081
@@ -28,17 +29,15 @@ management:
   tracing:
     sampling:
       probability: 1.0
-
-otel:
-  traces:
-    exporter: ${OTEL_TRACES_EXPORTER:otlp}
-  metrics:
-    exporter: ${OTEL_METRICS_EXPORTER:otlp}
-  logs:
-    exporter: ${OTEL_LOGS_EXPORTER:none}
-  exporter:
-    otlp:
-      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
+    export:
+      otlp:
+        enabled: ${MANAGEMENT_TRACING_EXPORT_OTLP_ENABLED:true}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+          transport: http
 
 logging:
   pattern:

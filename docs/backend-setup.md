@@ -59,7 +59,7 @@ DB_PASSWORD=cartogra
 KAFKA_BOOTSTRAP_SERVERS=localhost:9092
 REDIS_HOST=localhost
 REDIS_PORT=6379
-OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://localhost:4318/v1/traces
 ```
 
 Use service-specific application-local settings where applicable.

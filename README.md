@@ -66,7 +66,7 @@ The local stack lives in `infra/docker-compose/`. All services connect via `loca
 # Production-equivalent stack (Postgres, Kafka, Valkey, OTel Collector, Jaeger)
 cd infra/docker-compose && docker compose up -d
 
-# Dev stack — same services + Kafka UI at localhost:8086
+# Dev stack — same services + Kafka UI, Valkey UI, and pgAdmin
 cd infra/docker-compose && docker compose -f docker-compose.dev.yml up -d
 ```
 
@@ -81,6 +81,17 @@ cd infra/docker-compose && docker compose -f docker-compose.dev.yml up -d
 | OTel Collector | 4317 (gRPC), 4318 (HTTP) | OTLP ingest endpoint |
 | Kafka UI _(dev only)_ | 8086 | [http://localhost:8086](http://localhost:8086) — topic and message browser |
 | Valkey UI _(dev only)_ | 8087 | [http://localhost:8087](http://localhost:8087) — Redis Commander key/value browser |
+| pgAdmin _(dev only)_ | 8088 | [http://localhost:8088](http://localhost:8088) — PostgreSQL browser and query UI |
+
+The dev-stack pgAdmin container is configured for local-only convenience with `SERVER_MODE=False` and `MASTER_PASSWORD_REQUIRED=False`, so it should not prompt for the normal pgAdmin web login or a separate master password.
+
+If you override those settings, use pgAdmin with the default login `admin@cartogra.dev` and password `cartogra` unless you also override `PGADMIN_DEFAULT_EMAIL` or `PGADMIN_DEFAULT_PASSWORD` in `.env`.
+
+The dev container also pins the desktop-mode user to `admin@cartogra.dev` so auto-login works with the persisted pgAdmin data volume instead of looking for pgAdmin's built-in default desktop account.
+
+pgAdmin also preloads the local Postgres server as `Cartogra Local Postgres` using host `host.docker.internal` and port `5436`, which routes from the pgAdmin container to the host-mapped Postgres port.
+
+Connect to the local database from pgAdmin with host `host.docker.internal`, port `5436`, database `cartogra`, username `cartogra`, and the same password you set in `POSTGRES_PASSWORD`.
 
 ---
 
