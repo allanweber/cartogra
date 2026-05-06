@@ -114,6 +114,31 @@ Flyway migrations run on service startup. To verify migrations via tests/build:
 ./gradlew test
 ```
 
+### Per-Service Migration Isolation (Required)
+
+For independent startup migrations, each DB-backed service must own its schema and Flyway history table inside that schema.
+
+Required Spring config pattern:
+
+```yaml
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5436/cartogra?currentSchema=<service_schema>
+  flyway:
+    enabled: true
+    create-schemas: true
+    schemas: <service_schema>
+    default-schema: <service_schema>
+    locations: classpath:db/migration
+    table: flyway_schema_history
+```
+
+Examples:
+- `registry` service uses schema `registry`
+- `ingestion` service uses schema `ingestion`
+
+Do not use one shared Flyway history table in a shared `public` schema when services migrate independently.
+
 ## Health Checks
 
 - Gateway: http://localhost:8080/actuator/health

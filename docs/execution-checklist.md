@@ -72,9 +72,8 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [x] 0.20 [INFRA] Finalize `infra/docker-compose/otel-collector.yml` to receive OTLP and export traces→Tempo, metrics→Prometheus, logs→Loki (LGTM stack; supersedes Jaeger — see ADR-0008).
 - [x] 0.21 [INFRA] Finalize `infra/docker-compose/docker-compose.dev.yml` with LGTM observability stack (Tempo, Loki, Prometheus, Grafana) and dev helpers (Kafka UI, Valkey UI, pgAdmin).
 - Note 2026-05-06: LGTM stack replaces Jaeger; Grafana on port 3001, full three-signal correlation (traces + logs + metrics).
-- [ ] 0.22 [INFRA] Add a root `.env.example` covering local ports, DB credentials, Kafka, Redis, and OTel settings.
-- [ ] 0.23 [INFRA] Add multi-stage Dockerfiles for registry, gateway, and ingestion with Temurin 25, non-root user, and `MaxRAMPercentage=75`.
-- [ ] 0.24 [INFRA] Add a frontend Dockerfile stub or document why frontend image creation is intentionally deferred beyond Phase 0.
+- [ ] 0.22 [INFRA] Add multi-stage Dockerfiles for registry, gateway, and ingestion with Temurin 25, non-root user, and `MaxRAMPercentage=75`.
+- [ ] 0.23 [INFRA] Add a frontend Dockerfile stub or document why frontend image creation is intentionally deferred beyond Phase 0.
 
 ### Observability and CI
 
@@ -232,7 +231,7 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] 2.8 [CODE] Define `topology/v1/topology.proto` in `shared:contracts` with `GetGraph`, `GetImpact`, `ListSPOF`, `ListCycles`, and `ListDrifts` RPCs.
 - [ ] 2.9 [CODE] Implement `TopologyGrpcService` in `services:topology` annotated with `@GrpcService`; extract tenant from gRPC metadata via the shared server interceptor pattern.
 - [ ] 2.10 [CODE] Implement `TopologyGrpcClient` in `services:gateway` using `@GrpcClient("topology")`; map `StatusRuntimeException` to domain exceptions at the infrastructure boundary.
-- [ ] 2.11 [INFRA] Configure gRPC server port `9092` for topology; add `TOPOLOGY_GRPC_PORT` to `.env.example` and expose the port in `docker-compose.yml`.
+- [ ] 2.11 [INFRA] Configure gRPC server port `9092` for topology; add `TOPOLOGY_GRPC_PORT` and expose the port in `docker-compose.yml`.
 
 ### Graph algorithms and APIs
 
@@ -304,7 +303,7 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] 3.11 [CODE] Define `contract/v1/contract.proto` in `shared:contracts` with `CheckCompatibility`, `GetMatrix`, and `GetContractCheck` RPCs.
 - [ ] 3.12 [CODE] Implement `ContractGrpcService` in `services:contract` annotated with `@GrpcService`; extract tenant from gRPC metadata.
 - [ ] 3.13 [CODE] Implement `ContractGrpcClient` in `services:gateway` using `@GrpcClient("contract")`; map `StatusRuntimeException` to domain exceptions.
-- [ ] 3.14 [INFRA] Configure gRPC server port `9093` for contract; add `CONTRACT_GRPC_PORT` to `.env.example` and expose the port in `docker-compose.yml`.
+- [ ] 3.14 [INFRA] Configure gRPC server port `9093` for contract; add `CONTRACT_GRPC_PORT` and expose the port in `docker-compose.yml`.
 
 ### Breaking-change engine and compatibility workflows
 
@@ -379,7 +378,7 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] 4.10 [CODE] Define `intelligence/v1/intelligence.proto` in `shared:contracts` with `Query`, `GetQueryFeedback`, `Analyze`, `ListFindings`, and `GetHealthScore` RPCs.
 - [ ] 4.11 [CODE] Implement `IntelligenceGrpcService` in `services:intelligence` annotated with `@GrpcService`; extract tenant from gRPC metadata.
 - [ ] 4.12 [CODE] Implement `IntelligenceGrpcClient` in `services:gateway` using `@GrpcClient("intelligence")`; map `StatusRuntimeException` to domain exceptions.
-- [ ] 4.13 [INFRA] Configure gRPC server port `9094` for intelligence; add `INTELLIGENCE_GRPC_PORT` to `.env.example` and expose the port in `docker-compose.yml`.
+- [ ] 4.13 [INFRA] Configure gRPC server port `9094` for intelligence; add `INTELLIGENCE_GRPC_PORT` and expose the port in `docker-compose.yml`.
 
 ### Natural-language query flow
 

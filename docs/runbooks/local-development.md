@@ -190,6 +190,32 @@ docker compose -f infra/docker-compose/docker-compose.dev.yml up -d postgres
 ./gradlew :services:registry:flywayMigrate
 ```
 
+### Flyway error: non-empty schema but no schema history table
+
+Symptom:
+- `Found non-empty schema(s) "public" but no schema history table`
+
+Cause:
+- Service points Flyway at shared `public` while using independent startup migrations.
+
+Required setup per DB-backed service:
+- JDBC URL uses `currentSchema=<service_schema>`
+- Flyway sets `schemas=<service_schema>` and `default-schema=<service_schema>`
+- Flyway history table is `flyway_schema_history` in that service schema
+
+Example (`registry`):
+
+```yaml
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5436/cartogra?currentSchema=registry
+  flyway:
+    create-schemas: true
+    schemas: registry
+    default-schema: registry
+    table: flyway_schema_history
+```
+
 ### OTel traces not appearing in Grafana/Tempo
 
 Check `OTEL_EXPORTER_OTLP_ENDPOINT` in your shell (default: `http://localhost:4317`). Verify the observability stack is running and healthy:

@@ -5,13 +5,16 @@ spring:
     virtual:
       enabled: true
   datasource:
-    url: jdbc:postgresql://localhost:5436/cartogra
+    url: jdbc:postgresql://localhost:5436/cartogra?currentSchema=registry
     username: cartogra
     password: cartogra
   flyway:
     enabled: true
+    create-schemas: true
+    schemas: registry
+    default-schema: registry
     locations: classpath:db/migration
-    table: flyway_schema_history_registry
+    table: flyway_schema_history
 
 server:
   port: 8081
@@ -38,13 +41,14 @@ management:
         otlp:
           endpoint: http://localhost:4318/v1/traces
           transport: http
+    logging:
+      export:
+        otlp:
+          endpoint: http://localhost:4318/v1/logs
   otlp:
     metrics:
       export:
         url: http://localhost:4318/v1/metrics
-    logging:
-      export:
-        endpoint: http://localhost:4318/v1/logs
 
 logging:
   pattern:

@@ -84,7 +84,9 @@ cd infra/docker-compose && docker compose -f docker-compose.yml -f docker-compos
 | Valkey UI _(dev only)_ | 8087 | [http://localhost:8087](http://localhost:8087) — Redis Commander key/value browser |
 | pgAdmin _(dev only)_ | 8088 | [http://localhost:8088](http://localhost:8088) — PostgreSQL browser and query UI |
 
-Grafana is pre-configured with Tempo, Loki, and Prometheus datasources and cross-signal correlation. Open **Explore → Tempo Search** to browse traces, then click any span to jump to correlated Loki logs and RED metrics.
+Grafana starts with provisioned Tempo, Loki, and Prometheus datasources plus a default `Cartogra Observability` dashboard. Use that dashboard for per-service HTTP, JVM, and log-rate views, then open **Explore → Tempo Search** for deep trace search and trace-to-logs or trace-to-metrics correlation.
+
+Grafana will stay mostly empty until both conditions are true: the dev stack is running and at least one Cartogra service is running and receiving traffic.
 
 The dev-stack pgAdmin container is configured for local-only convenience with `SERVER_MODE=False` and `MASTER_PASSWORD_REQUIRED=False`. Default login: `admin@cartogra.dev` / `cartogra` (or whatever you set in `PGADMIN_DEFAULT_EMAIL` / `PGADMIN_DEFAULT_PASSWORD` in `.env`). The local Postgres server is pre-loaded as `Cartogra Local Postgres` — connect via host `host.docker.internal`, port `5436`, database `cartogra`, user `cartogra`.
 
@@ -103,20 +105,25 @@ For non-local environments (CI, staging, production) override via standard [Spri
 | `SPRING_CLOUD_GATEWAY_SERVER_WEBFLUX_ROUTES_0_URI` | Registry service address | `http://registry:8081` |
 | `MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT` | Trace exporter (HTTP) | `http://otel-collector:4318/v1/traces` |
 | `MANAGEMENT_OTLP_METRICS_EXPORT_URL` | Metrics exporter (HTTP) | `http://otel-collector:4318/v1/metrics` |
-| `MANAGEMENT_OTLP_LOGGING_EXPORT_ENDPOINT` | Log exporter (HTTP) | `http://otel-collector:4318/v1/logs` |
+| `MANAGEMENT_OPENTELEMETRY_LOGGING_EXPORT_OTLP_ENDPOINT` | Log exporter (HTTP) | `http://otel-collector:4318/v1/logs` |
 
 ### `registry` (port 8081) · `ingestion` (port 8085)
 
 These services share the same database and OTel config shape. Future DB-backed services follow the same pattern.
 
+Each service must use its own PostgreSQL schema and independent Flyway history table in that schema (for example, `registry` schema for registry service, `ingestion` schema for ingestion service).
+
 | Variable | Description | Example value |
 | -------- | ----------- | ------------- |
-| `SPRING_DATASOURCE_URL` | JDBC connection string | `jdbc:postgresql://postgres:5432/cartogra` |
+| `SPRING_DATASOURCE_URL` | JDBC connection string with service schema | `jdbc:postgresql://postgres:5432/cartogra?currentSchema=registry` |
 | `SPRING_DATASOURCE_USERNAME` | Database user | `cartogra` |
 | `SPRING_DATASOURCE_PASSWORD` | Database password | _(inject from secret)_ |
+| `SPRING_FLYWAY_SCHEMAS` | Service-owned Flyway schema | `registry` |
+| `SPRING_FLYWAY_DEFAULT_SCHEMA` | Service default migration schema | `registry` |
+| `SPRING_FLYWAY_TABLE` | Schema-local history table name | `flyway_schema_history` |
 | `MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT` | Trace exporter (HTTP) | `http://otel-collector:4318/v1/traces` |
 | `MANAGEMENT_OTLP_METRICS_EXPORT_URL` | Metrics exporter (HTTP) | `http://otel-collector:4318/v1/metrics` |
-| `MANAGEMENT_OTLP_LOGGING_EXPORT_ENDPOINT` | Log exporter (HTTP) | `http://otel-collector:4318/v1/logs` |
+| `MANAGEMENT_OPENTELEMETRY_LOGGING_EXPORT_OTLP_ENDPOINT` | Log exporter (HTTP) | `http://otel-collector:4318/v1/logs` |
 
 ### `topology` · `contract` · `intelligence` _(not yet scaffolded)_
 

@@ -18,6 +18,7 @@ plugins {
 val springBootVersion: String by project
 val springCloudVersion: String by project
 val testcontainersVersion: String by project
+val protobufVersion: String by project
 val javaVersion: String by project
 
 subprojects {
@@ -38,6 +39,9 @@ subprojects {
             mavenBom("org.springframework.boot:spring-boot-dependencies:$springBootVersion")
             mavenBom("org.springframework.cloud:spring-cloud-dependencies:$springCloudVersion")
             mavenBom("org.testcontainers:testcontainers-bom:$testcontainersVersion")
+        }
+        dependencies {
+            dependency("com.google.protobuf:protobuf-java:$protobufVersion")
         }
     }
 
