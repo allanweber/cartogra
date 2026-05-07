@@ -135,3 +135,4 @@ cartogra/
 @.claude/rules/frontend.md
 @.claude/rules/infra.md
 @.claude/rules/patterns.md
+@.claude/rules/workflow.md
