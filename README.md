@@ -131,6 +131,14 @@ Will follow the same pattern as `registry` once added.
 
 ---
 
+## Project Board
+
+Track progress and upcoming work on the [Cartogra Roadmap](https://github.com/users/allanweber/projects/5) (GitHub Projects v2).
+
+Milestones map to development phases: Phase 0 (Foundation) through Phase 5 (Ingestion). Each issue is tagged with its phase milestone.
+
+---
+
 ## Documentation
 
 | Doc | Purpose |
