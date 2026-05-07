@@ -60,11 +60,11 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 ### Database baseline
 
-- [ ] 0.14 [INFRA] Add registry Flyway `V001__create_tenants.sql` with UUID PKs, `TIMESTAMPTZ`, soft delete, and RLS.
-- [ ] 0.15 [INFRA] Add registry Flyway `V002__create_teams.sql` with tenant isolation, indexes, soft delete, and RLS.
-- [ ] 0.16 [INFRA] Add registry Flyway `V003__create_users.sql` with tenant isolation, indexes, soft delete, and RLS.
-- [ ] 0.17 [INFRA] Add registry Flyway `V004__create_scm_connections.sql` with tenant isolation, indexes, soft delete, and RLS.
-- [ ] 0.18 [TEST] Add a Testcontainers smoke test that boots Postgres, applies registry migrations cleanly, and fails on any ordering or checksum issue.
+- [x] 0.14 [INFRA] Add registry Flyway `V001__create_tenants.sql` with UUID PKs, `TIMESTAMPTZ`, soft delete, and RLS.
+- [x] 0.15 [INFRA] Add registry Flyway `V002__create_teams.sql` with tenant isolation, indexes, soft delete, and RLS.
+- [x] 0.16 [INFRA] Add registry Flyway `V003__create_users.sql` with tenant isolation, indexes, soft delete, and RLS.
+- [x] 0.17 [INFRA] Add registry Flyway `V004__create_scm_connections.sql` with tenant isolation, indexes, soft delete, and RLS.
+- [x] 0.18 [TEST] Add a Testcontainers smoke test that boots Postgres, applies registry migrations cleanly, and fails on any ordering or checksum issue.
 
 ### Local runtime and containers
 
