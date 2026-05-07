@@ -3,6 +3,10 @@ plugins {
     id("io.spring.dependency-management")
 }
 
+tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
+    archiveFileName.set("${project.name}.jar")
+}
+
 dependencies {
     implementation(project(":shared:common"))
     implementation("org.springframework.boot:spring-boot-starter-web")
