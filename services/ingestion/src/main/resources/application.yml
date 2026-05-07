@@ -5,9 +5,9 @@ spring:
     virtual:
       enabled: true
   datasource:
-    url: jdbc:postgresql://localhost:5436/cartogra?currentSchema=ingestion
-    username: cartogra
-    password: cartogra
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5436/cartogra?currentSchema=ingestion}
+    username: ${SPRING_DATASOURCE_USERNAME:cartogra}
+    password: ${SPRING_DATASOURCE_PASSWORD:cartogra}
   flyway:
     enabled: true
     create-schemas: true
@@ -39,16 +39,16 @@ management:
     tracing:
       export:
         otlp:
-          endpoint: http://localhost:4318/v1/traces
+          endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/traces
           transport: http
     logging:
       export:
         otlp:
-          endpoint: http://localhost:4318/v1/logs
+          endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/logs
   otlp:
     metrics:
       export:
-        url: http://localhost:4318/v1/metrics
+        url: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/metrics
 
 logging:
   pattern:

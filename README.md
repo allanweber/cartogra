@@ -92,6 +92,29 @@ The dev-stack pgAdmin container is configured for local-only convenience with `S
 
 ---
 
+## Build Service Images
+
+Build service images from the repository root using the Phase 0 Dockerfiles in `infra/docker/`.
+
+```bash
+# Registry
+docker build -f infra/docker/registry/Dockerfile -t cartogra/registry:dev .
+
+# Gateway
+docker build -f infra/docker/gateway/Dockerfile -t cartogra/gateway:dev .
+
+# Ingestion
+docker build -f infra/docker/ingestion/Dockerfile -t cartogra/ingestion:dev .
+```
+
+Optional quick verification:
+
+```bash
+docker images | grep "cartogra/registry\|cartogra/gateway\|cartogra/ingestion"
+```
+
+---
+
 ## Configuration
 
 **Local development requires no environment variables.** All service defaults (database, Kafka, Redis, OTel endpoints) are hardcoded in each service's `application.yml`. Docker Compose infra defaults are inlined in `docker-compose.dev.yml`.

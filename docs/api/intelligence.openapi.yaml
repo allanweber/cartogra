@@ -304,7 +304,7 @@ paths:
 
   # ── Health probes ─────────────────────────────────────────────────────────
 
-  /actuator/health/live:
+  /actuator/health/liveness:
     get:
       summary: Liveness probe
       operationId: liveness
@@ -313,7 +313,7 @@ paths:
         "200":
           description: Service alive
 
-  /actuator/health/ready:
+  /actuator/health/readiness:
     get:
       summary: Readiness probe
       operationId: readiness
