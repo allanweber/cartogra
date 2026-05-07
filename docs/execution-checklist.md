@@ -48,13 +48,13 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 ### Build and shared modules
 
-- [ ] 0.7 [CODE] Scaffold `shared:contracts` Gradle module; configure the protobuf plugin and gRPC code generation so all `.proto` files in this module compile to Java stubs that downstream services consume. This module is a prerequisite for any gRPC wiring in Phase 1+.
-- [ ] 0.8 [CODE] Finish `shared:common` with the Kafka event envelope, shared IDs and value objects, and a Spring-free API error model.
-- [ ] 0.9 [CODE] Finish `shared:test-support` with reusable Postgres and Kafka test helpers for Testcontainers-based integration tests.
-- [ ] 0.10 [CODE] Harden `services:registry` for Spring Data JDBC, explicit Flyway, virtual threads, and health readiness wiring.
-- [ ] 0.11 [CODE] Harden `services:gateway` for Spring Cloud Gateway, OTel tracing, `traceparent` propagation, `X-Trace-Id` response header handling, and virtual threads.
-- [ ] 0.12 [CODE] Harden `services:ingestion` for Spring Data JDBC, explicit Flyway, virtual threads, and a health-only Phase 0 stub.
-- [ ] 0.13 [CODE] Add one sample endpoint that proves the HTTP response envelope and returns `{ "data": ..., "traceId": "..." }` plus the matching `X-Trace-Id` header.
+- [x] 0.7 [CODE] Scaffold `shared:contracts` Gradle module; configure the protobuf plugin and gRPC code generation so all `.proto` files in this module compile to Java stubs that downstream services consume. This module is a prerequisite for any gRPC wiring in Phase 1+.
+- [x] 0.8 [CODE] Finish `shared:common` with the Kafka event envelope, shared IDs and value objects, and a Spring-free API error model.
+- [x] 0.9 [CODE] Finish `shared:test-support` with reusable Postgres and Kafka test helpers for Testcontainers-based integration tests.
+- [x] 0.10 [CODE] Harden `services:registry` for Spring Data JDBC, explicit Flyway, virtual threads, and health readiness wiring.
+- [x] 0.11 [CODE] Harden `services:gateway` for Spring Cloud Gateway, OTel tracing, `traceparent` propagation, `X-Trace-Id` response header handling, and virtual threads.
+- [x] 0.12 [CODE] Harden `services:ingestion` for Spring Data JDBC, explicit Flyway, virtual threads, and a health-only Phase 0 stub.
+- [x] 0.13 [CODE] Add one sample endpoint that proves the HTTP response envelope and returns `{ "data": ..., "traceId": "..." }` plus the matching `X-Trace-Id` header.
 - Note 2026-05-05: `services:registry` and `services:ingestion` now include `org.flywaydb:flyway-database-postgresql`, which fixes Flyway startup against PostgreSQL 16.13 while the broader hardening work in 0.10 and 0.12 remains open.
 - Note 2026-05-05: `services:registry` and `services:ingestion` now use separate Flyway history tables in the shared local Postgres database so each service can keep its own `V001+` migration sequence without checksum collisions.
 
