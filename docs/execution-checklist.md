@@ -42,9 +42,9 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 ### Repository and governance
 
-- [ ] 0.4 [DOCS] Finalize root governance files: `LICENSE`, `README.md`, `CONTRIBUTING.md`, `.editorconfig`, `.gitignore`, `CODEOWNERS`, and branch-protection expectations.
-- [ ] 0.5 [DOCS] Add GitHub issue templates for bug report, feature request, and architecture discussion plus a PR template with tests, docs, tenancy, and observability checks.
-- [ ] 0.6 [DOCS] Create the GitHub Project board with columns and milestones for Phases 0 through 5.
+- [x] 0.4 [DOCS] Finalize root governance files: `LICENSE`, `README.md`, `CONTRIBUTING.md`, `.editorconfig`, `.gitignore`, `CODEOWNERS`, and branch-protection expectations.
+- [x] 0.5 [DOCS] Add GitHub issue templates for bug report, feature request, and architecture discussion plus a PR template with tests, docs, tenancy, and observability checks.
+- [x] 0.6 [DOCS] Create the GitHub Project board with columns and milestones for Phases 0 through 5.
 
 ### Build and shared modules
 
