@@ -17,10 +17,11 @@ jobs:
         with:
           java-version: '25'
           distribution: 'temurin'
-          cache: 'gradle'
+
+      - uses: gradle/actions/setup-gradle@v4
 
       - name: Build and test
-        run: ./gradlew build --no-daemon
+        run: gradle build --no-daemon
 
       - name: Trivy vulnerability scan
         uses: aquasecurity/trivy-action@v0.36.0
