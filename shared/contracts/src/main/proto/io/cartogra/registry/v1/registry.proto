@@ -22,20 +22,18 @@ service RegistryService {
 }
 
 // ── Requests ────────────────────────────────────────────────────────────────
+// Tenant ID is never a request field — extracted from gRPC metadata by the
+// server interceptor and stored in a ScopedValue for the duration of the call.
 
 message GetServiceRequest {
-  io.cartogra.common.v1.TenantContext tenant     = 1;
-  string                              service_id = 2;
+  string service_id = 1;
 }
 
 message ListServicesRequest {
-  io.cartogra.common.v1.TenantContext tenant = 1;
-  io.cartogra.common.v1.PageRequest   page   = 2;
+  io.cartogra.common.v1.PageRequest page = 1;
 }
 
-message WatchServicesRequest {
-  io.cartogra.common.v1.TenantContext tenant = 1;
-}
+message WatchServicesRequest {}
 
 // ── Responses ───────────────────────────────────────────────────────────────
 

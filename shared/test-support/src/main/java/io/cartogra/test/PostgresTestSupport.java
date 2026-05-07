@@ -8,10 +8,12 @@ public final class PostgresTestSupport {
     public static final PostgreSQLContainer POSTGRES;
 
     static {
-        POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
-        POSTGRES.withDatabaseName("cartogra_test");
-        POSTGRES.withUsername("cartogra");
-        POSTGRES.withPassword("cartogra");
-        POSTGRES.start();
+        PostgreSQLContainer container = new PostgreSQLContainer("postgres:16-alpine");
+        container.withDatabaseName("cartogra_test");
+        container.withUsername("cartogra");
+        container.withPassword("cartogra");
+        container.withReuse(true);
+        container.start();
+        POSTGRES = container;
     }
 }
