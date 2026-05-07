@@ -12,24 +12,17 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"spring.flyway.enabled=false"})
 class ActuatorHealthIntegrationTest {
 
-    private static final PostgreSQLContainer POSTGRES = PostgresTestSupport.create();
-
-    static {
-        POSTGRES.start();
-    }
-
     @DynamicPropertySource
     static void datasourceProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
-        registry.add("spring.datasource.username", POSTGRES::getUsername);
-        registry.add("spring.datasource.password", POSTGRES::getPassword);
+        registry.add("spring.datasource.url", PostgresTestSupport.POSTGRES::getJdbcUrl);
+        registry.add("spring.datasource.username", PostgresTestSupport.POSTGRES::getUsername);
+        registry.add("spring.datasource.password", PostgresTestSupport.POSTGRES::getPassword);
     }
 
     @LocalServerPort
