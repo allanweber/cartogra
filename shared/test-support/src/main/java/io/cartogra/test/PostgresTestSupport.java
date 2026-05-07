@@ -12,7 +12,6 @@ public final class PostgresTestSupport {
         POSTGRES.withDatabaseName("cartogra_test");
         POSTGRES.withUsername("cartogra");
         POSTGRES.withPassword("cartogra");
-        POSTGRES.withReuse(true);
         POSTGRES.start();
     }
 }
