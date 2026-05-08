@@ -3,6 +3,9 @@ info:
   title: Cartogra Topology API
   version: "0.1.0"
   description: |
+    > **Phase 2 — Topology service — not yet implemented.**
+    > Forward-looking contract. See execution-checklist.md tasks 2.2–2.26.
+
     Dependency graph management, blast radius analysis, cycle detection, SPOF scoring, and drift detection.
 
     **Authentication:** JWT cookie or Bearer token (Gateway-issued). Gateway injects `X-Tenant-Id`.

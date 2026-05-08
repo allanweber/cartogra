@@ -8,6 +8,19 @@ All topics are created explicitly. No speculative topics — a topic is created 
 
 ---
 
+## Implementation Status
+
+| Domain | Phase | Status |
+|--------|-------|--------|
+| Ingestion (repository, spec, dependency observed) | Phase 0 | Implemented |
+| Registry (service registered/updated/deleted, team, scm_connection) | Phase 1 | Planned |
+| Topology (graph updated, drift detected, cycle detected) | Phase 2 | Planned |
+| Contract (check passed/failed, version published) | Phase 3 | Planned |
+| Notification (sent) | Phase 3 | Planned |
+| Intelligence (digest generated, alert raised) | Phase 4 | Planned |
+
+---
+
 ## Topic Catalog
 
 ### Registry domain

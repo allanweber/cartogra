@@ -60,3 +60,17 @@ gh pr create \
 - NEVER close a milestone manually — it closes automatically when all issues are closed
 - A PR that addresses multiple checklist items must still link one primary user-story issue
 - NEVER commit or push without explicit user approval
+
+## BIP (Build in Public) output channels
+
+Every BIP planning task MUST produce drafts for all applicable channels. The canonical format reference is [`docs/bip/README.md`](../../docs/bip/README.md).
+
+Standard channels (all five should be considered for each BIP task):
+
+- **Blog post** — long-form, 600–1000 words, published to personal blog or dev.to
+- **Twitter/X thread** — 4–8 tweets; first tweet is the hook, thread tells the story
+- **Instagram carousel** — 5–8 slides; first slide = hook visual, last slide = CTA; caption 150–200 words
+- **LinkedIn article/post** — 300–500 words, professional framing, ends with engagement question
+- **Video outline** — optional 5–10 min screencast or talking-head script
+
+BIP draft files live at `docs/bip/{task-id}-{slug}.md`. When a checklist item is tagged `[BIP]`, the implementation MUST include all applicable channel drafts in that file. Never plan a BIP task that only produces a blog post.

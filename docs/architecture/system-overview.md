@@ -6,6 +6,20 @@ Cartogra is a **multi-tenant service intelligence platform**. It auto-discovers 
 
 ---
 
+## Implementation Status
+
+| Service | Phase | Status |
+|---------|-------|--------|
+| `gateway` | Phase 0 | Implemented |
+| `registry` | Phase 0 | Implemented |
+| `ingestion` | Phase 0 | Implemented |
+| `frontend` | Phase 1 | Planned |
+| `topology` | Phase 2 | Planned |
+| `contract` | Phase 3 | Planned |
+| `intelligence` | Phase 4 | Planned |
+
+---
+
 ## Service Map
 
 | Service | Port | Responsibility |

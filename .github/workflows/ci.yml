@@ -38,7 +38,7 @@ jobs:
         if: steps.changes.outputs.changed == 'true'
         run: gradle build --no-daemon
 
-      - name: Trivy vulnerability scan
+      - name: Trivy vulnerability scan — fail on CRITICAL or HIGH (unfixed suppressed)
         if: steps.changes.outputs.changed == 'true'
         uses: aquasecurity/trivy-action@v0.36.0
         with:
