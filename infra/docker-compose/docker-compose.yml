@@ -68,6 +68,99 @@ services:
     networks:
       - cartogra-net
 
+  gateway:
+    build:
+      context: ../..
+      dockerfile: infra/docker/gateway/Dockerfile
+    image: cartogra/gateway:local
+    container_name: cartogra-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/cartogra
+      SPRING_DATASOURCE_USERNAME: cartogra
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-cartogra}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_DATA_REDIS_HOST: valkey
+      SPRING_DATA_REDIS_PORT: 6379
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health/liveness"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - cartogra-net
+
+  registry:
+    build:
+      context: ../..
+      dockerfile: infra/docker/registry/Dockerfile
+    image: cartogra/registry:local
+    container_name: cartogra-registry
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/cartogra
+      SPRING_DATASOURCE_USERNAME: cartogra
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-cartogra}
+      SPRING_FLYWAY_TABLE: flyway_schema_history_registry
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health/liveness"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - cartogra-net
+
+  ingestion:
+    build:
+      context: ../..
+      dockerfile: infra/docker/ingestion/Dockerfile
+    image: cartogra/ingestion:local
+    container_name: cartogra-ingestion
+    ports:
+      - "8085:8085"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/cartogra
+      SPRING_DATASOURCE_USERNAME: cartogra
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-cartogra}
+      SPRING_FLYWAY_TABLE: flyway_schema_history_ingestion
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085/actuator/health/liveness"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - cartogra-net
+
 volumes:
   postgres-data:
   valkey-data:
