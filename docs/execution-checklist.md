@@ -94,7 +94,7 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [x] 0.35 [UI] Configure vitest with happy-dom and React Testing Library; add `npm run test` and `npm run typecheck` scripts.
 - [x] 0.36 [UI] Create `frontend/.env.local` with `VITE_API_BASE_URL=http://localhost:8080`; add `frontend/.env.local.example` to the repo and `.env.local` to `.gitignore`.
 - [x] 0.37 [UI] Craft the app shell, `AppLayout` component with sidebar navigation, root error boundary, and 404 page using `/impeccable craft app shell`. All outputs must use named exports, shadcn/ui primitives, and Tailwind for layout.
-- [ ] 0.38 [UI] Run `/impeccable audit` on all Phase 0 screens before the phase gate; address any blocking accessibility or responsiveness findings.
+- [x] 0.38 [UI] Run `/impeccable audit` on all Phase 0 screens before the phase gate; address any blocking accessibility or responsiveness findings.
 - [x] 0.39 [INFRA] Add frontend CI tasks: `pnpm install --frozen-lockfile`, ESLint check, TypeScript type-check, and `vitest --passWithNoTests`.
 
 ### Core documentation
