@@ -1,3 +1,5 @@
+import { useTenantStore } from '#/stores/useTenantStore'
+
 export class ApiError extends Error {
   code: string
   traceId: string
@@ -15,9 +17,17 @@ export async function apiFetch<T>(
   init?: RequestInit,
 ): Promise<T> {
   const baseUrl = import.meta.env.VITE_API_BASE_URL ?? ''
+  const tenantId = useTenantStore.getState().tenantId
+
+  const headers = new Headers(init?.headers)
+  if (tenantId) {
+    headers.set('X-Tenant-Id', tenantId)
+  }
+
   const response = await fetch(`${baseUrl}/api${path}`, {
     credentials: 'include',
     ...init,
+    headers,
   })
 
   const traceId = response.headers.get('X-Trace-Id') ?? 'unknown'

@@ -18,7 +18,7 @@ export function PhasePlaceholder({
       <Card className="border-border/70 bg-background/85">
         <CardHeader className="space-y-3">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Sparkles className="size-4 text-primary" />
+            <Sparkles className="size-4 text-primary" aria-hidden="true" />
             <span>Why this surface exists</span>
           </div>
           <CardTitle className="text-xl tracking-[-0.02em]">Decision support, not empty chrome</CardTitle>
@@ -38,7 +38,7 @@ export function PhasePlaceholder({
           <ul className="space-y-3 text-sm text-muted-foreground">
             {capabilities.map((capability) => (
               <li key={capability} className="flex gap-3 leading-6">
-                <ArrowRight className="mt-1 size-4 shrink-0 text-primary" />
+                <ArrowRight className="mt-1 size-4 shrink-0 text-primary" aria-hidden="true" />
                 <span>{capability}</span>
               </li>
             ))}

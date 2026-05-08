@@ -65,11 +65,11 @@ export function AppLayout({
   return (
     <div className="min-h-screen text-foreground">
       <div className="mx-auto flex min-h-screen w-full max-w-[1600px] gap-0 px-4 py-4 sm:px-6 lg:px-8">
-        <aside className="sticky top-4 hidden h-[calc(100vh-2rem)] w-72 shrink-0 flex-col rounded-[calc(var(--radius)*1.8)] border border-sidebar-border bg-sidebar/90 p-4 shadow-[0_0_0_1px_color-mix(in_oklab,var(--border)_85%,transparent),0_24px_60px_-36px_color-mix(in_oklab,var(--foreground)_22%,transparent)] backdrop-blur md:flex">
+        <aside className="sticky top-4 hidden h-[calc(100vh-2rem)] w-72 shrink-0 flex-col rounded-[calc(var(--radius)*1.8)] border border-sidebar-border bg-sidebar p-4 shadow-[0_0_0_1px_color-mix(in_oklab,var(--border)_85%,transparent),0_24px_60px_-36px_color-mix(in_oklab,var(--foreground)_22%,transparent)] md:flex">
           <SidebarContent pathname={pathname} />
         </aside>
 
-        <div className="flex min-h-[calc(100vh-2rem)] min-w-0 flex-1 flex-col overflow-hidden rounded-[calc(var(--radius)*1.8)] border border-border/80 bg-card/90 shadow-[0_0_0_1px_color-mix(in_oklab,var(--border)_84%,transparent),0_30px_80px_-45px_color-mix(in_oklab,var(--foreground)_30%,transparent)] backdrop-blur">
+        <div className="flex min-h-[calc(100vh-2rem)] min-w-0 flex-1 flex-col overflow-hidden rounded-[calc(var(--radius)*1.8)] border border-border/80 bg-card shadow-[0_0_0_1px_color-mix(in_oklab,var(--border)_84%,transparent),0_30px_80px_-45px_color-mix(in_oklab,var(--foreground)_30%,transparent)]">
           <header className="sticky top-0 z-10 border-b border-border/70 bg-card/90 px-4 py-4 backdrop-blur sm:px-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="flex items-start gap-3">
@@ -99,7 +99,7 @@ export function AppLayout({
             </div>
           </header>
 
-          <main className="flex-1 px-4 py-6 sm:px-6 sm:py-8">{children}</main>
+          <main id="main-content" className="flex-1 px-4 py-6 sm:px-6 sm:py-8">{children}</main>
         </div>
       </div>
     </div>
@@ -126,7 +126,7 @@ function SidebarContent({ pathname }: { pathname: string }) {
 
       <Separator className="mb-4" />
 
-      <nav className="space-y-1.5">
+      <nav aria-label="Main navigation" className="space-y-1.5">
         {navigationItems.map((item) => {
           const Icon = item.icon
           const isActive =
@@ -137,6 +137,7 @@ function SidebarContent({ pathname }: { pathname: string }) {
               <TooltipTrigger asChild>
                 <Link
                   to={item.to}
+                  aria-current={isActive ? 'page' : undefined}
                   className={cn(
                     'group flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors',
                     isActive
@@ -152,7 +153,7 @@ function SidebarContent({ pathname }: { pathname: string }) {
                         : 'border-sidebar-border bg-background/70 group-hover:border-sidebar-accent-foreground/10',
                     )}
                   >
-                    <Icon className="size-4" />
+                    <Icon className="size-4" aria-hidden="true" />
                   </span>
                   <span className="flex-1 font-medium">{item.label}</span>
                 </Link>
@@ -183,7 +184,7 @@ function NavigationSheet({ pathname }: { pathname: string }) {
           <Menu className="size-4" />
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-[290px] border-sidebar-border bg-sidebar px-0">
+        <SheetContent side="left" className="w-[min(290px,80vw)] border-sidebar-border bg-sidebar px-0">
         <SheetHeader className="px-5 text-left">
           <SheetTitle className="text-xl tracking-[-0.02em]">Cartogra</SheetTitle>
           <SheetDescription>
