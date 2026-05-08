@@ -26,6 +26,10 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 ---
 
+<details>
+
+<summary>phase 0</summary>
+
 ## Phase 0 — Foundation
 
 ### Completed before this checklist
@@ -111,14 +115,16 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 ### Phase 0 Gate
 
-- [ ] [GATE] `DESIGN.md` and `PRODUCT.md` exist and contain enough detail to guide Phase 1 screen crafting.
-- [ ] [GATE] `shared:contracts` Gradle module compiles with the protobuf plugin wired; no proto files inside service modules.
-- [ ] [GATE] `./gradlew build` and CI are green, and the Trivy failure policy is documented.
-- [ ] [GATE] `docker compose up` succeeds with healthy gateway, registry, ingestion, database, cache, broker, and observability dependencies.
-- [ ] [GATE] Flyway clean migrate passes from a blank database in automation.
-- [ ] [GATE] At least one endpoint proves the response envelope and `X-Trace-Id` contract.
-- [ ] [GATE] Frontend installs and runs locally; CI lint, type-check, and test jobs pass.
-- [ ] [GATE] Minimum BIP set shipped: launch thread, data-model/Kafka thread, service-catalog blog, and ADR article.
+- [x] [GATE] `DESIGN.md` and `PRODUCT.md` exist and contain enough detail to guide Phase 1 screen crafting.
+- [x] [GATE] `shared:contracts` Gradle module compiles with the protobuf plugin wired; no proto files inside service modules.
+- [x] [GATE] `./gradlew build` and CI are green, and the Trivy failure policy is documented.
+- [x] [GATE] `docker compose up` succeeds with healthy gateway, registry, ingestion, database, cache, broker, and observability dependencies.
+- [x] [GATE] Flyway clean migrate passes from a blank database in automation.
+- [x] [GATE] At least one endpoint proves the response envelope and `X-Trace-Id` contract.
+- [x] [GATE] Frontend installs and runs locally; CI lint, type-check, and test jobs pass.
+- [x] [GATE] Minimum BIP set shipped: launch thread, data-model/Kafka thread, service-catalog blog, and ADR article.
+
+</details>
 
 ---
 
