@@ -99,15 +99,15 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 ### Core documentation
 
-- [ ] 0.40 [DOCS] Finalize `docs/adr/TEMPLATE.md` and `docs/adr/README.md` as the ADR entry point.
-- [ ] 0.41 [DOCS] Finalize `docs/architecture/system-overview.md`, `docs/architecture/data-model.md`, and `docs/architecture/kafka-topics.md` with current Phase 0 status markers.
-- [ ] 0.42 [DOCS] Finalize `docs/api/gateway.openapi.yaml` and `docs/api/registry.openapi.yaml` with shared response-envelope components, error schema, and `X-Trace-Id` header documentation.
-- [ ] 0.43 [DOCS] Keep `docs/api/topology.openapi.yaml`, `docs/api/contract.openapi.yaml`, and `docs/api/intelligence.openapi.yaml` as explicit forward-looking stubs with Phase ownership notes.
-- [ ] 0.44 [DOCS] Create initial `docs/runbooks/local-development.md`, `docs/runbooks/deployment.md`, and `docs/runbooks/incident-response.md` stubs.
-- [ ] 0.45 [BIP] Publish the blog post on why service catalogs drift after the docs stubs and architecture framing are reviewable.
-- [ ] 0.46 [BIP] Publish the ADRs/build-in-public article right after the ADR template and index merge.
-- [ ] 0.47 [BIP] Publish a GitHub or blog update showing the README diagram and project board once both are visible.
-- [ ] 0.48 [BIP] Record the optional short problem-framing video if it does not slow the phase gate.
+- [x] 0.40 [DOCS] Finalize `docs/adr/TEMPLATE.md` and `docs/adr/README.md` as the ADR entry point.
+- [x] 0.41 [DOCS] Finalize `docs/architecture/system-overview.md`, `docs/architecture/data-model.md`, and `docs/architecture/kafka-topics.md` with current Phase 0 status markers.
+- [x] 0.42 [DOCS] Finalize `docs/api/gateway.openapi.yaml` and `docs/api/registry.openapi.yaml` with shared response-envelope components, error schema, and `X-Trace-Id` header documentation.
+- [x] 0.43 [DOCS] Keep `docs/api/topology.openapi.yaml`, `docs/api/contract.openapi.yaml`, and `docs/api/intelligence.openapi.yaml` as explicit forward-looking stubs with Phase ownership notes.
+- [x] 0.44 [DOCS] Create initial `docs/runbooks/local-development.md`, `docs/runbooks/deployment.md`, and `docs/runbooks/incident-response.md` stubs.
+- [x] 0.45 [BIP] Publish the blog post on why service catalogs drift after the docs stubs and architecture framing are reviewable.
+- [x] 0.46 [BIP] Publish the ADRs/build-in-public article right after the ADR template and index merge.
+- [x] 0.47 [BIP] Publish a GitHub or blog update showing the README diagram and project board once both are visible.
+- [x] 0.48 [BIP] Record the optional short problem-framing video if it does not slow the phase gate.
 
 ### Phase 0 Gate
 

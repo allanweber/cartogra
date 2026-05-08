@@ -3,6 +3,9 @@ info:
   title: Cartogra Contract API
   version: "0.1.0"
   description: |
+    > **Phase 3 — Contract guardian — not yet implemented.**
+    > Forward-looking contract. See execution-checklist.md tasks 3.2–3.38.
+
     API contract registry, breaking-change detection, consumer-producer matrix, and schema history.
 
     **Authentication:** JWT cookie or Bearer token (Gateway-issued). Gateway injects `X-Tenant-Id`.

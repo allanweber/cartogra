@@ -2,6 +2,18 @@
 
 Each service owns its schema entirely. No cross-service joins. Cross-aggregate references store IDs only.
 
+## Implementation Status
+
+| Schema group | Phase | Status |
+|---|---|---|
+| Registry — tenants, teams, users, scm_connections | Phase 0 | Implemented |
+| Registry — services, services_history, tenant_api_keys | Phase 1 | Planned |
+| Topology — dependencies, dependency_drifts | Phase 2 | Planned |
+| Contract — api_contracts, contract_versions, contract_consumers, contract_checks, outbox_events | Phase 3 | Planned |
+| Intelligence — nl_query_logs, health_scores | Phase 4 | Planned |
+
+---
+
 All tables follow these conventions unless noted:
 
 - `id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY`
