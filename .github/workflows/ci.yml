@@ -12,18 +12,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect backend changes
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.base_ref }}"
+          else
+            BASE="HEAD~1"
+          fi
+          echo "changed=$(git diff $BASE --name-only | grep -qE 'services/|shared/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
 
       - uses: actions/setup-java@v4
+        if: steps.changes.outputs.changed == 'true'
         with:
           java-version: '25'
           distribution: 'temurin'
 
       - uses: gradle/actions/setup-gradle@v4
+        if: steps.changes.outputs.changed == 'true'
 
       - name: Build and test
+        if: steps.changes.outputs.changed == 'true'
         run: gradle build --no-daemon
 
       - name: Trivy vulnerability scan
+        if: steps.changes.outputs.changed == 'true'
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'fs'
@@ -40,22 +56,83 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect frontend changes
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.base_ref }}"
+          else
+            BASE="HEAD~1"
+          fi
+          echo "changed=$(git diff $BASE --name-only | grep -q 'frontend/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
 
       - uses: pnpm/action-setup@v4
+        if: steps.changes.outputs.changed == 'true'
         with:
           version: 10
 
       - uses: actions/setup-node@v4
+        if: steps.changes.outputs.changed == 'true'
         with:
           node-version: '22'
           cache: 'pnpm'
           cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Install dependencies
+        if: steps.changes.outputs.changed == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Lint
+        if: steps.changes.outputs.changed == 'true'
         run: pnpm run lint
 
+      - name: Type check
+        if: steps.changes.outputs.changed == 'true'
+        run: pnpm run typecheck
+
       - name: Test
+        if: steps.changes.outputs.changed == 'true'
         run: pnpm test
+
+  container-build:
+    name: Container — Build checks
+    needs: backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed services
+        id: changes
+        run: |
+          # On main/PR, compare against base; on push to main, compare HEAD~1
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.base_ref }}"
+          else
+            BASE="HEAD~1"
+          fi
+
+          echo "registry=$(git diff $BASE --name-only | grep -q 'services/registry\|infra/docker/registry' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "gateway=$(git diff $BASE --name-only | grep -q 'services/gateway\|infra/docker/gateway' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "ingestion=$(git diff $BASE --name-only | grep -q 'services/ingestion\|infra/docker/ingestion' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "frontend=$(git diff $BASE --name-only | grep -q 'frontend\|infra/docker/frontend' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+
+      - name: Build registry image
+        if: steps.changes.outputs.registry == 'true'
+        run: docker build -f infra/docker/registry/Dockerfile -t cartogra/registry:ci .
+
+      - name: Build gateway image
+        if: steps.changes.outputs.gateway == 'true'
+        run: docker build -f infra/docker/gateway/Dockerfile -t cartogra/gateway:ci .
+
+      - name: Build ingestion image
+        if: steps.changes.outputs.ingestion == 'true'
+        run: docker build -f infra/docker/ingestion/Dockerfile -t cartogra/ingestion:ci .
+
+      - name: Build frontend image
+        if: steps.changes.outputs.frontend == 'true'
+        run: docker build -f infra/docker/frontend/Dockerfile -t cartogra/frontend:ci .

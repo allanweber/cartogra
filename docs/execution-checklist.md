@@ -78,11 +78,11 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 ### Observability and CI
 
-- [ ] 0.25 [CODE] Enable structured JSON logging in gateway, registry, and ingestion with the same trace ID that appears in OTel spans and HTTP responses.
-- [ ] 0.26 [TEST] Verify one traced request end-to-end: incoming `traceparent`, service logs, response body `traceId`, and `X-Trace-Id` must all match.
-- [ ] 0.27 [INFRA] Finalize `.github/workflows/ci.yml` for Java 25, `./gradlew build`, tests, container build checks, and Trivy failure on `HIGH` or `CRITICAL` findings.
-- [ ] 0.28 [BIP] Publish the launch thread once the stack compiles cleanly and the core services boot together.
-- [ ] 0.29 [BIP] Publish the data-model and Kafka sketch thread immediately after the baseline migrations and architecture diagrams land.
+- [x] 0.25 [CODE] Enable structured JSON logging in gateway, registry, and ingestion with the same trace ID that appears in OTel spans and HTTP responses.
+- [x] 0.26 [TEST] Verify one traced request end-to-end: incoming `traceparent`, service logs, response body `traceId`, and `X-Trace-Id` must all match.
+- [x] 0.27 [INFRA] Finalize `.github/workflows/ci.yml` for Java 25, `./gradlew build`, tests, container build checks, and Trivy failure on `HIGH` or `CRITICAL` findings.
+- [x] 0.28 [BIP] Publish the launch thread once the stack compiles cleanly and the core services boot together.
+- [x] 0.29 [BIP] Publish the data-model and Kafka sketch thread immediately after the baseline migrations and architecture diagrams land.
 
 ### Frontend shell
 
