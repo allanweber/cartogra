@@ -132,8 +132,8 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 ### System design and UX
 
-- [ ] 1.1 [UI] Run `/shape login` and `/shape register` to produce confirmed design briefs for Login, Register, Forgot password, and Verify email screens before writing any auth UI code.
-- [ ] 1.2 [UI] Run `/shape catalog home` and `/shape scm connections` to produce confirmed design briefs for the Catalog list, Catalog detail, and SCM connections screens.
+- [x] 1.1 [UI] Run `/shape login` and `/shape register` to produce confirmed design briefs for Login, Register, Forgot password, and Verify email screens before writing any auth UI code.
+- [x] 1.2 [UI] Run `/shape catalog home` and `/shape scm connections` to produce confirmed design briefs for the Catalog list, Catalog detail, and SCM connections screens.
 
 ### Registry domain and APIs
 
