@@ -137,19 +137,19 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 ### Registry domain and APIs
 
-- [ ] 1.3 [CODE] Establish hexagonal package boundaries for registry: `api`, `application`, `domain`, `infrastructure`, and `config`.
-- [ ] 1.4 [INFRA] Add registry Flyway `V005__create_services.sql` with tenant isolation, soft delete, JSONB metadata, and the required indexes.
-- [ ] 1.5 [INFRA] Add registry Flyway `V006__create_services_history.sql` for temporal snapshots.
-- [ ] 1.6 [INFRA] Add registry Flyway `V007__create_scm_webhooks.sql` with tenant isolation and lifecycle fields.
-- [ ] 1.7 [CODE] Implement JDBC repositories for services, teams, and SCM connections using explicit SQL for filtering, search, and history access.
-- [ ] 1.8 [CODE] Implement service CRUD, owner assignment, health summary, orphan detection, and point-in-time history use cases.
-- [ ] 1.9 [CODE] Persist a `services_history` snapshot on every material service change.
-- [ ] 1.10 [CODE] Add REST controllers and `@RestControllerAdvice` handlers that always emit the documented envelope and stable error codes.
-- [ ] 1.11 [TEST] Add Testcontainers integration coverage for CRUD, history queries, orphan detection, and envelope/header behavior.
-- [ ] 1.12 [DOCS] Write the ADR for PostgreSQL plus recursive CTEs over a graph database.
-- [ ] 1.13 [BIP] Publish the PostgreSQL-vs-graph-DB ADR after it merges.
-- [ ] 1.14 [DOCS] Write the ADR or design note for Spring Data JDBC as the default persistence model.
-- [ ] 1.15 [BIP] Publish the Spring Data JDBC rationale immediately after it merges.
+- [x] 1.3 [CODE] Establish hexagonal package boundaries for registry: `api`, `application`, `domain`, `infrastructure`, and `config`.
+- [x] 1.4 [INFRA] Add registry Flyway `V005__create_services.sql` with tenant isolation, soft delete, JSONB metadata, and the required indexes.
+- [x] 1.5 [INFRA] Add registry Flyway `V006__create_services_history.sql` for temporal snapshots.
+- [x] 1.6 [INFRA] Add registry Flyway `V007__create_scm_webhooks.sql` with tenant isolation and lifecycle fields.
+- [x] 1.7 [CODE] Implement JDBC repositories for services, teams, and SCM connections using explicit SQL for filtering, search, and history access.
+- [x] 1.8 [CODE] Implement service CRUD, owner assignment, health summary, orphan detection, and point-in-time history use cases.
+- [x] 1.9 [CODE] Persist a `services_history` snapshot on every material service change.
+- [x] 1.10 [CODE] Add REST controllers and `@RestControllerAdvice` handlers that always emit the documented envelope and stable error codes.
+- [x] 1.11 [TEST] Add Testcontainers integration coverage for CRUD, history queries, orphan detection, and envelope/header behavior.
+- [x] 1.12 [DOCS] Write the ADR for PostgreSQL plus recursive CTEs over a graph database.
+- [x] 1.13 [BIP] Publish the PostgreSQL-vs-graph-DB ADR after it merges.
+- [x] 1.14 [DOCS] Write the ADR or design note for Spring Data JDBC as the default persistence model.
+- [x] 1.15 [BIP] Publish the Spring Data JDBC rationale immediately after it merges.
 
 ### Gateway authentication, authorization, and proxying
 

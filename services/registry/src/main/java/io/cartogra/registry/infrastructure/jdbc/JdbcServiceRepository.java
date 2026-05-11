@@ -125,7 +125,7 @@ public class JdbcServiceRepository implements ServiceRepository {
         String sql = """
                 SELECT COUNT(*) FROM services
                 WHERE tenant_id = :tenantId AND lower(name) = lower(:name)
-                  AND deleted_at IS NULL AND (:excludeId IS NULL OR id != :excludeId)
+                  AND deleted_at IS NULL AND (CAST(:excludeId AS UUID) IS NULL OR id != :excludeId)
                 """;
         var params = new MapSqlParameterSource()
                 .addValue("tenantId", tenantId)

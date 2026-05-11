@@ -5,9 +5,13 @@ This directory captures significant architectural decisions made during the deve
 ## Index
 
 | ID | Title | Status | Date |
-|----|-------|--------|------|
-| [ADR-0001](ADR-0001-postgresql-over-graph-database.md) | PostgreSQL over a dedicated graph database | Accepted | 2026-04-30 |
+| -- | ----- | ------ | ---- |
+| [ADR-0001](ADR-0001-postgresql-over-graph-database.md) | PostgreSQL over a dedicated graph database (includes CTE query strategy) | Accepted | 2026-04-30 |
 | [ADR-0002](ADR-0002-scm-provider-abstraction.md) | SCM provider abstraction via SPI | Accepted | 2026-04-30 |
+| [ADR-0003](ADR-0003-grpc-for-internal-service-communication.md) | gRPC for internal service-to-service communication | Accepted | 2026-04-30 |
+| [ADR-0007](ADR-0007-local-dev-infrastructure.md) | Local development infrastructure | Accepted | 2026-04-30 |
+| [ADR-0008](ADR-0008-lgtm-observability-stack.md) | LGTM observability stack | Accepted | 2026-04-30 |
+| [ADR-0009](ADR-0009-spring-data-jdbc.md) | Spring Data JDBC over JPA/Hibernate | Accepted | 2026-05-11 |
 
 ## Process
 
@@ -20,7 +24,7 @@ This directory captures significant architectural decisions made during the deve
 ## Statuses
 
 | Status | Meaning |
-|--------|---------|
+| ------ | ------- |
 | Proposed | Under review — do not implement yet |
 | Accepted | Approved and in effect |
 | Deprecated | Still in use but being phased out |

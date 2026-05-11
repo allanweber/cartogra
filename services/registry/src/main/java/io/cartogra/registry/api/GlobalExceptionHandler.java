@@ -3,6 +3,10 @@ package io.cartogra.registry.api;
 import io.cartogra.common.api.ApiError;
 import io.cartogra.common.api.ApiErrorResponse;
 import io.cartogra.common.api.ErrorCodes;
+import io.cartogra.registry.domain.exception.DuplicateServiceNameException;
+import io.cartogra.registry.domain.exception.ScmConnectionNotFoundException;
+import io.cartogra.registry.domain.exception.ServiceNotFoundException;
+import io.cartogra.registry.domain.exception.TeamNotFoundException;
 import io.opentelemetry.api.trace.Span;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,6 +25,38 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(ServiceNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleServiceNotFound(ServiceNotFoundException ex) {
+        String traceId = Span.current().getSpanContext().getTraceId();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .header("X-Trace-Id", traceId)
+                .body(new ApiErrorResponse(ApiError.of(ErrorCodes.NOT_FOUND, ex.getMessage()), traceId));
+    }
+
+    @ExceptionHandler(TeamNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleTeamNotFound(TeamNotFoundException ex) {
+        String traceId = Span.current().getSpanContext().getTraceId();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .header("X-Trace-Id", traceId)
+                .body(new ApiErrorResponse(ApiError.of(ErrorCodes.NOT_FOUND, ex.getMessage()), traceId));
+    }
+
+    @ExceptionHandler(ScmConnectionNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleScmConnectionNotFound(ScmConnectionNotFoundException ex) {
+        String traceId = Span.current().getSpanContext().getTraceId();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .header("X-Trace-Id", traceId)
+                .body(new ApiErrorResponse(ApiError.of(ErrorCodes.NOT_FOUND, ex.getMessage()), traceId));
+    }
+
+    @ExceptionHandler(DuplicateServiceNameException.class)
+    public ResponseEntity<ApiErrorResponse> handleDuplicateServiceName(DuplicateServiceNameException ex) {
+        String traceId = Span.current().getSpanContext().getTraceId();
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .header("X-Trace-Id", traceId)
+                .body(new ApiErrorResponse(ApiError.of(ErrorCodes.CONFLICT, ex.getMessage()), traceId));
+    }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiErrorResponse> handleValidation(MethodArgumentNotValidException ex) {

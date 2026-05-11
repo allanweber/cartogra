@@ -45,10 +45,40 @@ Use **PostgreSQL with recursive CTEs** for all dependency graph storage and trav
 ## Alternatives Considered
 
 | Option | Reason rejected |
-|--------|----------------|
+| ------ | --------------- |
 | Neo4j (self-hosted) | Second persistence system, JVM resource contention, licensing complexity for open-source |
 | Amazon Neptune | Cloud-provider lock-in, unavailable in local Docker Compose, cost at MVP stage |
 | Apache AGE (PostgreSQL extension) | Immature ecosystem, limited Kubernetes operator support, adds binary extension dependency |
+
+## CTE Query Strategy (addendum — 2026-05-11)
+
+All graph traversal queries in the Topology service follow three rules enforced by code review:
+
+1. **Depth guard** — every `WITH RECURSIVE` must include a `WHERE depth < N` clause (default 10) to prevent unbounded traversal on cyclic or deeply nested graphs.
+2. **Index-backed joins** — `dependencies(source_id)` and `dependencies(target_id)` are both indexed; each CTE step must join on an indexed column.
+3. **Tenant isolation inside the CTE** — the anchor query must include `AND tenant_id = :tenantId`; the recursive step joins back to the `dependencies` table which also carries `tenant_id`. Row-level security provides a safety net but is not a substitute for explicit filtering.
+
+Example canonical blast-radius CTE:
+
+```sql
+WITH RECURSIVE blast_radius AS (
+    SELECT target_id AS service_id, 1 AS depth
+    FROM   dependencies
+    WHERE  source_id  = :serviceId
+      AND  tenant_id  = :tenantId
+      AND  deleted_at IS NULL
+    UNION ALL
+    SELECT d.target_id, br.depth + 1
+    FROM   dependencies d
+    JOIN   blast_radius  br ON br.service_id = d.source_id
+    WHERE  d.tenant_id  = :tenantId
+      AND  d.deleted_at IS NULL
+      AND  br.depth     < 10
+)
+SELECT DISTINCT service_id FROM blast_radius;
+```
+
+The same pattern applies to cycle detection (add a `visited` array and check `NOT (target_id = ANY(visited))`) and ancestor queries (swap `source_id`/`target_id`).
 
 ## References
 
