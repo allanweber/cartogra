@@ -61,6 +61,78 @@ gh pr create \
 - A PR that addresses multiple checklist items must still link one primary user-story issue
 - NEVER commit or push without explicit user approval
 
+## PlantUML Diagrams (Hard Requirement)
+
+Every feature that involves new code, use cases, or database schema changes MUST include PlantUML diagrams. This is non-negotiable — diagrams are part of the definition of done, not optional documentation.
+
+### What to produce
+
+| Trigger | Required diagram |
+|---------|-----------------|
+| New database table(s) | ER/table diagram showing all tables and relationships |
+| New domain entities or complex structures | Class diagram of the domain model |
+| New use case, flow, or multi-step interaction | Sequence diagram per use case |
+
+### Tool and format
+
+- **Tool**: PlantUML (`.puml` files)
+- **Location**: `docs/diagrams/{service}/{feature}-{type}.puml`
+- **Types suffix**: `-sequence`, `-class`, `-er`
+- Example: `docs/diagrams/registry/create-service-sequence.puml`
+
+### Diagram conventions
+
+**ER diagrams** — use PlantUML `entity` blocks; mark PK (`<<PK>>`), FK (`<<FK>>`), required (`*`), optional (`~`); show all relationships:
+
+```plantuml
+@startuml
+entity "services" {
+  * id : UUID <<PK>>
+  --
+  * tenant_id : UUID
+  * name : TEXT
+  ~ team_id : UUID <<FK>>
+}
+@enduml
+```
+
+**Class diagrams** — show domain records, repository interfaces, use case interfaces, and their relationships; omit Spring/framework annotations:
+
+```plantuml
+@startuml
+interface ServiceRepository {
+  + findById(tenantId, serviceId): Optional<Service>
+  + save(service): Service
+}
+class JdbcServiceRepository implements ServiceRepository
+@enduml
+```
+
+**Sequence diagrams** — show the full call chain from controller (or caller) through use case to repository to DB; include the history snapshot save for mutating operations:
+
+```plantuml
+@startuml
+actor Client
+participant "ServiceController" as C
+participant "CreateServiceUseCase" as UC
+participant "ServiceRepository" as R
+database PostgreSQL as DB
+Client -> C: POST /services
+C -> UC: execute(command)
+UC -> R: save(service)
+R -> DB: INSERT
+@enduml
+```
+
+### Rules
+
+- NEVER ship a new feature without its diagrams — open a PR only when diagrams exist
+- Update diagrams when the implementation changes (they must reflect the actual code)
+- One file per diagram — NEVER combine unrelated flows into a single file
+- Include a `title` directive at the top of every `.puml` file
+
+---
+
 ## BIP (Build in Public) output channels
 
 Every BIP planning task MUST produce drafts for all applicable channels. The canonical format reference is [`docs/bip/README.md`](../../docs/bip/README.md).

@@ -1,0 +1,87 @@
+@startuml get-service-history-sequence
+title Get Service History — Use Case Flow
+
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam participantBackgroundColor #F8F8FF
+skinparam participantBorderColor #444466
+skinparam databaseBackgroundColor #FFFACD
+skinparam databaseBorderColor #888800
+
+actor Client
+participant "ServiceController\n(api)" as C
+participant "GetServiceHistoryUseCaseImpl\n(application)" as UC
+participant "ServiceRepository\n(application)" as SR
+participant "ServiceHistoryRepository\n(application)" as HR
+database "PostgreSQL" as DB
+
+group Paged history
+  Client -> C : GET /api/v1/services/{id}/history\n?limit=20&offset=0
+
+  activate C
+  C -> UC : execute(tenantId, serviceId, limit, offset)
+  activate UC
+
+  UC -> SR : findById(tenantId, serviceId)
+  activate SR
+  SR -> DB : SELECT * FROM services\nWHERE id=? AND tenant_id=?\n(no deleted_at filter — show history even for deleted services)
+  DB --> SR : row or empty
+  SR --> UC : Optional<Service>
+  deactivate SR
+
+  alt service not found at all
+    UC --> C : throws ServiceNotFoundException
+    C --> Client : 404 Not Found
+  end
+
+  UC -> HR : findByServiceId(tenantId, serviceId, limit, offset)
+  activate HR
+  HR -> DB : SELECT * FROM services_history\nWHERE service_id=? AND tenant_id=?\nORDER BY changed_at DESC\nLIMIT ? OFFSET ?
+  DB --> HR : rows
+  HR --> UC : List<ServiceSnapshot>
+  deactivate HR
+
+  UC -> HR : count for pagination
+  activate HR
+  HR -> DB : SELECT count(*) FROM services_history\nWHERE service_id=? AND tenant_id=?
+  DB --> HR : total
+  HR --> UC : long
+  deactivate HR
+
+  UC --> C : PageResult<ServiceSnapshot>
+  deactivate UC
+
+  C --> Client : 200 OK\n{"data": {"items":[{snapshot}],"total":N,...}, "traceId": "..."}
+  deactivate C
+end
+
+group Point-in-time query
+  Client -> C : GET /api/v1/services/{id}/history?at=2025-01-15T10:00:00Z
+
+  activate C
+  C -> UC : executeAtPointInTime(tenantId, serviceId, at)
+  activate UC
+
+  UC -> SR : findById(tenantId, serviceId)
+  SR --> UC : Optional<Service>
+
+  UC -> HR : findAtPointInTime(tenantId, serviceId, at)
+  activate HR
+  HR -> DB : SELECT * FROM services_history\nWHERE service_id=? AND tenant_id=?\nAND changed_at <= :at\nORDER BY changed_at DESC\nLIMIT 1
+  DB --> HR : most recent snapshot before timestamp
+  HR --> UC : Optional<ServiceSnapshot>
+  deactivate HR
+
+  alt no snapshot at or before requested time
+    UC --> C : throws ServiceNotFoundException
+    C --> Client : 404 Not Found
+  end
+
+  UC --> C : ServiceSnapshot
+  deactivate UC
+
+  C --> Client : 200 OK\n{"data": {snapshot}, "traceId": "..."}
+  deactivate C
+end
+
+@enduml
