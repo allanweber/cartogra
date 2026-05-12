@@ -28,29 +28,77 @@ jobs:
           echo "Changed files:"
           echo "$CHANGED"
           echo "──────────────────────────────────────"
-          if echo "$CHANGED" | grep -qE 'services/|shared/'; then
-            echo "changed=true" >> $GITHUB_OUTPUT
-            echo "✅ Backend changes detected — build will run"
+
+          # shared/ changes force a rebuild of every service
+          if echo "$CHANGED" | grep -qE '^shared/'; then
+            SHARED=true
+            echo "⚠️  shared/ changed — all services will rebuild"
           else
-            echo "changed=false" >> $GITHUB_OUTPUT
-            echo "⏭️  No backend changes — build skipped"
+            SHARED=false
+          fi
+
+          check() {
+            local service=$1 pattern=$2
+            if [ "$SHARED" = "true" ] || echo "$CHANGED" | grep -qE "$pattern"; then
+              echo "${service}=true" >> $GITHUB_OUTPUT
+              [ "$SHARED" = "true" ] \
+                && echo "✅ $service — forced by shared/ change" \
+                || echo "✅ $service — changes detected"
+            else
+              echo "${service}=false" >> $GITHUB_OUTPUT
+              echo "⏭️  $service — no changes"
+            fi
+          }
+
+          check registry    '^services/registry/'
+          check gateway     '^services/gateway/'
+          check topology    '^services/topology/'
+          check contract    '^services/contract/'
+          check intelligence '^services/intelligence/'
+          check ingestion   '^services/ingestion/'
+
+          # gate for Java/Gradle setup — true if anything needs building
+          if [ "$SHARED" = "true" ] || echo "$CHANGED" | grep -qE '^services/'; then
+            echo "any=true" >> $GITHUB_OUTPUT
+          else
+            echo "any=false" >> $GITHUB_OUTPUT
           fi
 
       - uses: actions/setup-java@v4
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.any == 'true'
         with:
           java-version: '25'
           distribution: 'temurin'
 
       - uses: gradle/actions/setup-gradle@v4
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.any == 'true'
 
-      - name: Build and test
-        if: steps.changes.outputs.changed == 'true'
-        run: gradle build --no-daemon
+      - name: Build & test registry
+        if: steps.changes.outputs.registry == 'true'
+        run: gradle :services:registry:build --no-daemon
+
+      - name: Build & test gateway
+        if: steps.changes.outputs.gateway == 'true'
+        run: gradle :services:gateway:build --no-daemon
+
+      - name: Build & test topology
+        if: steps.changes.outputs.topology == 'true'
+        run: gradle :services:topology:build --no-daemon
+
+      - name: Build & test contract
+        if: steps.changes.outputs.contract == 'true'
+        run: gradle :services:contract:build --no-daemon
+
+      - name: Build & test intelligence
+        if: steps.changes.outputs.intelligence == 'true'
+        run: gradle :services:intelligence:build --no-daemon
+
+      - name: Build & test ingestion
+        if: steps.changes.outputs.ingestion == 'true'
+        run: gradle :services:ingestion:build --no-daemon
 
       - name: Trivy vulnerability scan — fail on CRITICAL or HIGH (unfixed suppressed)
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.any == 'true'
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'fs'
@@ -64,11 +112,24 @@ jobs:
         run: |
           echo "## Backend — Build & Test" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.changes.outputs.changed }}" = "true" ]; then
-            echo "✅ Build and tests ran — changes detected in \`services/\` or \`shared/\`" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "⏭️ Skipped — no changes in \`services/\` or \`shared/\`" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "| Service | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          row() {
+            local service=$1 ran=$2
+            if [ "$ran" = "true" ]; then
+              echo "| $service | ✅ Built & tested |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| $service | ⏭️ Skipped |" >> $GITHUB_STEP_SUMMARY
+            fi
+          }
+
+          row registry    "${{ steps.changes.outputs.registry }}"
+          row gateway     "${{ steps.changes.outputs.gateway }}"
+          row topology    "${{ steps.changes.outputs.topology }}"
+          row contract    "${{ steps.changes.outputs.contract }}"
+          row intelligence "${{ steps.changes.outputs.intelligence }}"
+          row ingestion   "${{ steps.changes.outputs.ingestion }}"
 
   frontend:
     name: Frontend — Lint & Test
@@ -105,7 +166,7 @@ jobs:
       - uses: pnpm/action-setup@v4
         if: steps.changes.outputs.changed == 'true'
         with:
-          version: 10
+          version: 11
 
       - uses: actions/setup-node@v4
         if: steps.changes.outputs.changed == 'true'
