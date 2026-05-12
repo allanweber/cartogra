@@ -4,8 +4,8 @@ import io.cartogra.registry.application.dto.UpdateTeamCommand;
 import io.cartogra.registry.application.repository.TeamRepository;
 import io.cartogra.registry.application.usecase.UpdateTeamUseCase;
 import io.cartogra.registry.domain.Team;
+import io.cartogra.registry.domain.exception.DuplicateTeamNameException;
 import io.cartogra.registry.domain.exception.TeamNotFoundException;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,7 +28,7 @@ public class UpdateTeamUseCaseImpl implements UpdateTeamUseCase {
 
         if (!existing.name().equalsIgnoreCase(command.name())
                 && teamRepository.existsByName(command.tenantId(), command.name(), command.teamId())) {
-            throw new DuplicateKeyException("A team named '" + command.name() + "' already exists in this tenant");
+            throw new DuplicateTeamNameException(command.name());
         }
 
         return teamRepository.save(new Team(

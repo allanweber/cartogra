@@ -4,7 +4,7 @@ import io.cartogra.registry.application.dto.CreateTeamCommand;
 import io.cartogra.registry.application.repository.TeamRepository;
 import io.cartogra.registry.application.usecase.CreateTeamUseCase;
 import io.cartogra.registry.domain.Team;
-import org.springframework.dao.DuplicateKeyException;
+import io.cartogra.registry.domain.exception.DuplicateTeamNameException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,7 +24,7 @@ public class CreateTeamUseCaseImpl implements CreateTeamUseCase {
     @Transactional
     public Team execute(CreateTeamCommand command) {
         if (teamRepository.existsByName(command.tenantId(), command.name(), null)) {
-            throw new DuplicateKeyException("A team named '" + command.name() + "' already exists in this tenant");
+            throw new DuplicateTeamNameException(command.name());
         }
         Instant now = Instant.now();
         return teamRepository.save(new Team(UUID.randomUUID(), command.tenantId(), command.name(), now, now, null));
