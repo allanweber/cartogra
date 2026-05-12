@@ -8831,8 +8831,8 @@ snapshots:
   solid-js@1.9.12:
     dependencies:
       csstype: 3.2.3
-      seroval: 1.5.3
-      seroval-plugins: 1.5.3(seroval@1.5.3)
+      seroval: 1.5.4
+      seroval-plugins: 1.5.4(seroval@1.5.4)
 
   source-map-js@1.2.1: {}
 

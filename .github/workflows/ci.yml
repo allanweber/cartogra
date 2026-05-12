@@ -204,7 +204,7 @@ jobs:
 
   container-build:
     name: Container — Build checks
-    needs: backend
+    needs: [backend, frontend]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
