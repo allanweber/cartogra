@@ -19,7 +19,7 @@ jobs:
         id: changes
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE="${{ github.base_ref }}"
+            BASE="origin/${{ github.base_ref }}"
           else
             BASE="HEAD~1"
           fi
@@ -63,7 +63,7 @@ jobs:
         id: changes
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE="${{ github.base_ref }}"
+            BASE="origin/${{ github.base_ref }}"
           else
             BASE="HEAD~1"
           fi
@@ -111,7 +111,7 @@ jobs:
         run: |
           # On main/PR, compare against base; on push to main, compare HEAD~1
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE="${{ github.base_ref }}"
+            BASE="origin/${{ github.base_ref }}"
           else
             BASE="HEAD~1"
           fi
