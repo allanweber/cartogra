@@ -3,7 +3,7 @@ WORKDIR /app/frontend
 
 ENV PNPM_CONFIG_STRICT_DEP_BUILDS=false
 
-RUN corepack enable && corepack prepare pnpm@11.1.0 --activate
+RUN corepack enable && corepack prepare pnpm@10.33.4 --activate
 
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
