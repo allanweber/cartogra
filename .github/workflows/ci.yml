@@ -23,7 +23,18 @@ jobs:
           else
             BASE="HEAD~1"
           fi
-          echo "changed=$(git diff $BASE --name-only | grep -qE 'services/|shared/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          CHANGED=$(git diff $BASE --name-only)
+          echo "──────────────────────────────────────"
+          echo "Changed files:"
+          echo "$CHANGED"
+          echo "──────────────────────────────────────"
+          if echo "$CHANGED" | grep -qE 'services/|shared/'; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "✅ Backend changes detected — build will run"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "⏭️  No backend changes — build skipped"
+          fi
 
       - uses: actions/setup-java@v4
         if: steps.changes.outputs.changed == 'true'
@@ -48,6 +59,17 @@ jobs:
           severity: 'CRITICAL,HIGH'
           ignore-unfixed: true
 
+      - name: Write job summary
+        if: always()
+        run: |
+          echo "## Backend — Build & Test" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.changes.outputs.changed }}" = "true" ]; then
+            echo "✅ Build and tests ran — changes detected in \`services/\` or \`shared/\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏭️ Skipped — no changes in \`services/\` or \`shared/\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
   frontend:
     name: Frontend — Lint & Test
     runs-on: ubuntu-latest
@@ -67,7 +89,18 @@ jobs:
           else
             BASE="HEAD~1"
           fi
-          echo "changed=$(git diff $BASE --name-only | grep -q 'frontend/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          CHANGED=$(git diff $BASE --name-only)
+          echo "──────────────────────────────────────"
+          echo "Changed files:"
+          echo "$CHANGED"
+          echo "──────────────────────────────────────"
+          if echo "$CHANGED" | grep -q 'frontend/'; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "✅ Frontend changes detected — lint/test will run"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "⏭️  No frontend changes — lint/test skipped"
+          fi
 
       - uses: pnpm/action-setup@v4
         if: steps.changes.outputs.changed == 'true'
@@ -97,6 +130,17 @@ jobs:
         if: steps.changes.outputs.changed == 'true'
         run: pnpm test
 
+      - name: Write job summary
+        if: always()
+        run: |
+          echo "## Frontend — Lint & Test" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.changes.outputs.changed }}" = "true" ]; then
+            echo "✅ Lint, type-check, and tests ran — changes detected in \`frontend/\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏭️ Skipped — no changes in \`frontend/\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
   container-build:
     name: Container — Build checks
     needs: backend
@@ -109,17 +153,32 @@ jobs:
       - name: Detect changed services
         id: changes
         run: |
-          # On main/PR, compare against base; on push to main, compare HEAD~1
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE="origin/${{ github.base_ref }}"
           else
             BASE="HEAD~1"
           fi
+          CHANGED=$(git diff $BASE --name-only)
+          echo "──────────────────────────────────────"
+          echo "Changed files:"
+          echo "$CHANGED"
+          echo "──────────────────────────────────────"
 
-          echo "registry=$(git diff $BASE --name-only | grep -q 'services/registry\|infra/docker/registry' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
-          echo "gateway=$(git diff $BASE --name-only | grep -q 'services/gateway\|infra/docker/gateway' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
-          echo "ingestion=$(git diff $BASE --name-only | grep -q 'services/ingestion\|infra/docker/ingestion' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
-          echo "frontend=$(git diff $BASE --name-only | grep -q 'frontend\|infra/docker/frontend' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          check() {
+            local service=$1; shift
+            if echo "$CHANGED" | grep -qE "$@"; then
+              echo "${service}=true" >> $GITHUB_OUTPUT
+              echo "✅ $service — changes detected"
+            else
+              echo "${service}=false" >> $GITHUB_OUTPUT
+              echo "⏭️  $service — no changes"
+            fi
+          }
+
+          check registry  'services/registry|infra/docker/registry'
+          check gateway   'services/gateway|infra/docker/gateway'
+          check ingestion 'services/ingestion|infra/docker/ingestion'
+          check frontend  'frontend|infra/docker/frontend'
 
       - name: Build registry image
         if: steps.changes.outputs.registry == 'true'
@@ -136,3 +195,25 @@ jobs:
       - name: Build frontend image
         if: steps.changes.outputs.frontend == 'true'
         run: docker build -f infra/docker/frontend/Dockerfile -t cartogra/frontend:ci .
+
+      - name: Write job summary
+        if: always()
+        run: |
+          echo "## Container — Build Checks" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Image | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          row() {
+            local service=$1 image=$2 built=$3
+            if [ "$built" = "true" ]; then
+              echo "| $service | \`$image\` | ✅ Built |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| $service | \`$image\` | ⏭️ Skipped |" >> $GITHUB_STEP_SUMMARY
+            fi
+          }
+
+          row registry  cartogra/registry:ci  "${{ steps.changes.outputs.registry }}"
+          row gateway   cartogra/gateway:ci   "${{ steps.changes.outputs.gateway }}"
+          row ingestion cartogra/ingestion:ci "${{ steps.changes.outputs.ingestion }}"
+          row frontend  cartogra/frontend:ci  "${{ steps.changes.outputs.frontend }}"
