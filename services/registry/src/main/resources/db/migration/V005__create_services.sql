@@ -5,7 +5,7 @@ CREATE TABLE services (
     description      TEXT,
     team_id          UUID,
     repository_url   TEXT,
-    tech_stack       JSONB,
+    tech_stack       TEXT,
     metadata         JSONB,
     health_status    TEXT        NOT NULL DEFAULT 'unknown',
     last_deployed_at TIMESTAMPTZ,
@@ -16,7 +16,7 @@ CREATE TABLE services (
 
 CREATE UNIQUE INDEX ON services (tenant_id, lower(name)) WHERE deleted_at IS NULL;
 CREATE INDEX ON services (tenant_id, team_id) WHERE deleted_at IS NULL;
-CREATE INDEX ON services USING GIN (tech_stack) WHERE tech_stack IS NOT NULL;
+CREATE INDEX ON services (lower(tech_stack)) WHERE tech_stack IS NOT NULL;
 CREATE INDEX ON services USING GIN (metadata) WHERE metadata IS NOT NULL;
 CREATE INDEX ON services USING GIN (to_tsvector('english', coalesce(name, '') || ' ' || coalesce(description, '')));
 

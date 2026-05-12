@@ -19,27 +19,86 @@ jobs:
         id: changes
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE="${{ github.base_ref }}"
+            BASE="origin/${{ github.base_ref }}"
           else
             BASE="HEAD~1"
           fi
-          echo "changed=$(git diff $BASE --name-only | grep -qE 'services/|shared/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          CHANGED=$(git diff $BASE --name-only)
+          echo "──────────────────────────────────────"
+          echo "Changed files:"
+          echo "$CHANGED"
+          echo "──────────────────────────────────────"
+
+          # shared/ changes force a rebuild of every service
+          if echo "$CHANGED" | grep -qE '^shared/'; then
+            SHARED=true
+            echo "⚠️  shared/ changed — all services will rebuild"
+          else
+            SHARED=false
+          fi
+
+          check() {
+            local service=$1 pattern=$2
+            if [ "$SHARED" = "true" ] || echo "$CHANGED" | grep -qE "$pattern"; then
+              echo "${service}=true" >> $GITHUB_OUTPUT
+              [ "$SHARED" = "true" ] \
+                && echo "✅ $service — forced by shared/ change" \
+                || echo "✅ $service — changes detected"
+            else
+              echo "${service}=false" >> $GITHUB_OUTPUT
+              echo "⏭️  $service — no changes"
+            fi
+          }
+
+          check registry    '^services/registry/'
+          check gateway     '^services/gateway/'
+          check topology    '^services/topology/'
+          check contract    '^services/contract/'
+          check intelligence '^services/intelligence/'
+          check ingestion   '^services/ingestion/'
+
+          # gate for Java/Gradle setup — true if anything needs building
+          if [ "$SHARED" = "true" ] || echo "$CHANGED" | grep -qE '^services/'; then
+            echo "any=true" >> $GITHUB_OUTPUT
+          else
+            echo "any=false" >> $GITHUB_OUTPUT
+          fi
 
       - uses: actions/setup-java@v4
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.any == 'true'
         with:
           java-version: '25'
           distribution: 'temurin'
 
       - uses: gradle/actions/setup-gradle@v4
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.any == 'true'
 
-      - name: Build and test
-        if: steps.changes.outputs.changed == 'true'
-        run: gradle build --no-daemon
+      - name: Build & test registry
+        if: steps.changes.outputs.registry == 'true'
+        run: gradle :services:registry:build --no-daemon
+
+      - name: Build & test gateway
+        if: steps.changes.outputs.gateway == 'true'
+        run: gradle :services:gateway:build --no-daemon
+
+      - name: Build & test topology
+        if: steps.changes.outputs.topology == 'true'
+        run: gradle :services:topology:build --no-daemon
+
+      - name: Build & test contract
+        if: steps.changes.outputs.contract == 'true'
+        run: gradle :services:contract:build --no-daemon
+
+      - name: Build & test intelligence
+        if: steps.changes.outputs.intelligence == 'true'
+        run: gradle :services:intelligence:build --no-daemon
+
+      - name: Build & test ingestion
+        if: steps.changes.outputs.ingestion == 'true'
+        run: gradle :services:ingestion:build --no-daemon
 
       - name: Trivy vulnerability scan — fail on CRITICAL or HIGH (unfixed suppressed)
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.any == 'true'
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'fs'
@@ -47,6 +106,30 @@ jobs:
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
           ignore-unfixed: true
+
+      - name: Write job summary
+        if: always()
+        run: |
+          echo "## Backend — Build & Test" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          row() {
+            local service=$1 ran=$2
+            if [ "$ran" = "true" ]; then
+              echo "| $service | ✅ Built & tested |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| $service | ⏭️ Skipped |" >> $GITHUB_STEP_SUMMARY
+            fi
+          }
+
+          row registry    "${{ steps.changes.outputs.registry }}"
+          row gateway     "${{ steps.changes.outputs.gateway }}"
+          row topology    "${{ steps.changes.outputs.topology }}"
+          row contract    "${{ steps.changes.outputs.contract }}"
+          row intelligence "${{ steps.changes.outputs.intelligence }}"
+          row ingestion   "${{ steps.changes.outputs.ingestion }}"
 
   frontend:
     name: Frontend — Lint & Test
@@ -63,11 +146,22 @@ jobs:
         id: changes
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE="${{ github.base_ref }}"
+            BASE="origin/${{ github.base_ref }}"
           else
             BASE="HEAD~1"
           fi
-          echo "changed=$(git diff $BASE --name-only | grep -q 'frontend/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          CHANGED=$(git diff $BASE --name-only)
+          echo "──────────────────────────────────────"
+          echo "Changed files:"
+          echo "$CHANGED"
+          echo "──────────────────────────────────────"
+          if echo "$CHANGED" | grep -q 'frontend/'; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "✅ Frontend changes detected — lint/test will run"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "⏭️  No frontend changes — lint/test skipped"
+          fi
 
       - uses: pnpm/action-setup@v4
         if: steps.changes.outputs.changed == 'true'
@@ -97,9 +191,20 @@ jobs:
         if: steps.changes.outputs.changed == 'true'
         run: pnpm test
 
+      - name: Write job summary
+        if: always()
+        run: |
+          echo "## Frontend — Lint & Test" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.changes.outputs.changed }}" = "true" ]; then
+            echo "✅ Lint, type-check, and tests ran — changes detected in \`frontend/\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏭️ Skipped — no changes in \`frontend/\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
   container-build:
     name: Container — Build checks
-    needs: backend
+    needs: [backend, frontend]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -109,17 +214,32 @@ jobs:
       - name: Detect changed services
         id: changes
         run: |
-          # On main/PR, compare against base; on push to main, compare HEAD~1
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE="${{ github.base_ref }}"
+            BASE="origin/${{ github.base_ref }}"
           else
             BASE="HEAD~1"
           fi
+          CHANGED=$(git diff $BASE --name-only)
+          echo "──────────────────────────────────────"
+          echo "Changed files:"
+          echo "$CHANGED"
+          echo "──────────────────────────────────────"
 
-          echo "registry=$(git diff $BASE --name-only | grep -q 'services/registry\|infra/docker/registry' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
-          echo "gateway=$(git diff $BASE --name-only | grep -q 'services/gateway\|infra/docker/gateway' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
-          echo "ingestion=$(git diff $BASE --name-only | grep -q 'services/ingestion\|infra/docker/ingestion' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
-          echo "frontend=$(git diff $BASE --name-only | grep -q 'frontend\|infra/docker/frontend' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          check() {
+            local service=$1; shift
+            if echo "$CHANGED" | grep -qE "$@"; then
+              echo "${service}=true" >> $GITHUB_OUTPUT
+              echo "✅ $service — changes detected"
+            else
+              echo "${service}=false" >> $GITHUB_OUTPUT
+              echo "⏭️  $service — no changes"
+            fi
+          }
+
+          check registry  'services/registry|infra/docker/registry'
+          check gateway   'services/gateway|infra/docker/gateway'
+          check ingestion 'services/ingestion|infra/docker/ingestion'
+          check frontend  'frontend|infra/docker/frontend'
 
       - name: Build registry image
         if: steps.changes.outputs.registry == 'true'
@@ -136,3 +256,25 @@ jobs:
       - name: Build frontend image
         if: steps.changes.outputs.frontend == 'true'
         run: docker build -f infra/docker/frontend/Dockerfile -t cartogra/frontend:ci .
+
+      - name: Write job summary
+        if: always()
+        run: |
+          echo "## Container — Build Checks" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Image | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          row() {
+            local service=$1 image=$2 built=$3
+            if [ "$built" = "true" ]; then
+              echo "| $service | \`$image\` | ✅ Built |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| $service | \`$image\` | ⏭️ Skipped |" >> $GITHUB_STEP_SUMMARY
+            fi
+          }
+
+          row registry  cartogra/registry:ci  "${{ steps.changes.outputs.registry }}"
+          row gateway   cartogra/gateway:ci   "${{ steps.changes.outputs.gateway }}"
+          row ingestion cartogra/ingestion:ci "${{ steps.changes.outputs.ingestion }}"
+          row frontend  cartogra/frontend:ci  "${{ steps.changes.outputs.frontend }}"

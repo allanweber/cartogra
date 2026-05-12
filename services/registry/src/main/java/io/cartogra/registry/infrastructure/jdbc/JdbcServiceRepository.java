@@ -90,7 +90,7 @@ public class JdbcServiceRepository implements ServiceRepository {
                     created_at, updated_at, deleted_at
                 ) VALUES (
                     :id, :tenantId, :name, :description, :teamId, :repositoryUrl,
-                    CAST(:techStack AS JSONB), CAST(:metadata AS JSONB), :healthStatus, :lastDeployedAt,
+                    :techStack, CAST(:metadata AS JSONB), :healthStatus, :lastDeployedAt,
                     :createdAt, :updatedAt, :deletedAt
                 )
                 ON CONFLICT (id) DO UPDATE SET

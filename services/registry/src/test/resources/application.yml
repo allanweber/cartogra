@@ -1,0 +1,20 @@
+management:
+  tracing:
+    sampling:
+      probability: 0.0
+    export:
+      otlp:
+        enabled: false
+  otlp:
+    metrics:
+      export:
+        enabled: false
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          enabled: false
+    logging:
+      export:
+        otlp:
+          enabled: false

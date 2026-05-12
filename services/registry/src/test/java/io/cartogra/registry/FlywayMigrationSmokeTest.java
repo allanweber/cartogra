@@ -16,7 +16,7 @@ class FlywayMigrationSmokeTest {
     @DynamicPropertySource
     static void datasourceProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url",
-                () -> PostgresTestSupport.POSTGRES.getJdbcUrl() + "?currentSchema=registry");
+                () -> PostgresTestSupport.POSTGRES.getJdbcUrl() + "&currentSchema=registry");
         registry.add("spring.datasource.username", PostgresTestSupport.POSTGRES::getUsername);
         registry.add("spring.datasource.password", PostgresTestSupport.POSTGRES::getPassword);
     }
