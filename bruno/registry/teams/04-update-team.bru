@@ -1,0 +1,48 @@
+meta {
+  name: Update Team
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{baseUrl}}/teams/{{teamId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  X-Tenant-Id: {{tenantId}}
+}
+
+body:json {
+  {
+    "name": "smoke-test-team-updated"
+  }
+}
+
+tests {
+  test("status is 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("response envelope present", function() {
+    expect(res.body).to.have.property("data");
+    expect(res.body).to.have.property("traceId");
+  });
+
+  test("traceId is 32 lowercase hex", function() {
+    expect(res.body.traceId).to.match(/^[0-9a-f]{32}$/);
+  });
+
+  test("X-Trace-Id header matches body traceId", function() {
+    expect(res.headers["x-trace-id"]).to.equal(res.body.traceId);
+  });
+
+  test("name was updated", function() {
+    expect(res.body.data.name).to.equal("smoke-test-team-updated");
+  });
+}

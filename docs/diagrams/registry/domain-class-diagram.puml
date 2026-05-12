@@ -1,0 +1,175 @@
+@startuml registry-domain-class-diagram
+title Registry Service — Domain & Application Layer Class Diagram
+
+skinparam classBackgroundColor #F8F8FF
+skinparam classBorderColor #444466
+skinparam packageBackgroundColor #EFEFFF
+skinparam packageBorderColor #888899
+skinparam arrowColor #444466
+
+package "domain" {
+  enum ServiceHealthStatus {
+    HEALTHY
+    DEGRADED
+    UNKNOWN
+    --
+    + fromString(value: String): ServiceHealthStatus
+    + toDbValue(): String
+  }
+
+  class "Service" <<record>> {
+    + id : UUID
+    + tenantId : UUID
+    + name : String
+    + description : String
+    + teamId : UUID
+    + repositoryUrl : String
+    + techStack : String
+    + metadata : String
+    + healthStatus : ServiceHealthStatus
+    + lastDeployedAt : Instant
+    + createdAt : Instant
+    + updatedAt : Instant
+    + deletedAt : Instant
+    --
+    + isOrphaned() : boolean
+    + isDeleted() : boolean
+  }
+
+  class "ServiceSnapshot" <<record>> {
+    + id : UUID
+    + serviceId : UUID
+    + tenantId : UUID
+    + snapshot : String
+    + changedBy : UUID
+    + changedAt : Instant
+  }
+
+  class "Team" <<record>> {
+    + id : UUID
+    + tenantId : UUID
+    + name : String
+    + createdAt : Instant
+    + updatedAt : Instant
+    + deletedAt : Instant
+    --
+    + isDeleted() : boolean
+  }
+
+  class "ScmConnection" <<record>> {
+    + id : UUID
+    + tenantId : UUID
+    + provider : String
+    + config : String
+    + createdAt : Instant
+    + updatedAt : Instant
+    + deletedAt : Instant
+    --
+    + isDeleted() : boolean
+  }
+
+  package "exception" {
+    class ServiceNotFoundException
+    class TeamNotFoundException
+    class ScmConnectionNotFoundException
+    class DuplicateServiceNameException
+  }
+
+  Service --> ServiceHealthStatus
+  ServiceSnapshot ..> Service : "snapshot of"
+}
+
+package "application.repository" {
+  interface ServiceRepository {
+    + findById(tenantId, serviceId): Optional<Service>
+    + findAll(filter, limit, offset): List<Service>
+    + count(tenantId, filter): long
+    + findOrphaned(tenantId, limit, offset): List<Service>
+    + save(service): Service
+    + softDelete(tenantId, serviceId): void
+    + existsByName(tenantId, name, excludeId): boolean
+  }
+
+  interface ServiceHistoryRepository {
+    + save(snapshot): void
+    + findByServiceId(tenantId, serviceId, limit, offset): List<ServiceSnapshot>
+    + findAtPointInTime(tenantId, serviceId, at): Optional<ServiceSnapshot>
+  }
+
+  interface TeamRepository {
+    + findById(tenantId, teamId): Optional<Team>
+    + findAll(tenantId, limit, offset): List<Team>
+    + count(tenantId): long
+    + save(team): Team
+    + softDelete(tenantId, teamId): void
+    + existsByName(tenantId, name, excludeId): boolean
+  }
+
+  interface ScmConnectionRepository {
+    + findById(tenantId, id): Optional<ScmConnection>
+    + findAll(tenantId, limit, offset): List<ScmConnection>
+    + count(tenantId): long
+    + save(conn): ScmConnection
+    + softDelete(tenantId, id): void
+  }
+}
+
+package "application.usecase" {
+  interface CreateServiceUseCase { + execute(cmd): Service }
+  interface UpdateServiceUseCase { + execute(cmd): Service }
+  interface DeleteServiceUseCase { + execute(tenantId, serviceId, requestedBy): void }
+  interface FindServiceUseCase { + execute(tenantId, serviceId): Service }
+  interface ListServicesUseCase { + execute(tenantId, filter, limit, offset): PageResult<Service> }
+  interface AssignOwnerUseCase { + execute(cmd): Service }
+  interface DetectOrphansUseCase { + execute(tenantId, limit, offset): PageResult<Service> }
+  interface GetServiceHistoryUseCase {
+    + execute(tenantId, serviceId, limit, offset): PageResult<ServiceSnapshot>
+    + executeAtPointInTime(tenantId, serviceId, at): ServiceSnapshot
+  }
+
+  interface CreateTeamUseCase { + execute(cmd): Team }
+  interface UpdateTeamUseCase { + execute(cmd): Team }
+  interface DeleteTeamUseCase { + execute(tenantId, teamId, requestedBy): void }
+  interface FindTeamUseCase { + execute(tenantId, teamId): Team }
+  interface ListTeamsUseCase { + execute(tenantId, limit, offset): PageResult<Team> }
+
+  interface CreateScmConnectionUseCase { + execute(cmd): ScmConnection }
+  interface UpdateScmConnectionUseCase { + execute(cmd): ScmConnection }
+  interface DeleteScmConnectionUseCase { + execute(tenantId, id, requestedBy): void }
+  interface FindScmConnectionUseCase { + execute(tenantId, id): ScmConnection }
+  interface ListScmConnectionsUseCase { + execute(tenantId, limit, offset): PageResult<ScmConnection> }
+}
+
+package "infrastructure.jdbc" {
+  class JdbcServiceRepository implements ServiceRepository
+  class JdbcServiceHistoryRepository implements ServiceHistoryRepository
+  class JdbcTeamRepository implements TeamRepository
+  class JdbcScmConnectionRepository implements ScmConnectionRepository
+}
+
+package "application.usecase.impl" {
+  class CreateServiceUseCaseImpl implements CreateServiceUseCase
+  class UpdateServiceUseCaseImpl implements UpdateServiceUseCase
+  class DeleteServiceUseCaseImpl implements DeleteServiceUseCase
+  class FindServiceUseCaseImpl implements FindServiceUseCase
+  class ListServicesUseCaseImpl implements ListServicesUseCase
+  class AssignOwnerUseCaseImpl implements AssignOwnerUseCase
+  class DetectOrphansUseCaseImpl implements DetectOrphansUseCase
+  class GetServiceHistoryUseCaseImpl implements GetServiceHistoryUseCase
+}
+
+CreateServiceUseCaseImpl --> ServiceRepository
+CreateServiceUseCaseImpl --> ServiceHistoryRepository
+CreateServiceUseCaseImpl --> TeamRepository
+UpdateServiceUseCaseImpl --> ServiceRepository
+UpdateServiceUseCaseImpl --> ServiceHistoryRepository
+DeleteServiceUseCaseImpl --> ServiceRepository
+DeleteServiceUseCaseImpl --> ServiceHistoryRepository
+AssignOwnerUseCaseImpl --> ServiceRepository
+AssignOwnerUseCaseImpl --> ServiceHistoryRepository
+AssignOwnerUseCaseImpl --> TeamRepository
+GetServiceHistoryUseCaseImpl --> ServiceRepository
+GetServiceHistoryUseCaseImpl --> ServiceHistoryRepository
+DetectOrphansUseCaseImpl --> ServiceRepository
+
+@enduml

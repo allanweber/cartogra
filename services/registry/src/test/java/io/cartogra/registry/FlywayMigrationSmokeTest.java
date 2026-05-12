@@ -52,6 +52,21 @@ class FlywayMigrationSmokeTest {
         assertTableExists("scm_connections");
     }
 
+    @Test
+    void servicesTableExists() {
+        assertTableExists("services");
+    }
+
+    @Test
+    void servicesHistoryTableExists() {
+        assertTableExists("services_history");
+    }
+
+    @Test
+    void scmWebhooksTableExists() {
+        assertTableExists("scm_webhooks");
+    }
+
     private void assertTableExists(String tableName) {
         Integer count = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables " +

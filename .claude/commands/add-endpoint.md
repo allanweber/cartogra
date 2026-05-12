@@ -80,7 +80,63 @@ Arguments: $ARGUMENTS
    }
    ```
 
-8. **Verify rules checklist before finishing:**
+8. **Add a Bruno smoke test** in `bruno/<service>/<tag>/`:
+   - File name: `<NN>-<operation-id>.bru` (next seq number in the folder)
+   - Use `{{baseUrl}}`, `{{authToken}}`, `{{tenantId}}` — never hardcode values
+   - CI endpoints: use `headers { X-Cartogra-Api-Key: {{apiKey}} }` with `auth: none`
+   - POST/PUT responses: add `script:post-response` to capture created ID into a variable
+   - Every test MUST assert:
+     - Correct HTTP status code
+     - `res.body.data` and `res.body.traceId` present (enveloped endpoints)
+     - `res.body.traceId` matches `/^[0-9a-f]{32}$/`
+     - `res.headers["x-trace-id"]` equals `res.body.traceId`
+   - 204 responses: assert only `res.headers["x-trace-id"]` pattern
+   - Webhook/CI flat endpoints: assert `res.headers["x-trace-id"]` only (no envelope check)
+
+   ```bru
+   meta {
+     name: Get Xyz
+     type: http
+     seq: 3
+   }
+
+   get {
+     url: {{baseUrl}}/xyz/{{xyzId}}
+     body: none
+     auth: bearer
+   }
+
+   auth:bearer {
+     token: {{authToken}}
+   }
+
+   tests {
+     test("status is 200", function() {
+       expect(res.status).to.equal(200);
+     });
+
+     test("response envelope present", function() {
+       expect(res.body).to.have.property("data");
+       expect(res.body).to.have.property("traceId");
+     });
+
+     test("traceId is 32 lowercase hex", function() {
+       expect(res.body.traceId).to.match(/^[0-9a-f]{32}$/);
+     });
+
+     test("X-Trace-Id header matches body traceId", function() {
+       expect(res.headers["x-trace-id"]).to.equal(res.body.traceId);
+     });
+   }
+   ```
+
+   Alternatively, regenerate the whole collection from the updated OpenAPI spec:
+
+   ```bash
+   node scripts/generate-bruno.mjs docs/api/<service>.openapi.yaml bruno/<service>
+   ```
+
+9. **Verify rules checklist before finishing:**
    - [ ] Response includes `{"data": ..., "traceId": "..."}` — NOT a flat object
    - [ ] `X-Trace-Id` header is set on every response
    - [ ] `traceId` is extracted from `Span.current().getSpanContext().getTraceId()` (32 hex chars)
@@ -89,3 +145,4 @@ Arguments: $ARGUMENTS
    - [ ] `tenant_id` is extracted from the `X-Tenant-Id` header (injected by gateway)
    - [ ] Error responses also include `traceId` and `X-Trace-Id` header
    - [ ] This is NOT a webhook endpoint (those skip the envelope)
+   - [ ] Bruno `.bru` file added in `bruno/<service>/<tag>/`

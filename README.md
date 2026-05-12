@@ -42,7 +42,7 @@ Service catalogs go stale because they're updated manually. Cartogra solves this
 
 ```bash
 # 1. Start the local dev stack
-cd infra/docker-compose && docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+cd infra/docker-compose && docker compose -f docker-compose.dev.yml up -d
 
 # 2. Run all services (from repo root)
 ./gradlew bootRun

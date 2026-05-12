@@ -1,0 +1,128 @@
+@startuml registry-er-diagram
+title Registry Service — Entity-Relationship Diagram (V001–V007)
+
+skinparam linetype ortho
+skinparam entityBackgroundColor #F8F8FF
+skinparam entityBorderColor #444466
+
+entity "tenants" {
+  * id : UUID <<PK>>
+  --
+  * tenant_id : UUID
+  * name : TEXT
+  * slug : TEXT (UNIQUE)
+  * plan : TEXT
+  ~ metadata : JSONB
+  * created_at : TIMESTAMPTZ
+  * updated_at : TIMESTAMPTZ
+  ~ deleted_at : TIMESTAMPTZ
+}
+
+entity "teams" {
+  * id : UUID <<PK>>
+  --
+  * tenant_id : UUID <<tenant>>
+  * name : TEXT
+  * created_at : TIMESTAMPTZ
+  * updated_at : TIMESTAMPTZ
+  ~ deleted_at : TIMESTAMPTZ
+}
+
+entity "users" {
+  * id : UUID <<PK>>
+  --
+  * tenant_id : UUID <<tenant>>
+  * email : TEXT
+  * auth_provider : TEXT
+  * email_verified : BOOLEAN
+  * roles : TEXT[]
+  ~ metadata : JSONB
+  * created_at : TIMESTAMPTZ
+  * updated_at : TIMESTAMPTZ
+  ~ deleted_at : TIMESTAMPTZ
+}
+
+entity "scm_connections" {
+  * id : UUID <<PK>>
+  --
+  * tenant_id : UUID <<tenant>>
+  * provider : TEXT
+  * config : JSONB
+  * created_at : TIMESTAMPTZ
+  * updated_at : TIMESTAMPTZ
+  ~ deleted_at : TIMESTAMPTZ
+}
+
+entity "services" {
+  * id : UUID <<PK>>
+  --
+  * tenant_id : UUID <<tenant>>
+  * name : TEXT
+  ~ description : TEXT
+  ~ team_id : UUID <<FK>>
+  ~ repository_url : TEXT
+  ~ tech_stack : JSONB
+  ~ metadata : JSONB
+  * health_status : TEXT
+  ~ last_deployed_at : TIMESTAMPTZ
+  * created_at : TIMESTAMPTZ
+  * updated_at : TIMESTAMPTZ
+  ~ deleted_at : TIMESTAMPTZ
+}
+
+entity "services_history" {
+  * id : UUID <<PK>>
+  --
+  * service_id : UUID <<FK>>
+  * tenant_id : UUID <<tenant>>
+  * snapshot : JSONB
+  ~ changed_by : UUID <<FK users>>
+  * changed_at : TIMESTAMPTZ
+}
+
+entity "scm_webhooks" {
+  * id : UUID <<PK>>
+  --
+  * tenant_id : UUID <<tenant>>
+  * scm_connection_id : UUID <<FK>>
+  * provider : TEXT
+  ~ external_id : TEXT
+  * target_url : TEXT
+  ~ secret_hash : TEXT
+  * events : TEXT[]
+  * status : TEXT
+  ~ last_received_at : TIMESTAMPTZ
+  ~ error_message : TEXT
+  * created_at : TIMESTAMPTZ
+  * updated_at : TIMESTAMPTZ
+  ~ deleted_at : TIMESTAMPTZ
+}
+
+teams }o--|| tenants : "tenant_id"
+users }o--|| tenants : "tenant_id"
+scm_connections }o--|| tenants : "tenant_id"
+services }o--|| tenants : "tenant_id"
+services }o--o| teams : "team_id (nullable = orphan)"
+services_history }o--|| services : "service_id"
+services_history }o--o| users : "changed_by (nullable = system)"
+scm_webhooks }o--|| scm_connections : "scm_connection_id"
+
+note bottom of services
+  UNIQUE INDEX on (tenant_id, lower(name)) WHERE deleted_at IS NULL
+  GIN INDEX on tech_stack, metadata
+  GIN INDEX on to_tsvector(name || description)
+  health_status: healthy | degraded | unknown
+end note
+
+note bottom of services_history
+  Append-only — no UPDATE or DELETE
+  One row per mutation (create/update/delete/assign)
+  snapshot = full Service JSON at point-in-time
+end note
+
+note bottom of scm_webhooks
+  status: active | inactive | error
+  provider: github | azure_devops
+end note
+
+@enduml

@@ -16,9 +16,9 @@ info:
     - Header: `X-Trace-Id: <same 32-hex traceId>`
 
 servers:
-  - url: http://localhost:8081
+  - url: http://localhost:8081/api/v1
     description: Local development (direct)
-  - url: http://localhost:8080/api/registry
+  - url: http://localhost:8080/api/registry/api/v1
     description: Local development (via Gateway)
 
 tags:

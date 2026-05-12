@@ -1,0 +1,65 @@
+@startuml delete-service-sequence
+title Delete Service — Use Case Flow (Soft Delete)
+
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam participantBackgroundColor #F8F8FF
+skinparam participantBorderColor #444466
+skinparam databaseBackgroundColor #FFFACD
+skinparam databaseBorderColor #888800
+
+actor Client
+participant "ServiceController\n(api)" as C
+participant "DeleteServiceUseCaseImpl\n(application)" as UC
+participant "ServiceRepository\n(application)" as SR
+participant "ServiceHistoryRepository\n(application)" as HR
+database "PostgreSQL" as DB
+
+Client -> C : DELETE /api/v1/services/{id}
+
+activate C
+C -> UC : execute(tenantId, serviceId, requestedBy)
+activate UC
+
+UC -> SR : findById(tenantId, serviceId)
+activate SR
+SR -> DB : SELECT * FROM services\nWHERE id=? AND tenant_id=? AND deleted_at IS NULL
+DB --> SR : row or empty
+SR --> UC : Optional<Service>
+deactivate SR
+
+alt service not found
+  UC --> C : throws ServiceNotFoundException
+  C --> Client : 404 Not Found\n{"error":{"code":"SERVICE_NOT_FOUND",...}}
+end
+
+UC -> SR : softDelete(tenantId, serviceId)
+activate SR
+SR -> DB : UPDATE services SET deleted_at = now()\nWHERE id=? AND tenant_id=?
+DB --> SR : ok
+SR --> UC : void
+deactivate SR
+
+UC -> UC : build deleted Service record\n(deletedAt=now(), updatedAt=now())
+UC -> UC : serialize Service → JSON snapshot
+
+UC -> HR : save(ServiceSnapshot)
+activate HR
+HR -> DB : INSERT INTO services_history\n(snapshot captures deleted_at timestamp)
+DB --> HR : ok
+HR --> UC : void
+deactivate HR
+
+UC --> C : void
+deactivate UC
+
+C --> Client : 204 No Content\n(X-Trace-Id header)
+deactivate C
+
+note over DB
+  Row is NOT physically deleted.
+  deleted_at is set; all future reads
+  filter WHERE deleted_at IS NULL.
+end note
+
+@enduml

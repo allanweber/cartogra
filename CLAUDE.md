@@ -54,6 +54,7 @@
 - Set resource requests AND limits on EVERY K8s container
 - Use `for_each` (not `count`) in Terraform for removable resources
 - Write a Flyway migration for every schema change
+- **Add PlantUML diagrams for every feature with new code** — ER diagrams for new tables, class diagrams for domain models, sequence diagrams for use cases and complex flows (see `workflow.md`)
 
 **NEVER:**
 
@@ -108,6 +109,8 @@ cartogra/
     ├── adr/                               # Architecture Decision Records
     ├── api/                               # OpenAPI specs (*.openapi.yaml per service)
     ├── architecture/                      # system-overview, data-model, kafka-topics
+    ├── diagrams/                          # PlantUML diagrams (*.puml) per service
+    │   └── {service}/                     # er, class, sequence diagrams
     └── runbooks/                          # Operational runbooks
 ```
 
