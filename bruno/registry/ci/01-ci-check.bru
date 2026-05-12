@@ -1,0 +1,39 @@
+meta {
+  name: CI Check
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/ci/check
+  body: json
+  auth: none
+}
+
+headers {
+  X-Cartogra-Api-Key: {{apiKey}}
+}
+
+body:json {
+  {
+    "serviceId": "{{serviceId}}",
+    "specType": "openapi",
+    "specContent": "openapi: '3.1.0'\ninfo:\n  title: Smoke Test\n  version: '0.1.0'\npaths: {}"
+  }
+}
+
+tests {
+  test("status is 200 or 422", function() {
+    expect([200, 422]).to.include(res.status);
+  });
+
+  test("X-Trace-Id header is present", function() {
+    expect(res.headers["x-trace-id"]).to.match(/^[0-9a-f]{32}$/);
+  });
+
+  test("result has checkId and result fields (flat — not enveloped)", function() {
+    expect(res.body).to.have.property("checkId");
+    expect(res.body).to.have.property("result");
+    expect(["compatible", "warning", "breaking"]).to.include(res.body.result);
+  });
+}

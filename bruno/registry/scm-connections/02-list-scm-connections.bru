@@ -1,0 +1,42 @@
+meta {
+  name: List SCM Connections
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/scm-connections
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  X-Tenant-Id: {{tenantId}}
+}
+
+tests {
+  test("status is 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("response envelope present", function() {
+    expect(res.body).to.have.property("data");
+    expect(res.body).to.have.property("traceId");
+  });
+
+  test("traceId is 32 lowercase hex", function() {
+    expect(res.body.traceId).to.match(/^[0-9a-f]{32}$/);
+  });
+
+  test("X-Trace-Id header matches body traceId", function() {
+    expect(res.headers["x-trace-id"]).to.equal(res.body.traceId);
+  });
+
+  test("data is an array", function() {
+    expect(res.body.data).to.be.an("array");
+  });
+}

@@ -1,0 +1,61 @@
+meta {
+  name: Create Service
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/services
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  X-Tenant-Id: {{tenantId}}
+}
+
+body:json {
+  {
+    "name": "smoke-test-service",
+    "description": "Created by Bruno smoke test",
+    "repositoryUrl": "https://github.com/acme/smoke-test-service"
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar("serviceId", res.body.data.id);
+  }
+}
+
+tests {
+  test("status is 201", function() {
+    expect(res.status).to.equal(201);
+  });
+
+  test("response envelope present", function() {
+    expect(res.body).to.have.property("data");
+    expect(res.body).to.have.property("traceId");
+  });
+
+  test("traceId is 32 lowercase hex", function() {
+    expect(res.body.traceId).to.match(/^[0-9a-f]{32}$/);
+  });
+
+  test("X-Trace-Id header matches body traceId", function() {
+    expect(res.headers["x-trace-id"]).to.equal(res.body.traceId);
+  });
+
+  test("service has id and name", function() {
+    expect(res.body.data.id).to.be.a("string");
+    expect(res.body.data.name).to.equal("smoke-test-service");
+  });
+
+  test("healthStatus defaults to unknown", function() {
+    expect(res.body.data.healthStatus).to.equal("unknown");
+  });
+}

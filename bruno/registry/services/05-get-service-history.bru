@@ -1,0 +1,48 @@
+meta {
+  name: Get Service History
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/services/{{serviceId}}/history
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  X-Tenant-Id: {{tenantId}}
+}
+
+params:query {
+  page: 0
+  size: 20
+}
+
+tests {
+  test("status is 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("response envelope present", function() {
+    expect(res.body).to.have.property("data");
+    expect(res.body).to.have.property("traceId");
+  });
+
+  test("traceId is 32 lowercase hex", function() {
+    expect(res.body.traceId).to.match(/^[0-9a-f]{32}$/);
+  });
+
+  test("X-Trace-Id header matches body traceId", function() {
+    expect(res.headers["x-trace-id"]).to.equal(res.body.traceId);
+  });
+
+  test("history has content array and pagination", function() {
+    expect(res.body.data.content).to.be.an("array");
+    expect(res.body.data.page).to.have.property("totalElements");
+  });
+}
