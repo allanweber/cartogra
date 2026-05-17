@@ -1,10 +1,22 @@
 @startuml
-title Auth Schema — users (V003) + refresh_tokens (V008) + tenant_oidc_configs (V009)
+title Auth Schema — tenants (V001) + users (V003) + refresh_tokens (V008) + tenant_oidc_configs (V009)
+
+entity "tenants" {
+  * id : UUID <<PK>>
+  --
+  * tenant_id : UUID
+  * name : TEXT
+  ~ slug : TEXT
+  ~ plan : TEXT
+  * created_at : TIMESTAMPTZ
+  * updated_at : TIMESTAMPTZ
+  ~ deleted_at : TIMESTAMPTZ
+}
 
 entity "users" {
   * id : UUID <<PK>>
   --
-  * tenant_id : UUID
+  * tenant_id : UUID <<FK>>
   * email : TEXT
   * auth_provider : TEXT
   ~ auth_subject : TEXT
@@ -45,5 +57,7 @@ entity "tenant_oidc_configs" {
   ~ deleted_at : TIMESTAMPTZ
 }
 
+tenants ||--o{ users : "has"
 users ||--o{ refresh_tokens : "has"
+tenants ||--o| tenant_oidc_configs : "configures"
 @enduml

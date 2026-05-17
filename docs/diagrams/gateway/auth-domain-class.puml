@@ -2,6 +2,16 @@
 title Gateway Auth Domain
 
 package "domain" {
+  class Tenant << record >> {
+    id : UUID
+    tenantId : UUID
+    name : String
+    slug : String?
+    plan : String
+    createdAt : Instant
+    updatedAt : Instant
+    deletedAt : Instant?
+  }
   class User << record >> {
     id : UUID
     tenantId : UUID
@@ -41,7 +51,7 @@ package "domain" {
 
 package "application" {
   interface RegisterUserUseCase {
-    execute(request) : TokenResponse
+    execute(request) : RegisterResponse
   }
   interface VerifyEmailUseCase {
     execute(email, token) : void
@@ -64,8 +74,12 @@ package "application" {
 }
 
 package "infrastructure.jdbc" {
+  interface TenantRepository {
+    save(tenant) : Tenant
+  }
   interface UserRepository {
     findById(id) : Optional<User>
+    findByEmail(email) : Optional<User>
     findByTenantAndEmail(tenantId, email) : Optional<User>
     findByVerificationToken(token) : Optional<User>
     save(user) : User
@@ -75,6 +89,7 @@ package "infrastructure.jdbc" {
     save(token) : RefreshToken
     revoke(id) : void
     revokeAllForUser(userId) : void
+    deleteExpiredAndRevoked(retention) : int
   }
   interface TenantOidcConfigRepository {
     findByTenantId(tenantId) : Optional<TenantOidcConfig>
@@ -98,6 +113,19 @@ package "infrastructure.jwt" {
   }
 }
 
+package "infrastructure.tracing" {
+  class TraceContext {
+    currentTraceId(reactorContext) : String
+  }
+}
+
+package "infrastructure.scheduler" {
+  class RefreshTokenPurgeScheduler {
+    purgeExpiredAndRevoked() : void
+  }
+}
+
+RegisterUserUseCase ..> TenantRepository
 RegisterUserUseCase ..> UserRepository
 VerifyEmailUseCase ..> UserRepository
 LoginUseCase ..> UserRepository
@@ -107,4 +135,5 @@ RefreshTokenUseCase ..> JwtTokenProvider
 LogoutUseCase ..> RefreshTokenRepository
 OAuthCallbackUseCase ..> UserRepository
 OAuthCallbackUseCase ..> JwtTokenProvider
+RefreshTokenPurgeScheduler ..> RefreshTokenRepository
 @enduml
