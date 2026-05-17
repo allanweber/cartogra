@@ -1,7 +1,7 @@
 openapi: "3.1.0"
 info:
   title: Cartogra Gateway API
-  version: "0.1.0"
+  version: "1.0.0"
   description: |
     Authentication, session management, tenant injection, and reverse-proxy entry point for all Cartogra services.
 
@@ -10,86 +10,30 @@ info:
     - Error: `{ "error": { "code", "message", "details" }, "traceId": "<32-hex>" }`
     - Header: `X-Trace-Id: <same 32-hex traceId>`
 
+    **Auth modes** (both accepted on all secured endpoints):
+    - Browser: `jwt` httpOnly cookie (`HttpOnly; Secure; SameSite=Lax; Path=/; MaxAge=900`)
+    - API clients: `Authorization: Bearer <access_token>`
+
 servers:
   - url: http://localhost:8080
     description: Local development
 
 tags:
   - name: auth
-    description: Authentication flows — login, OTP, OAuth callbacks, logout, token refresh
-  - name: api-keys
-    description: Tenant-scoped API key management (CI/automation)
+    description: Registration, verification, login, refresh, logout, and user info
+  - name: oauth
+    description: OAuth 2.0 flows — Google and GitHub
+  - name: oidc-admin
+    description: Tenant OIDC configuration management (ADMIN role required)
   - name: health
     description: Liveness and readiness probes
 
 paths:
-  # ── Auth ───────────────────────────────────────────────────────────────────
+  # ── Registration & Verification ────────────────────────────────────────────
 
-  /auth/login:
+  /v1/auth/register:
     post:
-      summary: Email + password login (step 1 of 2)
-      operationId: loginWithPassword
-      tags: [auth]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/LoginRequest"
-      responses:
-        "200":
-          description: OTP sent to email; session pending verification
-          headers:
-            X-Trace-Id:
-              $ref: "#/components/headers/XTraceId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/OtpRequiredResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "429":
-          $ref: "#/components/responses/TooManyRequests"
-
-  /auth/verify-otp:
-    post:
-      summary: Verify OTP and complete login
-      operationId: verifyOtp
-      tags: [auth]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/OtpVerifyRequest"
-      responses:
-        "200":
-          description: |
-            Authentication complete. Browser clients receive httpOnly JWT cookie.
-            Non-browser clients receive token in response body.
-          headers:
-            X-Trace-Id:
-              $ref: "#/components/headers/XTraceId"
-            Set-Cookie:
-              description: httpOnly JWT cookie (browser clients)
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuthSuccessResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "429":
-          $ref: "#/components/responses/TooManyRequests"
-
-  /auth/register:
-    post:
-      summary: Register new account + tenant
+      summary: Register new user account
       operationId: register
       tags: [auth]
       requestBody:
@@ -100,14 +44,14 @@ paths:
               $ref: "#/components/schemas/RegisterRequest"
       responses:
         "201":
-          description: Account created; OTP sent for verification
+          description: Account created; verification email sent asynchronously
           headers:
             X-Trace-Id:
               $ref: "#/components/headers/XTraceId"
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OtpRequiredResponse"
+                $ref: "#/components/schemas/TokenResponseEnvelope"
         "400":
           $ref: "#/components/responses/BadRequest"
         "409":
@@ -115,72 +59,197 @@ paths:
         "429":
           $ref: "#/components/responses/TooManyRequests"
 
-  /auth/logout:
+  /v1/auth/verify:
     post:
-      summary: Invalidate session / clear cookie
+      summary: Verify email address with OTP token
+      operationId: verifyEmail
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyEmailRequest"
+      responses:
+        "200":
+          description: Email verified successfully
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoidEnvelope"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # ── Login ──────────────────────────────────────────────────────────────────
+
+  /v1/auth/login:
+    post:
+      summary: Authenticate with email and password
+      operationId: login
+      tags: [auth]
+      description: |
+        On success:
+        - Browser clients receive `jwt` and `jwt_refresh` httpOnly cookies
+        - API clients can use `access_token` from the response body
+        - Both tokens are identical in capability; the cookie is just a transport convenience
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Authentication successful
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+            Set-Cookie:
+              description: |
+                Two cookies set on success:
+                - `jwt=<access_token>; HttpOnly; Secure; SameSite=Lax; Path=/; MaxAge=900`
+                - `jwt_refresh=<refresh_token>; HttpOnly; Secure; SameSite=Lax; Path=/v1/auth/refresh; MaxAge=2592000`
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponseEnvelope"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # ── Token Refresh ──────────────────────────────────────────────────────────
+
+  /v1/auth/refresh:
+    post:
+      summary: Refresh access token using refresh token
+      operationId: refreshToken
+      tags: [auth]
+      description: |
+        Accepts refresh token from either:
+        - `jwt_refresh` httpOnly cookie (browser clients)
+        - `Authorization: Bearer <refresh_token>` header (API clients)
+
+        Issues a new access token and rotates the refresh token (old token revoked).
+      responses:
+        "200":
+          description: New access token issued; refresh token rotated
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+            Set-Cookie:
+              description: Updated `jwt` and `jwt_refresh` cookies
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponseEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # ── Logout ─────────────────────────────────────────────────────────────────
+
+  /v1/auth/logout:
+    post:
+      summary: Revoke refresh token and clear cookies
       operationId: logout
       tags: [auth]
       security:
         - cookieAuth: []
         - bearerAuth: []
+      description: Revokes the refresh token and clears both `jwt` and `jwt_refresh` cookies.
       responses:
-        "204":
-          description: Session invalidated
+        "200":
+          description: Logged out successfully
           headers:
             X-Trace-Id:
               $ref: "#/components/headers/XTraceId"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
+            Set-Cookie:
+              description: Both cookies cleared (MaxAge=0)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoidEnvelope"
 
-  /auth/refresh:
-    post:
-      summary: Refresh JWT token
-      operationId: refreshToken
+  # ── User Info ──────────────────────────────────────────────────────────────
+
+  /v1/auth/userinfo:
+    get:
+      summary: Return authenticated user info from JWT claims
+      operationId: userinfo
       tags: [auth]
       security:
         - cookieAuth: []
         - bearerAuth: []
       responses:
         "200":
-          description: New token issued
+          description: User info from validated JWT
           headers:
             X-Trace-Id:
               $ref: "#/components/headers/XTraceId"
-            Set-Cookie:
-              description: Updated httpOnly JWT cookie (browser clients)
-              schema:
-                type: string
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuthSuccessResponse"
+                $ref: "#/components/schemas/UserInfoEnvelope"
         "401":
           $ref: "#/components/responses/Unauthorized"
 
-  /auth/oauth/github:
-    get:
-      summary: Initiate GitHub OAuth flow
-      operationId: oauthGitHub
-      tags: [auth]
-      responses:
-        "302":
-          description: Redirect to GitHub authorization endpoint
+  # ── OAuth ──────────────────────────────────────────────────────────────────
 
-  /auth/oauth/google:
+  /v1/auth/oauth/{provider}/start:
     get:
-      summary: Initiate Google OAuth flow
-      operationId: oauthGoogle
-      tags: [auth]
-      responses:
-        "302":
-          description: Redirect to Google authorization endpoint
-
-  /auth/oauth/callback:
-    get:
-      summary: OAuth callback handler (all providers)
-      operationId: oauthCallback
-      tags: [auth]
+      summary: Initiate OAuth authorization flow
+      operationId: oauthStart
+      tags: [oauth]
       parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [google, github]
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "302":
+          description: Redirect to provider authorization endpoint
+          headers:
+            Location:
+              description: Provider authorization URL with state, client_id, scope, redirect_uri
+              schema:
+                type: string
+                format: uri
+
+  /v1/auth/oauth/{provider}/callback:
+    get:
+      summary: Handle OAuth authorization callback
+      operationId: oauthCallback
+      tags: [oauth]
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [google, github]
         - name: code
           in: query
           required: true
@@ -192,18 +261,33 @@ paths:
           schema:
             type: string
       responses:
-        "302":
-          description: Redirect to frontend with session established
+        "200":
+          description: |
+            OAuth login successful. Sets `jwt` and `jwt_refresh` cookies.
+            Response body contains token for API clients.
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+            Set-Cookie:
+              description: "`jwt` and `jwt_refresh` httpOnly cookies"
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponseEnvelope"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
-  # ── Tenant API Keys ────────────────────────────────────────────────────────
+  # ── Tenant OIDC Admin ──────────────────────────────────────────────────────
 
-  /api-keys:
+  /v1/auth/admin/oidc-config:
     post:
-      summary: Create tenant API key
-      operationId: createApiKey
-      tags: [api-keys]
+      summary: Create tenant OIDC configuration
+      operationId: createOidcConfig
+      tags: [oidc-admin]
       security:
         - cookieAuth: []
         - bearerAuth: []
@@ -212,65 +296,103 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateApiKeyRequest"
+              $ref: "#/components/schemas/TenantOidcConfigRequest"
       responses:
         "201":
-          description: |
-            API key created. The raw key is returned **once only** — store it immediately.
+          description: OIDC configuration created
           headers:
             X-Trace-Id:
               $ref: "#/components/headers/XTraceId"
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CreateApiKeyResponse"
+                $ref: "#/components/schemas/TenantOidcConfigEnvelope"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
     get:
-      summary: List tenant API keys (metadata only, no raw keys)
-      operationId: listApiKeys
-      tags: [api-keys]
+      summary: Get tenant OIDC configuration
+      operationId: getOidcConfig
+      tags: [oidc-admin]
       security:
         - cookieAuth: []
         - bearerAuth: []
       responses:
         "200":
+          description: Current OIDC configuration for the tenant
           headers:
             X-Trace-Id:
               $ref: "#/components/headers/XTraceId"
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiKeyListResponse"
-
-  /api-keys/{keyId}:
-    delete:
-      summary: Revoke API key
-      operationId: revokeApiKey
-      tags: [api-keys]
-      security:
-        - cookieAuth: []
-        - bearerAuth: []
-      parameters:
-        - name: keyId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "204":
-          description: Key revoked
-          headers:
-            X-Trace-Id:
-              $ref: "#/components/headers/XTraceId"
+                $ref: "#/components/schemas/TenantOidcConfigEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
-  # ── Health ────────────────────────────────────────────────────────────────
+    put:
+      summary: Update tenant OIDC configuration
+      operationId: updateOidcConfig
+      tags: [oidc-admin]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantOidcConfigRequest"
+      responses:
+        "200":
+          description: OIDC configuration updated
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantOidcConfigEnvelope"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      summary: Soft-delete tenant OIDC configuration
+      operationId: deleteOidcConfig
+      tags: [oidc-admin]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OIDC configuration deleted
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoidEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  # ── Health ─────────────────────────────────────────────────────────────────
 
   /actuator/health/liveness:
     get:
@@ -292,14 +414,14 @@ paths:
         "503":
           description: Service not ready
 
-# ── Components ─────────────────────────────────────────────────────────────
+# ── Components ──────────────────────────────────────────────────────────────
 
 components:
   securitySchemes:
     cookieAuth:
       type: apiKey
       in: cookie
-      name: cartogra_session
+      name: jwt
     bearerAuth:
       type: http
       scheme: bearer
@@ -308,6 +430,7 @@ components:
       type: apiKey
       in: header
       name: X-Cartogra-Api-Key
+      description: Tenant-scoped API key for CI/automation (x-planned — Phase 3)
 
   headers:
     XTraceId:
@@ -315,21 +438,10 @@ components:
       schema:
         type: string
         pattern: "^[0-9a-f]{32}$"
+        example: "a3f1c8d2e4b5f6a7b8c9d0e1f2a3b4c5"
 
   schemas:
-    # ── Envelope ─────────────────────────────────────────────────────────────
-
-    ApiResponse:
-      description: Standard success envelope
-      type: object
-      required: [data, traceId]
-      properties:
-        data:
-          description: Response payload — type depends on operation
-        traceId:
-          type: string
-          pattern: "^[0-9a-f]{32}$"
-          example: "a3f1c8d2e4b5f6a7b8c9d0e1f2a3b4c5"
+    # ── Envelope ──────────────────────────────────────────────────────────────
 
     ApiError:
       description: Standard error envelope
@@ -353,7 +465,45 @@ components:
           type: string
           pattern: "^[0-9a-f]{32}$"
 
-    # ── Auth ─────────────────────────────────────────────────────────────────
+    VoidEnvelope:
+      description: Success envelope with no data payload
+      type: object
+      required: [traceId]
+      properties:
+        data:
+          nullable: true
+        traceId:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
+
+    # ── Auth Requests ──────────────────────────────────────────────────────────
+
+    RegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          minLength: 8
+        tenantId:
+          type: string
+          format: uuid
+          description: Optional — a new tenant is created if not provided
+
+    VerifyEmailRequest:
+      type: object
+      required: [email, token]
+      properties:
+        email:
+          type: string
+          format: email
+        token:
+          type: string
+          description: OTP token from verification email
 
     LoginRequest:
       type: object
@@ -365,132 +515,119 @@ components:
         password:
           type: string
           minLength: 8
+        tenantId:
+          type: string
+          format: uuid
+          description: Optional — derived from email domain if not provided
 
-    RegisterRequest:
+    # ── Auth Responses ─────────────────────────────────────────────────────────
+
+    TokenResponse:
       type: object
-      required: [email, password, tenantName]
+      required: [accessToken, expiresIn]
       properties:
+        accessToken:
+          type: string
+          description: JWT access token
+        refreshToken:
+          type: string
+          description: Opaque refresh token (for API clients; also set as httpOnly cookie)
+        expiresIn:
+          type: integer
+          description: Access token lifetime in seconds
+          example: 900
+
+    TokenResponseEnvelope:
+      type: object
+      required: [data, traceId]
+      properties:
+        data:
+          $ref: "#/components/schemas/TokenResponse"
+        traceId:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
+
+    UserInfoResponse:
+      type: object
+      required: [userId, email, tenantId, roles]
+      properties:
+        userId:
+          type: string
+          format: uuid
         email:
           type: string
           format: email
-        password:
+        tenantId:
           type: string
-          minLength: 8
-        tenantName:
-          type: string
-          minLength: 2
+          format: uuid
+        roles:
+          type: array
+          items:
+            type: string
+          example: ["VIEWER"]
 
-    OtpVerifyRequest:
+    UserInfoEnvelope:
       type: object
-      required: [email, otp]
+      required: [data, traceId]
       properties:
-        email:
+        data:
+          $ref: "#/components/schemas/UserInfoResponse"
+        traceId:
           type: string
-          format: email
-        otp:
-          type: string
-          minLength: 6
-          maxLength: 8
+          pattern: "^[0-9a-f]{32}$"
 
-    OtpRequiredResponse:
-      allOf:
-        - $ref: "#/components/schemas/ApiResponse"
-        - type: object
-          properties:
-            data:
-              type: object
-              properties:
-                otpRequired:
-                  type: boolean
-                  example: true
-                expiresIn:
-                  type: integer
-                  description: OTP expiry in seconds
-                  example: 300
+    # ── OIDC Config ────────────────────────────────────────────────────────────
 
-    AuthSuccessResponse:
-      allOf:
-        - $ref: "#/components/schemas/ApiResponse"
-        - type: object
-          properties:
-            data:
-              type: object
-              required: [userId, tenantId, roles]
-              properties:
-                userId:
-                  type: string
-                  format: uuid
-                tenantId:
-                  type: string
-                  format: uuid
-                roles:
-                  type: array
-                  items:
-                    type: string
-                token:
-                  type: string
-                  description: JWT — only present for non-browser clients
-
-    # ── API Keys ──────────────────────────────────────────────────────────────
-
-    CreateApiKeyRequest:
+    TenantOidcConfigRequest:
       type: object
-      required: [name]
+      required: [discoveryUri, clientId, clientSecret]
       properties:
-        name:
+        discoveryUri:
           type: string
-        expiresAt:
+          format: uri
+          example: "https://accounts.google.com/.well-known/openid-configuration"
+        clientId:
+          type: string
+        clientSecret:
+          type: string
+          description: Stored encrypted at application layer
+
+    TenantOidcConfig:
+      type: object
+      required: [id, tenantId, discoveryUri, clientId, enabled, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        discoveryUri:
+          type: string
+          format: uri
+        clientId:
+          type: string
+        clientSecret:
+          type: string
+          description: Masked in responses
+        enabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
           type: string
           format: date-time
 
-    CreateApiKeyResponse:
-      allOf:
-        - $ref: "#/components/schemas/ApiResponse"
-        - type: object
-          properties:
-            data:
-              type: object
-              required: [id, rawKey, name, createdAt]
-              properties:
-                id:
-                  type: string
-                  format: uuid
-                rawKey:
-                  type: string
-                  description: Shown once only
-                name:
-                  type: string
-                createdAt:
-                  type: string
-                  format: date-time
-
-    ApiKeyListResponse:
-      allOf:
-        - $ref: "#/components/schemas/ApiResponse"
-        - type: object
-          properties:
-            data:
-              type: array
-              items:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    format: uuid
-                  name:
-                    type: string
-                  lastUsedAt:
-                    type: string
-                    format: date-time
-                    nullable: true
-                  expiresAt:
-                    type: string
-                    format: date-time
-                    nullable: true
-                  revokedAt:
-                    type: string
-                    format: date-time
-                    nullable: true
+    TenantOidcConfigEnvelope:
+      type: object
+      required: [data, traceId]
+      properties:
+        data:
+          $ref: "#/components/schemas/TenantOidcConfig"
+        traceId:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
 
   responses:
     BadRequest:
@@ -544,15 +681,23 @@ components:
             $ref: "#/components/schemas/ApiError"
 
     TooManyRequests:
-      description: Rate limit exceeded
+      description: |
+        Rate limit exceeded.
+        Auth endpoints: 5 req/s burst of 10.
+        All other routes: 20 req/s burst of 40.
       headers:
         X-Trace-Id:
           $ref: "#/components/headers/XTraceId"
         Retry-After:
-          description: Seconds until the rate limit resets
+          description: Seconds until the rate limit window resets
           schema:
             type: integer
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ApiError"
+          example:
+            error:
+              code: "RATE_LIMITED"
+              message: "Too many requests — please slow down"
+            traceId: "a3f1c8d2e4b5f6a7b8c9d0e1f2a3b4c5"

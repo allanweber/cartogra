@@ -33,6 +33,9 @@ docker-compose.override.yml
 .DS_Store
 Thumbs.db
 
+# Local dev config
+**/application-dev.yml
+
 # Secrets / credentials
 *.pem
 *.key

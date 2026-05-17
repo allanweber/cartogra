@@ -1,0 +1,29 @@
+@startuml
+title Register with Email OTP
+
+actor Client
+participant "AuthController" as AC
+participant "RegisterUserUseCase" as UC
+participant "UserRepository" as UR
+participant "EmailSender" as ES
+database PostgreSQL as DB
+
+Client -> AC: POST /v1/auth/register\n{email, password, tenantId?}
+AC -> UC: execute(request)
+UC -> UR: findByTenantAndEmail(tenantId, email)
+UR -> DB: SELECT ... WHERE email = ? AND deleted_at IS NULL
+
+alt user already exists
+  UC --> AC: throw ConflictException
+  AC --> Client: 409 {error: {code: DUPLICATE_EMAIL}, traceId}
+else new user
+  UC -> UC: BCrypt.hash(password)
+  UC -> UC: generateOTP() + expiry (15 min)
+  UC -> UR: save(newUser with emailVerified=false + token)
+  UR -> DB: INSERT INTO users
+  UC -> ES: sendVerification(email, otpToken) [async virtual thread]
+  ES --> Client: (email sent asynchronously)
+  UC --> AC: TokenResponse(message: "verify email")
+  AC --> Client: 201 {data: TokenResponse, traceId}\nX-Trace-Id: <traceId>
+end
+@enduml

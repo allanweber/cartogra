@@ -1,0 +1,110 @@
+@startuml
+title Gateway Auth Domain
+
+package "domain" {
+  class User << record >> {
+    id : UUID
+    tenantId : UUID
+    email : String
+    authProvider : String
+    authSubject : String?
+    passwordHash : String?
+    emailVerified : boolean
+    roles : List<String>
+    emailVerificationToken : String?
+    emailVerificationTokenExp : Instant?
+    createdAt : Instant
+    updatedAt : Instant
+    deletedAt : Instant?
+  }
+  class RefreshToken << record >> {
+    id : UUID
+    tenantId : UUID
+    userId : UUID
+    tokenHash : String
+    issuedAt : Instant
+    expiresAt : Instant
+    revokedAt : Instant?
+  }
+  class TenantOidcConfig << record >> {
+    id : UUID
+    tenantId : UUID
+    discoveryUri : String
+    clientId : String
+    clientSecret : String
+    enabled : boolean
+    createdAt : Instant
+    updatedAt : Instant
+    deletedAt : Instant?
+  }
+}
+
+package "application" {
+  interface RegisterUserUseCase {
+    execute(request) : TokenResponse
+  }
+  interface VerifyEmailUseCase {
+    execute(email, token) : void
+  }
+  interface LoginUseCase {
+    execute(tenantId, email, password) : TokenResponse
+  }
+  interface RefreshTokenUseCase {
+    execute(rawRefreshToken) : TokenResponse
+  }
+  interface LogoutUseCase {
+    execute(rawRefreshToken) : void
+  }
+  interface OAuthStartUseCase {
+    buildAuthorizationUri(provider, tenantId, state) : String
+  }
+  interface OAuthCallbackUseCase {
+    execute(provider, code, state) : TokenResponse
+  }
+}
+
+package "infrastructure.jdbc" {
+  interface UserRepository {
+    findById(id) : Optional<User>
+    findByTenantAndEmail(tenantId, email) : Optional<User>
+    findByVerificationToken(token) : Optional<User>
+    save(user) : User
+  }
+  interface RefreshTokenRepository {
+    findActiveByHash(tokenHash) : Optional<RefreshToken>
+    save(token) : RefreshToken
+    revoke(id) : void
+    revokeAllForUser(userId) : void
+  }
+  interface TenantOidcConfigRepository {
+    findByTenantId(tenantId) : Optional<TenantOidcConfig>
+    save(config) : TenantOidcConfig
+    softDeleteByTenantId(tenantId) : void
+  }
+}
+
+package "infrastructure.jwt" {
+  class JwtTokenProvider {
+    issueAccessToken(claims) : String
+    issueRefreshToken() : String
+    decode(token) : Mono<JwtClaims>
+  }
+  class JwtClaims << record >> {
+    userId : UUID
+    tenantId : UUID
+    email : String
+    roles : List<String>
+    exp : Instant
+  }
+}
+
+RegisterUserUseCase ..> UserRepository
+VerifyEmailUseCase ..> UserRepository
+LoginUseCase ..> UserRepository
+LoginUseCase ..> JwtTokenProvider
+RefreshTokenUseCase ..> RefreshTokenRepository
+RefreshTokenUseCase ..> JwtTokenProvider
+LogoutUseCase ..> RefreshTokenRepository
+OAuthCallbackUseCase ..> UserRepository
+OAuthCallbackUseCase ..> JwtTokenProvider
+@enduml

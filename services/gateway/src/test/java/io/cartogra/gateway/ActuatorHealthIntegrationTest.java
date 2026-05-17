@@ -7,14 +7,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class ActuatorHealthIntegrationTest {
-
-    @LocalServerPort
-    private int port;
+class ActuatorHealthIntegrationTest extends AbstractGatewayIT {
 
     @Test
     void healthEndpointReturnsUp() throws Exception {

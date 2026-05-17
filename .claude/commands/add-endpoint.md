@@ -80,60 +80,57 @@ Arguments: $ARGUMENTS
    }
    ```
 
-8. **Add a Bruno smoke test** in `bruno/<service>/<tag>/`:
-   - File name: `<NN>-<operation-id>.bru` (next seq number in the folder)
-   - Use `{{baseUrl}}`, `{{authToken}}`, `{{tenantId}}` — never hardcode values
-   - CI endpoints: use `headers { X-Cartogra-Api-Key: {{apiKey}} }` with `auth: none`
-   - POST/PUT responses: add `script:post-response` to capture created ID into a variable
+8. **Add a Postman request** to `postman/<service>.postman_collection.json`:
+   - Add the request inside the appropriate folder in the collection's `item` array
+   - Use `{{<service>-url}}` for the base URL (e.g. `{{gateway-url}}`, `{{registry-url}}`) — never hardcode
+   - Use `{{authToken}}`, `{{tenantId}}` from the environment — never hardcode values
+   - CI endpoints: add header `X-Cartogra-Api-Key: {{apiKey}}` and omit the Bearer auth
+   - POST/PUT responses: capture created IDs with `pm.environment.set(...)` in the Tests script
    - Every test MUST assert:
      - Correct HTTP status code
      - `res.body.data` and `res.body.traceId` present (enveloped endpoints)
      - `res.body.traceId` matches `/^[0-9a-f]{32}$/`
      - `res.headers["x-trace-id"]` equals `res.body.traceId`
-   - 204 responses: assert only `res.headers["x-trace-id"]` pattern
-   - Webhook/CI flat endpoints: assert `res.headers["x-trace-id"]` only (no envelope check)
+   - 204 responses: assert only the `x-trace-id` header pattern
+   - Webhook/CI flat endpoints: assert `x-trace-id` header only (no envelope check)
 
-   ```bru
-   meta {
-     name: Get Xyz
-     type: http
-     seq: 3
+   ```json
+   {
+     "name": "Get Xyz",
+     "request": {
+       "method": "GET",
+       "header": [
+         { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+       ],
+       "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }] },
+       "url": {
+         "raw": "{{gateway-url}}/xyz/{{xyzId}}",
+         "host": ["{{gateway-url}}"],
+         "path": ["xyz", "{{xyzId}}"]
+       }
+     },
+     "event": [
+       {
+         "listen": "test",
+         "script": {
+           "exec": [
+             "pm.test('status is 200', function() { pm.response.to.have.status(200); });",
+             "pm.test('response envelope present', function() {",
+             "  var body = pm.response.json();",
+             "  pm.expect(body).to.have.property('data');",
+             "  pm.expect(body).to.have.property('traceId');",
+             "});",
+             "pm.test('traceId is 32 lowercase hex', function() {",
+             "  pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/);",
+             "});",
+             "pm.test('X-Trace-Id header matches body traceId', function() {",
+             "  pm.expect(pm.response.headers.get('x-trace-id')).to.equal(pm.response.json().traceId);",
+             "});"
+           ]
+         }
+       }
+     ]
    }
-
-   get {
-     url: {{baseUrl}}/xyz/{{xyzId}}
-     body: none
-     auth: bearer
-   }
-
-   auth:bearer {
-     token: {{authToken}}
-   }
-
-   tests {
-     test("status is 200", function() {
-       expect(res.status).to.equal(200);
-     });
-
-     test("response envelope present", function() {
-       expect(res.body).to.have.property("data");
-       expect(res.body).to.have.property("traceId");
-     });
-
-     test("traceId is 32 lowercase hex", function() {
-       expect(res.body.traceId).to.match(/^[0-9a-f]{32}$/);
-     });
-
-     test("X-Trace-Id header matches body traceId", function() {
-       expect(res.headers["x-trace-id"]).to.equal(res.body.traceId);
-     });
-   }
-   ```
-
-   Alternatively, regenerate the whole collection from the updated OpenAPI spec:
-
-   ```bash
-   node scripts/generate-bruno.mjs docs/api/<service>.openapi.yaml bruno/<service>
    ```
 
 9. **Verify rules checklist before finishing:**

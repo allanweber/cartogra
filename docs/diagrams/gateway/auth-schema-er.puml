@@ -1,0 +1,49 @@
+@startuml
+title Auth Schema — users (V003) + refresh_tokens (V008) + tenant_oidc_configs (V009)
+
+entity "users" {
+  * id : UUID <<PK>>
+  --
+  * tenant_id : UUID
+  * email : TEXT
+  * auth_provider : TEXT
+  ~ auth_subject : TEXT
+  ~ password_hash : TEXT
+  * email_verified : BOOLEAN
+  ~ email_verification_token : TEXT
+  ~ email_verification_token_exp : TIMESTAMPTZ
+  * roles : TEXT[]
+  ~ metadata : JSONB
+  * created_at : TIMESTAMPTZ
+  * updated_at : TIMESTAMPTZ
+  ~ deleted_at : TIMESTAMPTZ
+}
+
+entity "refresh_tokens" {
+  * id : UUID <<PK>>
+  --
+  * tenant_id : UUID
+  * user_id : UUID <<FK>>
+  * token_hash : TEXT
+  * issued_at : TIMESTAMPTZ
+  * expires_at : TIMESTAMPTZ
+  ~ revoked_at : TIMESTAMPTZ
+  * created_at : TIMESTAMPTZ
+  ~ deleted_at : TIMESTAMPTZ
+}
+
+entity "tenant_oidc_configs" {
+  * id : UUID <<PK>>
+  --
+  * tenant_id : UUID
+  * discovery_uri : TEXT
+  * client_id : TEXT
+  * client_secret : TEXT
+  * enabled : BOOLEAN
+  * created_at : TIMESTAMPTZ
+  * updated_at : TIMESTAMPTZ
+  ~ deleted_at : TIMESTAMPTZ
+}
+
+users ||--o{ refresh_tokens : "has"
+@enduml
