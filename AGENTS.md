@@ -26,7 +26,7 @@
 | Persistence | `spring-boot-starter-data-jdbc` + PostgreSQL | JPA / Hibernate / `EntityManager` |
 | Migrations | Flyway (per-service) | Liquibase, `ddl-auto` |
 | Messaging | Apache Kafka | RabbitMQ, SQS |
-| Internal sync RPC | gRPC (`spring-grpc` 1.x, protobuf) | REST between services, Feign clients, `RestClient` for internal calls |
+| Internal sync (Gateway → service) | `RestClient` (Spring) | Feign clients, `WebClient` for blocking flows |
 | Cache / Rate-limit | Redis | Memcached |
 | Graph queries | Hand-written SQL + recursive CTEs | Graph DB, Neo4j |
 | Tracing | OpenTelemetry (OTLP) | Zipkin client, Sleuth |
@@ -49,8 +49,8 @@
 - Read this file fully before writing any code
 - Add `tenant_id UUID NOT NULL` to EVERY new domain table
 - Wrap ALL Spring REST responses in the envelope (except webhook receivers)
-- Propagate OTel `traceparent` to ALL downstream HTTP calls, gRPC calls, and Kafka messages
-- Use gRPC for ALL direct service-to-service synchronous calls — `.proto` files live in `shared:contracts`
+- Propagate OTel `traceparent` to ALL downstream HTTP calls and Kafka messages
+- Use `RestClient` for all Gateway → downstream service synchronous calls; propagate `traceparent` on every request
 - Use constructor injection in ALL Spring beans
 - Set resource requests AND limits on EVERY K8s container
 - Use `for_each` (not `count`) in Terraform for removable resources
@@ -67,8 +67,7 @@
 - Expose actuator `*` in production
 - Concatenate SQL strings — always use named params
 - Run `terraform destroy` in CI without a human approval gate
-- Use REST/HTTP for direct service-to-service calls — use gRPC
-- Define `.proto` files inside a service module — they belong in `shared:contracts`
+- Add gRPC or protobuf dependencies to any service — gRPC is deferred to Phase 6 research
 
 ## Java 25 Rules
 

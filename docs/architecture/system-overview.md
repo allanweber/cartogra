@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Cartogra is a **multi-tenant service intelligence platform**. It auto-discovers microservices from Kubernetes and SCM providers, maps declared and observed dependencies, guards API contracts, and surfaces AI-generated insights. External clients communicate with the Gateway via REST. Internal service-to-service synchronous calls use gRPC. Asynchronous events flow over Kafka. No service calls another service's database.
+Cartogra is a **multi-tenant service intelligence platform**. It auto-discovers microservices from Kubernetes and SCM providers, maps declared and observed dependencies, guards API contracts, and surfaces AI-generated insights. External clients communicate with the Gateway via REST. The Gateway proxies requests to downstream services via REST using Spring's `RestClient`. Asynchronous events flow over Kafka. No service calls another service's database.
 
 ---
 
@@ -120,12 +120,10 @@ Webhook receivers (GitHub, Azure DevOps) are exempt — they respond as the upst
 | Channel | Protocol | When to use |
 |---------|----------|-------------|
 | External (client → Gateway) | REST / JSON / HTTPS | Browser, API clients, CI integrations |
-| Internal synchronous (service → service) | gRPC / protobuf / HTTP/2 | Direct calls requiring an immediate response (e.g., registry lookup, contract check) |
+| Internal synchronous (Gateway → service) | REST / JSON / HTTP (`RestClient`) | Gateway-proxied calls to domain services (registry, topology, contract, intelligence) |
 | Internal asynchronous (service → service) | Kafka | Event propagation, decoupled workflows, fan-out |
 
-No service calls another service's database — all cross-service data access goes through gRPC or Kafka.
-
-Proto contracts live in `shared:contracts` (`io.cartogra.{domain}.v{N}` packages). Generated stubs are compiled at build time; never committed to source control.
+No service calls another service's database — all cross-service data access goes through the Gateway (REST) or Kafka.
 
 ### Messaging
 
@@ -167,5 +165,4 @@ POST /ingestion/webhooks/github (raw, no envelope)
 - [kafka-topics.md](kafka-topics.md) — full topic catalog
 - [ADR-0001](../adr/ADR-0001-postgresql-over-graph-database.md) — graph storage decision
 - [ADR-0002](../adr/ADR-0002-scm-provider-abstraction.md) — SCM SPI decision
-- [ADR-0003](../adr/ADR-0003-grpc-for-internal-service-communication.md) — gRPC for internal sync communication
-- [shared/contracts](../../shared/contracts/src/main/proto/) — protobuf definitions for all internal APIs
+- ADR-0003 — gRPC for internal sync communication (Superseded 2026-05-18; deferred to Phase 6 research)

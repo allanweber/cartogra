@@ -20,10 +20,13 @@ todos:
   - id: phase-5-production
     content: "Phase 5: Helm/Terraform, observability, Acme seed + loader, guest demo, Docusaurus, DLQ replay, E2E/k6, Operations view, capstone BIP"
     status: pending
+  - id: phase-6-research
+    content: "Phase 6: Research placeholder — evaluate gRPC, Avro/Schema Registry, SSE/WebSocket, and multi-region options after production launch. No implementation commitment."
+    status: pending
 isProject: false
 ---
 
-<!-- markdownlint-disable-file MD041 -->
+<!-- markdownlint-disable-file MD024 MD032 MD036 MD041 -->
 
 > **Working from this plan?** Day-to-day execution tasks live in [execution-checklist.md](execution-checklist.md). Engineering rules and code patterns live in [CLAUDE.md](../CLAUDE.md) and `.claude/rules/`. This file covers rationale, constraints, scope, user stories, and phase gates only.
 
@@ -35,8 +38,8 @@ Six backend services, 16+ Kafka topics, 20+ relational tables, dual SCM provider
 
 ## Guiding constraints
 
-- **Source of truth:** [CLAUDE.md](../CLAUDE.md) and `.claude/rules/` define tech choices, patterns, and non-negotiables (JDBC not JPA, gRPC for service-to-service, `.proto` files only in `shared:contracts`, etc.).
-- **Service isolation:** Services communicate only via gRPC (synchronous) and Kafka (async); `shared:common` stays Spring-free.
+- **Source of truth:** [CLAUDE.md](../CLAUDE.md) and `.claude/rules/` define tech choices, patterns, and non-negotiables (JDBC not JPA, `RestClient` for internal sync calls, `.proto` files deferred to Phase 6 research, etc.).
+- **Service isolation:** Services communicate via REST (Gateway → downstream, using Spring Cloud Gateway and `RestClient`) and Kafka (async). `shared:common` stays Spring-free.
 - **Phase gates:** Each phase ships a usable increment, documented decisions (ADRs), appropriate tests, and BIP artifacts.
 
 ## Program workstreams (run in parallel every phase)
@@ -66,7 +69,7 @@ flowchart TB
     reg[Registry_API_JDBC]
     spi[SCM_SPI_GitHub_AzureDevOps]
     ing[Ingestion_workers_sync_jobs]
-    gw[Gateway_proxy_headers]
+    gw[Gateway_proxy_RestClient]
     fe1[Catalog_UI]
   end
   subgraph p2 [Phase2]
@@ -89,6 +92,9 @@ flowchart TB
     seed[Acme_seed_demo]
     e2e[E2E_k6_observability]
   end
+  subgraph p6 [Phase6]
+    research[Research_gRPC_Avro_SSE]
+  end
   mono --> gwA
   mono --> reg
   env --> reg
@@ -109,6 +115,7 @@ flowchart TB
   intel --> fe4
   helm --> seed
   seed --> e2e
+  e2e --> research
 ```
 
 ## Kafka topic rollout (introduce when first real producer/consumer exists)
@@ -136,7 +143,7 @@ flowchart TB
 
 ### MVP boundary
 
-- **In:** Monorepo CI, Compose infra, `shared:common` Kafka event envelope, `shared:contracts` Gradle module with protobuf plugin, registry stub + Flyway V001–V004 for core org tables, gateway stub returning `{ data, traceId }` on one route, ingestion stub (health only), OTel + traceparent wired, JDBC on registry + ingestion, frontend shell (TanStack Start + shadcn + routing placeholders + `apiFetch<T>` + vitest), `DESIGN.md` + `PRODUCT.md` created, ADR template + index, OpenAPI stubs with envelope components, GitHub Project, first BIP wave.
+- **In:** Monorepo CI, Compose infra, `shared:common` Kafka event envelope, registry stub + Flyway V001–V004 for core org tables, gateway stub returning `{ data, traceId }` on one route, ingestion stub (health only), OTel + traceparent wired, JDBC on registry + ingestion, frontend shell (TanStack Start + shadcn + routing placeholders + `apiFetch<T>` + vitest), `DESIGN.md` + `PRODUCT.md` created, ADR template + index, OpenAPI stubs with envelope components, GitHub Project, first BIP wave.
 - **Out:** Production auth (Resend OTP, OAuth) — Phase 1; SCM/K8s sync workers — Phase 1; Topology/Contract/Intelligence business logic.
 
 ### Definition of Done
@@ -144,7 +151,6 @@ flowchart TB
 - `./gradlew build` and CI green; Trivy policy documented.
 - `docker compose up` + registry connects to Postgres; Flyway clean migrate succeeds; gateway and ingestion stubs start and export OTel (or no-op in CI).
 - At least one gateway or registry endpoint returns `{ data, traceId }` + `X-Trace-Id`.
-- `shared:contracts` module compiles with protobuf plugin; no proto files yet required.
 - Frontend installs, runs dev server, CI runs lint and vitest.
 - `DESIGN.md` and `PRODUCT.md` exist at repo root; app shell shaped and crafted.
 - BIP0.1–BIP0.4 published; ADR index file exists.
@@ -153,7 +159,7 @@ flowchart TB
 
 ## Phase 1 — Gateway MVP auth + Registry (Weeks 3–6)
 
-**Objective:** Gateway implements MVP identity (local + Resend OTP, Google + GitHub OAuth, tenant OIDC config), session cookie + Bearer tokens, Redis rate limits, and proxies to Registry via gRPC; Registry delivers the living catalog (JDBC, temporal history, dual SCM + K8s ingestion, Kafka events); catalog UI for authenticated users.
+**Objective:** Gateway implements MVP identity (local + Resend OTP, Google + GitHub OAuth, tenant OIDC config), session cookie + Bearer tokens, Redis rate limits, and proxies to Registry via Spring Cloud Gateway; Registry delivers the living catalog (JDBC, temporal history, dual SCM + K8s ingestion, Kafka events); catalog UI for authenticated users.
 
 ### User stories
 
@@ -173,7 +179,7 @@ flowchart TB
 
 ### MVP boundary
 
-- **In:** Full Registry REST + JDBC repositories; Gateway MVP auth + rate limits + gRPC proxy to Registry; Resend integration (sandbox in CI); OAuth apps for dev/staging; dual SCM workers; K8s worker behind `ENABLE_K8S_WORKER` flag; Kafka registry topics; catalog UI; OpenAPI registry + gateway kept current.
+- **In:** Full Registry REST + JDBC repositories; Gateway MVP auth + rate limits + Spring Cloud Gateway proxy to Registry; Resend integration (sandbox in CI); OAuth apps for dev/staging; dual SCM workers; K8s worker behind `ENABLE_K8S_WORKER` flag; Kafka registry topics; catalog UI; OpenAPI registry + gateway kept current.
 - **Defer if slips:** US1.9 tenant OIDC; GitHub App marketplace hardening; webhook signature verification polish; tenant API key UX (add DB table if cheap).
 
 ### Definition of Done
@@ -181,7 +187,7 @@ flowchart TB
 - US1.1–US1.8, US1.10 satisfied locally/staging; US1.9 either satisfied or explicitly deferred with public note.
 - Sync jobs succeed for both SCM providers; Kafka events visible.
 - Rate limits enforced; 429 behavior documented.
-- Gateway → Registry gRPC reachable and load-balanced; `RegistryGrpcService` and `RegistryGrpcClient` integration-tested.
+- Gateway proxies Registry via Spring Cloud Gateway with `traceparent` propagation; RestClient used for any direct backend calls not covered by SCG routing.
 - OpenAPI + envelope conventions match project guide §2.
 - Catalog UI shaped, crafted, and `/impeccable audit` passed.
 - BIP1.1–BIP1.8 minimum shipped.
@@ -204,14 +210,13 @@ flowchart TB
 
 ### MVP boundary
 
-- **In:** Topology service + migrations (`dependencies`, `dependency_drifts`, `dependency_graph` materialized view); full read API; graph builder consumer from registry events; declared + observed edges; drift detection job; D3 graph UI with declared/observed toggle and blast-radius highlight; recursive CTEs for impact + cycles; SPOF heuristic; gRPC service exposed to gateway.
+- **In:** Topology service + migrations (`dependencies`, `dependency_drifts`, `dependency_graph` materialized view); full read API; graph builder consumer from registry events; declared + observed edges; drift detection job; D3 graph UI with declared/observed toggle and blast-radius highlight; recursive CTEs for impact + cycles; SPOF heuristic; topology exposed via REST routes proxied through the gateway.
 - **Defer:** SSE stream to frontend; advanced graph layout (cluster by team); Neo4j; Avro schemas.
 
 ### Definition of Done
 
 - Graph renders for tenant with ≥20 services without browser freeze.
 - Impact/cycles/SPOF endpoints return stable results on seed dataset; drift list matches known scenario.
-- Gateway → Topology gRPC reachable; `TopologyGrpcService` and `TopologyGrpcClient` integration-tested.
 - Consumer lag observable in metrics; DLQ path stubbed.
 - Graph UI shaped, crafted, and `/impeccable audit` passed.
 - BIP2.1–BIP2.7 minimum shipped.
@@ -235,14 +240,13 @@ flowchart TB
 
 ### MVP boundary
 
-- **In:** Contract service + schema tables; OpenAPI 3 + AsyncAPI 2 parse/validate; `contract_versions` history; breaking-change engine; `contract_checks` workflow (pending/approve/block); consumer-producer matrix; `POST /ci/check` (API key auth only); outbox + relay to Kafka; notification rules + Slack OR Teams; spec discovery consumer; GitHub Action + Azure DevOps task in `ci-extensions/`; Contract Hub UI (diff, matrix, timeline); gRPC service exposed to gateway.
+- **In:** Contract service + schema tables; OpenAPI 3 + AsyncAPI 2 parse/validate; `contract_versions` history; breaking-change engine; `contract_checks` workflow (pending/approve/block); consumer-producer matrix; `POST /ci/check` (API key auth only); outbox + relay to Kafka; notification rules + Slack OR Teams; spec discovery consumer; GitHub Action + Azure DevOps task in `ci-extensions/`; Contract Hub UI (diff, matrix, timeline); contract routes exposed via REST proxied through the gateway.
 - **Defer:** Email notifications; interactive Slack approvals; full AsyncAPI runtime validation; schema registry replication.
 
 ### Definition of Done
 
 - End-to-end: new spec version → check → Kafka event → notification log entry (webhook mock OK) in local compose.
 - Example repos demonstrate failing CI on breaking change; passing on compatible change.
-- Gateway → Contract gRPC reachable; `ContractGrpcService` and `ContractGrpcClient` integration-tested.
 - Contract OpenAPI + CI extension README complete.
 - Contract Hub UI shaped, crafted, and `/impeccable audit` passed.
 - BIP3.1–BIP3.10 minimum shipped; marketplace publish or documented blocker + timeline.
@@ -265,7 +269,7 @@ flowchart TB
 
 ### MVP boundary
 
-- **In:** Intelligence service + migrations; Claude client with structured output parsing; externalized prompts under `resources/prompts/`; `nl_query_log` + feedback endpoint; NL query path (constrained read-only SQL or safe explanation); anti-pattern scan (circular_dependency, god_service, orphaned_service) combining deterministic graph metrics + LLM narrative; health score; weekly digest; Kafka analysis-requests/results; frontend Intelligence panel; rate limits + Redis cache; gRPC service exposed to gateway.
+- **In:** Intelligence service + migrations; Claude client with structured output parsing; externalized prompts under `resources/prompts/`; `nl_query_log` + feedback endpoint; NL query path (constrained read-only SQL or safe explanation); anti-pattern scan (circular_dependency, god_service, orphaned_service) combining deterministic graph metrics + LLM narrative; health score; weekly digest; Kafka analysis-requests/results; frontend Intelligence panel; rate limits + Redis cache; intelligence routes exposed via REST proxied through the gateway.
 - **Defer:** Fine-tuned local model; automatic remediation; multi-turn conversational memory.
 
 ### Definition of Done
@@ -273,7 +277,6 @@ flowchart TB
 - NL queries safe under threat model doc; abuse limits enforced.
 - At least three anti-pattern types produce findings on seed or fixture DB.
 - Digest and health score available via API and surfaced in UI.
-- Gateway → Intelligence gRPC reachable; `IntelligenceGrpcService` and `IntelligenceGrpcClient` integration-tested.
 - Intelligence panel shaped, crafted, and `/impeccable audit` passed.
 - BIP4.1–BIP4.5 minimum shipped.
 
@@ -304,8 +307,32 @@ flowchart TB
 - Observability answers "What's broken?" and "Which consumer lags?" within 5 minutes.
 - E2E + k6 gates in CI; thresholds documented.
 - Operations view shaped, crafted, and `/impeccable audit` passed.
-- All gRPC services confirmed reachable in staging environment.
 - BIP5.1–BIP5.5 + BIP5.8 shipped.
+
+---
+
+## Phase 6 — Future Research (Post-launch)
+
+**Objective:** Evaluate architectural improvements based on real production experience. Nothing here is committed or scheduled.
+
+> This phase is a placeholder, not a delivery commitment. Items are evaluated after Phase 5 ships and real bottlenecks can be measured.
+
+### Research topics
+
+**gRPC for internal service communication**
+
+The project uses REST (`RestClient` / Spring Cloud Gateway) for synchronous inter-service calls. gRPC was designed into the original plan and removed before Phase 1 — the REST approach is simpler, proven, and sufficient at current scale.
+
+After launch, evaluate:
+- REST vs gRPC latency on topology graph-read and registry list hot paths under k6 load
+- `spring-grpc 1.x` maturity and Spring Boot 4 compatibility at evaluation time
+- Streaming advantages for graph traversal and watch APIs
+- Decision gate: adopt gRPC only if REST overhead cannot be solved by caching or query optimization
+
+**Other topics**
+- Avro schemas + Confluent Schema Registry for Kafka (if JSON overhead is measurable)
+- SSE or WebSocket for real-time graph updates pushed to the browser
+- Multi-region active-active (if the platform grows beyond single-region)
 
 ---
 

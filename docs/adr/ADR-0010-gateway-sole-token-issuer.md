@@ -21,7 +21,7 @@ The `gateway` service is the **only** component that issues JWTs. No separate au
 ## Rationale
 
 - The gateway already sits at the perimeter — it is the natural place to validate credentials and issue tokens.
-- An MVP auth microservice adds one extra hop, one extra service to operate, and one more gRPC contract to maintain without adding capability that a single-service implementation cannot provide.
+- An MVP auth microservice adds one extra hop, one extra service to operate, and one more internal REST call to maintain without adding capability that a single-service implementation cannot provide.
 - Tenant context injection (task 1.23) and rate limiting (task 1.25) are cleanest when auth and routing share the same process — both filters read the same `ReactiveSecurityContextHolder` and Redis connection pool.
 - Splitting auth into a separate service is a Phase 5+ concern, when the auth surface grows beyond a single gateway (e.g., dedicated identity federation, SCIM provisioning, device flow).
 
@@ -37,4 +37,4 @@ The `gateway` service is the **only** component that issues JWTs. No separate au
 
 ## Alternatives Considered
 
-**Separate auth microservice** — rejected for MVP. Adds deployment complexity and a synchronous gRPC call on every protected request with no MVP-scope benefit. Revisit in Phase 5.
+**Separate auth microservice** — rejected for MVP. Adds deployment complexity and a synchronous REST call on every protected request with no MVP-scope benefit. Revisit in Phase 5.

@@ -16,7 +16,6 @@ pluginManagement {
 
     plugins {
         id("org.springframework.boot") version springBootVersion
-        id("com.google.protobuf") version "0.10.0"
     }
 }
 
@@ -24,7 +23,6 @@ rootProject.name = "cartogra"
 
 include(
     "shared:common",
-    "shared:contracts",
     "shared:test-support",
     "services:gateway",
     "services:registry",

@@ -9,7 +9,6 @@ pluginManagement {
 
     plugins {
         id("org.springframework.boot") version springBootVersion
-        id("com.google.protobuf") version "0.10.0"
     }
 }
 

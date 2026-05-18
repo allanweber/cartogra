@@ -53,7 +53,7 @@ Built on battle-tested foundations:
 ✅ PostgreSQL with multi-tenancy + RLS
 ✅ OpenTelemetry for complete tracing
 ✅ Kafka for event-driven sync
-✅ gRPC for internal service communication
+✅ RestClient for internal service calls (gRPC deferred to Phase 6)
 ✅ TanStack Start for the frontend
 
 Production-ready architecture from day one.
@@ -130,7 +130,7 @@ We chose boring, proven technology:
 - PostgreSQL for structured multi-tenant data
 - Kafka for reliable service-to-service events
 - OpenTelemetry for complete observability
-- gRPC for internal communication (no REST chaos)
+- RestClient for internal service calls with traceparent propagation
 
 The architecture prioritizes **operational clarity**: every decision traceable, every request correlated through distributed tracing.
 
@@ -235,8 +235,8 @@ Why? Events are the source of truth. When a service registers, updates its API, 
 **Observability:** OpenTelemetry + Grafana stack  
 Why? Trace every request, correlate logs, see metrics. No observability surprises when debugging issues.
 
-**Internal RPC:** gRPC + Protobuf  
-Why? REST between services is chaos. gRPC ensures type safety and binary efficiency. Protobuf schemas version gracefully.
+**Internal RPC:** Spring RestClient  
+Why? Gateway proxies all downstream calls over HTTP REST. Simple, observable via OTel auto-instrumentation, no extra dependencies. gRPC is under consideration for Phase 6 if throughput demands it.
 
 **Frontend:** TanStack Start with TypeScript  
 Why? File-based routing that scales. React Server Components for data fetching without complexity. Full type safety end-to-end.

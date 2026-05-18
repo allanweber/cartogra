@@ -11,14 +11,12 @@ import io.spring.gradle.dependencymanagement.dsl.DependencyManagementExtension
 plugins {
     id("org.springframework.boot") apply false
     id("io.spring.dependency-management") version "1.1.7" apply false
-    id("com.google.protobuf") apply false
     java
 }
 
 val springBootVersion: String by project
 val springCloudVersion: String by project
 val testcontainersVersion: String by project
-val protobufVersion: String by project
 val javaVersion: String by project
 
 subprojects {
@@ -41,7 +39,6 @@ subprojects {
             mavenBom("org.testcontainers:testcontainers-bom:$testcontainersVersion")
         }
         dependencies {
-            dependency("com.google.protobuf:protobuf-java:$protobufVersion")
         }
     }
 

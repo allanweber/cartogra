@@ -14,8 +14,8 @@ Multiple items are treated as a single grouped feature delivered in one branch a
 
 - Extract each task ID (e.g. `1.28`, `1.29`), category (`[CODE]`, `[INFRA]`, `[DOCS]`, `[TEST]`, `[BIP]`), and description.
 - Identify the primary service(s) involved (gateway, registry, ingestion, topology, contract, intelligence, shared, frontend).
-- Identify whether any item involves: new DB tables, new REST endpoints, new gRPC contracts, new Kafka topics, new env vars, new ADR-worthy decisions, or BIP output.
-- Read the relevant existing source files to understand current state before planning anything (check existing migrations, proto files, build.gradle.kts deps, application.yml, Bruno collections, etc.).
+- Identify whether any item involves: new DB tables, new REST endpoints, new Kafka topics, new env vars, new ADR-worthy decisions, or BIP output.
+- Read the relevant existing source files to understand current state before planning anything (check existing migrations, build.gradle.kts deps, application.yml, Bruno collections, etc.).
 
 ---
 
@@ -77,9 +77,9 @@ Per CLAUDE.md: never commit or push without Allan's explicit approval. Show diff
 List what must be true BEFORE these tasks can start (existing code, merged PRs, env vars, tool versions). Then list what these tasks UNBLOCK for future checklist items. If tasks within this plan must be done in order, number them explicitly.
 
 Example:
-- **Requires**: `shared:contracts` Gradle module compiles (done in 0.7)
-- **Order within plan**: 1.28 → 1.30 → 1.29 → 1.31 (proto must exist before service impl, interceptor before service, service before client)
-- **Unblocks**: 1.32 (gRPC port config), 2.8 (topology proto)
+- **Requires**: `shared:common` compiles; gateway Spring Cloud Gateway routing is wired
+- **Order within plan**: 1.28 → 1.29 → 1.30 (SPI interface before provider impls)
+- **Unblocks**: 1.32 (sync workers)
 
 ---
 
@@ -102,8 +102,9 @@ One subsection per checklist item. Tasks that are tightly coupled (e.g. a proto 
 ```
 
 **Critical constraints** (rules from AGENTS.md / CLAUDE.md that apply specifically here):
-- e.g. "tenant ID extracted from gRPC metadata via interceptor, never as a proto field"
-- e.g. "`java_multiple_files = true` required on the proto"
+
+- e.g. "RestClient must propagate `traceparent` and `X-Tenant-Id` on every outbound call"
+- e.g. "Kafka consumer must extract traceparent from message headers before processing"
 
 ---
 
@@ -127,7 +128,7 @@ Only if any task introduces new configuration.
 
 | Var | Service(s) | `.env.example` default | `application-dev.yml` value | Notes |
 |-----|-----------|------------------------|------------------------------|-------|
-| `REGISTRY_GRPC_PORT` | registry, gateway | `9091` | `9091` | gRPC server port |
+| `REGISTRY_BASE_URL` | gateway | `http://localhost:8081` | `http://registry:8081` | Registry REST base URL |
 
 Also note any `docker-compose.yml` or `build.gradle.kts` changes needed to wire the new vars.
 
@@ -164,7 +165,7 @@ Only if any task introduces new failure modes that need stable codes in `shared/
 
 | Constant | HTTP Status | When emitted |
 |----------|-------------|--------------|
-| `GRPC_REGISTRY_UNAVAILABLE` | 503 | Registry gRPC call returns UNAVAILABLE |
+| `REGISTRY_UNAVAILABLE` | 503 | Registry REST call returns a non-2xx status |
 
 If none, write "N/A — no new error codes required."
 
@@ -188,7 +189,7 @@ Provide full Postman request JSON for every request. Rules:
 - Use `{{authToken}}`, `{{tenantId}}` from the environment — never hardcode values.
 - Capture created IDs via `pm.environment.set(...)` in the `test` event script when the AC involves a write that subsequent ACs depend on.
 - Every test script must assert: correct HTTP status, `res.body.data` + `res.body.traceId` present (enveloped endpoints), `traceId` matches `/^[0-9a-f]{32}$/`, `x-trace-id` header equals body `traceId`.
-- gRPC-only tasks with no HTTP surface: write "No Postman requests — gRPC internal only; verified by integration tests."
+- Internal-only tasks with no external HTTP surface: write "No Postman requests — verified by integration tests."
 
 ---
 

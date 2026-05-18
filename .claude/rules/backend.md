@@ -162,45 +162,51 @@ Every message payload MUST match this envelope:
 - Introduce new topic ONLY when first real producer/consumer exists — no speculative topics
 - Topic naming: `cartogra.{domain}.{entity}.{event}` (e.g., `cartogra.registry.service.registered`)
 
-## gRPC (Internal Service-to-Service)
+## Internal Service Communication (Gateway → Services)
 
-All direct synchronous calls between services MUST use gRPC. REST (via `RestClient` or any HTTP client) between internal services is NEVER acceptable.
+The Gateway calls downstream services via REST using Spring's `RestClient`. This is the only approved synchronous inter-service communication mechanism. gRPC is deferred to Phase 6 research.
 
-**Source of truth for contracts:**
-- All `.proto` files live exclusively in `shared:contracts` — NEVER define proto files inside a service module
-- Proto package naming: `io.cartogra.{domain}.v{N}` (e.g., `io.cartogra.registry.v1`)
-- Java output package: `io.cartogra.grpc.{domain}.v{N}` (set via `option java_package`)
-- Use `option java_multiple_files = true` on every proto file
-- Version proto packages on breaking changes: `registry/v1/` → `registry/v2/`; NEVER reuse or renumber fields
+**Rules:**
+- Inject a configured `RestClient` bean per downstream service (base URL from env var)
+- Propagate the W3C `traceparent` header on every outbound request
+- Forward the gateway-derived `X-Tenant-Id` header on every call
+- Catch HTTP errors and map them to domain exceptions at the infrastructure boundary — never let `RestClientException` reach the REST layer
+- OTel auto-instrumentation covers `RestClient` via the Spring Boot starter — no manual interceptor required
 
-**Service dependencies:**
-- gRPC server: `implementation(project(":shared:contracts"))` + `implementation("org.springframework.grpc:spring-grpc-spring-boot-starter:$springGrpcVersion")`
-- gRPC client: same two dependencies
-- Services that only consume Kafka do NOT need these deps
+```java
+// infrastructure/client/RegistryClient.java
+@Component
+public class RegistryClient {
 
-**Server implementation:**
-- Annotate the service class with `@GrpcService` (from `org.springframework.grpc`)
-- Extend the generated `*ImplBase` class for each service definition
-- Extract tenant ID from gRPC metadata via the server interceptor — NEVER accept it as a proto field on requests; use `TenantContext` message instead
-- Handle errors by throwing `StatusRuntimeException` with an appropriate `Status` code; map to domain exceptions in an interceptor so business logic never sees raw gRPC status codes
+    private final RestClient restClient;
 
-**Client usage:**
-- Inject the generated blocking stub via `@GrpcClient("service-name")` on the channel parameter
-- Attach `x-tenant-id` metadata on every outbound call
-- Wrap calls in a try/catch that maps `StatusRuntimeException` to domain exceptions; NEVER propagate gRPC status to the REST layer
+    public RegistryClient(@Value("${services.registry.base-url}") String baseUrl) {
+        this.restClient = RestClient.builder().baseUrl(baseUrl).build();
+    }
 
-**Observability:**
-- `spring-boot-starter-opentelemetry` auto-instruments gRPC server and client channels — no manual interceptor required for tracing
-- Confirm `grpc.server.*` and `grpc.client.*` metrics are exported to Prometheus via the OTel bridge
+    public ServiceDto getService(UUID tenantId, UUID serviceId) {
+        return restClient.get()
+            .uri("/services/{id}", serviceId)
+            .header("X-Tenant-Id", tenantId.toString())
+            .retrieve()
+            .onStatus(HttpStatusCode::isError, (req, res) -> {
+                throw new InfrastructureException("registry call failed: " + res.getStatusCode());
+            })
+            .body(new ParameterizedTypeReference<ApiResponse<ServiceDto>>() {})
+            .data();
+    }
+}
+```
 
-**Server-side streaming:**
-- Allowed for progressive delivery (graph traversal, watch APIs, bulk export)
-- Client-side and bidirectional streaming require an ADR amendment
-- Streaming RPCs MUST call `observer.onCompleted()` or `observer.onError()` in all code paths
+Configure base URLs in `application.yml`:
 
-**Port convention:**
-- gRPC server listens on `${GRPC_PORT:909X}` (separate from the actuator/REST management port)
-- Actuator health probes remain on `server.port` (808X) — NEVER merge with the gRPC port
+```yaml
+services:
+  registry:
+    base-url: ${REGISTRY_BASE_URL:http://localhost:8081}
+  topology:
+    base-url: ${TOPOLOGY_BASE_URL:http://localhost:8082}
+```
 
 ## Auth
 

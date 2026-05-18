@@ -163,4 +163,4 @@ restarts the relevant `bootRun` process.
 - [Redis SSPL license change announcement](https://redis.io/blog/redis-adopts-dual-source-available-licensing/)
 - [OTel Collector contrib releases](https://github.com/open-telemetry/opentelemetry-collector-contrib/releases)
 - [ADR-0008 — LGTM Observability Stack](ADR-0008-lgtm-observability-stack.md)
-- [ADR-0003 — gRPC for internal service communication](ADR-0003-grpc-for-internal-service-communication.md)
+- ADR-0003 — gRPC for internal service communication (Superseded 2026-05-18; deferred to Phase 6 research)

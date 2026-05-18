@@ -52,7 +52,7 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 ### Build and shared modules
 
-- [x] 0.7 [CODE] Scaffold `shared:contracts` Gradle module; configure the protobuf plugin and gRPC code generation so all `.proto` files in this module compile to Java stubs that downstream services consume. This module is a prerequisite for any gRPC wiring in Phase 1+.
+- [x] 0.7 [CODE] ~~Scaffold `shared:contracts` Gradle module with the protobuf plugin~~ — module removed 2026-05-18; gRPC deferred to Phase 6 research. `shared:common` and `shared:test-support` remain.
 - [x] 0.8 [CODE] Finish `shared:common` with the Kafka event envelope, shared IDs and value objects, and a Spring-free API error model.
 - [x] 0.9 [CODE] Finish `shared:test-support` with reusable Postgres and Kafka test helpers for Testcontainers-based integration tests.
 - [x] 0.10 [CODE] Harden `services:registry` for Spring Data JDBC, explicit Flyway, virtual threads, and health readiness wiring.
@@ -116,7 +116,6 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 ### Phase 0 Gate
 
 - [x] [GATE] `DESIGN.md` and `PRODUCT.md` exist and contain enough detail to guide Phase 1 screen crafting.
-- [x] [GATE] `shared:contracts` Gradle module compiles with the protobuf plugin wired; no proto files inside service modules.
 - [x] [GATE] `./gradlew build` and CI are green, and the Trivy failure policy is documented.
 - [x] [GATE] `docker compose up` succeeds with healthy gateway, registry, ingestion, database, cache, broker, and observability dependencies.
 - [x] [GATE] Flyway clean migrate passes from a blank database in automation.
@@ -161,51 +160,43 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [x] 1.21 [CODE] Issue secure httpOnly JWT cookies for browsers and Bearer tokens for non-browser clients; reject unverified users from accessing tenant data.
 - [x] 1.22 [CODE] Enforce RBAC for `viewer`, `member`, and `admin` routes using `@EnableMethodSecurity` and `@PreAuthorize`; verify that tenant boundaries are derived from the authenticated principal, never inbound headers.
 - [x] 1.23 [CODE] Strip client-supplied `X-Tenant-Id` from all inbound requests; inject gateway-derived tenant and principal headers downstream.
-- [x] 1.24 [CODE] Proxy registry REST routes through the gateway; forward `traceparent` and set `X-Trace-Id` on all proxied responses.
+- [x] 1.24 [CODE] Proxy registry REST routes through the gateway using Spring Cloud Gateway; forward `traceparent` and set `X-Trace-Id` on all proxied responses.
 - [x] 1.25 [CODE] Add Redis-backed rate limiting on all routes, including stricter token buckets for `/auth/*` and other expensive endpoints.
 - [x] 1.26 [TEST] Add end-to-end auth tests for register → OTP → verify → login, cookie flows, Bearer flows, rate-limiting (assert 429), and cross-service trace propagation.
 - [x] 1.27 [DOCS] Update `docs/api/gateway.openapi.yaml` to cover every implemented `/auth/*` route, cookie/Bearer behavior, and any deferred tenant-OIDC surface.
 
-### gRPC — Gateway → Registry
-
-- [ ] 1.28 [CODE] Define `registry/v1/registry.proto` in `shared:contracts` with `GetService`, `ListServices`, and `WatchServices` RPCs; follow `io.cartogra.registry.v1` package naming and set `java_multiple_files = true`.
-- [ ] 1.29 [CODE] Implement `RegistryGrpcService` in `services:registry` annotated with `@GrpcService`, extending the generated `RegistryServiceImplBase`; extract tenant ID from gRPC metadata via the server interceptor, never as a proto field.
-- [ ] 1.30 [CODE] Add the gRPC server interceptor in `services:registry` that reads `x-tenant-id` metadata and stores it in a `ScopedValue` for the duration of the call.
-- [ ] 1.31 [CODE] Implement `RegistryGrpcClient` in `services:gateway` using `@GrpcClient("registry")`; attach `x-tenant-id` metadata on every outbound call and map `StatusRuntimeException` to domain exceptions at the infrastructure boundary.
-- [ ] 1.32 [INFRA] Configure gRPC server port `9091` for registry (separate from REST port `8081`); add `REGISTRY_GRPC_PORT` to `.env.example` and expose the port in `docker-compose.yml`.
-
 ### SCM SPI and ingestion workers
 
-- [ ] 1.33 [CODE] Define the Spring-free `ScmProvider` SPI under ingestion application code.
-- [ ] 1.34 [CODE] Implement `GitHubProvider` using connection config stored as JSONB and WireMock-backed tests.
-- [ ] 1.35 [CODE] Implement `AzureDevOpsProvider` using PAT or service-principal config and WireMock-backed tests.
-- [ ] 1.36 [INFRA] Add ingestion Flyway `V001__create_sync_jobs.sql` with tenant isolation, status tracking, soft delete, indexes, and RLS.
-- [ ] 1.37 [CODE] Implement GitHub and Azure DevOps sync workers that consume sync commands, update `sync_jobs`, publish results, and propagate trace headers.
-- [ ] 1.38 [CODE] Add the Kubernetes worker behind `ENABLE_K8S_WORKER=true` with a documented kind/mock fallback for local development.
-- [ ] 1.39 [TEST] Add integration tests for both SCM providers plus sync job state transitions.
-- [ ] 1.40 [DOCS] Write the ADR for the SCM provider abstraction and update deployment docs with PAT/service-principal setup.
-- [ ] 1.41 [BIP] Publish the SCM SPI ADR after the abstraction and both provider paths are coded.
-- [ ] 1.42 [BIP] Publish the provider-comparison thread after both provider adapters have passing tests.
+- [ ] 1.28 [CODE] Define the Spring-free `ScmProvider` SPI under ingestion application code.
+- [ ] 1.29 [CODE] Implement `GitHubProvider` using connection config stored as JSONB and WireMock-backed tests.
+- [ ] 1.30 [CODE] Implement `AzureDevOpsProvider` using PAT or service-principal config and WireMock-backed tests.
+- [ ] 1.31 [INFRA] Add ingestion Flyway `V001__create_sync_jobs.sql` with tenant isolation, status tracking, soft delete, indexes, and RLS.
+- [ ] 1.32 [CODE] Implement GitHub and Azure DevOps sync workers that consume sync commands, update `sync_jobs`, publish results, and propagate trace headers.
+- [ ] 1.33 [CODE] Add the Kubernetes worker behind `ENABLE_K8S_WORKER=true` with a documented kind/mock fallback for local development.
+- [ ] 1.34 [TEST] Add integration tests for both SCM providers plus sync job state transitions.
+- [ ] 1.35 [DOCS] Write the ADR for the SCM provider abstraction and update deployment docs with PAT/service-principal setup.
+- [ ] 1.36 [BIP] Publish the SCM SPI ADR after the abstraction and both provider paths are coded.
+- [ ] 1.37 [BIP] Publish the provider-comparison thread after both provider adapters have passing tests.
 
 ### Events, catalog UI, and demo access
 
-- [ ] 1.43 [CODE] Publish registry service lifecycle events with the shared Kafka envelope and `traceparent` propagation.
-- [ ] 1.44 [CODE] Consume sync commands in ingestion with an idempotency strategy documented in code or ADR notes.
-- [ ] 1.45 [CODE] Decide whether guest demo access is enabled in Phase 1; if enabled, enforce read-only behavior and keep gateway rate limits active.
-- [ ] 1.46 [UI] Craft Login, Register, Verify email, and OAuth handoff screens using `/impeccable craft login` and `/impeccable craft register`; all auth state must use httpOnly cookies — never `localStorage`.
-- [ ] 1.47 [UI] Craft the Catalog list and detail flows using `/impeccable craft catalog home`; include filters for team, health, tech stack, SCM provider, and search, plus orphan highlighting.
-- [ ] 1.48 [UI] Centralize envelope parsing in the frontend API client; surface `traceId` in all error states via the `ApiError` class established in Phase 0.
-- [ ] 1.49 [UI] Run `/impeccable audit` on all Phase 1 screens before the phase gate; address any blocking findings.
-- [ ] 1.50 [TEST] Add contract tests that verify gateway and registry responses match the OpenAPI envelope and `X-Trace-Id` contract.
-- [ ] 1.51 [DOCS] Update `docs/api/registry.openapi.yaml` to reflect the implemented registry surface.
-- [ ] 1.52 [BIP] Publish the envelope-and-trace-ID thread after gateway proxying works end to end.
-- [ ] 1.53 [BIP] Publish the Gateway-auth rationale thread after local auth and at least one OAuth provider work end to end.
-- [ ] 1.54 [BIP] Publish the self-healing-registry article after the catalog and sync story are demonstrable.
-- [ ] 1.55 [BIP] Publish the multi-tenant plus temporal-versioning article after history and ownership flows work.
-- [ ] 1.56 [BIP] Publish the enterprise-SCM angle on LinkedIn after both providers are visible in the catalog.
-- [ ] 1.57 [BIP] Publish screenshots plus OpenAPI links after the catalog UI is stable enough to demo.
-- [ ] 1.58 [BIP] Publish the dual-mode auth article (httpOnly cookies + Bearer tokens in a Spring Security 7 reactive gateway) after JWT issuance is stable end-to-end.
-- [ ] 1.59 [BIP] Publish the Redis rate-limiting article (token buckets, per-tenant key isolation, 429 behavior) after rate limiting is tested and observable.
+- [ ] 1.38 [CODE] Publish registry service lifecycle events with the shared Kafka envelope and `traceparent` propagation.
+- [ ] 1.39 [CODE] Consume sync commands in ingestion with an idempotency strategy documented in code or ADR notes.
+- [ ] 1.40 [CODE] Decide whether guest demo access is enabled in Phase 1; if enabled, enforce read-only behavior and keep gateway rate limits active.
+- [ ] 1.41 [UI] Craft Login, Register, Verify email, and OAuth handoff screens using `/impeccable craft login` and `/impeccable craft register`; all auth state must use httpOnly cookies — never `localStorage`.
+- [ ] 1.42 [UI] Craft the Catalog list and detail flows using `/impeccable craft catalog home`; include filters for team, health, tech stack, SCM provider, and search, plus orphan highlighting.
+- [ ] 1.43 [UI] Centralize envelope parsing in the frontend API client; surface `traceId` in all error states via the `ApiError` class established in Phase 0.
+- [ ] 1.44 [UI] Run `/impeccable audit` on all Phase 1 screens before the phase gate; address any blocking findings.
+- [ ] 1.45 [TEST] Add contract tests that verify gateway and registry responses match the OpenAPI envelope and `X-Trace-Id` contract.
+- [ ] 1.46 [DOCS] Update `docs/api/registry.openapi.yaml` to reflect the implemented registry surface.
+- [ ] 1.47 [BIP] Publish the envelope-and-trace-ID thread after gateway proxying works end to end.
+- [ ] 1.48 [BIP] Publish the Gateway-auth rationale thread after local auth and at least one OAuth provider work end to end.
+- [ ] 1.49 [BIP] Publish the self-healing-registry article after the catalog and sync story are demonstrable.
+- [ ] 1.50 [BIP] Publish the multi-tenant plus temporal-versioning article after history and ownership flows work.
+- [ ] 1.51 [BIP] Publish the enterprise-SCM angle on LinkedIn after both providers are visible in the catalog.
+- [ ] 1.52 [BIP] Publish screenshots plus OpenAPI links after the catalog UI is stable enough to demo.
+- [ ] 1.53 [BIP] Publish the dual-mode auth article (httpOnly cookies + Bearer tokens in a Spring Security 7 reactive gateway) after JWT issuance is stable end-to-end.
+- [ ] 1.54 [BIP] Publish the Redis rate-limiting article (token buckets, per-tenant key isolation, 429 behavior) after rate limiting is tested and observable.
 
 ### Phase 1 Gate
 
@@ -213,7 +204,7 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] [GATE] Tenant OIDC is either working or explicitly deferred with a public note that preserves scope discipline.
 - [ ] [GATE] Both SCM sync workers succeed in scripted or runbooked tests; Kafka events are visible.
 - [ ] [GATE] 429 behavior is smoke-tested and documented.
-- [ ] [GATE] `shared:contracts` contains `registry/v1/registry.proto`; `RegistryGrpcService` is reachable from gateway via gRPC.
+- [ ] [GATE] Gateway proxies registry via Spring Cloud Gateway with trace propagation.
 - [ ] [GATE] Gateway and registry OpenAPI docs match the implemented envelope and auth behavior.
 - [ ] [GATE] Phase 1 screens have passed `/impeccable audit`; no blocking accessibility or envelope-handling regressions.
 - [ ] [GATE] Minimum BIP set shipped: two ADR/design notes, two deep-dive writeups, and two short-form technical threads.
@@ -235,54 +226,46 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] 2.6 [CODE] Implement repositories for dependency insert/update/delete, observed-edge enrichment, and drift persistence.
 - [ ] 2.7 [CODE] Decide and document the materialized-view refresh strategy, including any debounce or advisory-lock behavior.
 
-### gRPC — Gateway → Topology
-
-- [ ] 2.8 [CODE] Define `topology/v1/topology.proto` in `shared:contracts` with `GetGraph`, `GetImpact`, `ListSPOF`, `ListCycles`, and `ListDrifts` RPCs.
-- [ ] 2.9 [CODE] Implement `TopologyGrpcService` in `services:topology` annotated with `@GrpcService`; extract tenant from gRPC metadata via the shared server interceptor pattern.
-- [ ] 2.10 [CODE] Implement `TopologyGrpcClient` in `services:gateway` using `@GrpcClient("topology")`; map `StatusRuntimeException` to domain exceptions at the infrastructure boundary.
-- [ ] 2.11 [INFRA] Configure gRPC server port `9092` for topology; add `TOPOLOGY_GRPC_PORT` and expose the port in `docker-compose.yml`.
-
 ### Graph algorithms and APIs
 
-- [ ] 2.12 [CODE] Implement the declared-dependency CRUD API and graph read endpoints with the shared response envelope.
-- [ ] 2.13 [CODE] Implement recursive CTEs for blast radius with bounded depth and path-explosion guards.
-- [ ] 2.14 [CODE] Implement cycle detection with normalized and deduplicated cycle output.
-- [ ] 2.15 [CODE] Implement the SPOF heuristic with a documented fan-in threshold and any redundancy assumptions.
-- [ ] 2.16 [CODE] Implement drift detection plus the resolve endpoint.
-- [ ] 2.17 [TEST] Add fixed graph fixtures and tests for graph reads, blast radius, cycle detection, SPOF, and drift resolution.
-- [ ] 2.18 [DOCS] Update `docs/api/topology.openapi.yaml` to match the implemented graph, drift, and analysis endpoints.
-- [ ] 2.19 [DOCS] Write the ADR that documents PostgreSQL recursive CTEs and materialized views for the graph layer.
-- [ ] 2.20 [BIP] Publish the recursive-CTE article after the graph algorithms have passing fixtures.
-- [ ] 2.21 [BIP] Publish the blast-radius SQL thread after the blast-radius endpoint is reviewable.
+- [ ] 2.8 [CODE] Implement the declared-dependency CRUD API and graph read endpoints with the shared response envelope.
+- [ ] 2.9 [CODE] Implement recursive CTEs for blast radius with bounded depth and path-explosion guards.
+- [ ] 2.10 [CODE] Implement cycle detection with normalized and deduplicated cycle output.
+- [ ] 2.11 [CODE] Implement the SPOF heuristic with a documented fan-in threshold and any redundancy assumptions.
+- [ ] 2.12 [CODE] Implement drift detection plus the resolve endpoint.
+- [ ] 2.13 [TEST] Add fixed graph fixtures and tests for graph reads, blast radius, cycle detection, SPOF, and drift resolution.
+- [ ] 2.14 [DOCS] Update `docs/api/topology.openapi.yaml` to match the implemented graph, drift, and analysis endpoints.
+- [ ] 2.15 [DOCS] Write the ADR that documents PostgreSQL recursive CTEs and materialized views for the graph layer.
+- [ ] 2.16 [BIP] Publish the recursive-CTE article after the graph algorithms have passing fixtures.
+- [ ] 2.17 [BIP] Publish the blast-radius SQL thread after the blast-radius endpoint is reviewable.
 
 ### Event-driven graph updates and observed dependencies
 
-- [ ] 2.22 [CODE] Implement the `topology-graph-builder` consumer so registry events update topology state idempotently.
-- [ ] 2.23 [CODE] Publish topology dependency events with shared Kafka envelope and trace propagation.
-- [ ] 2.24 [CODE] Implement `OtelSpanWorker` so real or synthetic spans can create observed edges.
-- [ ] 2.25 [TEST] Add fixture-based integration tests that prove a span batch produces observed edges and mode toggling works.
-- [ ] 2.26 [CODE] Instrument MV refresh duration, consumer lag, and graph query latency metrics.
-- [ ] 2.27 [DOCS] Write the ADR or design note that captures the Kafka topic taxonomy and idempotency strategy for graph updates.
-- [ ] 2.28 [BIP] Publish the Kafka topic design article after topology topics and consumers are visible.
-- [ ] 2.29 [BIP] Publish the UUIDv5/idempotency thread after the event flow is stable.
+- [ ] 2.18 [CODE] Implement the `topology-graph-builder` consumer so registry events update topology state idempotently.
+- [ ] 2.19 [CODE] Publish topology dependency events with shared Kafka envelope and trace propagation.
+- [ ] 2.20 [CODE] Implement `OtelSpanWorker` so real or synthetic spans can create observed edges.
+- [ ] 2.21 [TEST] Add fixture-based integration tests that prove a span batch produces observed edges and mode toggling works.
+- [ ] 2.22 [CODE] Instrument MV refresh duration, consumer lag, and graph query latency metrics.
+- [ ] 2.23 [DOCS] Write the ADR or design note that captures the Kafka topic taxonomy and idempotency strategy for graph updates.
+- [ ] 2.24 [BIP] Publish the Kafka topic design article after topology topics and consumers are visible.
+- [ ] 2.25 [BIP] Publish the UUIDv5/idempotency thread after the event flow is stable.
 
 ### Graph UI
 
-- [ ] 2.30 [UI] Craft the D3 graph with zoom, pan, declared-vs-observed toggle, node selection, and drift overlays using `/impeccable craft dependency graph`; use D3 for the canvas and shadcn/ui for all surrounding chrome.
-- [ ] 2.31 [UI] Craft the upstream/downstream detail panels and blast-radius highlighting using `/impeccable craft blast radius panel`.
-- [ ] 2.32 [UI] Run `/impeccable audit` on all Phase 2 screens before the phase gate.
-- [ ] 2.33 [TEST] Measure and document graph render behavior for the 20-service seed target and capture the target hardware used.
-- [ ] 2.34 [BIP] Publish the declared-vs-observed dependencies article after the toggle and overlay work.
-- [ ] 2.35 [BIP] Publish the materialized-view-for-speed thread after the performance story is defensible.
-- [ ] 2.36 [BIP] Publish the event-naming/partitioning LinkedIn post after topic naming is settled.
-- [ ] 2.37 [BIP] Record the optional live-impact-analysis video if it does not block the phase gate.
+- [ ] 2.26 [UI] Craft the D3 graph with zoom, pan, declared-vs-observed toggle, node selection, and drift overlays using `/impeccable craft dependency graph`; use D3 for the canvas and shadcn/ui for all surrounding chrome.
+- [ ] 2.27 [UI] Craft the upstream/downstream detail panels and blast-radius highlighting using `/impeccable craft blast radius panel`.
+- [ ] 2.28 [UI] Run `/impeccable audit` on all Phase 2 screens before the phase gate.
+- [ ] 2.29 [TEST] Measure and document graph render behavior for the 20-service seed target and capture the target hardware used.
+- [ ] 2.30 [BIP] Publish the declared-vs-observed dependencies article after the toggle and overlay work.
+- [ ] 2.31 [BIP] Publish the materialized-view-for-speed thread after the performance story is defensible.
+- [ ] 2.32 [BIP] Publish the event-naming/partitioning LinkedIn post after topic naming is settled.
+- [ ] 2.33 [BIP] Record the optional live-impact-analysis video if it does not block the phase gate.
 
 ### Phase 2 Gate
 
 - [ ] [GATE] The graph renders for a tenant-sized dataset without browser freeze on the documented target hardware.
 - [ ] [GATE] Blast radius, cycles, SPOF, and drift endpoints return stable results on known fixtures.
 - [ ] [GATE] Observed dependencies can be produced from a trace fixture or synthetic span path.
-- [ ] [GATE] `shared:contracts` contains `topology/v1/topology.proto`; `TopologyGrpcService` is reachable from gateway via gRPC.
 - [ ] [GATE] Consumer lag and topology metrics are visible in observability tooling.
 - [ ] [GATE] Phase 2 screens have passed `/impeccable audit`.
 - [ ] [GATE] Minimum BIP set shipped: one ADR/design note, two deep-dive posts, and three short-form technical posts.
@@ -307,58 +290,50 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] 3.9 [CODE] Implement contract CRUD, version history, consumers, and contract check endpoints with the shared response envelope.
 - [ ] 3.10 [TEST] Add valid and invalid spec tests plus versioning and canonicalization coverage.
 
-### gRPC — Gateway → Contract
-
-- [ ] 3.11 [CODE] Define `contract/v1/contract.proto` in `shared:contracts` with `CheckCompatibility`, `GetMatrix`, and `GetContractCheck` RPCs.
-- [ ] 3.12 [CODE] Implement `ContractGrpcService` in `services:contract` annotated with `@GrpcService`; extract tenant from gRPC metadata.
-- [ ] 3.13 [CODE] Implement `ContractGrpcClient` in `services:gateway` using `@GrpcClient("contract")`; map `StatusRuntimeException` to domain exceptions.
-- [ ] 3.14 [INFRA] Configure gRPC server port `9093` for contract; add `CONTRACT_GRPC_PORT` and expose the port in `docker-compose.yml`.
-
 ### Breaking-change engine and compatibility workflows
 
-- [ ] 3.15 [CODE] Implement breaking-change rules for removed fields, type changes, added required fields, and enum removals.
-- [ ] 3.16 [CODE] Implement structured `changes` output plus `affected_consumers` resolution.
-- [ ] 3.17 [CODE] Implement approve/block workflows for breaking checks.
-- [ ] 3.18 [TEST] Add golden tests for compatible and breaking spec pairs.
-- [ ] 3.19 [BIP] Publish the structured-diff thread after the golden tests and diff payloads are stable.
-- [ ] 3.20 [BIP] Publish the breaking-change algorithm article after the engine is reviewable.
+- [ ] 3.11 [CODE] Implement breaking-change rules for removed fields, type changes, added required fields, and enum removals.
+- [ ] 3.12 [CODE] Implement structured `changes` output plus `affected_consumers` resolution.
+- [ ] 3.13 [CODE] Implement approve/block workflows for breaking checks.
+- [ ] 3.14 [TEST] Add golden tests for compatible and breaking spec pairs.
+- [ ] 3.15 [BIP] Publish the structured-diff thread after the golden tests and diff payloads are stable.
+- [ ] 3.16 [BIP] Publish the breaking-change algorithm article after the engine is reviewable.
 
 ### Outbox, notifications, and CI surface
 
-- [ ] 3.21 [CODE] Implement the transactional outbox so contract version writes and outbox events commit atomically.
-- [ ] 3.22 [CODE] Implement the outbox relay with backoff, publish tracking, and poison-message handling.
-- [ ] 3.23 [CODE] Publish schema and check events with shared Kafka envelope and trace propagation.
-- [ ] 3.24 [CODE] Implement notification rules, delivery logs, and at least one proven outbound channel path (Slack or Teams webhook).
-- [ ] 3.25 [TEST] Add integration coverage proving contract write → outbox row → relay → Kafka → notification log.
-- [ ] 3.26 [DOCS] Write the ADR for the outbox pattern and cross-link it from deployment or incident docs.
-- [ ] 3.27 [BIP] Publish the outbox ADR after the relay integration test passes.
-- [ ] 3.28 [BIP] Publish the dual-write-bug article after the relay is demonstrably reliable.
-- [ ] 3.29 [INFRA] Add the tenant API key migration; store API keys hashed at rest.
-- [ ] 3.30 [CODE] Implement admin APIs to issue, list, and revoke tenant API keys.
-- [ ] 3.31 [CODE] Implement `POST /ci/check` with API-key-only auth (`X-Cartogra-Api-Key`), envelope responses, and documented blocking semantics.
-- [ ] 3.32 [CODE] Implement the GitHub Action extension against `/ci/check`.
-- [ ] 3.33 [CODE] Implement the Azure Pipelines task against `/ci/check`.
-- [ ] 3.34 [CODE] Implement spec discovery from ingestion so discovered OpenAPI/AsyncAPI files are processed idempotently.
-- [ ] 3.35 [TEST] Add workflow smoke tests for both CI extensions and idempotency tests for spec discovery.
-- [ ] 3.36 [DOCS] Add example GitHub Actions and Azure Pipelines usage to docs and update `docs/api/contract.openapi.yaml`.
-- [ ] 3.37 [BIP] Publish the dual-marketplace article after both extension paths run against the same backend contract.
-- [ ] 3.38 [BIP] Publish the one-check-two-CI-systems thread after both extensions pass smoke tests.
+- [ ] 3.17 [CODE] Implement the transactional outbox so contract version writes and outbox events commit atomically.
+- [ ] 3.18 [CODE] Implement the outbox relay with backoff, publish tracking, and poison-message handling.
+- [ ] 3.19 [CODE] Publish schema and check events with shared Kafka envelope and trace propagation.
+- [ ] 3.20 [CODE] Implement notification rules, delivery logs, and at least one proven outbound channel path (Slack or Teams webhook).
+- [ ] 3.21 [TEST] Add integration coverage proving contract write → outbox row → relay → Kafka → notification log.
+- [ ] 3.22 [DOCS] Write the ADR for the outbox pattern and cross-link it from deployment or incident docs.
+- [ ] 3.23 [BIP] Publish the outbox ADR after the relay integration test passes.
+- [ ] 3.24 [BIP] Publish the dual-write-bug article after the relay is demonstrably reliable.
+- [ ] 3.25 [INFRA] Add the tenant API key migration; store API keys hashed at rest.
+- [ ] 3.26 [CODE] Implement admin APIs to issue, list, and revoke tenant API keys.
+- [ ] 3.27 [CODE] Implement `POST /ci/check` with API-key-only auth (`X-Cartogra-Api-Key`), envelope responses, and documented blocking semantics.
+- [ ] 3.28 [CODE] Implement the GitHub Action extension against `/ci/check`.
+- [ ] 3.29 [CODE] Implement the Azure Pipelines task against `/ci/check`.
+- [ ] 3.30 [CODE] Implement spec discovery from ingestion so discovered OpenAPI/AsyncAPI files are processed idempotently.
+- [ ] 3.31 [TEST] Add workflow smoke tests for both CI extensions and idempotency tests for spec discovery.
+- [ ] 3.32 [DOCS] Add example GitHub Actions and Azure Pipelines usage to docs and update `docs/api/contract.openapi.yaml`.
+- [ ] 3.33 [BIP] Publish the dual-marketplace article after both extension paths run against the same backend contract.
+- [ ] 3.34 [BIP] Publish the one-check-two-CI-systems thread after both extensions pass smoke tests.
 
 ### Contract Hub UI
 
-- [ ] 3.39 [UI] Craft the side-by-side diff viewer with required, added, and removed highlights using `/impeccable craft contract diff`.
-- [ ] 3.40 [UI] Craft the compatibility matrix heatmap, version timeline, and breaking-check queue using `/impeccable craft contract matrix`.
-- [ ] 3.41 [UI] Run `/impeccable audit` on all Phase 3 screens before the phase gate.
-- [ ] 3.42 [BIP] Publish the schema-diff UI demo after the Contract Hub is stable enough to show.
-- [ ] 3.43 [BIP] Publish the compatibility-matrix story after the matrix is wired to real data.
-- [ ] 3.44 [BIP] Publish the marketplace listing or a documented blocker/timeline immediately when the packaging outcome is known.
+- [ ] 3.35 [UI] Craft the side-by-side diff viewer with required, added, and removed highlights using `/impeccable craft contract diff`.
+- [ ] 3.36 [UI] Craft the compatibility matrix heatmap, version timeline, and breaking-check queue using `/impeccable craft contract matrix`.
+- [ ] 3.37 [UI] Run `/impeccable audit` on all Phase 3 screens before the phase gate.
+- [ ] 3.38 [BIP] Publish the schema-diff UI demo after the Contract Hub is stable enough to show.
+- [ ] 3.39 [BIP] Publish the compatibility-matrix story after the matrix is wired to real data.
+- [ ] 3.40 [BIP] Publish the marketplace listing or a documented blocker/timeline immediately when the packaging outcome is known.
 
 ### Phase 3 Gate
 
 - [ ] [GATE] End-to-end contract flow works locally: new spec version, compatibility check, Kafka publication, and notification log entry.
 - [ ] [GATE] `POST /ci/check` works with tenant API keys only and returns the global response envelope.
 - [ ] [GATE] GitHub Action and Azure Pipelines task both demonstrate failing and passing scenarios.
-- [ ] [GATE] `shared:contracts` contains `contract/v1/contract.proto`; `ContractGrpcService` is reachable from gateway via gRPC.
 - [ ] [GATE] Contract OpenAPI and CI-extension docs are current.
 - [ ] [GATE] Phase 3 screens have passed `/impeccable audit`.
 - [ ] [GATE] Minimum BIP set shipped: one ADR, three substantive posts, and three short-form updates; marketplace publish completed or publicly blocked with explanation.
@@ -382,50 +357,42 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] 4.8 [CODE] Record token counts, latency, and execution status on every AI-backed request.
 - [ ] 4.9 [DOCS] Write the ADR or design note for Claude integration, prompt structure, and deterministic-evidence rules.
 
-### gRPC — Gateway → Intelligence
-
-- [ ] 4.10 [CODE] Define `intelligence/v1/intelligence.proto` in `shared:contracts` with `Query`, `GetQueryFeedback`, `Analyze`, `ListFindings`, and `GetHealthScore` RPCs.
-- [ ] 4.11 [CODE] Implement `IntelligenceGrpcService` in `services:intelligence` annotated with `@GrpcService`; extract tenant from gRPC metadata.
-- [ ] 4.12 [CODE] Implement `IntelligenceGrpcClient` in `services:gateway` using `@GrpcClient("intelligence")`; map `StatusRuntimeException` to domain exceptions.
-- [ ] 4.13 [INFRA] Configure gRPC server port `9094` for intelligence; add `INTELLIGENCE_GRPC_PORT` and expose the port in `docker-compose.yml`.
-
 ### Natural-language query flow
 
-- [ ] 4.14 [CODE] Implement SQL safety guardrails: allowlisted sources only, read-only execution, parameter binding, row limits, and timeout handling.
-- [ ] 4.15 [CODE] Implement `POST /intelligence/query` returning `answer`, optional `data`, optional `generated_sql`, and a durable `query_id`.
-- [ ] 4.16 [CODE] Implement `POST /intelligence/query/{id}/feedback` and store the result in `nl_query_log`.
-- [ ] 4.17 [TEST] Add unit and integration coverage for safe vs unsafe query handling and prompt formatting.
-- [ ] 4.18 [DOCS] Update `docs/api/intelligence.openapi.yaml` for query and feedback endpoints.
-- [ ] 4.19 [BIP] Publish the NL-over-PostgreSQL article after the guarded query flow works.
-- [ ] 4.20 [BIP] Publish the token-and-latency tracking thread after those metrics are visible.
+- [ ] 4.10 [CODE] Implement SQL safety guardrails: allowlisted sources only, read-only execution, parameter binding, row limits, and timeout handling.
+- [ ] 4.11 [CODE] Implement `POST /intelligence/query` returning `answer`, optional `data`, optional `generated_sql`, and a durable `query_id`.
+- [ ] 4.12 [CODE] Implement `POST /intelligence/query/{id}/feedback` and store the result in `nl_query_log`.
+- [ ] 4.13 [TEST] Add unit and integration coverage for safe vs unsafe query handling and prompt formatting.
+- [ ] 4.14 [DOCS] Update `docs/api/intelligence.openapi.yaml` for query and feedback endpoints.
+- [ ] 4.15 [BIP] Publish the NL-over-PostgreSQL article after the guarded query flow works.
+- [ ] 4.16 [BIP] Publish the token-and-latency tracking thread after those metrics are visible.
 
 ### Analysis jobs, findings, and health score
 
-- [ ] 4.21 [CODE] Implement deterministic anti-pattern detection for at least circular dependency, god service, and orphaned service.
-- [ ] 4.22 [CODE] Layer LLM narrative on top of deterministic evidence instead of letting the model invent unsupported claims.
-- [ ] 4.23 [CODE] Implement `POST /intelligence/analyze`, findings list, acknowledge/resolve flows, health score, and digest retrieval.
-- [ ] 4.24 [CODE] Publish intelligence analysis request and result events.
-- [ ] 4.25 [TEST] Add fixture coverage proving known anti-patterns produce findings and health-score updates.
-- [ ] 4.26 [BIP] Publish the evidence-first anti-pattern thread after deterministic findings are stable.
-- [ ] 4.27 [BIP] Publish the trust-model thread after the deterministic-plus-LLM split is documented.
+- [ ] 4.17 [CODE] Implement deterministic anti-pattern detection for at least circular dependency, god service, and orphaned service.
+- [ ] 4.18 [CODE] Layer LLM narrative on top of deterministic evidence instead of letting the model invent unsupported claims.
+- [ ] 4.19 [CODE] Implement `POST /intelligence/analyze`, findings list, acknowledge/resolve flows, health score, and digest retrieval.
+- [ ] 4.20 [CODE] Publish intelligence analysis request and result events.
+- [ ] 4.21 [TEST] Add fixture coverage proving known anti-patterns produce findings and health-score updates.
+- [ ] 4.22 [BIP] Publish the evidence-first anti-pattern thread after deterministic findings are stable.
+- [ ] 4.23 [BIP] Publish the trust-model thread after the deterministic-plus-LLM split is documented.
 
 ### Intelligence UI and operator visibility
 
-- [ ] 4.28 [UI] Craft the NL query panel with answer rendering, optional generated-SQL disclosure, and feedback controls using `/impeccable craft intelligence panel`.
-- [ ] 4.29 [UI] Craft the findings feed with severity badges and acknowledge/resolve actions using `/impeccable craft anti-pattern feed`.
-- [ ] 4.30 [UI] Craft the health-score trend and latest digest views using `/impeccable craft health score`.
-- [ ] 4.31 [UI] Run `/impeccable audit` on all Phase 4 screens before the phase gate.
-- [ ] 4.32 [TEST] Create an evaluation set of NL questions against fixtures or seed data and document the pass/fail bar.
-- [ ] 4.33 [DOCS] Finish `docs/api/intelligence.openapi.yaml` for the full implemented surface.
-- [ ] 4.34 [BIP] Publish the LLM-for-infrastructure-intelligence article after the UI and API are demoable.
-- [ ] 4.35 [BIP] Record the NL query demo video after the query path is stable enough to show live.
+- [ ] 4.24 [UI] Craft the NL query panel with answer rendering, optional generated-SQL disclosure, and feedback controls using `/impeccable craft intelligence panel`.
+- [ ] 4.25 [UI] Craft the findings feed with severity badges and acknowledge/resolve actions using `/impeccable craft anti-pattern feed`.
+- [ ] 4.26 [UI] Craft the health-score trend and latest digest views using `/impeccable craft health score`.
+- [ ] 4.27 [UI] Run `/impeccable audit` on all Phase 4 screens before the phase gate.
+- [ ] 4.28 [TEST] Create an evaluation set of NL questions against fixtures or seed data and document the pass/fail bar.
+- [ ] 4.29 [DOCS] Finish `docs/api/intelligence.openapi.yaml` for the full implemented surface.
+- [ ] 4.30 [BIP] Publish the LLM-for-infrastructure-intelligence article after the UI and API are demoable.
+- [ ] 4.31 [BIP] Record the NL query demo video after the query path is stable enough to show live.
 
 ### Phase 4 Gate
 
 - [ ] [GATE] NL queries are guarded by documented safety rules and abuse limits.
 - [ ] [GATE] At least three anti-pattern types produce findings on fixtures or seed data with deterministic evidence.
 - [ ] [GATE] Health score and digest are available via API and visible in the UI.
-- [ ] [GATE] `shared:contracts` contains `intelligence/v1/intelligence.proto`; `IntelligenceGrpcService` is reachable from gateway via gRPC.
 - [ ] [GATE] Token usage, latency, and quota behavior are observable enough to support demo operations.
 - [ ] [GATE] Phase 4 screens have passed `/impeccable audit`.
 - [ ] [GATE] Minimum BIP set shipped: one ADR/design note, two substantive articles, and two short-form posts.
@@ -488,3 +455,39 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] [GATE] Playwright and k6 gates pass in CI with documented thresholds.
 - [ ] [GATE] Phase 5 screens have passed `/impeccable audit`.
 - [ ] [GATE] Minimum BIP set shipped: observability writeup, data-architecture retrospective, launch post, and at least one retrospective artifact.
+
+---
+
+## Phase 6 — Future Research
+
+> **Status:** Placeholder — not scheduled. Work in this phase will be evaluated after production launch when real bottlenecks can be measured.
+
+This phase captures research topics deferred from earlier phases. Nothing here blocks Phases 1–5. Each item will be evaluated on its merits before any implementation is committed.
+
+### gRPC for internal service communication
+
+The current architecture uses REST (`RestClient` via Spring Cloud Gateway) for all synchronous inter-service calls. gRPC was originally designed in and removed before Phase 1 because the REST approach is simpler, already proven, and sufficient at current scale.
+
+Potential benefits to evaluate:
+
+- Compile-time contract enforcement via `.proto` files in a `shared:contracts` module
+- Binary protocol efficiency on high-throughput internal paths (e.g., topology graph traversal)
+- Server-side streaming for watch/push APIs without SSE
+- Strong typing enforced at the infrastructure boundary
+
+Research tasks (if we decide to pursue):
+
+- [ ] 6.1 [DOCS] Benchmark REST vs gRPC latency on the topology graph-read and registry list hot paths under k6 load; document results and whether REST overhead is measurable.
+- [ ] 6.2 [DOCS] Evaluate `spring-grpc 1.x` maturity, community support, and Spring Boot 4 compatibility as of evaluation date.
+- [ ] 6.3 [CODE] If benchmarks justify it, prototype `RegistryGrpcService` + `RegistryGrpcClient` on a spike branch; write ADR before merging anything.
+- [ ] 6.4 [DOCS] Decision gate: adopt gRPC only if REST latency or throughput cannot be solved by caching, query optimization, or connection pooling alone.
+
+### Other potential research areas
+
+- [ ] 6.5 [DOCS] Evaluate Avro schemas + Confluent Schema Registry for Kafka payloads if JSON overhead becomes measurable.
+- [ ] 6.6 [DOCS] Evaluate SSE or WebSocket for real-time graph updates if Kafka-push to browser becomes a requirement.
+- [ ] 6.7 [DOCS] Evaluate multi-region active-active if the platform grows beyond a single-region deployment.
+
+### Phase 6 Gate
+
+- [ ] [GATE] Each research item produces either a rejected ADR (with documented reasoning) or an accepted ADR with a concrete implementation plan for a future phase.
