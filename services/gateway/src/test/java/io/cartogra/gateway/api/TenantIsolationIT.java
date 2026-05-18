@@ -56,7 +56,7 @@ class TenantIsolationIT extends AbstractGatewayIT {
     @Test
     void unauthenticatedRequestToPublicEndpointSucceeds() {
         webTestClient.get()
-            .uri("/actuator/health/live")
+            .uri("/actuator/health/liveness")
             .exchange()
             .expectStatus().isOk();
     }
