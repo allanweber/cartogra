@@ -47,6 +47,7 @@
 - Actuator: expose ONLY `health,metrics,info` — NEVER `*` in production
 - Actuator security: Spring Security 7 secures all actuator endpoints except `/health` by default
 - Health probes: `management.endpoint.health.probes.enabled=true`; paths: `/actuator/health/live` and `/actuator/health/ready`
+- NEVER add a `/ping` endpoint — use `/actuator/health/live` to verify a service is reachable; Kubernetes liveness/readiness probes already cover this
 - Health details: `show-details: when-authorized` — NEVER `always` in production
 - Profiles: `application-{env}.yml`; secrets via `${ENV_VAR:default}` — NEVER hardcoded values
 - Schema: Flyway owns DDL — NEVER `ddl-auto: create-drop` or `update`; add `spring-boot-starter-flyway` explicitly

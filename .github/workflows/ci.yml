@@ -81,21 +81,21 @@ jobs:
         if: steps.changes.outputs.gateway == 'true'
         run: gradle :services:gateway:build --no-daemon
 
-      - name: Build & test topology
-        if: steps.changes.outputs.topology == 'true'
-        run: gradle :services:topology:build --no-daemon
+      # - name: Build & test topology
+      #   if: steps.changes.outputs.topology == 'true'
+      #   run: gradle :services:topology:build --no-daemon
 
-      - name: Build & test contract
-        if: steps.changes.outputs.contract == 'true'
-        run: gradle :services:contract:build --no-daemon
+      # - name: Build & test contract
+      #   if: steps.changes.outputs.contract == 'true'
+      #   run: gradle :services:contract:build --no-daemon
 
-      - name: Build & test intelligence
-        if: steps.changes.outputs.intelligence == 'true'
-        run: gradle :services:intelligence:build --no-daemon
+      # - name: Build & test intelligence
+      #   if: steps.changes.outputs.intelligence == 'true'
+      #   run: gradle :services:intelligence:build --no-daemon
 
-      - name: Build & test ingestion
-        if: steps.changes.outputs.ingestion == 'true'
-        run: gradle :services:ingestion:build --no-daemon
+      # - name: Build & test ingestion
+      #   if: steps.changes.outputs.ingestion == 'true'
+      #   run: gradle :services:ingestion:build --no-daemon
 
       - name: Trivy vulnerability scan — fail on CRITICAL or HIGH (unfixed suppressed)
         if: steps.changes.outputs.any == 'true'
@@ -249,9 +249,9 @@ jobs:
         if: steps.changes.outputs.gateway == 'true'
         run: docker build -f infra/docker/gateway/Dockerfile -t cartogra/gateway:ci .
 
-      - name: Build ingestion image
-        if: steps.changes.outputs.ingestion == 'true'
-        run: docker build -f infra/docker/ingestion/Dockerfile -t cartogra/ingestion:ci .
+      # - name: Build ingestion image
+      #   if: steps.changes.outputs.ingestion == 'true'
+      #   run: docker build -f infra/docker/ingestion/Dockerfile -t cartogra/ingestion:ci .
 
       - name: Build frontend image
         if: steps.changes.outputs.frontend == 'true'

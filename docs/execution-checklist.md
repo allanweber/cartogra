@@ -153,18 +153,18 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 ### Gateway authentication, authorization, and proxying
 
-- [ ] 1.16 [INFRA] Extend the users schema for password hash, email verification token and expiry, `auth_provider`, `auth_subject`, and any session or token metadata needed for MVP auth.
-- [ ] 1.17 [CODE] Implement Spring Security 7 on the gateway with local email/password registration, OTP verification, login, refresh, logout, and `userinfo` endpoints.
-- [ ] 1.18 [CODE] Add the Resend client with environment-based API key management and a test-mode strategy that suppresses real sends in CI.
-- [ ] 1.19 [CODE] Implement Google and GitHub OAuth start/callback flows through the gateway.
-- [ ] 1.20 [CODE] Implement tenant OIDC configuration storage plus an admin API; keep UI optional if the phase needs to defer it.
-- [ ] 1.21 [CODE] Issue secure httpOnly JWT cookies for browsers and Bearer tokens for non-browser clients; reject unverified users from accessing tenant data.
-- [ ] 1.22 [CODE] Enforce RBAC for `viewer`, `member`, and `admin` routes using `@EnableMethodSecurity` and `@PreAuthorize`; verify that tenant boundaries are derived from the authenticated principal, never inbound headers.
-- [ ] 1.23 [CODE] Strip client-supplied `X-Tenant-Id` from all inbound requests; inject gateway-derived tenant and principal headers downstream.
-- [ ] 1.24 [CODE] Proxy registry REST routes through the gateway; forward `traceparent` and set `X-Trace-Id` on all proxied responses.
-- [ ] 1.25 [CODE] Add Redis-backed rate limiting on all routes, including stricter token buckets for `/auth/*` and other expensive endpoints.
-- [ ] 1.26 [TEST] Add end-to-end auth tests for register → OTP → verify → login, cookie flows, Bearer flows, rate-limiting (assert 429), and cross-service trace propagation.
-- [ ] 1.27 [DOCS] Update `docs/api/gateway.openapi.yaml` to cover every implemented `/auth/*` route, cookie/Bearer behavior, and any deferred tenant-OIDC surface.
+- [x] 1.16 [INFRA] Extend the users schema for password hash, email verification token and expiry, `auth_provider`, `auth_subject`, and any session or token metadata needed for MVP auth.
+- [x] 1.17 [CODE] Implement Spring Security 7 on the gateway with local email/password registration, OTP verification, login, refresh, logout, and `userinfo` endpoints.
+- [x] 1.18 [CODE] Add the Resend client with environment-based API key management and a test-mode strategy that suppresses real sends in CI.
+- [x] 1.19 [CODE] Implement Google and GitHub OAuth start/callback flows through the gateway.
+- [x] 1.20 [CODE] Implement tenant OIDC configuration storage plus an admin API; keep UI optional if the phase needs to defer it.
+- [x] 1.21 [CODE] Issue secure httpOnly JWT cookies for browsers and Bearer tokens for non-browser clients; reject unverified users from accessing tenant data.
+- [x] 1.22 [CODE] Enforce RBAC for `viewer`, `member`, and `admin` routes using `@EnableMethodSecurity` and `@PreAuthorize`; verify that tenant boundaries are derived from the authenticated principal, never inbound headers.
+- [x] 1.23 [CODE] Strip client-supplied `X-Tenant-Id` from all inbound requests; inject gateway-derived tenant and principal headers downstream.
+- [x] 1.24 [CODE] Proxy registry REST routes through the gateway; forward `traceparent` and set `X-Trace-Id` on all proxied responses.
+- [x] 1.25 [CODE] Add Redis-backed rate limiting on all routes, including stricter token buckets for `/auth/*` and other expensive endpoints.
+- [x] 1.26 [TEST] Add end-to-end auth tests for register → OTP → verify → login, cookie flows, Bearer flows, rate-limiting (assert 429), and cross-service trace propagation.
+- [x] 1.27 [DOCS] Update `docs/api/gateway.openapi.yaml` to cover every implemented `/auth/*` route, cookie/Bearer behavior, and any deferred tenant-OIDC surface.
 
 ### gRPC — Gateway → Registry
 
@@ -204,6 +204,8 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] 1.55 [BIP] Publish the multi-tenant plus temporal-versioning article after history and ownership flows work.
 - [ ] 1.56 [BIP] Publish the enterprise-SCM angle on LinkedIn after both providers are visible in the catalog.
 - [ ] 1.57 [BIP] Publish screenshots plus OpenAPI links after the catalog UI is stable enough to demo.
+- [ ] 1.58 [BIP] Publish the dual-mode auth article (httpOnly cookies + Bearer tokens in a Spring Security 7 reactive gateway) after JWT issuance is stable end-to-end.
+- [ ] 1.59 [BIP] Publish the Redis rate-limiting article (token buckets, per-tenant key isolation, 429 behavior) after rate limiting is tested and observable.
 
 ### Phase 1 Gate
 
@@ -475,6 +477,8 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] 5.27 [BIP] Publish the real-incident DLQ thread only if it is true and useful.
 - [ ] 5.28 [BIP] Record the architecture walkthrough video if it adds value without delaying launch.
 - [ ] 5.29 [BIP] Publish the public launch post with the live demo and how-to-try-it path.
+- [ ] 5.X [INFRA] Add K8s NetworkPolicy rules so registry, topology, contract, and intelligence accept inbound traffic only from the gateway namespace — no direct external access to backend service ports.
+- [ ] 5.Y [CODE] Implement gateway service-token validation in all proxied services (registry, topology, contract, intelligence): gateway signs a short-lived X-Gateway-Token (HS256, 30 s TTL, separate secret from user JWTs); each downstream service rejects requests missing or invalid tokens. Write a shared filter in `shared:common` to avoid repeating the validation logic in every service.
 
 ### Phase 5 Gate
 

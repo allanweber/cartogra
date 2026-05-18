@@ -1,0 +1,40 @@
+spring:
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/test-schema.sql
+
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes: []
+
+app:
+  jwt:
+    secret: test-secret-32-bytes-padding-here!
+    access-token-expiry-seconds: 900
+    refresh-token-expiry-seconds: 2592000
+  resend:
+    api-key: test-key
+    from-address: noreply@test.com
+    test-mode: true
+  oauth:
+    google:
+      client-id: test-google-client
+      client-secret: test-google-secret
+      redirect-uri: http://localhost/v1/auth/oauth/google/callback
+      token-uri: https://oauth2.googleapis.com/token
+      userinfo-uri: https://openidconnect.googleapis.com/v1/userinfo
+    github:
+      client-id: test-github-client
+      client-secret: test-github-secret
+      redirect-uri: http://localhost/v1/auth/oauth/github/callback
+      token-uri: https://github.com/login/oauth/access_token
+      userinfo-uri: https://api.github.com/user
+  rate-limit:
+    enabled: false
+    default-replenish-rate: 100
+    default-burst-capacity: 200
+    auth-replenish-rate: 3
+    auth-burst-capacity: 5

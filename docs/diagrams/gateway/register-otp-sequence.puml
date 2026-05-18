@@ -1,0 +1,33 @@
+@startuml
+title Register with Email OTP
+
+actor Client
+participant "AuthController" as AC
+participant "RegisterUserUseCase" as UC
+participant "TenantRepository" as TR
+participant "UserRepository" as UR
+participant "EmailSender" as ES
+database PostgreSQL as DB
+
+Client -> AC: POST /v1/auth/register\n{email, password, orgName?}
+AC -> UC: execute(request)
+UC -> UR: findByEmail(email)
+UR -> DB: SELECT ... WHERE email = ?
+
+alt email already registered
+  UC --> AC: throw ConflictException\n(provider-aware message for OAuth accounts)
+  AC --> Client: 409 {error: {code: CONFLICT}, traceId}
+else new user
+  UC -> TR: save(new Tenant(name=orgName|email, plan="free"))
+  TR -> DB: INSERT INTO tenants
+  DB --> TR: Tenant(id, tenantId)
+  UC -> UC: BCrypt.hash(password)
+  UC -> UC: generateOTP() + expiry (15 min)
+  UC -> UR: save(newUser with tenantId, emailVerified=false + otpToken)
+  UR -> DB: INSERT INTO users
+  UC -> ES: sendVerification(email, otpToken) [virtual-thread executor, async]
+  ES --> UC: (returns immediately)
+  UC --> AC: RegisterResponse(tenantId)
+  AC --> Client: 201 {data: {tenantId}, traceId}\nX-Trace-Id: <traceId>
+end
+@enduml

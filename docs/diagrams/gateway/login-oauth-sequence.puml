@@ -1,0 +1,48 @@
+@startuml
+title OAuth Login — Google / GitHub
+
+actor Browser
+participant "OAuthController" as OC
+participant "OAuthStartUseCase" as SU
+participant "OAuthCallbackUseCase" as CU
+participant "OAuthProvider" as OP
+participant "UserRepository" as UR
+participant "JwtTokenProvider" as JWT
+database Redis as RD
+entity "Google/GitHub" as EXT
+
+Browser -> OC: GET /v1/auth/oauth/{provider}/start?tenantId=X
+OC -> OC: generate random state
+OC -> SU: buildAuthorizationUri(provider, tenantId, state)
+SU -> RD: SET oauth:state:{state} tenantId EX 600
+SU --> OC: authorizationUri
+OC --> Browser: 302 Redirect → provider /authorize?state=...&...
+
+Browser -> EXT: follows redirect, user consents
+EXT -> Browser: redirect to /v1/auth/oauth/{provider}/callback?code=X&state=Y
+Browser -> OC: GET /v1/auth/oauth/{provider}/callback?code=X&state=Y
+
+OC -> CU: execute(provider, code, state)
+CU -> RD: GETDEL oauth:state:{state}
+alt state not found or expired
+  CU --> OC: throw UnauthorizedException(INVALID_OAUTH_STATE)
+  OC --> Browser: 400 {error: {code: INVALID_OAUTH_STATE}, traceId}
+else state valid
+  CU -> OP: exchangeCodeForAccessToken(code, redirectUri)
+  OP -> EXT: POST /token {code, client_id, client_secret, ...}
+  EXT --> OP: {access_token}
+  CU -> OP: fetchProfile(accessToken)
+  OP -> EXT: GET /userinfo
+  EXT --> OP: {sub, email, name}
+  CU -> UR: findByTenantAndEmail(tenantId, profile.email)
+  alt existing user
+    CU -> UR: save(updated authSubject if changed)
+  else new user
+    CU -> UR: save(newUser, emailVerified=true, authProvider=provider)
+  end
+  CU -> JWT: issueAccessToken + issueRefreshToken
+  CU --> OC: TokenResponse
+  OC -> OC: Set-Cookie: jwt + jwt_refresh
+  OC --> Browser: 200 {data: TokenResponse, traceId}
+end
+@enduml

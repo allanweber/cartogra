@@ -4,13 +4,21 @@ spring:
   threads:
     virtual:
       enabled: true
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
   cloud:
     gateway:
       server:
         webflux:
           routes:
             - id: registry
-              uri: http://localhost:8081
+              uri: ${REGISTRY_URI:http://localhost:8081}
               predicates:
                 - Path=/api/v1/**
 
@@ -27,6 +35,11 @@ management:
       probes:
         enabled: true
       show-details: when-authorized
+      group:
+        live:
+          include: livenessState
+        ready:
+          include: readinessState
   tracing:
     sampling:
       probability: 1.0
@@ -47,3 +60,32 @@ management:
     metrics:
       export:
         url: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/metrics
+
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+    access-token-expiry-seconds: ${JWT_ACCESS_EXPIRY_SECONDS:900}
+    refresh-token-expiry-seconds: ${JWT_REFRESH_EXPIRY_SECONDS:2592000}
+  resend:
+    api-key: ${RESEND_API_KEY}
+    from-address: ${RESEND_FROM}
+    test-mode: ${RESEND_TEST_MODE:false}
+  oauth:
+    google:
+      client-id: ${GOOGLE_CLIENT_ID}
+      client-secret: ${GOOGLE_CLIENT_SECRET}
+      redirect-uri: ${APP_BASE_URL}/v1/auth/oauth/google/callback
+      token-uri: https://oauth2.googleapis.com/token
+      userinfo-uri: https://openidconnect.googleapis.com/v1/userinfo
+    github:
+      client-id: ${GITHUB_CLIENT_ID}
+      client-secret: ${GITHUB_CLIENT_SECRET}
+      redirect-uri: ${APP_BASE_URL}/v1/auth/oauth/github/callback
+      token-uri: https://github.com/login/oauth/access_token
+      userinfo-uri: https://api.github.com/user
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    default-replenish-rate: ${RATE_LIMIT_DEFAULT_REPLENISH:20}
+    default-burst-capacity: ${RATE_LIMIT_DEFAULT_BURST:40}
+    auth-replenish-rate: ${RATE_LIMIT_AUTH_REPLENISH:5}
+    auth-burst-capacity: ${RATE_LIMIT_AUTH_BURST:10}

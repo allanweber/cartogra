@@ -77,12 +77,22 @@ services:
     ports:
       - "8080:8080"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/cartogra
-      SPRING_DATASOURCE_USERNAME: cartogra
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-cartogra}
+      DB_URL: jdbc:postgresql://postgres:5432/cartogra?currentSchema=registry
+      DB_USERNAME: cartogra
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-cartogra}
+      REDIS_HOST: valkey
+      REDIS_PORT: 6379
+      REGISTRY_URI: http://registry:8081
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-min-32-bytes}
+      RESEND_API_KEY: ${RESEND_API_KEY:-re_placeholder}
+      RESEND_FROM: ${RESEND_FROM:-noreply@cartogra.dev}
+      RESEND_TEST_MODE: ${RESEND_TEST_MODE:-true}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-placeholder}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-placeholder}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-placeholder}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-placeholder}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      SPRING_DATA_REDIS_HOST: valkey
-      SPRING_DATA_REDIS_PORT: 6379
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info
       SPRING_PROFILES_ACTIVE: docker
     depends_on:

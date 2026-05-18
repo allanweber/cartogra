@@ -1,0 +1,1521 @@
+{
+  "info": {
+    "name": "Cartogra Registry",
+    "description": "Registry service API collection for Cartogra - services, teams, and SCM connections",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "registry-url",
+      "value": "http://localhost:8081",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Services",
+      "item": [
+        {
+          "name": "Create Service",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"smoke-test-service\",\n  \"description\": \"Created by Postman smoke test\",\n  \"repositoryUrl\": \"https://github.com/acme/smoke-test-service\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{registry-url}}/api/v1/services",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"status is 201\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(201);",
+                  "});",
+                  "",
+                  "pm.test(\"response envelope present\", function () {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"data\");",
+                  "    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+                  "});",
+                  "",
+                  "pm.test(\"traceId is 32 lowercase hex\", function () {",
+                  "    pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/);",
+                  "});",
+                  "",
+                  "pm.test(\"X-Trace-Id header matches body traceId\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId);",
+                  "});",
+                  "",
+                  "pm.test(\"service has id and name\", function () {",
+                  "    pm.expect(pm.response.json().data.id).to.be.a(\"string\");",
+                  "    pm.expect(pm.response.json().data.name).to.equal(\"smoke-test-service\");",
+                  "});",
+                  "",
+                  "pm.test(\"healthStatus defaults to unknown\", function () {",
+                  "    pm.expect(pm.response.json().data.healthStatus).to.equal(\"unknown\");",
+                  "});",
+                  "",
+                  "if (pm.response.code === 201) {",
+                  "    pm.environment.set(\"serviceId\", pm.response.json().data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Services",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{registry-url}}/api/v1/services",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"status is 200\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "",
+                  "pm.test(\"response envelope present\", function () {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"data\");",
+                  "    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+                  "});",
+                  "",
+                  "pm.test(\"traceId is 32 lowercase hex\", function () {",
+                  "    pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/);",
+                  "});",
+                  "",
+                  "pm.test(\"X-Trace-Id header matches body traceId\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId);",
+                  "});",
+                  "",
+                  "pm.test(\"returns array of services\", function () {",
+                  "    pm.expect(pm.response.json().data).to.be.an(\"array\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Service",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{registry-url}}/api/v1/services/{{serviceId}}",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services",
+                "{{serviceId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"status is 200\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "",
+                  "pm.test(\"response envelope present\", function () {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"data\");",
+                  "    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+                  "});",
+                  "",
+                  "pm.test(\"traceId is 32 lowercase hex\", function () {",
+                  "    pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/);",
+                  "});",
+                  "",
+                  "pm.test(\"X-Trace-Id header matches body traceId\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId);",
+                  "});",
+                  "",
+                  "pm.test(\"service data present\", function () {",
+                  "    pm.expect(pm.response.json().data.id).to.equal(pm.environment.get(\"serviceId\"));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Service",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"updated-service-name\",\n  \"description\": \"Updated description\",\n  \"repositoryUrl\": \"https://github.com/acme/updated-service\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{registry-url}}/api/v1/services/{{serviceId}}",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services",
+                "{{serviceId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"status is 200\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "",
+                  "pm.test(\"response envelope present\", function () {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"data\");",
+                  "    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+                  "});",
+                  "",
+                  "pm.test(\"traceId is 32 lowercase hex\", function () {",
+                  "    pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/);",
+                  "});",
+                  "",
+                  "pm.test(\"X-Trace-Id header matches body traceId\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId);",
+                  "});",
+                  "",
+                  "pm.test(\"service updated\", function () {",
+                  "    pm.expect(pm.response.json().data.name).to.equal(\"updated-service-name\");",
+                  "    pm.expect(pm.response.json().data.description).to.equal(\"Updated description\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Service History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{registry-url}}/api/v1/services/{{serviceId}}/history",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services",
+                "{{serviceId}}",
+                "history"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"status is 200\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "",
+                  "pm.test(\"response envelope present\", function () {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"data\");",
+                  "    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+                  "});",
+                  "",
+                  "pm.test(\"traceId is 32 lowercase hex\", function () {",
+                  "    pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/);",
+                  "});",
+                  "",
+                  "pm.test(\"X-Trace-Id header matches body traceId\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId);",
+                  "});",
+                  "",
+                  "pm.test(\"returns array of history snapshots\", function () {",
+                  "    pm.expect(pm.response.json().data).to.be.an(\"array\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Service",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{registry-url}}/api/v1/services/{{serviceId}}",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services",
+                "{{serviceId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"status is 204\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(204);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Orphaned Services",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{registry-url}}/api/v1/services/orphaned",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services",
+                "orphaned"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"status is 200\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "",
+                  "pm.test(\"response envelope present\", function () {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"data\");",
+                  "    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+                  "});",
+                  "",
+                  "pm.test(\"traceId is 32 lowercase hex\", function () {",
+                  "    pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/);",
+                  "});",
+                  "",
+                  "pm.test(\"X-Trace-Id header matches body traceId\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId);",
+                  "});",
+                  "",
+                  "pm.test(\"returns array of orphaned services\", function () {",
+                  "    pm.expect(pm.response.json().data).to.be.an(\"array\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Assign Owner",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"teamId\": \"{{teamId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{registry-url}}/api/v1/services/{{serviceId}}/owner",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services",
+                "{{serviceId}}",
+                "owner"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"status is 200\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "",
+                  "pm.test(\"response envelope present\", function () {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"data\");",
+                  "    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+                  "});",
+                  "",
+                  "pm.test(\"traceId is 32 lowercase hex\", function () {",
+                  "    pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/);",
+                  "});",
+                  "",
+                  "pm.test(\"X-Trace-Id header matches body traceId\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Teams",
+      "item": [
+        {
+          "name": "Create Team",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"smoke-test-team\",\n  \"slackChannel\": \"#smoke-tests\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{registry-url}}/api/v1/teams",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "teams"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"status is 201\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(201);",
+                  "});",
+                  "",
+                  "pm.test(\"response envelope present\", function () {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"data\");",
+                  "    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+                  "});",
+                  "",
+                  "pm.test(\"traceId is 32 lowercase hex\", function () {",
+                  "    pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/);",
+                  "});",
+                  "",
+                  "pm.test(\"X-Trace-Id header matches body traceId\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 201) {",
+                  "    pm.environment.set(\"teamId\", pm.response.json().data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Teams",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{registry-url}}/api/v1/teams",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "teams"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"status is 200\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "",
+                  "pm.test(\"response envelope present\", function () {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"data\");",
+                  "    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+                  "});",
+                  "",
+                  "pm.test(\"traceId is 32 lowercase hex\", function () {",
+                  "    pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/);",
+                  "});",
+                  "",
+                  "pm.test(\"X-Trace-Id header matches body traceId\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId);",
+                  "});",
+                  "",
+                  "pm.test(\"returns array of teams\", function () {",
+                  "    pm.expect(pm.response.json().data).to.be.an(\"array\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Team",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{registry-url}}/api/v1/teams/{{teamId}}",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "teams",
+                "{{teamId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"status is 200\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "",
+                  "pm.test(\"response envelope present\", function () {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"data\");",
+                  "    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+                  "});",
+                  "",
+                  "pm.test(\"traceId is 32 lowercase hex\", function () {",
+                  "    pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/);",
+                  "});",
+                  "",
+                  "pm.test(\"X-Trace-Id header matches body traceId\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Team",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"updated-team-name\",\n  \"slackChannel\": \"#updated-channel\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{registry-url}}/api/v1/teams/{{teamId}}",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "teams",
+                "{{teamId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"status is 200\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "",
+                  "pm.test(\"response envelope present\", function () {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"data\");",
+                  "    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+                  "});",
+                  "",
+                  "pm.test(\"traceId is 32 lowercase hex\", function () {",
+                  "    pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/);",
+                  "});",
+                  "",
+                  "pm.test(\"X-Trace-Id header matches body traceId\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Team",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{registry-url}}/api/v1/teams/{{teamId}}",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "teams",
+                "{{teamId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"status is 204\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(204);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SCM Connections",
+      "item": [
+        {
+          "name": "Create SCM Connection",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"github\",\n  \"config\": \"{\\\"installationId\\\":\\\"smoke-test-installation-123\\\"}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{registry-url}}/api/v1/scm-connections",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "scm-connections"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"status is 201\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(201);",
+                  "});",
+                  "",
+                  "pm.test(\"response envelope present\", function () {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"data\");",
+                  "    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+                  "});",
+                  "",
+                  "pm.test(\"traceId is 32 lowercase hex\", function () {",
+                  "    pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/);",
+                  "});",
+                  "",
+                  "pm.test(\"X-Trace-Id header matches body traceId\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 201) {",
+                  "    pm.environment.set(\"connectionId\", pm.response.json().data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "List SCM Connections",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{registry-url}}/api/v1/scm-connections",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "scm-connections"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"status is 200\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "",
+                  "pm.test(\"response envelope present\", function () {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"data\");",
+                  "    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+                  "});",
+                  "",
+                  "pm.test(\"traceId is 32 lowercase hex\", function () {",
+                  "    pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/);",
+                  "});",
+                  "",
+                  "pm.test(\"X-Trace-Id header matches body traceId\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId);",
+                  "});",
+                  "",
+                  "pm.test(\"returns array of connections\", function () {",
+                  "    pm.expect(pm.response.json().data).to.be.an(\"array\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get SCM Connection",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{registry-url}}/api/v1/scm-connections/{{connectionId}}",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "scm-connections",
+                "{{connectionId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"status is 200\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "",
+                  "pm.test(\"response envelope present\", function () {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"data\");",
+                  "    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+                  "});",
+                  "",
+                  "pm.test(\"traceId is 32 lowercase hex\", function () {",
+                  "    pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/);",
+                  "});",
+                  "",
+                  "pm.test(\"X-Trace-Id header matches body traceId\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update SCM Connection",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"github\",\n  \"config\": \"{\\\"installationId\\\":\\\"updated-installation-456\\\"}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{registry-url}}/api/v1/scm-connections/{{connectionId}}",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "scm-connections",
+                "{{connectionId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"status is 200\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "",
+                  "pm.test(\"response envelope present\", function () {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"data\");",
+                  "    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+                  "});",
+                  "",
+                  "pm.test(\"traceId is 32 lowercase hex\", function () {",
+                  "    pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/);",
+                  "});",
+                  "",
+                  "pm.test(\"X-Trace-Id header matches body traceId\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete SCM Connection",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{registry-url}}/api/v1/scm-connections/{{connectionId}}",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "scm-connections",
+                "{{connectionId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"status is 204\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(204);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{registry-url}}/actuator/health",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"status is 200\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "",
+                  "pm.test(\"health status is UP\", function () {",
+                  "    pm.expect(pm.response.json().status).to.equal(\"UP\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Acceptance Criteria Tests",
+      "item": [
+        {
+          "name": "tenant_id enforced on EVERY domain table",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"tenant-test-service\",\n  \"description\": \"Testing tenant isolation\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{registry-url}}/api/v1/services",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"tenant_id enforced on EVERY domain table - status is 201\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(201);",
+                  "});",
+                  "",
+                  "pm.test(\"tenant_id enforced on EVERY domain table - response envelope present\", function () {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"data\");",
+                  "    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Services CRUD through registry API",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"crud-test-service\",\n  \"description\": \"Testing CRUD operations\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{registry-url}}/api/v1/services",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Services CRUD through registry API - status is 201\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(201);",
+                  "});",
+                  "",
+                  "pm.test(\"Services CRUD through registry API - response envelope present\", function () {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"data\");",
+                  "    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Teams + SCM connections CRUD through registry API",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"crud-test-team\",\n  \"slackChannel\": \"#crud-tests\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{registry-url}}/api/v1/teams",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "teams"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Teams + SCM connections CRUD through registry API - status is 201\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(201);",
+                  "});",
+                  "",
+                  "pm.test(\"Teams + SCM connections CRUD through registry API - response envelope present\", function () {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"data\");",
+                  "    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "History and point-in-time endpoints",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{registry-url}}/api/v1/services/{{serviceId}}/history",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services",
+                "{{serviceId}}",
+                "history"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"History and point-in-time endpoints - status is 200\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "",
+                  "pm.test(\"History and point-in-time endpoints - response envelope present\", function () {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"data\");",
+                  "    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+                  "});",
+                  "",
+                  "pm.test(\"History and point-in-time endpoints - returns array\", function () {",
+                  "    pm.expect(pm.response.json().data).to.be.an(\"array\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Orphaned services detection",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{registry-url}}/api/v1/services/orphaned",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services",
+                "orphaned"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Orphaned services detection - status is 200\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Orphaned services detection - response envelope present\", function () {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"data\");",
+                  "    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+                  "});",
+                  "",
+                  "pm.test(\"Orphaned services detection - returns array\", function () {",
+                  "    pm.expect(pm.response.json().data).to.be.an(\"array\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Spring Data JDBC over JPA/Hibernate",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{registry-url}}/api/v1/services",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Spring Data JDBC over JPA/Hibernate - status is 200\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Spring Data JDBC over JPA/Hibernate - response envelope present\", function () {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"data\");",
+                  "    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "PostgreSQL + recursive CTEs for graph queries",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenantId}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{registry-url}}/api/v1/services/orphaned",
+              "host": [
+                "{{registry-url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services",
+                "orphaned"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"PostgreSQL + recursive CTEs for graph queries - status is 200\", function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "",
+                  "pm.test(\"PostgreSQL + recursive CTEs for graph queries - response envelope present\", function () {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"data\");",
+                  "    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
