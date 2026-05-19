@@ -1,6 +1,7 @@
 # ADR-0002 — SCM provider abstraction via SPI
 
 **Date:** 2026-04-30
+**Updated:** 2026-05-18
 **Status:** Accepted
 **Deciders:** Platform team
 
@@ -18,7 +19,9 @@ Options considered:
 
 ## Decision
 
-Introduce a **`ScmProvider` Service Provider Interface** in `services/registry/src/main/java/io/cartogra/registry/infrastructure/scm/`. The interface defines provider-agnostic operations (`listRepositories`, `getFileContents`, `resolveOwnership`, `streamWebhookEvents`). Concrete implementations (`GitHubProvider`, `AzureDevOpsProvider`) are Spring beans registered conditionally via `@ConditionalOnProperty`. The ingestion pipeline is written against the SPI only.
+Introduce a **`ScmProvider` Service Provider Interface** in `services/ingestion/src/main/java/io/cartogra/ingestion/application/port/out/`. The interface defines provider-agnostic operations (`listRepositories`, `getFileContents`, `resolveOwnership`). Concrete implementations (`GitHubProvider`, `AzureDevOpsProvider`) live in `infrastructure/scm/{github,azuredevops}/` and are collected into a `Map<String, ScmProvider>` Spring bean by `ScmProviderConfig`. The ingestion pipeline (`ExecuteSyncUseCaseImpl`) is written against the SPI only and dispatches by `providerType` string from the incoming sync command.
+
+Provider connection config (PAT, org name, base URL for WireMock overrides) is passed per-call via `ScmConnectionConfig.config` (JSONB from the registry `scm_connections` table) — never stored in env vars on the ingestion side.
 
 ## Consequences
 

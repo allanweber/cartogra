@@ -1,0 +1,26 @@
+@startuml
+title Ingestion Service — sync_jobs ER Diagram
+
+entity "sync_jobs" {
+  * id : UUID <<PK>>
+  --
+  * tenant_id : UUID
+  * connection_id : UUID
+  * provider_type : TEXT
+  * status : TEXT
+  ~ started_at : TIMESTAMPTZ
+  ~ completed_at : TIMESTAMPTZ
+  ~ error_message : TEXT
+  ~ repositories_synced : INT
+  * created_at : TIMESTAMPTZ
+  * updated_at : TIMESTAMPTZ
+  ~ deleted_at : TIMESTAMPTZ
+}
+
+note right of sync_jobs
+  status IN ('PENDING','RUNNING','COMPLETED','FAILED')
+  RLS: tenant_id = current_setting('app.current_tenant_id')
+  Soft delete via deleted_at
+end note
+
+@enduml

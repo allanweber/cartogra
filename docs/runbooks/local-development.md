@@ -32,8 +32,9 @@ Copy `.env.example` to `.env`. The following variables are required to start all
 | `REDIS_PASSWORD` | Local Redis auth password |
 | `JWT_SECRET` | 256-bit secret for gateway JWT signing |
 | `RESEND_API_KEY` | Resend API key for OTP emails (`re_...`) |
-| `GITHUB_APP_ID` | GitHub App ID (skip if not testing SCM ingestion) |
-| `GITHUB_APP_PRIVATE_KEY` | GitHub App private key PEM (base64) |
+| `GITHUB_PAT` | GitHub Personal Access Token with `repo` scope (for SCM ingestion) |
+| `AZDO_PAT` | Azure DevOps Personal Access Token (for SCM ingestion) |
+| `AZDO_ORG` | Azure DevOps organization name |
 | `CLAUDE_API_KEY` | Anthropic API key (skip if not testing intelligence service) |
 
 **Never commit `.env`** — it is in `.gitignore`.

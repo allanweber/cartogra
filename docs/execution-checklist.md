@@ -167,16 +167,16 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 ### SCM SPI and ingestion workers
 
-- [ ] 1.28 [CODE] Define the Spring-free `ScmProvider` SPI under ingestion application code.
-- [ ] 1.29 [CODE] Implement `GitHubProvider` using connection config stored as JSONB and WireMock-backed tests.
-- [ ] 1.30 [CODE] Implement `AzureDevOpsProvider` using PAT or service-principal config and WireMock-backed tests.
-- [ ] 1.31 [INFRA] Add ingestion Flyway `V001__create_sync_jobs.sql` with tenant isolation, status tracking, soft delete, indexes, and RLS.
-- [ ] 1.32 [CODE] Implement GitHub and Azure DevOps sync workers that consume sync commands, update `sync_jobs`, publish results, and propagate trace headers.
-- [ ] 1.33 [CODE] Add the Kubernetes worker behind `ENABLE_K8S_WORKER=true` with a documented kind/mock fallback for local development.
-- [ ] 1.34 [TEST] Add integration tests for both SCM providers plus sync job state transitions.
-- [ ] 1.35 [DOCS] Write the ADR for the SCM provider abstraction and update deployment docs with PAT/service-principal setup.
-- [ ] 1.36 [BIP] Publish the SCM SPI ADR after the abstraction and both provider paths are coded.
-- [ ] 1.37 [BIP] Publish the provider-comparison thread after both provider adapters have passing tests.
+- [x] 1.28 [CODE] Define the Spring-free `ScmProvider` SPI under ingestion application code.
+- [x] 1.29 [CODE] Implement `GitHubProvider` using connection config stored as JSONB and WireMock-backed tests.
+- [x] 1.30 [CODE] Implement `AzureDevOpsProvider` using PAT or service-principal config and WireMock-backed tests.
+- [x] 1.31 [INFRA] Add ingestion Flyway `V001__create_sync_jobs.sql` with tenant isolation, status tracking, soft delete, indexes, and RLS.
+- [x] 1.32 [CODE] Implement GitHub and Azure DevOps sync workers that consume sync commands, update `sync_jobs`, publish results, and propagate trace headers.
+- [x] 1.33 [CODE] Add the Kubernetes worker behind `ENABLE_K8S_WORKER=true` with a documented kind/mock fallback for local development.
+- [x] 1.34 [TEST] Add integration tests for both SCM providers plus sync job state transitions.
+- [x] 1.35 [DOCS] Write the ADR for the SCM provider abstraction and update deployment docs with PAT/service-principal setup.
+- [x] 1.36 [BIP] Publish the SCM SPI ADR after the abstraction and both provider paths are coded.
+- [x] 1.37 [BIP] Publish the provider-comparison thread after both provider adapters have passing tests.
 
 ### Events, catalog UI, and demo access
 
@@ -197,6 +197,23 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] 1.52 [BIP] Publish screenshots plus OpenAPI links after the catalog UI is stable enough to demo.
 - [ ] 1.53 [BIP] Publish the dual-mode auth article (httpOnly cookies + Bearer tokens in a Spring Security 7 reactive gateway) after JWT issuance is stable end-to-end.
 - [ ] 1.54 [BIP] Publish the Redis rate-limiting article (token buckets, per-tenant key isolation, 429 behavior) after rate limiting is tested and observable.
+- [ ] 1.55 [CODE] Wire `KubernetesWorker` to publish a `cartogra.registry.sync.command` Kafka message (`EventEnvelope` + `traceparent`) whenever a K8s `Service` is ADDED or MODIFIED in a watched namespace. Resolve tenant ID from the service's `cartogra.io/tenant-id` namespace label; use a configured synthetic connection UUID (`ingestion.workers.k8s.connection-id`) as the connection identity. Document the label contract in `docs/runbooks/local-development.md`.
+- [ ] 1.56 [TEST] Add `KubernetesWorkerIT` using `io.fabric8:kubernetes-server-mock` (no real cluster or `kind` required) + `@EmbeddedKafka`: simulate a `Service` ADDED event in a watched namespace and assert a `cartogra.registry.sync.command` message is published with the correct `tenant_id`, `traceparent` header, and `providerType = "kubernetes"`. Add `testImplementation("io.fabric8:kubernetes-server-mock:7.0.0")` to `services/ingestion/build.gradle.kts`.
+
+### Automatic sync — periodic scheduler
+
+- [ ] 1.57 [INFRA] Add ingestion Flyway `V003__create_scm_connection_cache.sql` — a local materialized table of SCM connection records (`id`, `tenant_id`, `provider_type`, `config` JSONB, `sync_interval_minutes`, `last_synced_at`, `deleted_at`) populated by consuming registry lifecycle events. Add a unique index on `(tenant_id, id)` and a partial index on connections due for re-sync (`last_synced_at + sync_interval_minutes * interval '1 min' <= now()`).
+- [ ] 1.58 [CODE] Consume `scm_connection.created`, `scm_connection.updated`, and `scm_connection.deleted` registry lifecycle events in ingestion and upsert the local `scm_connection_cache` table. This decouples ingestion from registry REST calls at sync time and is the prerequisite for both the scheduler and webhook registration.
+- [ ] 1.59 [CODE] Add a `@Scheduled` task in ingestion (interval configurable via `ingestion.sync.poll-interval`, default 15 min) that queries `scm_connection_cache` for connections due for re-sync, acquires a Postgres advisory lock (`pg_try_advisory_lock`) to prevent duplicate runs under horizontal scaling, then publishes one `cartogra.registry.sync.command` `EventEnvelope` per due connection with `traceparent` propagation. Update `last_synced_at` atomically before publishing.
+- [ ] 1.60 [TEST] Integration test for the scheduler: seed two connections in `scm_connection_cache` (one due, one not due), trigger the scheduled method directly, assert exactly one `sync.command` published to `@EmbeddedKafka`.
+
+### Webhook-driven sync
+
+- [ ] 1.61 [CODE] Extend the `ScmProvider` SPI with four webhook methods: `registerWebhook(config, targetUrl)`, `deregisterWebhook(config, externalWebhookId)`, `verifyWebhookSignature(request, rawBody, config) → boolean`, and `isRelevantWebhookEvent(request) → boolean`. Add default no-op implementations so existing providers compile. Implement full webhook registration/deregistration in `GitHubProvider` (org-level hook via `POST /orgs/{org}/hooks`) and `AzureDevOpsProvider` (service hook via `POST /_apis/hooks/subscriptions`). Store the returned `external_id` and a hashed secret in `scm_webhooks` on registration; mark `deleted_at` on deregistration. Trigger registration by consuming the `scm_connection.created` event (task 1.58).
+- [ ] 1.62 [CODE] Add a single `WebhookController` in ingestion at `POST /webhooks/{providerType}/{connectionId}`. This route is excluded from gateway JWT auth and the response envelope. Read the raw request body before deserialization via `ContentCachingRequestWrapper`. Load connection config from `scm_connection_cache`, dispatch to `providers.get(providerType).verifyWebhookSignature()` — return 401 on failure with no body. On success, call `isRelevantWebhookEvent()` to skip pings and irrelevant event types, then publish `cartogra.registry.sync.command` and return 202. Update `scm_webhooks.last_received_at` on every successful verification.
+- [ ] 1.63 [CODE] Implement `verifyWebhookSignature` in `GitHubProvider` (HMAC-SHA256 over raw body, `X-Hub-Signature-256` header) and `AzureDevOpsProvider` (shared-secret header). Secret is read from `ScmConnectionConfig` — never from env vars. Adding a future provider (GitLab, Bitbucket) requires only a new `ScmProvider` implementation; no changes to the controller or routing.
+- [ ] 1.64 [TEST] Add `WebhookControllerIT` using `@EmbeddedKafka` and WireMock: correctly-signed GitHub push payload → assert `sync.command` published; tampered GitHub payload → assert 401 and no Kafka message; valid AzDO payload → assert `sync.command`; unknown `providerType` → assert 404; GitHub ping event → assert 202 but no Kafka message.
+- [ ] 1.65 [DOCS] Update `docs/api/ingestion.openapi.yaml` for `POST /webhooks/{providerType}/{connectionId}` (no auth, no envelope, 202 Accepted, 401 on bad signature, 404 on unknown provider). Add a "Webhook setup" section to the deployment runbook covering: required public URL, ngrok/Cloudflare Tunnel for local dev, GitHub org-level vs repo-level hook trade-offs, AzDO service hook setup, and how to add a future provider (implement `ScmProvider`, `verifyWebhookSignature` handles the new format automatically).
 
 ### Phase 1 Gate
 
