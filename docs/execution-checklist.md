@@ -167,16 +167,16 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 ### SCM SPI and ingestion workers
 
-- [ ] 1.28 [CODE] Define the Spring-free `ScmProvider` SPI under ingestion application code.
-- [ ] 1.29 [CODE] Implement `GitHubProvider` using connection config stored as JSONB and WireMock-backed tests.
-- [ ] 1.30 [CODE] Implement `AzureDevOpsProvider` using PAT or service-principal config and WireMock-backed tests.
-- [ ] 1.31 [INFRA] Add ingestion Flyway `V001__create_sync_jobs.sql` with tenant isolation, status tracking, soft delete, indexes, and RLS.
-- [ ] 1.32 [CODE] Implement GitHub and Azure DevOps sync workers that consume sync commands, update `sync_jobs`, publish results, and propagate trace headers.
-- [ ] 1.33 [CODE] Add the Kubernetes worker behind `ENABLE_K8S_WORKER=true` with a documented kind/mock fallback for local development.
-- [ ] 1.34 [TEST] Add integration tests for both SCM providers plus sync job state transitions.
-- [ ] 1.35 [DOCS] Write the ADR for the SCM provider abstraction and update deployment docs with PAT/service-principal setup.
-- [ ] 1.36 [BIP] Publish the SCM SPI ADR after the abstraction and both provider paths are coded.
-- [ ] 1.37 [BIP] Publish the provider-comparison thread after both provider adapters have passing tests.
+- [x] 1.28 [CODE] Define the Spring-free `ScmProvider` SPI under ingestion application code.
+- [x] 1.29 [CODE] Implement `GitHubProvider` using connection config stored as JSONB and WireMock-backed tests.
+- [x] 1.30 [CODE] Implement `AzureDevOpsProvider` using PAT or service-principal config and WireMock-backed tests.
+- [x] 1.31 [INFRA] Add ingestion Flyway `V001__create_sync_jobs.sql` with tenant isolation, status tracking, soft delete, indexes, and RLS.
+- [x] 1.32 [CODE] Implement GitHub and Azure DevOps sync workers that consume sync commands, update `sync_jobs`, publish results, and propagate trace headers.
+- [x] 1.33 [CODE] Add the Kubernetes worker behind `ENABLE_K8S_WORKER=true` with a documented kind/mock fallback for local development.
+- [x] 1.34 [TEST] Add integration tests for both SCM providers plus sync job state transitions.
+- [x] 1.35 [DOCS] Write the ADR for the SCM provider abstraction and update deployment docs with PAT/service-principal setup.
+- [x] 1.36 [BIP] Publish the SCM SPI ADR after the abstraction and both provider paths are coded.
+- [x] 1.37 [BIP] Publish the provider-comparison thread after both provider adapters have passing tests.
 
 ### Events, catalog UI, and demo access
 
@@ -197,6 +197,33 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] 1.52 [BIP] Publish screenshots plus OpenAPI links after the catalog UI is stable enough to demo.
 - [ ] 1.53 [BIP] Publish the dual-mode auth article (httpOnly cookies + Bearer tokens in a Spring Security 7 reactive gateway) after JWT issuance is stable end-to-end.
 - [ ] 1.54 [BIP] Publish the Redis rate-limiting article (token buckets, per-tenant key isolation, 429 behavior) after rate limiting is tested and observable.
+- [ ] 1.55 [CODE] Wire `KubernetesWorker` to publish a `cartogra.registry.sync.command` Kafka message (`EventEnvelope` + `traceparent`) whenever a K8s `Service` is ADDED or MODIFIED in a watched namespace. Resolve tenant ID from the service's `cartogra.io/tenant-id` namespace label; use a configured synthetic connection UUID (`ingestion.workers.k8s.connection-id`) as the connection identity. Document the label contract in `docs/runbooks/local-development.md`.
+- [ ] 1.56 [TEST] Add `KubernetesWorkerIT` using `io.fabric8:kubernetes-server-mock` (no real cluster or `kind` required) + `@EmbeddedKafka`: simulate a `Service` ADDED event in a watched namespace and assert a `cartogra.registry.sync.command` message is published with the correct `tenant_id`, `traceparent` header, and `providerType = "kubernetes"`. Add `testImplementation("io.fabric8:kubernetes-server-mock:7.0.0")` to `services/ingestion/build.gradle.kts`.
+
+### Automatic sync — periodic scheduler
+
+- [ ] 1.57 [INFRA] Add ingestion Flyway `V003__create_scm_connection_cache.sql` — a local materialized table of SCM connection records (`id`, `tenant_id`, `provider_type`, `config` JSONB, `sync_interval_minutes`, `last_synced_at`, `deleted_at`) populated by consuming registry lifecycle events. Add a unique index on `(tenant_id, id)` and a partial index on connections due for re-sync (`last_synced_at + sync_interval_minutes * interval '1 min' <= now()`).
+- [ ] 1.58 [CODE] Consume `scm_connection.created`, `scm_connection.updated`, and `scm_connection.deleted` registry lifecycle events in ingestion and upsert the local `scm_connection_cache` table. This decouples ingestion from registry REST calls at sync time and is the prerequisite for both the scheduler and webhook registration.
+- [ ] 1.59 [CODE] Add a `@Scheduled` task in ingestion (interval configurable via `ingestion.sync.poll-interval`, default 15 min) that queries `scm_connection_cache` for connections due for re-sync, acquires a Postgres advisory lock (`pg_try_advisory_lock`) to prevent duplicate runs under horizontal scaling, then publishes one `cartogra.registry.sync.command` `EventEnvelope` per due connection with `traceparent` propagation. Update `last_synced_at` atomically before publishing.
+- [ ] 1.60 [TEST] Integration test for the scheduler: seed two connections in `scm_connection_cache` (one due, one not due), trigger the scheduled method directly, assert exactly one `sync.command` published to `@EmbeddedKafka`.
+
+### Webhook-driven sync
+
+- [ ] 1.61 [CODE] Extend the `ScmProvider` SPI with four webhook methods: `registerWebhook(config, targetUrl)`, `deregisterWebhook(config, externalWebhookId)`, `verifyWebhookSignature(request, rawBody, config) → boolean`, and `isRelevantWebhookEvent(request) → boolean`. Add default no-op implementations so existing providers compile. Implement full webhook registration/deregistration in `GitHubProvider` (org-level hook via `POST /orgs/{org}/hooks`) and `AzureDevOpsProvider` (service hook via `POST /_apis/hooks/subscriptions`). Store the returned `external_id` and a hashed secret in `scm_webhooks` on registration; mark `deleted_at` on deregistration. Trigger registration by consuming the `scm_connection.created` event (task 1.58).
+- [ ] 1.62 [CODE] Add a single `WebhookController` in ingestion at `POST /webhooks/{providerType}/{connectionId}`. This route is excluded from gateway JWT auth and the response envelope. Read the raw request body before deserialization via `ContentCachingRequestWrapper`. Load connection config from `scm_connection_cache`, dispatch to `providers.get(providerType).verifyWebhookSignature()` — return 401 on failure with no body. On success, call `isRelevantWebhookEvent()` to skip pings and irrelevant event types, then publish `cartogra.registry.sync.command` and return 202. Update `scm_webhooks.last_received_at` on every successful verification.
+- [ ] 1.63 [CODE] Implement `verifyWebhookSignature` in `GitHubProvider` (HMAC-SHA256 over raw body, `X-Hub-Signature-256` header) and `AzureDevOpsProvider` (shared-secret header). Secret is read from `ScmConnectionConfig` — never from env vars. Adding a future provider (GitLab, Bitbucket) requires only a new `ScmProvider` implementation; no changes to the controller or routing.
+- [ ] 1.64 [TEST] Add `WebhookControllerIT` using `@EmbeddedKafka` and WireMock: correctly-signed GitHub push payload → assert `sync.command` published; tampered GitHub payload → assert 401 and no Kafka message; valid AzDO payload → assert `sync.command`; unknown `providerType` → assert 404; GitHub ping event → assert 202 but no Kafka message.
+- [ ] 1.65 [DOCS] Update `docs/api/ingestion.openapi.yaml` for `POST /webhooks/{providerType}/{connectionId}` (no auth, no envelope, 202 Accepted, 401 on bad signature, 404 on unknown provider). Add a "Webhook setup" section to the deployment runbook covering: required public URL, ngrok/Cloudflare Tunnel for local dev, GitHub org-level vs repo-level hook trade-offs, AzDO service hook setup, and how to add a future provider (implement `ScmProvider`, `verifyWebhookSignature` handles the new format automatically).
+
+### Infrastructure hardening and missing flows
+
+- [ ] 1.66 [CODE] Publish `scm_connection.created`, `scm_connection.updated`, and `scm_connection.deleted` lifecycle events from registry with the shared Kafka envelope and `traceparent` propagation. These events are the prerequisite for tasks 1.58 (connection cache consumer), 1.59 (scheduler), and 1.61 (webhook registration).
+- [ ] 1.67 [CODE] Consume `cartogra.registry.sync.completed` events in registry to update `scm_connections.last_synced_at` and `last_sync_status`. This closes the ingestion → registry feedback loop.
+- [ ] 1.68 [CODE] Implement the password reset flow in gateway: `POST /auth/forgot-password` sends a time-limited reset token via Resend; `POST /auth/reset-password` validates the token and updates the password hash. Apply the same rate limiting as other `/auth/*` endpoints.
+- [ ] 1.69 [CODE] Extend `RateLimitWebFilter` to use per-tenant Redis keys (`rate_limit:tenant:<tenantId>:<route>`) on all authenticated routes, falling back to per-IP only for unauthenticated paths. Per-tenant limits must be configurable per plan tier.
+- [ ] 1.70 [INFRA] Configure graceful shutdown for all JVM services: `server.shutdown=graceful` and `spring.lifecycle.timeout-per-shutdown-phase=30s` in each service's `application.yml`. Verify that in-flight Kafka consumer commits complete before the pod terminates.
+- [ ] 1.71 [CODE] Add Resilience4j circuit breakers on all gateway `RestClient` calls to downstream services (registry, topology, contract, intelligence). Expose circuit-breaker state in each service's `/actuator/health` response.
+- [ ] 1.72 [UI] Verify and implement the root error boundary claimed done in task 0.37. Audit `frontend/src/` for an `ErrorBoundary` component; if absent, implement it as a React class component with `componentDidCatch`, display the `traceId` from the caught `ApiError`, and add a Vitest snapshot test.
 
 ### Phase 1 Gate
 
@@ -261,6 +288,21 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] 2.32 [BIP] Publish the event-naming/partitioning LinkedIn post after topic naming is settled.
 - [ ] 2.33 [BIP] Record the optional live-impact-analysis video if it does not block the phase gate.
 
+### Audit logging, search, and billing foundation
+
+- [ ] 2.34 [INFRA] Add a Flyway migration for `audit_events` — a generic audit table (`id`, `tenant_id`, `entity_type`, `entity_id`, `action`, `actor_id`, `payload` JSONB, `created_at`) with tenant isolation, RLS, and a GIN index on `payload`. Check existing migration files to determine the correct version number for the owning service.
+- [ ] 2.35 [CODE] Populate `audit_events` from all mutating use cases in registry, topology, and contract (service create/update/delete, dependency change, contract version upload). Use a shared `AuditEventPublisher` in `shared:common` with zero Spring dependencies.
+- [ ] 2.36 [DOCS] Write the ADR documenting the generic `audit_events` table pattern versus per-entity `changed_by` columns; cross-reference the GDPR deletion task (3.41).
+- [ ] 2.37 [CODE] Add `GET /audit-events` admin endpoint in registry with filtering by `entity_type`, `entity_id`, date range, and actor; paginated; admin role required.
+- [ ] 2.38 [CODE] Implement TOTP-based MFA in gateway: `POST /auth/mfa/enable` returns a TOTP secret and QR code URI; `POST /auth/mfa/verify` validates the TOTP code and marks MFA active; `POST /auth/mfa/disable` requires current TOTP code. Enforce TOTP verification on login when MFA is enabled.
+- [ ] 2.39 [CODE] Add full-text search on services in registry using PostgreSQL `to_tsvector` + `plainto_tsquery` on `name`, `description`, and `metadata::text`. Add a GIN index on the tsvector column and expose a `?q=` query parameter on the services list endpoint.
+- [ ] 2.40 [UI] Implement server-side pagination UI components (page controls, page-size selector, total count) and wire them to the Catalog list and any other list endpoint that returns more than 20 rows.
+- [ ] 2.41 [INFRA] Add Flyway migration(s) for Stripe billing tables: `billing_plans` (`id`, `name`, `stripe_price_id`, `limits` JSONB), `tenant_subscriptions` (`tenant_id`, `stripe_customer_id`, `stripe_subscription_id`, `plan_id`, `status`, `current_period_end`), and `billing_events` (`id`, `tenant_id`, `stripe_event_id`, `type`, `payload` JSONB, `processed_at`). Use soft delete and `TIMESTAMPTZ` throughout.
+- [ ] 2.42 [CODE] Implement `StripeClient` in gateway infrastructure: wraps the Stripe Java SDK, always passes idempotency keys, reads `STRIPE_SECRET_KEY` from env vars (never hardcoded), and maps Stripe exceptions to domain exceptions at the infrastructure boundary.
+- [ ] 2.43 [CODE] Add `POST /billing/stripe/webhook` in gateway: read raw body before deserialization; verify Stripe signature using `STRIPE_WEBHOOK_SECRET` from env; handle `customer.subscription.updated`, `customer.subscription.deleted`, and `invoice.payment_failed` events; update `tenant_subscriptions` accordingly; return 200 with no envelope (Stripe ignores response body).
+- [ ] 2.44 [CODE] Add `PlanEnforcementFilter` in gateway that reads the tenant's current plan from `tenant_subscriptions` (via Redis cache, TTL 60 s), injects an `X-Plan-Tier` header downstream, and returns 402 when a request exceeds plan limits (service count, API key count, intelligence query count).
+- [ ] 2.45 [DOCS] Write the billing ADR capturing the Stripe + `PlanEnforcementFilter` approach; add a "Stripe setup" section to `docs/runbooks/deployment.md` covering `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, webhook endpoint registration, and local testing with the Stripe CLI.
+
 ### Phase 2 Gate
 
 - [ ] [GATE] The graph renders for a tenant-sized dataset without browser freeze on the documented target hardware.
@@ -311,6 +353,8 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] 3.24 [BIP] Publish the dual-write-bug article after the relay is demonstrably reliable.
 - [ ] 3.25 [INFRA] Add the tenant API key migration; store API keys hashed at rest.
 - [ ] 3.26 [CODE] Implement admin APIs to issue, list, and revoke tenant API keys.
+- [ ] 3.26a [UI] Craft the API key management UI: list active keys with scopes and expiry, create a key with scope selection, and revoke a key with a confirmation dialog. Wire to the admin APIs from 3.26.
+- [ ] 3.26b [CODE] Extend the tenant API key model with per-key scopes (e.g. `ci:check`, `webhooks:push`, `catalog:read`). Validate scopes at `POST /ci/check` and any other API-key-authenticated endpoint; reject requests where the key's scopes do not cover the requested operation.
 - [ ] 3.27 [CODE] Implement `POST /ci/check` with API-key-only auth (`X-Cartogra-Api-Key`), envelope responses, and documented blocking semantics.
 - [ ] 3.28 [CODE] Implement the GitHub Action extension against `/ci/check`.
 - [ ] 3.29 [CODE] Implement the Azure Pipelines task against `/ci/check`.
@@ -328,6 +372,15 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] 3.38 [BIP] Publish the schema-diff UI demo after the Contract Hub is stable enough to show.
 - [ ] 3.39 [BIP] Publish the compatibility-matrix story after the matrix is wired to real data.
 - [ ] 3.40 [BIP] Publish the marketplace listing or a documented blocker/timeline immediately when the packaging outcome is known.
+
+### Billing customer flow and GDPR
+
+- [ ] 3.41 [CODE] Implement GDPR tenant deletion (`DELETE /admin/tenants/{id}/gdpr-erase`): soft-delete the tenant, anonymize personal data in users and audit_events, publish a `tenant.erased` Kafka event, schedule a 30-day hard-delete job, and return a signed erasure receipt. Admin role and re-authentication required.
+- [ ] 3.42 [DOCS] Write the ADR for tenant lifecycle management — trial → active → suspended → erased — including the 30-day grace period, data residency boundaries, and how Stripe subscription cancellation interacts with the erasure flow.
+- [ ] 3.43 [CODE] Implement Stripe Checkout: `POST /billing/checkout` creates a Stripe Checkout Session for the selected plan and returns the session URL; the frontend redirects the user to Stripe-hosted payment. On success, Stripe fires `customer.subscription.created`, which the webhook receiver (2.43) processes.
+- [ ] 3.44 [CODE] Implement Stripe Customer Portal passthrough: `POST /billing/portal` creates a Stripe Customer Portal session URL; the frontend redirects the user there for plan upgrades, downgrades, and payment method changes. No custom billing UI is required for Phase 3.
+- [ ] 3.45 [UI] Add a Billing settings page at `/settings/billing`: show current plan name, next renewal date, and a "Manage billing" button that triggers the Customer Portal flow (3.44). Show an upgrade prompt when the tenant is on the free tier.
+- [ ] 3.46 [DOCS] Add a "Go live with billing" section to `docs/runbooks/deployment.md`: how to create Stripe products and prices, map `stripe_price_id` to `billing_plans`, configure the webhook endpoint in the Stripe dashboard, verify webhook delivery with the Stripe CLI, and what to do when a subscription lapses.
 
 ### Phase 3 Gate
 
@@ -419,15 +472,19 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] 5.8 [INFRA] Finalize Terraform modules and at least one concrete staging environment.
 - [ ] 5.9 [INFRA] Configure remote Terraform state with S3 backend, DynamoDB lock table, encryption, and bucket versioning.
 - [ ] 5.10 [INFRA] Add staging deployment CI plus post-deploy smoke tests.
+- [ ] 5.10a [TEST] Implement a post-deploy smoke test suite as a standalone Gradle task (`:smoke:test`) that runs after every staging deploy: call `/actuator/health/ready` on all services, execute one authenticated request per service, and assert all responses match the documented envelope. CI must gate on this suite after each deploy.
 
 ### Observability, DLQ, and operations
 
 - [ ] 5.11 [INFRA] Finalize the staging OTel, Tempo, Loki, Prometheus, and Grafana path (K8s Helm values in `infra/k8s/infra/helm/`; run `install.sh`).
+- [ ] 5.11a [INFRA] Add Grafana dashboard provisioning JSON templates under `infra/docker-compose/grafana/dashboards/`: one per service (request rate, error rate, p95 latency, JVM heap) plus one platform-wide overview (Kafka consumer lag, Postgres connections, Redis hit rate). Dashboards must appear automatically on first `docker compose up` via `grafana.ini` provisioning.
 - [ ] 5.12 [INFRA] Add alerts for consumer lag, elevated error rate, and critical-path failures.
 - [ ] 5.13 [CODE] Implement the dead-letter topic path and replay admin API with audit logging.
 - [ ] 5.14 [UI] Craft the Operations view for connector health, recent platform events, lag visibility, and observability links using `/impeccable craft operations view`.
 - [ ] 5.15 [UI] Run `/impeccable audit` on all Phase 5 screens before the phase gate.
 - [ ] 5.16 [DOCS] Expand deployment and incident runbooks for staging, alerts, DLQ replay, and operator workflows.
+- [ ] 5.16a [CODE] Add a batch service creation endpoint (`POST /services/batch`) that accepts an array of service definitions and creates all or none within a single transaction. Return per-item status in the response. Add a matching integration test.
+- [ ] 5.16b [CODE] Add export (`GET /tenants/{id}/export`) and import (`POST /tenants/{id}/import`) endpoints for the full service catalog (services, teams, dependencies, contracts as a ZIP archive). Implement idempotent import with a `dryRun=true` query parameter. Supports disaster recovery and environment cloning.
 - [ ] 5.17 [BIP] Publish the observability-stack article after dashboards and alerts are reviewable.
 - [ ] 5.18 [BIP] Publish the Flyway-in-a-multi-service-monorepo article after the deployment story is settled.
 

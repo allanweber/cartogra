@@ -8,6 +8,16 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5436/cartogra?currentSchema=ingestion}
     username: ${SPRING_DATASOURCE_USERNAME:cartogra}
     password: ${SPRING_DATASOURCE_PASSWORD:cartogra}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ingestion-sync-worker
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
   flyway:
     enabled: true
     create-schemas: true

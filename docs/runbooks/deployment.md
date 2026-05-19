@@ -192,3 +192,86 @@ terraform apply -var-file=terraform.tfvars
 **Never run `terraform destroy` in CI without a human approval gate.**
 
 State is stored in S3 (`cartogra-tf-state-prod`) with DynamoDB locking.
+
+---
+
+## 8. SCM provider credential setup
+
+SCM provider credentials are stored in the `registry.scm_connections` table as JSONB. They are **never** stored in environment variables on the ingestion service.
+
+### GitHub — Personal Access Token
+
+1. Create a PAT at **GitHub → Settings → Developer settings → Personal access tokens** with scopes: `repo` (read), `read:org`.
+2. Insert a connection record via the Registry API (requires `ADMIN` role):
+
+```http
+POST /connections
+Authorization: Bearer <token>
+X-Tenant-Id: <tenantId>
+Content-Type: application/json
+
+{
+  "providerType": "github",
+  "config": {
+    "token": "<PAT value>",
+    "org": "your-github-org"
+  }
+}
+```
+
+**Security:** The PAT is stored encrypted-at-rest via Postgres RLS + column encryption policy. It is never logged by the ingestion service.
+
+### Azure DevOps — Personal Access Token
+
+1. Create a PAT at **Azure DevOps → User Settings → Personal Access Tokens** with scopes: `Code (Read)`, `Graph (Read)`.
+2. Insert a connection record:
+
+```http
+POST /connections
+Authorization: Bearer <token>
+X-Tenant-Id: <tenantId>
+Content-Type: application/json
+
+{
+  "providerType": "azuredevops",
+  "config": {
+    "pat": "<PAT value>",
+    "organization": "your-ado-org"
+  }
+}
+```
+
+### Triggering a manual sync (smoke test)
+
+```bash
+# Publish a sync command directly to Kafka (requires kafkacat / kcat)
+kcat -b localhost:9092 -t cartogra.registry.sync.command -P << 'EOF'
+{
+  "event_id": "00000000-0000-0000-0000-000000000001",
+  "event_type": "sync.command",
+  "entity_id": "<connectionId>",
+  "tenant_id": "<tenantId>",
+  "timestamp": "2026-05-18T00:00:00Z",
+  "version": 1,
+  "correlation_id": "00000000-0000-0000-0000-000000000002",
+  "payload": {
+    "connectionId": "<connectionId>",
+    "tenantId": "<tenantId>",
+    "providerType": "github",
+    "connectionConfig": {
+      "token": "<PAT>",
+      "org": "your-github-org"
+    }
+  }
+}
+EOF
+```
+
+Monitor the `sync_jobs` table to observe the PENDING → RUNNING → COMPLETED transition:
+
+```sql
+SELECT id, status, repositories_synced, error_message, updated_at
+FROM ingestion.sync_jobs
+ORDER BY created_at DESC
+LIMIT 5;
+```
