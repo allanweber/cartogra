@@ -8,6 +8,7 @@ import io.cartogra.registry.application.usecase.DeleteServiceUseCase;
 import io.cartogra.registry.domain.Service;
 import io.cartogra.registry.domain.ServiceSnapshot;
 import io.cartogra.registry.domain.exception.ServiceNotFoundException;
+import io.cartogra.registry.infrastructure.kafka.ServiceLifecycleEventProducer;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,13 +21,16 @@ public class DeleteServiceUseCaseImpl implements DeleteServiceUseCase {
     private final ServiceRepository serviceRepository;
     private final ServiceHistoryRepository historyRepository;
     private final ObjectMapper objectMapper;
+    private final ServiceLifecycleEventProducer eventProducer;
 
     public DeleteServiceUseCaseImpl(ServiceRepository serviceRepository,
                                     ServiceHistoryRepository historyRepository,
-                                    ObjectMapper objectMapper) {
+                                    ObjectMapper objectMapper,
+                                    ServiceLifecycleEventProducer eventProducer) {
         this.serviceRepository = serviceRepository;
         this.historyRepository = historyRepository;
         this.objectMapper = objectMapper;
+        this.eventProducer = eventProducer;
     }
 
     @Override
@@ -37,13 +41,15 @@ public class DeleteServiceUseCaseImpl implements DeleteServiceUseCase {
 
         serviceRepository.softDelete(tenantId, serviceId);
 
+        Instant deletedAt = Instant.now();
         var deleted = new Service(
                 existing.id(), existing.tenantId(), existing.name(), existing.description(),
                 existing.teamId(), existing.repositoryUrl(), existing.techStack(), existing.metadata(),
                 existing.healthStatus(), existing.lastDeployedAt(), existing.createdAt(),
-                Instant.now(), Instant.now()
+                deletedAt, deletedAt
         );
         historyRepository.save(toSnapshot(deleted, requestedBy));
+        eventProducer.publishDeleted(existing, deletedAt);
     }
 
     private ServiceSnapshot toSnapshot(Service service, UUID changedBy) {

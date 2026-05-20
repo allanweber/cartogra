@@ -1,0 +1,44 @@
+@startuml
+title Registry — Service Lifecycle Event Publishing
+
+participant "ServiceController" as C
+participant "CreateServiceUseCaseImpl\n/ UpdateServiceUseCaseImpl\n/ DeleteServiceUseCaseImpl\n/ AssignOwnerUseCaseImpl" as UC
+participant "ServiceRepository" as R
+database "PostgreSQL" as DB
+participant "ServiceLifecycleEventProducer" as P
+queue "Kafka" as K
+
+== Create ==
+C -> UC : execute(CreateServiceCommand)
+UC -> R : existsByName(tenantId, name)
+R -> DB : SELECT
+UC -> R : save(service)
+R -> DB : INSERT
+UC -> R : save(snapshot)
+R -> DB : INSERT
+UC -> P : publishRegistered(saved)
+P -> K : ProducerRecord → cartogra.registry.service.registered\n[key=serviceId, W3C traceparent header]
+
+== Update ==
+C -> UC : execute(UpdateServiceCommand)
+UC -> R : findById(tenantId, serviceId)
+R -> DB : SELECT
+UC -> R : save(updated)
+R -> DB : UPDATE
+UC -> R : save(snapshot)
+R -> DB : INSERT
+UC -> P : publishUpdated(saved)
+P -> K : ProducerRecord → cartogra.registry.service.updated\n[key=serviceId, W3C traceparent header]
+
+== Delete ==
+C -> UC : execute(tenantId, serviceId, requestedBy)
+UC -> R : findById(tenantId, serviceId)
+R -> DB : SELECT
+UC -> R : softDelete(tenantId, serviceId)
+R -> DB : UPDATE deleted_at
+UC -> R : save(snapshot)
+R -> DB : INSERT
+UC -> P : publishDeleted(existing, deletedAt)
+P -> K : ProducerRecord → cartogra.registry.service.deleted\n[key=serviceId, W3C traceparent header]
+
+@enduml

@@ -97,6 +97,34 @@ public class JdbcSyncJobRepository implements SyncJobRepository {
                 """, params);
     }
 
+    @Override
+    public boolean existsRunningForConnection(UUID tenantId, UUID connectionId) {
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("connectionId", connectionId);
+        var results = jdbc.query("""
+                SELECT id FROM sync_jobs
+                WHERE tenant_id = :tenantId AND connection_id = :connectionId
+                  AND status = 'RUNNING' AND deleted_at IS NULL
+                LIMIT 1
+                """, params, (rs, _) -> rs.getObject("id", UUID.class));
+        return !results.isEmpty();
+    }
+
+    @Override
+    public Optional<SyncJob> findRunningForConnection(UUID tenantId, UUID connectionId) {
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("connectionId", connectionId);
+        var results = jdbc.query("""
+                SELECT * FROM sync_jobs
+                WHERE tenant_id = :tenantId AND connection_id = :connectionId
+                  AND status = 'RUNNING' AND deleted_at IS NULL
+                LIMIT 1
+                """, params, (rs, _) -> mapRow(rs));
+        return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
+    }
+
     private SyncJob mapRow(ResultSet rs) throws SQLException {
         return new SyncJob(
                 rs.getObject("id", UUID.class),

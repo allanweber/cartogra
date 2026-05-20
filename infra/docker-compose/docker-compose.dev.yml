@@ -210,30 +210,6 @@ services:
     networks:
       - cartogra-net
 
-  postgres-ui:
-    image: dpage/pgadmin4:9.4.0
-    container_name: cartogra-postgres-ui
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@cartogra.dev}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-cartogra}
-      PGADMIN_CONFIG_SERVER_MODE: "False"
-      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
-      PGADMIN_CONFIG_DESKTOP_USER: "'admin@cartogra.dev'"
-      PGADMIN_SERVER_JSON_FILE: /pgadmin4/servers.json
-      PGADMIN_REPLACE_SERVERS_ON_STARTUP: "True"
-    ports:
-      - "8088:80"
-    volumes:
-      - pgadmin-data:/var/lib/pgadmin
-      - ./pgadmin-servers.json:/pgadmin4/servers.json:ro
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - cartogra-net
-
 volumes:
   postgres-data:
   valkey-data:

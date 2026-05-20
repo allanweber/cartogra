@@ -12,6 +12,11 @@ This directory captures significant architectural decisions made during the deve
 | [ADR-0007](ADR-0007-local-dev-infrastructure.md) | Local development infrastructure | Accepted | 2026-04-30 |
 | [ADR-0008](ADR-0008-lgtm-observability-stack.md) | LGTM observability stack | Accepted | 2026-04-30 |
 | [ADR-0009](ADR-0009-spring-data-jdbc.md) | Spring Data JDBC over JPA/Hibernate | Accepted | 2026-05-11 |
+| [ADR-0010](ADR-0010-gateway-sole-token-issuer.md) | Gateway as the sole JWT issuer | Accepted | 2026-05-11 |
+| [ADR-0011](ADR-0011-httponlycookie-bearer-dual-auth.md) | HttpOnly cookie + Bearer token dual auth | Accepted | 2026-05-11 |
+| [ADR-0012](ADR-0012-gateway-servlet-stack.md) | Gateway on Spring MVC servlet stack | Accepted | 2026-05-18 |
+| [ADR-0013](ADR-0013-guest-demo-access-deferred.md) | Guest demo access deferred to Phase 5 | Accepted | 2026-05-20 |
+| [ADR-0014](ADR-0014-sync-command-idempotency.md) | Sync command idempotency: concurrent-execution guard | Accepted | 2026-05-20 |
 
 ## Process
 

@@ -38,6 +38,13 @@ public class ExecuteSyncUseCaseImpl implements ExecuteSyncUseCase {
 
     @Override
     public SyncJob execute(SyncCommandPayload command) {
+        var running = syncJobRepository.findRunningForConnection(command.tenantId(), command.connectionId());
+        if (running.isPresent()) {
+            log.warn("Dropping duplicate sync command: a RUNNING job already exists for connection={}",
+                    command.connectionId());
+            return running.get();
+        }
+
         SyncJob job = syncJobRepository.save(
                 SyncJob.create(command.tenantId(), command.connectionId(), command.providerType()));
         syncJobRepository.markRunning(job.id());

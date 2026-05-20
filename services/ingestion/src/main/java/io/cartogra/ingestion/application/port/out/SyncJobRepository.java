@@ -16,4 +16,8 @@ public interface SyncJobRepository {
     void markCompleted(UUID jobId, int repositoriesSynced);
 
     void markFailed(UUID jobId, String errorMessage);
+
+    boolean existsRunningForConnection(UUID tenantId, UUID connectionId);
+
+    Optional<SyncJob> findRunningForConnection(UUID tenantId, UUID connectionId);
 }
