@@ -1,15 +1,16 @@
 package io.cartogra.gateway.infrastructure.jwt;
 
 import io.cartogra.gateway.config.JwtConfig;
-import org.springframework.security.oauth2.jwt.Jwt;
+import io.cartogra.gateway.domain.exception.UnauthorizedException;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.stereotype.Component;
-import reactor.core.publisher.Mono;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -46,8 +47,8 @@ public class JwtTokenProvider {
             + UUID.randomUUID().toString().replace("-", "");
     }
 
-    public Mono<JwtClaims> decode(String token) {
-        return Mono.fromCallable(() -> {
+    public JwtClaims decode(String token) {
+        try {
             Jwt jwt = decoder.decode(token);
             return new JwtClaims(
                 UUID.fromString(jwt.getSubject()),
@@ -56,6 +57,8 @@ public class JwtTokenProvider {
                 jwt.getClaimAsStringList("roles"),
                 jwt.getExpiresAt()
             );
-        });
+        } catch (JwtException e) {
+            throw new UnauthorizedException("Invalid or expired token");
+        }
     }
 }

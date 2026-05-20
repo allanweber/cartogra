@@ -7,7 +7,7 @@ spring:
   cloud:
     gateway:
       server:
-        webflux:
+        webmvc:
           routes: []
 
 app:
@@ -33,8 +33,8 @@ app:
       token-uri: https://github.com/login/oauth/access_token
       userinfo-uri: https://api.github.com/user
   rate-limit:
-    enabled: false
-    default-replenish-rate: 100
-    default-burst-capacity: 200
-    auth-replenish-rate: 3
+    enabled: true
+    default-replenish-rate: 1000
+    default-burst-capacity: 5000
+    auth-replenish-rate: 1
     auth-burst-capacity: 5

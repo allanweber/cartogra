@@ -2,28 +2,39 @@ package io.cartogra.gateway;
 
 import com.redis.testcontainers.RedisContainer;
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.WebApplicationContext;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest
 @ActiveProfiles("integration-test")
 public abstract class AbstractGatewayIT {
 
-    @LocalServerPort
-    protected int port;
+    @Autowired
+    private WebApplicationContext context;
 
-    protected WebTestClient webTestClient;
+    @Autowired
+    private StringRedisTemplate redis;
+
+    protected MockMvc mockMvc;
 
     @BeforeEach
-    void initWebTestClient() {
-        webTestClient = WebTestClient.bindToServer()
-            .baseUrl("http://localhost:" + port)
+    void setUpMockMvc() {
+        mockMvc = MockMvcBuilders.webAppContextSetup(context)
+            .apply(SecurityMockMvcConfigurers.springSecurity())
             .build();
+        var keys = redis.keys("rate_limit:*");
+        if (keys != null && !keys.isEmpty()) {
+            redis.delete(keys);
+        }
     }
 
     // Containers started once for the whole JVM — prevents stale Spring context cache issues

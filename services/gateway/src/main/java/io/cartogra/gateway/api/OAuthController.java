@@ -5,14 +5,12 @@ import io.cartogra.gateway.api.dto.TokenResponse;
 import io.cartogra.gateway.application.OAuthCallbackUseCase;
 import io.cartogra.gateway.application.OAuthStartUseCase;
 import io.cartogra.gateway.infrastructure.tracing.TraceContext;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.web.bind.annotation.*;
-import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
 import java.util.UUID;
 
@@ -34,42 +32,38 @@ public class OAuthController {
     }
 
     @GetMapping("/{provider}/start")
-    public Mono<ResponseEntity<Void>> start(
+    public ResponseEntity<Void> start(
             @PathVariable String provider,
             @RequestParam(required = false) UUID tenantId) {
         String state = UUID.randomUUID().toString().replace("-", "");
-        return Mono.fromCallable(() -> oauthStart.buildAuthorizationUri(provider, tenantId, state))
-            .subscribeOn(Schedulers.boundedElastic())
-            .map(redirectUri -> ResponseEntity.status(HttpStatus.FOUND)
-                .header(HttpHeaders.LOCATION, redirectUri)
-                .<Void>build());
+        String redirectUri = oauthStart.buildAuthorizationUri(provider, tenantId, state);
+        return ResponseEntity.status(HttpStatus.FOUND)
+            .header(HttpHeaders.LOCATION, redirectUri)
+            .build();
     }
 
     @GetMapping("/{provider}/callback")
-    public Mono<ResponseEntity<ApiResponse<TokenResponse>>> callback(
+    public ResponseEntity<ApiResponse<TokenResponse>> callback(
             @PathVariable String provider,
             @RequestParam String code,
             @RequestParam String state,
-            ServerHttpResponse response) {
-        return Mono.deferContextual(ctx -> {
-            String traceId = traceContext.currentTraceId(ctx);
-            return Mono.fromCallable(() -> oauthCallback.execute(provider, code, state))
-                .subscribeOn(Schedulers.boundedElastic())
-                .map(result -> {
-                    if (result.accessToken() != null) {
-                        response.addCookie(ResponseCookie.from(COOKIE_JWT, result.accessToken())
-                            .httpOnly(true).secure(true).sameSite("Lax").path("/")
-                            .maxAge(result.expiresIn()).build());
-                    }
-                    if (result.refreshToken() != null) {
-                        response.addCookie(ResponseCookie.from(COOKIE_REFRESH, result.refreshToken())
-                            .httpOnly(true).secure(true).sameSite("Lax").path("/v1/auth/refresh")
-                            .maxAge(30L * 24 * 3600).build());
-                    }
-                    return ResponseEntity.ok()
-                        .header("X-Trace-Id", traceId)
-                        .<ApiResponse<TokenResponse>>body(new ApiResponse<>(result, traceId));
-                });
-        });
+            HttpServletResponse response) {
+        String traceId = traceContext.currentTraceId();
+        TokenResponse result = oauthCallback.execute(provider, code, state);
+        if (result.accessToken() != null) {
+            response.addHeader(HttpHeaders.SET_COOKIE,
+                ResponseCookie.from(COOKIE_JWT, result.accessToken())
+                    .httpOnly(true).secure(true).sameSite("Lax").path("/")
+                    .maxAge(result.expiresIn()).build().toString());
+        }
+        if (result.refreshToken() != null) {
+            response.addHeader(HttpHeaders.SET_COOKIE,
+                ResponseCookie.from(COOKIE_REFRESH, result.refreshToken())
+                    .httpOnly(true).secure(true).sameSite("Lax").path("/v1/auth/refresh")
+                    .maxAge(30L * 24 * 3600).build().toString());
+        }
+        return ResponseEntity.ok()
+            .header("X-Trace-Id", traceId)
+            .body(new ApiResponse<>(result, traceId));
     }
 }

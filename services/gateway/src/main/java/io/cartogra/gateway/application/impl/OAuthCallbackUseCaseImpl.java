@@ -16,7 +16,7 @@ import io.cartogra.gateway.infrastructure.jwt.JwtClaims;
 import io.cartogra.gateway.infrastructure.jwt.JwtTokenProvider;
 import io.cartogra.gateway.infrastructure.oauth.OAuthProfile;
 import io.cartogra.gateway.infrastructure.oauth.OAuthProvider;
-import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -40,7 +40,7 @@ public class OAuthCallbackUseCaseImpl implements OAuthCallbackUseCase {
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final JwtConfig jwtConfig;
-    private final ReactiveStringRedisTemplate redis;
+    private final StringRedisTemplate redis;
 
     public OAuthCallbackUseCaseImpl(List<OAuthProvider> providers,
                                     OAuthConfig oauthConfig,
@@ -49,7 +49,7 @@ public class OAuthCallbackUseCaseImpl implements OAuthCallbackUseCase {
                                     RefreshTokenRepository refreshTokenRepository,
                                     JwtTokenProvider jwtTokenProvider,
                                     JwtConfig jwtConfig,
-                                    ReactiveStringRedisTemplate redis) {
+                                    StringRedisTemplate redis) {
         this.providers = providers.stream()
             .collect(Collectors.toMap(OAuthProvider::providerName, Function.identity()));
         this.oauthConfig = oauthConfig;
@@ -64,7 +64,7 @@ public class OAuthCallbackUseCaseImpl implements OAuthCallbackUseCase {
     @Override
     public TokenResponse execute(String provider, String code, String state) {
         String stateKey = "oauth:state:" + state;
-        String stateValue = redis.opsForValue().getAndDelete(stateKey).block();
+        String stateValue = redis.opsForValue().getAndDelete(stateKey);
         if (stateValue == null) {
             throw new InvalidOAuthStateException("Invalid or expired OAuth state");
         }

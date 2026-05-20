@@ -5,59 +5,47 @@ import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
 class TenantIsolationIT extends AbstractGatewayIT {
 
     @Test
-    void forgedXTenantIdHeaderIsStrippedOnUnauthenticatedRequest() {
-        // Even without a JWT, a forged X-Tenant-Id should not reach downstream services.
-        // The protected route returns 401 — meaning the gateway processed the request
-        // with the forged header stripped (not passing it through unmodified).
-        webTestClient.get()
-            .uri("/api/v1/services")
-            .header("X-Tenant-Id", UUID.randomUUID().toString())
-            .exchange()
-            .expectStatus().isUnauthorized()
-            .expectBody()
-            .jsonPath("$.error.code").isEqualTo("UNAUTHORIZED");
+    void forgedXTenantIdHeaderIsStrippedOnUnauthenticatedRequest() throws Exception {
+        mockMvc.perform(get("/api/v1/services")
+                .header("X-Tenant-Id", UUID.randomUUID().toString()))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
     }
 
     @Test
-    void forgedXUserIdHeaderIsStrippedOnUnauthenticatedRequest() {
-        webTestClient.get()
-            .uri("/api/v1/services")
-            .header("X-User-Id", UUID.randomUUID().toString())
-            .exchange()
-            .expectStatus().isUnauthorized();
+    void forgedXUserIdHeaderIsStrippedOnUnauthenticatedRequest() throws Exception {
+        mockMvc.perform(get("/api/v1/services")
+                .header("X-User-Id", UUID.randomUUID().toString()))
+            .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void requestWithExpiredJwtIsRejected() {
-        // A well-formed but expired JWT should not authenticate the request
+    void requestWithExpiredJwtIsRejected() throws Exception {
         String expiredJwt = "eyJhbGciOiJIUzI1NiJ9." +
             "eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJ0aWQiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDIiLCJlbWFpbCI6InVzZXJAdGVzdC5jb20iLCJyb2xlcyI6WyJWSUVXRVIiXSwiaWF0IjoxNjAwMDAwMDAwLCJleHAiOjE2MDAwMDAwMDF9." +
             "invalid-signature";
 
-        webTestClient.get()
-            .uri("/api/v1/services")
-            .header("Authorization", "Bearer " + expiredJwt)
-            .exchange()
-            .expectStatus().isUnauthorized();
+        mockMvc.perform(get("/api/v1/services")
+                .header("Authorization", "Bearer " + expiredJwt))
+            .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void malformedJwtIsRejected() {
-        webTestClient.get()
-            .uri("/api/v1/services")
-            .header("Authorization", "Bearer not.a.valid.jwt.at.all")
-            .exchange()
-            .expectStatus().isUnauthorized();
+    void malformedJwtIsRejected() throws Exception {
+        mockMvc.perform(get("/api/v1/services")
+                .header("Authorization", "Bearer not.a.valid.jwt.at.all"))
+            .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void unauthenticatedRequestToPublicEndpointSucceeds() {
-        webTestClient.get()
-            .uri("/actuator/health/liveness")
-            .exchange()
-            .expectStatus().isOk();
+    void unauthenticatedRequestToPublicEndpointSucceeds() throws Exception {
+        mockMvc.perform(get("/actuator/health/liveness"))
+            .andExpect(status().isOk());
     }
 }

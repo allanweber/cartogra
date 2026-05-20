@@ -5,142 +5,115 @@ import io.cartogra.gateway.AbstractGatewayIT;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 
-import java.util.Map;
 import java.util.UUID;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 class AuthControllerIT extends AbstractGatewayIT {
 
     @Test
-    void registerNewUserReturns201() {
-        webTestClient.post().uri("/v1/auth/register")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "email", "newuser@test.com",
-                "password", "password123",
-                "orgName", "Test Org"
-            ))
-            .exchange()
-            .expectStatus().isCreated()
-            .expectBody()
-            .jsonPath("$.traceId").isNotEmpty()
-            .jsonPath("$.data.tenantId").isNotEmpty();
+    void registerNewUserReturns201() throws Exception {
+        mockMvc.perform(post("/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"newuser@test.com","password":"password123","orgName":"Test Org"}
+                    """))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.traceId").isNotEmpty())
+            .andExpect(jsonPath("$.data.tenantId").isNotEmpty());
     }
 
     @Test
-    void registerWithoutOrgNameUsesEmailAsTenantName() {
-        webTestClient.post().uri("/v1/auth/register")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "email", "noorg-" + UUID.randomUUID() + "@test.com",
-                "password", "password123"
-            ))
-            .exchange()
-            .expectStatus().isCreated()
-            .expectBody()
-            .jsonPath("$.data.tenantId").isNotEmpty();
+    void registerWithoutOrgNameUsesEmailAsTenantName() throws Exception {
+        mockMvc.perform(post("/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"noorg-%s@test.com","password":"password123"}
+                    """.formatted(UUID.randomUUID())))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.data.tenantId").isNotEmpty());
     }
 
     @Test
-    void loginWithUnverifiedUserReturns401() {
+    void loginWithUnverifiedUserReturns401() throws Exception {
         String email = "unverified-" + UUID.randomUUID() + "@test.com";
-
         UUID tenantId = registerAndExtractTenantId(email, "password123");
 
-        webTestClient.post().uri("/v1/auth/login")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "email", email,
-                "password", "password123",
-                "tenantId", tenantId.toString()
-            ))
-            .exchange()
-            .expectStatus().isUnauthorized()
-            .expectBody()
-            .jsonPath("$.error.code").isNotEmpty()
-            .jsonPath("$.traceId").isNotEmpty();
+        mockMvc.perform(post("/v1/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"%s","password":"password123","tenantId":"%s"}
+                    """.formatted(email, tenantId)))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.error.code").isNotEmpty())
+            .andExpect(jsonPath("$.traceId").isNotEmpty());
     }
 
     @Test
-    void loginWithWrongPasswordReturns401() {
-        webTestClient.post().uri("/v1/auth/login")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "email", "nonexistent@test.com",
-                "password", "wrong",
-                "tenantId", UUID.randomUUID().toString()
-            ))
-            .exchange()
-            .expectStatus().isUnauthorized()
-            .expectBody()
-            .jsonPath("$.error.code").isEqualTo("UNAUTHORIZED")
-            .jsonPath("$.traceId").isNotEmpty();
+    void loginWithWrongPasswordReturns401() throws Exception {
+        mockMvc.perform(post("/v1/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"nonexistent@test.com","password":"wrong","tenantId":"%s"}
+                    """.formatted(UUID.randomUUID())))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"))
+            .andExpect(jsonPath("$.traceId").isNotEmpty());
     }
 
     @Test
-    void fullRegisterVerifyLoginFlow() throws InterruptedException {
+    void fullRegisterVerifyLoginFlow() throws Exception {
         String email = "full-flow-" + UUID.randomUUID() + "@test.com";
+        registerAndExtractTenantId(email, "password123");
 
-        UUID tenantId = registerAndExtractTenantId(email, "password123");
-
-        // Give async email sender time to log the OTP
         Thread.sleep(100);
 
-        // Verify with a known OTP by going directly to the DB is not feasible in IT —
-        // test just confirms the endpoint accepts the request shape
-        webTestClient.post().uri("/v1/auth/verify")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "email", email,
-                "token", "000000"
-            ))
-            .exchange()
-            .expectStatus().isEqualTo(400); // wrong OTP but correct request structure
+        mockMvc.perform(post("/v1/auth/verify")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"%s","token":"000000"}
+                    """.formatted(email)))
+            .andExpect(status().isBadRequest());
     }
 
     @Test
-    void invalidEmailReturns400() {
-        webTestClient.post().uri("/v1/auth/register")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "email", "not-an-email",
-                "password", "password123"
-            ))
-            .exchange()
-            .expectStatus().isBadRequest();
+    void invalidEmailReturns400() throws Exception {
+        mockMvc.perform(post("/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"not-an-email","password":"password123"}
+                    """))
+            .andExpect(status().isBadRequest());
     }
 
     @Test
-    void shortPasswordReturns400() {
-        webTestClient.post().uri("/v1/auth/register")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of(
-                "email", "user@test.com",
-                "password", "short"
-            ))
-            .exchange()
-            .expectStatus().isBadRequest();
+    void shortPasswordReturns400() throws Exception {
+        mockMvc.perform(post("/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"user@test.com","password":"short"}
+                    """))
+            .andExpect(status().isBadRequest());
     }
 
     @Test
-    void accessProtectedRouteWithoutTokenReturns401() {
-        webTestClient.get().uri("/api/v1/services")
-            .exchange()
-            .expectStatus().isUnauthorized()
-            .expectBody()
-            .jsonPath("$.error.code").isEqualTo("UNAUTHORIZED")
-            .jsonPath("$.traceId").isNotEmpty();
+    void accessProtectedRouteWithoutTokenReturns401() throws Exception {
+        mockMvc.perform(get("/api/v1/services"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"))
+            .andExpect(jsonPath("$.traceId").isNotEmpty());
     }
 
-    private UUID registerAndExtractTenantId(String email, String password) {
-        String body = webTestClient.post().uri("/v1/auth/register")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(Map.of("email", email, "password", password))
-            .exchange()
-            .expectStatus().isCreated()
-            .expectBody(String.class)
-            .returnResult()
-            .getResponseBody();
+    private UUID registerAndExtractTenantId(String email, String password) throws Exception {
+        String body = mockMvc.perform(post("/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"%s","password":"%s"}
+                    """.formatted(email, password)))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString();
 
         return UUID.fromString(JsonPath.read(body, "$.data.tenantId"));
     }

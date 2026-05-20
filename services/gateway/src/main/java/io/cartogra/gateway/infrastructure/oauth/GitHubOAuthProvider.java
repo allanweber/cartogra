@@ -2,7 +2,7 @@ package io.cartogra.gateway.infrastructure.oauth;
 
 import io.cartogra.gateway.config.OAuthConfig;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.Map;
@@ -13,11 +13,11 @@ public class GitHubOAuthProvider implements OAuthProvider {
     private static final String AUTH_URI = "https://github.com/login/oauth/authorize";
 
     private final OAuthConfig.ProviderConfig config;
-    private final WebClient webClient;
+    private final RestClient restClient;
 
-    public GitHubOAuthProvider(OAuthConfig oauthConfig, WebClient.Builder builder) {
+    public GitHubOAuthProvider(OAuthConfig oauthConfig, RestClient.Builder builder) {
         this.config = oauthConfig.github();
-        this.webClient = builder.build();
+        this.restClient = builder.build();
     }
 
     @Override
@@ -37,18 +37,17 @@ public class GitHubOAuthProvider implements OAuthProvider {
 
     @Override
     public String exchangeCodeForAccessToken(String code, String redirectUri) {
-        Map<?, ?> response = webClient.post()
+        Map<?, ?> response = restClient.post()
             .uri(config.tokenUri())
             .header("Accept", "application/json")
-            .bodyValue(Map.of(
+            .body(Map.of(
                 "code", code,
                 "client_id", config.clientId(),
                 "client_secret", config.clientSecret(),
                 "redirect_uri", redirectUri
             ))
             .retrieve()
-            .bodyToMono(Map.class)
-            .block();
+            .body(Map.class);
         if (response == null || !response.containsKey("access_token")) {
             throw new IllegalStateException("Failed to exchange GitHub auth code");
         }
@@ -57,13 +56,12 @@ public class GitHubOAuthProvider implements OAuthProvider {
 
     @Override
     public OAuthProfile fetchProfile(String accessToken) {
-        Map<?, ?> user = webClient.get()
+        Map<?, ?> user = restClient.get()
             .uri(config.userinfoUri())
             .header("Authorization", "Bearer " + accessToken)
             .header("Accept", "application/vnd.github+json")
             .retrieve()
-            .bodyToMono(Map.class)
-            .block();
+            .body(Map.class);
         if (user == null) {
             throw new IllegalStateException("Failed to fetch GitHub user profile");
         }

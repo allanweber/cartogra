@@ -1,17 +1,17 @@
 package io.cartogra.gateway.infrastructure.security;
 
 import io.cartogra.gateway.infrastructure.tracing.TraceContext;
-import org.springframework.core.io.buffer.DataBuffer;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.web.server.ServerAuthenticationEntryPoint;
-import org.springframework.web.server.ServerWebExchange;
-import reactor.core.publisher.Mono;
+import org.springframework.security.web.AuthenticationEntryPoint;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
-public class JsonAuthenticationEntryPoint implements ServerAuthenticationEntryPoint {
+public class JsonAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
     private final TraceContext traceContext;
 
@@ -20,18 +20,16 @@ public class JsonAuthenticationEntryPoint implements ServerAuthenticationEntryPo
     }
 
     @Override
-    public Mono<Void> commence(ServerWebExchange exchange, AuthenticationException ex) {
-        return Mono.deferContextual(ctx -> {
-            String traceId = traceContext.currentTraceId(ctx);
-            String body = """
-                {"error":{"code":"UNAUTHORIZED","message":"Authentication required"},"traceId":"%s"}
-                """.formatted(traceId).strip();
-            exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-            exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
-            exchange.getResponse().getHeaders().set("X-Trace-Id", traceId);
-            DataBuffer buffer = exchange.getResponse().bufferFactory()
-                .wrap(body.getBytes(StandardCharsets.UTF_8));
-            return exchange.getResponse().writeWith(Mono.just(buffer));
-        });
+    public void commence(HttpServletRequest request, HttpServletResponse response,
+            AuthenticationException ex) throws IOException {
+        String traceId = traceContext.currentTraceId();
+        String body = """
+            {"error":{"code":"UNAUTHORIZED","message":"Authentication required"},"traceId":"%s"}
+            """.formatted(traceId).strip();
+        response.setStatus(HttpStatus.UNAUTHORIZED.value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setHeader("X-Trace-Id", traceId);
+        response.getWriter().write(body);
     }
 }

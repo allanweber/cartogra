@@ -2,7 +2,7 @@ package io.cartogra.gateway.infrastructure.oauth;
 
 import io.cartogra.gateway.config.OAuthConfig;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.Map;
@@ -13,11 +13,11 @@ public class GoogleOAuthProvider implements OAuthProvider {
     private static final String AUTH_URI = "https://accounts.google.com/o/oauth2/v2/auth";
 
     private final OAuthConfig.ProviderConfig config;
-    private final WebClient webClient;
+    private final RestClient restClient;
 
-    public GoogleOAuthProvider(OAuthConfig oauthConfig, WebClient.Builder builder) {
+    public GoogleOAuthProvider(OAuthConfig oauthConfig, RestClient.Builder builder) {
         this.config = oauthConfig.google();
-        this.webClient = builder.build();
+        this.restClient = builder.build();
     }
 
     @Override
@@ -38,9 +38,9 @@ public class GoogleOAuthProvider implements OAuthProvider {
 
     @Override
     public String exchangeCodeForAccessToken(String code, String redirectUri) {
-        Map<?, ?> response = webClient.post()
+        Map<?, ?> response = restClient.post()
             .uri(config.tokenUri())
-            .bodyValue(Map.of(
+            .body(Map.of(
                 "code", code,
                 "client_id", config.clientId(),
                 "client_secret", config.clientSecret(),
@@ -48,8 +48,7 @@ public class GoogleOAuthProvider implements OAuthProvider {
                 "grant_type", "authorization_code"
             ))
             .retrieve()
-            .bodyToMono(Map.class)
-            .block();
+            .body(Map.class);
         if (response == null || !response.containsKey("access_token")) {
             throw new IllegalStateException("Failed to exchange Google auth code");
         }
@@ -58,12 +57,11 @@ public class GoogleOAuthProvider implements OAuthProvider {
 
     @Override
     public OAuthProfile fetchProfile(String accessToken) {
-        Map<?, ?> userinfo = webClient.get()
+        Map<?, ?> userinfo = restClient.get()
             .uri(config.userinfoUri())
             .header("Authorization", "Bearer " + accessToken)
             .retrieve()
-            .bodyToMono(Map.class)
-            .block();
+            .body(Map.class);
         if (userinfo == null) {
             throw new IllegalStateException("Failed to fetch Google user profile");
         }
