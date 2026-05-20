@@ -1,40 +1,38 @@
 package io.cartogra.gateway.config;
 
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.cloud.gateway.filter.GatewayFilterChain;
-import org.springframework.cloud.gateway.filter.GlobalFilter;
-import org.springframework.core.Ordered;
-import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ServerWebExchange;
-import reactor.core.publisher.Mono;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+import java.util.Collections;
+import java.util.stream.Collectors;
 
 @Component
-public class ProxyRequestLoggingFilter implements GlobalFilter, Ordered {
+public class ProxyRequestLoggingFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(ProxyRequestLoggingFilter.class);
 
     @Override
-    public int getOrder() {
-        return -99;
-    }
-
-    @Override
-    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-        ServerHttpRequest req = exchange.getRequest();
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
+            FilterChain filterChain) throws ServletException, IOException {
         if (log.isDebugEnabled()) {
-            log.debug("Proxying {} {} | headers={}",
-                req.getMethod(),
-                req.getURI(),
-                req.getHeaders().toSingleValueMap());
+            String headers = Collections.list(request.getHeaderNames()).stream()
+                    .collect(Collectors.toMap(h -> h, request::getHeader))
+                    .toString();
+            log.debug("Proxying {} {} | headers={}", request.getMethod(), request.getRequestURI(), headers);
         } else {
             log.info("Proxying {} {} | X-Tenant-Id={} X-User-Id={}",
-                req.getMethod(),
-                req.getURI(),
-                req.getHeaders().getFirst("X-Tenant-Id"),
-                req.getHeaders().getFirst("X-User-Id"));
+                    request.getMethod(),
+                    request.getRequestURI(),
+                    request.getHeader("X-Tenant-Id"),
+                    request.getHeader("X-User-Id"));
         }
-        return chain.filter(exchange);
+        filterChain.doFilter(request, response);
     }
 }

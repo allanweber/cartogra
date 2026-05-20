@@ -1,124 +1,123 @@
 package io.cartogra.gateway.infrastructure.security;
 
+import io.cartogra.gateway.config.TenantInjectionFilter;
 import io.cartogra.gateway.infrastructure.jwt.JwtClaims;
+import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpHeaders;
-import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
-import org.springframework.mock.web.server.MockServerWebExchange;
-import org.springframework.security.core.context.ReactiveSecurityContextHolder;
-import org.springframework.web.server.ServerWebExchange;
-import reactor.core.publisher.Mono;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 
+@ExtendWith(MockitoExtension.class)
 class TenantInjectionFilterTest {
 
-    private TenantInjectionGlobalFilter filter;
+    @Mock
+    private FilterChain filterChain;
+
+    private TenantInjectionFilter filter;
 
     private final UUID userId = UUID.randomUUID();
     private final UUID tenantId = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
-        filter = new TenantInjectionGlobalFilter();
+        filter = new TenantInjectionFilter();
+        SecurityContextHolder.clearContext();
     }
 
     @Test
-    void authenticatedRequestInjectsHeadersFromJwt() {
+    void authenticatedRequestInjectsHeadersFromJwt() throws Exception {
         JwtClaims claims = new JwtClaims(userId, tenantId, "user@test.com", List.of("VIEWER"), null);
         JwtAuthentication auth = new JwtAuthentication(claims);
+        var context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(auth);
+        SecurityContextHolder.setContext(context);
 
-        MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/services").build();
-        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/services");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicReference<jakarta.servlet.ServletRequest> capturedRequest = new AtomicReference<>();
 
-        AtomicReference<ServerWebExchange> captured = new AtomicReference<>();
-        var chain = (org.springframework.cloud.gateway.filter.GatewayFilterChain) ex -> {
-            captured.set(ex);
-            return Mono.empty();
-        };
+        doAnswer(inv -> { capturedRequest.set(inv.getArgument(0)); return null; })
+            .when(filterChain).doFilter(any(), any());
 
-        filter.filter(exchange, chain)
-            .contextWrite(ReactiveSecurityContextHolder.withAuthentication(auth))
-            .block();
+        filter.doFilter(request, response, filterChain);
 
-        assertThat(captured.get()).isNotNull();
-        HttpHeaders headers = captured.get().getRequest().getHeaders();
-        assertThat(headers.getFirst("X-Tenant-Id")).isEqualTo(tenantId.toString());
-        assertThat(headers.getFirst("X-User-Id")).isEqualTo(userId.toString());
+        var captured = (jakarta.servlet.http.HttpServletRequest) capturedRequest.get();
+        assertThat(captured.getHeader("X-Tenant-Id")).isEqualTo(tenantId.toString());
+        assertThat(captured.getHeader("X-User-Id")).isEqualTo(userId.toString());
     }
 
     @Test
-    void unauthenticatedRequestHasNoInjectedHeaders() {
-        MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/services").build();
-        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+    void unauthenticatedRequestHasNoInjectedHeaders() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/services");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicReference<jakarta.servlet.ServletRequest> capturedRequest = new AtomicReference<>();
 
-        AtomicReference<ServerWebExchange> captured = new AtomicReference<>();
-        var chain = (org.springframework.cloud.gateway.filter.GatewayFilterChain) ex -> {
-            captured.set(ex);
-            return Mono.empty();
-        };
+        doAnswer(inv -> { capturedRequest.set(inv.getArgument(0)); return null; })
+            .when(filterChain).doFilter(any(), any());
 
-        filter.filter(exchange, chain).block();
+        filter.doFilter(request, response, filterChain);
 
-        assertThat(captured.get()).isNotNull();
-        HttpHeaders headers = captured.get().getRequest().getHeaders();
-        assertThat(headers.getFirst("X-Tenant-Id")).isNull();
-        assertThat(headers.getFirst("X-User-Id")).isNull();
+        var captured = (jakarta.servlet.http.HttpServletRequest) capturedRequest.get();
+        assertThat(captured.getHeader("X-Tenant-Id")).isNull();
+        assertThat(captured.getHeader("X-User-Id")).isNull();
     }
 
     @Test
-    void inboundForgedHeadersAreStripped() {
+    void inboundForgedHeadersAreStripped() throws Exception {
         UUID attackerTenantId = UUID.randomUUID();
 
-        MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/services")
-            .header("X-Tenant-Id", attackerTenantId.toString())
-            .header("X-User-Id", UUID.randomUUID().toString())
-            .build();
-        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/services");
+        request.addHeader("X-Tenant-Id", attackerTenantId.toString());
+        request.addHeader("X-User-Id", UUID.randomUUID().toString());
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicReference<jakarta.servlet.ServletRequest> capturedRequest = new AtomicReference<>();
 
-        AtomicReference<ServerWebExchange> captured = new AtomicReference<>();
-        var chain = (org.springframework.cloud.gateway.filter.GatewayFilterChain) ex -> {
-            captured.set(ex);
-            return Mono.empty();
-        };
+        doAnswer(inv -> { capturedRequest.set(inv.getArgument(0)); return null; })
+            .when(filterChain).doFilter(any(), any());
 
-        filter.filter(exchange, chain).block();
+        filter.doFilter(request, response, filterChain);
 
-        HttpHeaders headers = captured.get().getRequest().getHeaders();
-        assertThat(headers.getFirst("X-Tenant-Id")).isNull();
-        assertThat(headers.getFirst("X-User-Id")).isNull();
+        var captured = (jakarta.servlet.http.HttpServletRequest) capturedRequest.get();
+        assertThat(captured.getHeader("X-Tenant-Id")).isNull();
+        assertThat(captured.getHeader("X-User-Id")).isNull();
     }
 
     @Test
-    void authenticatedRequestStripsForgedHeadersAndInjectsJwtValues() {
+    void authenticatedRequestStripsForgedHeadersAndInjectsJwtValues() throws Exception {
         UUID attackerTenantId = UUID.randomUUID();
         JwtClaims claims = new JwtClaims(userId, tenantId, "user@test.com", List.of("VIEWER"), null);
         JwtAuthentication auth = new JwtAuthentication(claims);
+        var context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(auth);
+        SecurityContextHolder.setContext(context);
 
-        MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/services")
-            .header("X-Tenant-Id", attackerTenantId.toString())
-            .header("X-User-Id", UUID.randomUUID().toString())
-            .build();
-        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/services");
+        request.addHeader("X-Tenant-Id", attackerTenantId.toString());
+        request.addHeader("X-User-Id", UUID.randomUUID().toString());
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicReference<jakarta.servlet.ServletRequest> capturedRequest = new AtomicReference<>();
 
-        AtomicReference<ServerWebExchange> captured = new AtomicReference<>();
-        var chain = (org.springframework.cloud.gateway.filter.GatewayFilterChain) ex -> {
-            captured.set(ex);
-            return Mono.empty();
-        };
+        doAnswer(inv -> { capturedRequest.set(inv.getArgument(0)); return null; })
+            .when(filterChain).doFilter(any(), any());
 
-        filter.filter(exchange, chain)
-            .contextWrite(ReactiveSecurityContextHolder.withAuthentication(auth))
-            .block();
+        filter.doFilter(request, response, filterChain);
 
-        HttpHeaders headers = captured.get().getRequest().getHeaders();
-        assertThat(headers.getFirst("X-Tenant-Id")).isEqualTo(tenantId.toString());
-        assertThat(headers.getFirst("X-Tenant-Id")).isNotEqualTo(attackerTenantId.toString());
-        assertThat(headers.getFirst("X-User-Id")).isEqualTo(userId.toString());
+        var captured = (jakarta.servlet.http.HttpServletRequest) capturedRequest.get();
+        assertThat(captured.getHeader("X-Tenant-Id")).isEqualTo(tenantId.toString());
+        assertThat(captured.getHeader("X-Tenant-Id")).isNotEqualTo(attackerTenantId.toString());
+        assertThat(captured.getHeader("X-User-Id")).isEqualTo(userId.toString());
     }
 }

@@ -1,0 +1,53 @@
+@startuml
+title Gateway MVC — Authenticated Proxy Request Flow
+
+actor Client
+
+box "Gateway (Servlet Stack)" #LightBlue
+  participant "GlobalTracingFilter" as TF
+  participant "JwtAuthentication\nFilter" as JA
+  participant "RateLimitFilter" as RL
+  participant "TenantInjection\nFilter" as TI
+  participant "Spring Cloud\nGateway MVC" as GW
+end box
+
+participant "Registry\nService" as RS
+
+Client -> TF: HTTP request\n(cookie or Bearer)
+TF -> TF: start filter chain
+
+TF -> JA: chain.doFilter()
+JA -> JA: extract JWT from cookie\nor Authorization header
+JA -> JA: jwtTokenProvider.decode(token)
+
+alt invalid or missing token
+  JA -> Client: 401 Unauthorized\n{error:{code:UNAUTHORIZED}, traceId}
+else valid token
+  JA -> JA: SecurityContextHolder\n.setAuthentication(JwtAuthentication)
+end
+
+JA -> RL: chain.doFilter()
+RL -> RL: Redis EVAL token-bucket\nLua script
+
+alt rate limit exceeded
+  RL -> Client: 429 Too Many Requests\n{error:{code:RATE_LIMITED}, traceId}
+else request allowed
+  RL -> TI: chain.doFilter()
+  TI -> TI: strip client X-Tenant-Id header\n(TenantStrippingRequestWrapper)
+  TI -> TI: read tenantId/userId from\nSecurityContextHolder
+  TI -> TI: inject X-Tenant-Id, X-User-Id\n(TenantInjectingRequestWrapper)
+
+  TI -> GW: chain.doFilter() with\nwrapped request
+  GW -> RS: proxy /api/v1/**\n+ traceparent header\n+ X-Tenant-Id header
+
+  RS -> GW: 200 response
+  GW -> TI: response passes back
+  TI -> RL: response
+  RL -> JA: response
+  JA -> JA: SecurityContextHolder.clearContext()
+  JA -> TF: response
+  TF -> TF: response.setHeader(\n"X-Trace-Id", traceContext.currentTraceId())
+  TF -> Client: 200 + X-Trace-Id header
+end
+
+@enduml

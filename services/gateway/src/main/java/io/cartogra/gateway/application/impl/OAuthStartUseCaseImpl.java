@@ -4,7 +4,7 @@ import io.cartogra.gateway.application.OAuthStartUseCase;
 import io.cartogra.gateway.config.OAuthConfig;
 import io.cartogra.gateway.infrastructure.oauth.OAuthProvider;
 import org.jspecify.annotations.Nullable;
-import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -19,11 +19,11 @@ public class OAuthStartUseCaseImpl implements OAuthStartUseCase {
 
     private final Map<String, OAuthProvider> providers;
     private final OAuthConfig oauthConfig;
-    private final ReactiveStringRedisTemplate redis;
+    private final StringRedisTemplate redis;
 
     public OAuthStartUseCaseImpl(List<OAuthProvider> providers,
                                  OAuthConfig oauthConfig,
-                                 ReactiveStringRedisTemplate redis) {
+                                 StringRedisTemplate redis) {
         this.providers = providers.stream()
             .collect(Collectors.toMap(OAuthProvider::providerName, Function.identity()));
         this.oauthConfig = oauthConfig;
@@ -38,9 +38,7 @@ public class OAuthStartUseCaseImpl implements OAuthStartUseCase {
         }
         String redirectUri = redirectUriFor(provider);
         String stateValue = tenantId != null ? tenantId.toString() : "new";
-        redis.opsForValue()
-            .set("oauth:state:" + state, stateValue, Duration.ofMinutes(10))
-            .block();
+        redis.opsForValue().set("oauth:state:" + state, stateValue, Duration.ofMinutes(10));
         return oauthProvider.buildAuthorizationUri(state, redirectUri);
     }
 

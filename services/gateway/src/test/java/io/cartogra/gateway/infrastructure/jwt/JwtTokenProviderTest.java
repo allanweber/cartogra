@@ -1,6 +1,7 @@
 package io.cartogra.gateway.infrastructure.jwt;
 
 import io.cartogra.gateway.config.JwtConfig;
+import io.cartogra.gateway.domain.exception.UnauthorizedException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
@@ -42,13 +43,13 @@ class JwtTokenProviderTest {
     }
 
     @Test
-    void issueAndDecodRoundTrip() {
+    void issueAndDecodeRoundTrip() {
         UUID userId = UUID.randomUUID();
         UUID tenantId = UUID.randomUUID();
         JwtClaims claims = new JwtClaims(userId, tenantId, "user@example.com", List.of("VIEWER"), null);
 
         String token = provider.issueAccessToken(claims);
-        JwtClaims decoded = provider.decode(token).block();
+        JwtClaims decoded = provider.decode(token);
 
         assertThat(decoded).isNotNull();
         assertThat(decoded.userId()).isEqualTo(userId);
@@ -69,8 +70,8 @@ class JwtTokenProviderTest {
 
     @Test
     void decodeInvalidTokenThrows() {
-        assertThatThrownBy(() -> provider.decode("not.a.jwt").block())
-            .isNotNull();
+        assertThatThrownBy(() -> provider.decode("not.a.jwt"))
+            .isInstanceOf(UnauthorizedException.class);
     }
 
     @Test
@@ -81,7 +82,7 @@ class JwtTokenProviderTest {
         String token = provider.issueAccessToken(claims);
 
         String tampered = token.substring(0, token.length() - 5) + "XXXXX";
-        assertThatThrownBy(() -> provider.decode(tampered).block())
-            .isNotNull();
+        assertThatThrownBy(() -> provider.decode(tampered))
+            .isInstanceOf(UnauthorizedException.class);
     }
 }

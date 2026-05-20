@@ -1,31 +1,26 @@
 package io.cartogra.gateway.infrastructure.email;
 
 import io.cartogra.gateway.config.ResendConfig;
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-
-import java.io.IOException;
+import org.springframework.web.client.RestClient;
 
 @Component
 @ConditionalOnProperty(name = "app.resend.test-mode", havingValue = "false", matchIfMissing = true)
 public class ResendEmailSender implements EmailSender {
 
     private static final Logger log = LoggerFactory.getLogger(ResendEmailSender.class);
-    private static final MediaType JSON = MediaType.get("application/json");
     private static final String RESEND_URL = "https://api.resend.com/emails";
 
-    private final OkHttpClient client;
+    private final RestClient restClient;
     private final ResendConfig config;
 
-    public ResendEmailSender(OkHttpClient client, ResendConfig config) {
-        this.client = client;
+    public ResendEmailSender(RestClient.Builder builder, ResendConfig config) {
+        this.restClient = builder.build();
         this.config = config;
     }
 
@@ -56,16 +51,17 @@ public class ResendEmailSender implements EmailSender {
     }
 
     private void send(String jsonBody, String toEmail) {
-        Request request = new Request.Builder()
-            .url(RESEND_URL)
-            .addHeader("Authorization", "Bearer " + config.apiKey())
-            .post(RequestBody.create(jsonBody, JSON))
-            .build();
-        try (Response response = client.newCall(request).execute()) {
-            if (!response.isSuccessful()) {
-                log.error("Resend API error for {}: status={}", toEmail, response.code());
-            }
-        } catch (IOException e) {
+        try {
+            restClient.post()
+                .uri(RESEND_URL)
+                .header("Authorization", "Bearer " + config.apiKey())
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(jsonBody)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, (req, res) ->
+                    log.error("Resend API error for {}: status={}", toEmail, res.getStatusCode()))
+                .toBodilessEntity();
+        } catch (Exception e) {
             log.error("Failed to send email to {}", toEmail, e);
         }
     }

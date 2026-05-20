@@ -15,7 +15,7 @@ spring:
   cloud:
     gateway:
       server:
-        webflux:
+        webmvc:
           routes:
             - id: registry
               uri: ${REGISTRY_URI:http://localhost:8081}
