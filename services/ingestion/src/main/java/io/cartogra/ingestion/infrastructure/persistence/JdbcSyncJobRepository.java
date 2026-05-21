@@ -11,6 +11,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -123,6 +124,16 @@ public class JdbcSyncJobRepository implements SyncJobRepository {
                 LIMIT 1
                 """, params, (rs, _) -> mapRow(rs));
         return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
+    }
+
+    @Override
+    public List<SyncJob> findStaleRunning(Instant updatedBefore) {
+        var params = new MapSqlParameterSource()
+                .addValue("threshold", Timestamp.from(updatedBefore));
+        return jdbc.query("""
+                SELECT * FROM sync_jobs
+                WHERE status = 'RUNNING' AND updated_at < :threshold AND deleted_at IS NULL
+                """, params, (rs, _) -> mapRow(rs));
     }
 
     private SyncJob mapRow(ResultSet rs) throws SQLException {

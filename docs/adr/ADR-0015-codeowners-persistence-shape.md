@@ -1,6 +1,6 @@
 # ADR-0015 — CODEOWNERS persistence shape
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2026-05-20
 **Deciders**: Allan Weber
 

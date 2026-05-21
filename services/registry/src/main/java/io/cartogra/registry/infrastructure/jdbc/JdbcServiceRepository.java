@@ -121,6 +121,21 @@ public class JdbcServiceRepository implements ServiceRepository {
     }
 
     @Override
+    public Optional<Service> findByRepositoryPath(UUID tenantId, String repositoryPath) {
+        String sql = """
+                SELECT * FROM services
+                WHERE tenant_id = :tenantId
+                  AND repository_url LIKE '%' || :repositoryPath
+                  AND deleted_at IS NULL
+                LIMIT 1
+                """;
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("repositoryPath", repositoryPath);
+        return jdbc.query(sql, params, SERVICE_MAPPER).stream().findFirst();
+    }
+
+    @Override
     public boolean existsByName(UUID tenantId, String name, UUID excludeId) {
         String sql = """
                 SELECT COUNT(*) FROM services

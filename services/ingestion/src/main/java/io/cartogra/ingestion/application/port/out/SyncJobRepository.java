@@ -2,6 +2,8 @@ package io.cartogra.ingestion.application.port.out;
 
 import io.cartogra.ingestion.domain.SyncJob;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -20,4 +22,6 @@ public interface SyncJobRepository {
     boolean existsRunningForConnection(UUID tenantId, UUID connectionId);
 
     Optional<SyncJob> findRunningForConnection(UUID tenantId, UUID connectionId);
+
+    List<SyncJob> findStaleRunning(Instant updatedBefore);
 }

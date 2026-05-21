@@ -17,6 +17,11 @@ spring:
     table: flyway_schema_history
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: registry-ownership-consumer
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
   mvc:
     throw-exception-if-no-handler-found: true
   web:

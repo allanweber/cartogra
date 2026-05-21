@@ -26,6 +26,11 @@ spring:
     locations: classpath:db/migration
     table: flyway_schema_history
 
+ingestion:
+  sync:
+    stale-timeout: PT30M
+    reaper-interval: PT1M
+
 server:
   port: 8085
 

@@ -1,12 +1,14 @@
 package io.cartogra.ingestion.application.usecase;
 
 import io.cartogra.ingestion.application.port.in.SyncCommandPayload;
+import io.cartogra.ingestion.application.port.out.OwnershipMap;
 import io.cartogra.ingestion.application.port.out.ScmConnectionConfig;
 import io.cartogra.ingestion.application.port.out.ScmProvider;
 import io.cartogra.ingestion.application.port.out.ScmProviderException;
 import io.cartogra.ingestion.application.port.out.ScmRepository;
 import io.cartogra.ingestion.application.port.out.SyncJobRepository;
 import io.cartogra.ingestion.domain.SyncJob;
+import io.cartogra.ingestion.infrastructure.kafka.OwnershipResolvedProducer;
 import io.cartogra.ingestion.infrastructure.kafka.SyncResultProducer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,15 +27,18 @@ public class ExecuteSyncUseCaseImpl implements ExecuteSyncUseCase {
     private final Map<String, ScmProvider> providers;
     private final SyncJobRepository syncJobRepository;
     private final SyncResultProducer resultProducer;
+    private final OwnershipResolvedProducer ownershipProducer;
 
     public ExecuteSyncUseCaseImpl(
             List<ScmProvider> providers,
             SyncJobRepository syncJobRepository,
-            SyncResultProducer resultProducer) {
+            SyncResultProducer resultProducer,
+            OwnershipResolvedProducer ownershipProducer) {
         this.providers = providers.stream()
                 .collect(Collectors.toMap(ScmProvider::providerType, Function.identity()));
         this.syncJobRepository = syncJobRepository;
         this.resultProducer = resultProducer;
+        this.ownershipProducer = ownershipProducer;
     }
 
     @Override
@@ -68,7 +73,8 @@ public class ExecuteSyncUseCaseImpl implements ExecuteSyncUseCase {
             List<ScmRepository> repositories = provider.listRepositories(connectionConfig);
             for (ScmRepository repo : repositories) {
                 if (!repo.archived()) {
-                    provider.resolveOwnership(connectionConfig, repo);
+                    OwnershipMap ownership = provider.resolveOwnership(connectionConfig, repo);
+                    ownershipProducer.publish(command.tenantId(), command.connectionId(), repo, ownership);
                 }
             }
             int count = (int) repositories.stream().filter(r -> !r.archived()).count();
