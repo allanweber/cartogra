@@ -97,7 +97,7 @@ function RootNotFound() {
       eyebrow="Not found"
       actions={
         <Button asChild>
-          <a href="/catalog">Go to Catalog</a>
+          <a href="/dashboard">Go to Catalog</a>
         </Button>
       }
     >
@@ -129,7 +129,7 @@ function RootErrorBoundary({
         <div className="flex flex-wrap items-center gap-3">
           <Button onClick={() => reset()}>Retry</Button>
           <Button asChild variant="outline">
-            <a href="/catalog">Go to Catalog</a>
+            <a href="/dashboard">Go to Catalog</a>
           </Button>
         </div>
       }

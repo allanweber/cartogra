@@ -9,16 +9,48 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TimelineRouteImport } from './routes/timeline'
+import { Route as TeamsRouteImport } from './routes/teams'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as RisksRouteImport } from './routes/risks'
 import { Route as OpsRouteImport } from './routes/ops'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as IntelligenceRouteImport } from './routes/intelligence'
 import { Route as GraphRouteImport } from './routes/graph'
+import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ContractsRouteImport } from './routes/contracts'
 import { Route as CatalogRouteImport } from './routes/catalog'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CatalogServiceIdRouteImport } from './routes/catalog.$serviceId'
 
+const TimelineRoute = TimelineRouteImport.update({
+  id: '/timeline',
+  path: '/timeline',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TeamsRoute = TeamsRouteImport.update({
+  id: '/teams',
+  path: '/teams',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RisksRoute = RisksRouteImport.update({
+  id: '/risks',
+  path: '/risks',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OpsRoute = OpsRouteImport.update({
   id: '/ops',
   path: '/ops',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IntelligenceRoute = IntelligenceRouteImport.update({
@@ -29,6 +61,11 @@ const IntelligenceRoute = IntelligenceRouteImport.update({
 const GraphRoute = GraphRouteImport.update({
   id: '/graph',
   path: '/graph',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContractsRoute = ContractsRouteImport.update({
@@ -46,31 +83,57 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CatalogServiceIdRoute = CatalogServiceIdRouteImport.update({
+  id: '/$serviceId',
+  path: '/$serviceId',
+  getParentRoute: () => CatalogRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/catalog': typeof CatalogRoute
+  '/catalog': typeof CatalogRouteWithChildren
   '/contracts': typeof ContractsRoute
+  '/dashboard': typeof DashboardRoute
   '/graph': typeof GraphRoute
   '/intelligence': typeof IntelligenceRoute
+  '/login': typeof LoginRoute
   '/ops': typeof OpsRoute
+  '/risks': typeof RisksRoute
+  '/settings': typeof SettingsRoute
+  '/teams': typeof TeamsRoute
+  '/timeline': typeof TimelineRoute
+  '/catalog/$serviceId': typeof CatalogServiceIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/catalog': typeof CatalogRoute
+  '/catalog': typeof CatalogRouteWithChildren
   '/contracts': typeof ContractsRoute
+  '/dashboard': typeof DashboardRoute
   '/graph': typeof GraphRoute
   '/intelligence': typeof IntelligenceRoute
+  '/login': typeof LoginRoute
   '/ops': typeof OpsRoute
+  '/risks': typeof RisksRoute
+  '/settings': typeof SettingsRoute
+  '/teams': typeof TeamsRoute
+  '/timeline': typeof TimelineRoute
+  '/catalog/$serviceId': typeof CatalogServiceIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/catalog': typeof CatalogRoute
+  '/catalog': typeof CatalogRouteWithChildren
   '/contracts': typeof ContractsRoute
+  '/dashboard': typeof DashboardRoute
   '/graph': typeof GraphRoute
   '/intelligence': typeof IntelligenceRoute
+  '/login': typeof LoginRoute
   '/ops': typeof OpsRoute
+  '/risks': typeof RisksRoute
+  '/settings': typeof SettingsRoute
+  '/teams': typeof TeamsRoute
+  '/timeline': typeof TimelineRoute
+  '/catalog/$serviceId': typeof CatalogServiceIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -78,37 +141,105 @@ export interface FileRouteTypes {
     | '/'
     | '/catalog'
     | '/contracts'
+    | '/dashboard'
     | '/graph'
     | '/intelligence'
+    | '/login'
     | '/ops'
+    | '/risks'
+    | '/settings'
+    | '/teams'
+    | '/timeline'
+    | '/catalog/$serviceId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/catalog' | '/contracts' | '/graph' | '/intelligence' | '/ops'
+  to:
+    | '/'
+    | '/catalog'
+    | '/contracts'
+    | '/dashboard'
+    | '/graph'
+    | '/intelligence'
+    | '/login'
+    | '/ops'
+    | '/risks'
+    | '/settings'
+    | '/teams'
+    | '/timeline'
+    | '/catalog/$serviceId'
   id:
     | '__root__'
     | '/'
     | '/catalog'
     | '/contracts'
+    | '/dashboard'
     | '/graph'
     | '/intelligence'
+    | '/login'
     | '/ops'
+    | '/risks'
+    | '/settings'
+    | '/teams'
+    | '/timeline'
+    | '/catalog/$serviceId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  CatalogRoute: typeof CatalogRoute
+  CatalogRoute: typeof CatalogRouteWithChildren
   ContractsRoute: typeof ContractsRoute
+  DashboardRoute: typeof DashboardRoute
   GraphRoute: typeof GraphRoute
   IntelligenceRoute: typeof IntelligenceRoute
+  LoginRoute: typeof LoginRoute
   OpsRoute: typeof OpsRoute
+  RisksRoute: typeof RisksRoute
+  SettingsRoute: typeof SettingsRoute
+  TeamsRoute: typeof TeamsRoute
+  TimelineRoute: typeof TimelineRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/timeline': {
+      id: '/timeline'
+      path: '/timeline'
+      fullPath: '/timeline'
+      preLoaderRoute: typeof TimelineRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/teams': {
+      id: '/teams'
+      path: '/teams'
+      fullPath: '/teams'
+      preLoaderRoute: typeof TeamsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/risks': {
+      id: '/risks'
+      path: '/risks'
+      fullPath: '/risks'
+      preLoaderRoute: typeof RisksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/ops': {
       id: '/ops'
       path: '/ops'
       fullPath: '/ops'
       preLoaderRoute: typeof OpsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/intelligence': {
@@ -123,6 +254,13 @@ declare module '@tanstack/react-router' {
       path: '/graph'
       fullPath: '/graph'
       preLoaderRoute: typeof GraphRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/contracts': {
@@ -146,16 +284,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/catalog/$serviceId': {
+      id: '/catalog/$serviceId'
+      path: '/$serviceId'
+      fullPath: '/catalog/$serviceId'
+      preLoaderRoute: typeof CatalogServiceIdRouteImport
+      parentRoute: typeof CatalogRoute
+    }
   }
 }
 
+interface CatalogRouteChildren {
+  CatalogServiceIdRoute: typeof CatalogServiceIdRoute
+}
+
+const CatalogRouteChildren: CatalogRouteChildren = {
+  CatalogServiceIdRoute: CatalogServiceIdRoute,
+}
+
+const CatalogRouteWithChildren =
+  CatalogRoute._addFileChildren(CatalogRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  CatalogRoute: CatalogRoute,
+  CatalogRoute: CatalogRouteWithChildren,
   ContractsRoute: ContractsRoute,
+  DashboardRoute: DashboardRoute,
   GraphRoute: GraphRoute,
   IntelligenceRoute: IntelligenceRoute,
+  LoginRoute: LoginRoute,
   OpsRoute: OpsRoute,
+  RisksRoute: RisksRoute,
+  SettingsRoute: SettingsRoute,
+  TeamsRoute: TeamsRoute,
+  TimelineRoute: TimelineRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

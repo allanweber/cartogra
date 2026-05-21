@@ -1,4 +1,5 @@
 
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -145,6 +146,31 @@ body {
     @apply font-sans;
   }
 }
+
+/* Health status colors */
+.health-healthy { color: oklch(0.55 0.18 145); }
+.health-degraded { color: oklch(0.65 0.18 60); }
+.health-down { color: oklch(0.58 0.23 28); }
+.bg-health-healthy { background-color: oklch(0.96 0.05 145); color: oklch(0.38 0.14 145); }
+.bg-health-degraded { background-color: oklch(0.97 0.06 80); color: oklch(0.50 0.15 60); }
+.bg-health-down { background-color: oklch(0.97 0.05 28); color: oklch(0.50 0.20 28); }
+.dark .bg-health-healthy { background-color: oklch(0.25 0.06 145); color: oklch(0.72 0.16 145); }
+.dark .bg-health-degraded { background-color: oklch(0.27 0.06 80); color: oklch(0.78 0.14 60); }
+.dark .bg-health-down { background-color: oklch(0.27 0.05 28); color: oklch(0.72 0.18 28); }
+
+/* Severity colors */
+.bg-severity-critical { background-color: oklch(0.97 0.05 28); color: oklch(0.50 0.20 28); border-left-color: oklch(0.58 0.23 28); }
+.bg-severity-warning { background-color: oklch(0.97 0.06 80); color: oklch(0.50 0.15 60); border-left-color: oklch(0.65 0.18 60); }
+.bg-severity-info { background-color: oklch(0.96 0.04 240); color: oklch(0.45 0.14 240); border-left-color: oklch(0.60 0.18 240); }
+.dark .bg-severity-critical { background-color: oklch(0.27 0.05 28); color: oklch(0.72 0.18 28); border-left-color: oklch(0.68 0.18 28); }
+.dark .bg-severity-warning { background-color: oklch(0.27 0.06 80); color: oklch(0.78 0.14 60); border-left-color: oklch(0.75 0.16 60); }
+.dark .bg-severity-info { background-color: oklch(0.26 0.04 240); color: oklch(0.72 0.14 240); border-left-color: oklch(0.70 0.16 240); }
+
+/* Contract status */
+.status-breaking { color: oklch(0.58 0.23 28); }
+.status-compatible { color: oklch(0.55 0.18 145); }
+.status-warning { color: oklch(0.65 0.18 60); }
+.status-stale { color: oklch(0.55 0.04 264); }
 
 @layer base {
   body {
