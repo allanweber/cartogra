@@ -7,14 +7,18 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.awaitility.Awaitility;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.kafka.test.context.EmbeddedKafka;
+import org.springframework.kafka.test.utils.ContainerTestUtils;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import tools.jackson.databind.JsonNode;
@@ -54,6 +58,16 @@ class CodeownersFlowIT {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
+
+    @BeforeEach
+    void waitForConsumerAssignment() throws InterruptedException {
+        for (MessageListenerContainer container : kafkaListenerEndpointRegistry.getListenerContainers()) {
+            ContainerTestUtils.waitForAssignment(container, 1);
+        }
+    }
 
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry registry) {
@@ -107,7 +121,7 @@ class CodeownersFlowIT {
 
         // Wait for consumer to process and assert teamId is set
         Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
+                .atMost(Duration.ofSeconds(15))
                 .pollInterval(Duration.ofMillis(300))
                 .untilAsserted(() -> {
                     HttpResponse<String> check = HTTP.send(
