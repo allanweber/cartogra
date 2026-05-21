@@ -19,4 +19,6 @@ public interface TeamRepository {
     void softDelete(UUID tenantId, UUID id);
 
     boolean existsByName(UUID tenantId, String name, UUID excludeId);
+
+    Optional<Team> findByTenantAndName(UUID tenantId, String name);
 }

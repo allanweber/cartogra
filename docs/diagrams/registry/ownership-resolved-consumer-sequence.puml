@@ -1,0 +1,39 @@
+@startuml
+title Registry — Ownership Resolved Consumer Sequence
+
+queue "cartogra.ingestion\n.ownership.resolved" as TOPIC
+participant "OwnershipResolvedConsumer" as CONS
+participant "ServiceRepository" as SREP
+participant "TeamRepository" as TREP
+participant "AssignOwnerUseCase" as UC
+database "PostgreSQL" as DB
+
+TOPIC -> CONS: ConsumerRecord<String, String>
+CONS -> CONS: extract W3C traceparent, makeCurrent()
+CONS -> CONS: deserialize EventEnvelope<OwnershipResolvedPayload>
+CONS -> SREP: findByRepositoryPath(tenantId, repositoryFullName)
+SREP -> DB: SELECT * FROM services\nWHERE repository_url LIKE '%' || :repositoryPath\nAND tenant_id = :tenantId
+DB --> SREP: Optional<Service>
+SREP --> CONS: serviceOpt
+
+alt service not found
+    CONS -> CONS: log.warn("no service found")
+else service.teamId != null
+    CONS -> CONS: log.debug("already has team, skip")
+else ownerTeams empty or ambiguous (size > 1)
+    CONS -> CONS: log.warn("no/ambiguous ownerTeams")
+else exactly one ownerTeam
+    CONS -> TREP: findByTenantAndName(tenantId, ownerTeams[0])
+    TREP -> DB: SELECT * FROM teams\nWHERE tenant_id = :tenantId\nAND lower(name) = lower(:name)
+    DB --> TREP: Optional<Team>
+    TREP --> CONS: teamOpt
+    alt team not found
+        CONS -> CONS: log.warn("team not found in registry")
+    else team found
+        CONS -> UC: execute(AssignOwnerCommand(\n  tenantId, serviceId, teamId, SYSTEM_ACTOR))
+        UC -> DB: UPDATE services SET team_id = :teamId
+        UC --> CONS: updated Service
+        CONS -> CONS: log.info("assigned team via CODEOWNERS")
+    end
+end
+@enduml

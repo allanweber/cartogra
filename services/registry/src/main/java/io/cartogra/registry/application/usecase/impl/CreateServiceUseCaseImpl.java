@@ -12,6 +12,7 @@ import io.cartogra.registry.domain.ServiceHealthStatus;
 import io.cartogra.registry.domain.ServiceSnapshot;
 import io.cartogra.registry.domain.exception.DuplicateServiceNameException;
 import io.cartogra.registry.domain.exception.TeamNotFoundException;
+import io.cartogra.registry.infrastructure.kafka.ServiceLifecycleEventProducer;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,15 +26,18 @@ public class CreateServiceUseCaseImpl implements CreateServiceUseCase {
     private final ServiceHistoryRepository historyRepository;
     private final TeamRepository teamRepository;
     private final ObjectMapper objectMapper;
+    private final ServiceLifecycleEventProducer eventProducer;
 
     public CreateServiceUseCaseImpl(ServiceRepository serviceRepository,
                                     ServiceHistoryRepository historyRepository,
                                     TeamRepository teamRepository,
-                                    ObjectMapper objectMapper) {
+                                    ObjectMapper objectMapper,
+                                    ServiceLifecycleEventProducer eventProducer) {
         this.serviceRepository = serviceRepository;
         this.historyRepository = historyRepository;
         this.teamRepository = teamRepository;
         this.objectMapper = objectMapper;
+        this.eventProducer = eventProducer;
     }
 
     @Override
@@ -66,6 +70,7 @@ public class CreateServiceUseCaseImpl implements CreateServiceUseCase {
 
         Service saved = serviceRepository.save(service);
         historyRepository.save(toSnapshot(saved, command.requestedBy()));
+        eventProducer.publishRegistered(saved);
         return saved;
     }
 

@@ -17,8 +17,10 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-opentelemetry")
     implementation("io.opentelemetry.instrumentation:opentelemetry-logback-appender-1.0:2.20.0-alpha")
     implementation("org.springframework.boot:spring-boot-starter-validation")
+    implementation("org.springframework.boot:spring-boot-starter-kafka")
     runtimeOnly("org.postgresql:postgresql")
     testImplementation(project(":shared:test-support"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.testcontainers:testcontainers-postgresql")
+    testImplementation("org.springframework.kafka:spring-kafka-test")
 }

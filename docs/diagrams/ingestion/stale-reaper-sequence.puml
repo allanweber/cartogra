@@ -1,0 +1,24 @@
+@startuml
+title Ingestion — Stale Job Reaper Sequence
+
+participant "StaleJobReaperScheduler" as REAPER
+participant "SyncJobRepository" as REPO
+database "PostgreSQL" as DB
+participant "SyncResultProducer" as PROD
+queue "cartogra.ingestion\n.sync.completed" as TOPIC
+
+REAPER -> REAPER: @Scheduled(fixedDelay=PT1M)
+REAPER -> REAPER: threshold = now() - stale-timeout (default PT30M)
+REAPER -> REPO: findStaleRunning(threshold)
+REPO -> DB: SELECT * FROM sync_jobs\nWHERE status='RUNNING'\nAND updated_at < threshold\nAND deleted_at IS NULL
+DB --> REPO: List<SyncJob>
+REPO --> REAPER: staleJobs
+
+loop for each staleJob
+    REAPER -> REPO: markFailed(job.id(), "reaper: timed out")
+    REPO -> DB: UPDATE sync_jobs SET status='FAILED', error_message=...
+    REAPER -> PROD: publishFailure(job, "reaper: timed out")
+    PROD -> TOPIC: send EventEnvelope<SyncResultPayload>(status=FAILED)
+    REAPER -> REAPER: log.warn(job.id, job.connectionId, job.tenantId)
+end
+@enduml

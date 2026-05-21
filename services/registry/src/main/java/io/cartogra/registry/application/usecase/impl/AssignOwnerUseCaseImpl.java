@@ -11,6 +11,7 @@ import io.cartogra.registry.domain.Service;
 import io.cartogra.registry.domain.ServiceSnapshot;
 import io.cartogra.registry.domain.exception.ServiceNotFoundException;
 import io.cartogra.registry.domain.exception.TeamNotFoundException;
+import io.cartogra.registry.infrastructure.kafka.ServiceLifecycleEventProducer;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,15 +25,18 @@ public class AssignOwnerUseCaseImpl implements AssignOwnerUseCase {
     private final ServiceHistoryRepository historyRepository;
     private final TeamRepository teamRepository;
     private final ObjectMapper objectMapper;
+    private final ServiceLifecycleEventProducer eventProducer;
 
     public AssignOwnerUseCaseImpl(ServiceRepository serviceRepository,
                                   ServiceHistoryRepository historyRepository,
                                   TeamRepository teamRepository,
-                                  ObjectMapper objectMapper) {
+                                  ObjectMapper objectMapper,
+                                  ServiceLifecycleEventProducer eventProducer) {
         this.serviceRepository = serviceRepository;
         this.historyRepository = historyRepository;
         this.teamRepository = teamRepository;
         this.objectMapper = objectMapper;
+        this.eventProducer = eventProducer;
     }
 
     @Override
@@ -56,6 +60,7 @@ public class AssignOwnerUseCaseImpl implements AssignOwnerUseCase {
 
         Service saved = serviceRepository.save(updated);
         historyRepository.save(toSnapshot(saved, command.requestedBy()));
+        eventProducer.publishUpdated(saved);
         return saved;
     }
 

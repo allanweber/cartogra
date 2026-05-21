@@ -11,6 +11,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -95,6 +96,44 @@ public class JdbcSyncJobRepository implements SyncJobRepository {
                 SET status = 'FAILED', completed_at = :now, error_message = :errorMessage, updated_at = :now
                 WHERE id = :jobId
                 """, params);
+    }
+
+    @Override
+    public boolean existsRunningForConnection(UUID tenantId, UUID connectionId) {
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("connectionId", connectionId);
+        var results = jdbc.query("""
+                SELECT id FROM sync_jobs
+                WHERE tenant_id = :tenantId AND connection_id = :connectionId
+                  AND status = 'RUNNING' AND deleted_at IS NULL
+                LIMIT 1
+                """, params, (rs, _) -> rs.getObject("id", UUID.class));
+        return !results.isEmpty();
+    }
+
+    @Override
+    public Optional<SyncJob> findRunningForConnection(UUID tenantId, UUID connectionId) {
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("connectionId", connectionId);
+        var results = jdbc.query("""
+                SELECT * FROM sync_jobs
+                WHERE tenant_id = :tenantId AND connection_id = :connectionId
+                  AND status = 'RUNNING' AND deleted_at IS NULL
+                LIMIT 1
+                """, params, (rs, _) -> mapRow(rs));
+        return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
+    }
+
+    @Override
+    public List<SyncJob> findStaleRunning(Instant updatedBefore) {
+        var params = new MapSqlParameterSource()
+                .addValue("threshold", Timestamp.from(updatedBefore));
+        return jdbc.query("""
+                SELECT * FROM sync_jobs
+                WHERE status = 'RUNNING' AND updated_at < :threshold AND deleted_at IS NULL
+                """, params, (rs, _) -> mapRow(rs));
     }
 
     private SyncJob mapRow(ResultSet rs) throws SQLException {

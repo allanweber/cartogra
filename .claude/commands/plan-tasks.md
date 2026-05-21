@@ -157,6 +157,17 @@ Group by task ID when multiple tasks are present.
 **What NOT to test here** (covered by a later checklist item or a different layer):
 - e.g. "UI flows — covered by 1.46"
 
+**E2E manual test** (developer-executed, full local stack):
+
+Provide ordered steps a developer runs by hand against the full Docker Compose stack before raising a PR. Each step must name the exact action and the expected observable outcome. Include:
+
+- **Prerequisites**: which `docker compose` services must be running and healthy. Reference the `/actuator/health/ready` probe for each JVM service.
+- **Steps 1…N**: for each step: the exact action (curl command, Postman request name, Kafka UI path at `http://localhost:9090`, SQL query, or log grep via `docker compose logs`) and the expected observable result.
+- **Passing signal**: one sentence describing what a complete, successful run looks like end-to-end.
+- **Failure triage**: for each likely failure mode (service unreachable, expected Kafka message absent, wrong status code, log line missing), state what to check — env var, container log, DB row, or classpath.
+
+If the feature has no external HTTP surface (Kafka-only, ADR-only, or infrastructure tasks): describe how to observe the Kafka message (Kafka UI topic browser, `kafka-console-consumer`, or log output) and any DB state checks instead.
+
 ---
 
 ## New Error Codes
@@ -296,4 +307,5 @@ After all work is implemented and verified:
 - [ ] BIP covers all 5 channels for every `[BIP]`-tagged task, or is marked N/A.
 - [ ] Env vars delta is complete — no values hardcoded in the plan body.
 - [ ] Rollback plan is non-empty for any task that touches a migration.
+- [ ] E2E manual test section is present in Test Strategy with numbered steps, passing signal, and failure triage. If Kafka-only or docs-only, describes Kafka UI / log / DB observation steps instead.
 - [ ] "Checklist Items to Mark Done" lists every task ID from the arguments.

@@ -11,6 +11,7 @@ import io.cartogra.registry.domain.ServiceHealthStatus;
 import io.cartogra.registry.domain.ServiceSnapshot;
 import io.cartogra.registry.domain.exception.DuplicateServiceNameException;
 import io.cartogra.registry.domain.exception.ServiceNotFoundException;
+import io.cartogra.registry.infrastructure.kafka.ServiceLifecycleEventProducer;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,13 +24,16 @@ public class UpdateServiceUseCaseImpl implements UpdateServiceUseCase {
     private final ServiceRepository serviceRepository;
     private final ServiceHistoryRepository historyRepository;
     private final ObjectMapper objectMapper;
+    private final ServiceLifecycleEventProducer eventProducer;
 
     public UpdateServiceUseCaseImpl(ServiceRepository serviceRepository,
                                     ServiceHistoryRepository historyRepository,
-                                    ObjectMapper objectMapper) {
+                                    ObjectMapper objectMapper,
+                                    ServiceLifecycleEventProducer eventProducer) {
         this.serviceRepository = serviceRepository;
         this.historyRepository = historyRepository;
         this.objectMapper = objectMapper;
+        this.eventProducer = eventProducer;
     }
 
     @Override
@@ -61,6 +65,7 @@ public class UpdateServiceUseCaseImpl implements UpdateServiceUseCase {
 
         Service saved = serviceRepository.save(updated);
         historyRepository.save(toSnapshot(saved, command.requestedBy()));
+        eventProducer.publishUpdated(saved);
         return saved;
     }
 

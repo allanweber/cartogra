@@ -79,6 +79,19 @@ public class JdbcTeamRepository implements TeamRepository {
     }
 
     @Override
+    public Optional<Team> findByTenantAndName(UUID tenantId, String name) {
+        String sql = """
+                SELECT * FROM teams
+                WHERE tenant_id = :tenantId AND lower(name) = lower(:name) AND deleted_at IS NULL
+                LIMIT 1
+                """;
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("name", name);
+        return jdbc.query(sql, params, TEAM_MAPPER).stream().findFirst();
+    }
+
+    @Override
     public boolean existsByName(UUID tenantId, String name, UUID excludeId) {
         String sql = """
                 SELECT COUNT(*) FROM teams
