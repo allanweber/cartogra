@@ -54,3 +54,41 @@ This approach is chosen over alternatives because:
 
 **Neutral**:
 - The `SyncJobRepository` port gains two new methods: `existsRunningForConnection` and `findRunningForConnection`. Both are pure query methods with no side effects.
+
+---
+
+## Stale RUNNING jobs and the reaper
+
+**Added**: 2026-05-20 (phase 1–5 dead-end audit)
+
+The guard above silently drops duplicate `sync.command` messages when a RUNNING job exists for the same `connectionId`. This is the correct behaviour in steady state, but it interacts badly with a specific failure mode:
+
+> A JVM crash, OOM kill, or `kubectl delete pod` between `syncJobRepository.markRunning(job.id())` ([ExecuteSyncUseCaseImpl.java:50](../../services/ingestion/src/main/java/io/cartogra/ingestion/application/usecase/ExecuteSyncUseCaseImpl.java#L50)) and the corresponding `markCompleted` / `markFailed` call leaves the `sync_jobs` row stuck in `RUNNING` permanently. The guard will then drop **every future** sync command for that `connectionId`, silently disabling the connection until an operator deletes the row by hand.
+
+### Mitigation: stale-job reaper
+
+A `@Scheduled` reaper in ingestion (task 1.39a) runs every minute, finds `sync_jobs` rows where `status = 'RUNNING' AND updated_at < now() - ingestion.sync.stale-timeout` (default `PT30M`), flips them to `FAILED` with `error_message = 'reaper: timed out'`, and publishes a `cartogra.ingestion.sync.completed` failure envelope so the registry consumer (task 1.67) records the failure on `scm_connections.last_sync_status`.
+
+### Why not a database-level fix
+
+- A `CHECK` constraint cannot reference `now()` reliably.
+- A `BEFORE UPDATE` trigger that auto-fails old RUNNING rows would race with normal completion.
+- A unique partial index on `(connection_id) WHERE status = 'RUNNING'` would force the second consumer to error rather than gracefully drop — re-triggering the retry-storm we deliberately avoided in this ADR.
+
+### Failure-mode coverage
+
+| Mode | Behaviour |
+|------|-----------|
+| Sync completes normally | Guard sees no RUNNING; future sync commands proceed. |
+| Sync fails with `ScmProviderException` | `markFailed` runs; future sync commands proceed. |
+| JVM crash after `markRunning` | Row stays RUNNING; guard drops future commands. **Reaper detects within `stale-timeout` and recovers.** |
+| Provider call hangs indefinitely | Row stays RUNNING; reaper detects after `stale-timeout` and recovers. |
+
+### Configuration
+
+| Property | Default | Notes |
+|----------|---------|-------|
+| `ingestion.sync.stale-timeout` | `PT30M` | Should be at least 2× the worst expected sync duration. |
+| `ingestion.sync.reaper-interval` | `PT1M` | Scheduler cadence; tune down only if reaper latency matters. |
+
+The reaper is additive to the guard and does not alter the duplicate-message dedup semantics described above.

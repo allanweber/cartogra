@@ -181,7 +181,16 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 ### Events, catalog UI, and demo access
 
 - [ ] 1.38 [CODE] Publish registry service lifecycle events with the shared Kafka envelope and `traceparent` propagation.
+- [ ] 1.38a [TEST] Replace `@MockitoBean ServiceLifecycleEventProducer` in `ServiceCrudIT` with `@EmbeddedKafka` + a real consumer that round-trips one envelope per CRUD operation; assert `eventType`, `entityId`, `tenantId`, `traceparent` header, and that `KafkaJsonSerializer` (Jackson 3) deserialises cleanly into `EventEnvelope<ServiceRegisteredPayload>` on the consumer side. This is the only end-to-end validation that the custom serializer works before any downstream consumer (2.18) is built.
 - [ ] 1.39 [CODE] Consume sync commands in ingestion with an idempotency strategy documented in code or ADR notes.
+- [ ] 1.39a [CODE] Add a stale-job reaper as a `@Scheduled` task in ingestion: every minute, find `sync_jobs` rows where `status='RUNNING'` and `updated_at < now() - ingestion.sync.stale-timeout` (default `PT30M`), flip them to `FAILED` with `error_message='reaper: timed out'`, and publish a `sync.completed` failure envelope so the registry consumer (1.67) updates `scm_connections.last_sync_status`. Update ADR-0014 with a "Stale RUNNING jobs and the reaper" addendum.
+- [ ] 1.39b [TEST] Add `StaleJobReaperIT`: insert a `RUNNING` row with `updated_at` 31 minutes ago, invoke the reaper method directly, assert the row is `FAILED` and a `cartogra.ingestion.sync.completed` envelope with `status='FAILED'` is published to `@EmbeddedKafka`.
+- [ ] 1.39c [DOCS] Write ADR-0015 — CODEOWNERS persistence shape. Decide between (a) auto-assigning `services.team_id` when `OwnershipMap.ownerTeams` resolves to exactly one existing tenant team, vs (b) a dedicated `service_codeowners` path-level table. Recommend (a) with an audit-event fallback for ambiguous matches; document the rationale. Mark ADR `Accepted` only after Allan signs off.
+- [ ] 1.39d [INFRA] Add the registry Flyway migration required by ADR-0015 (if option (b) is accepted, `V0NN__create_service_codeowners.sql`; if option (a), this task becomes a no-op and is closed with a note).
+- [ ] 1.39e [CODE] Publish `cartogra.ingestion.ownership.resolved` from ingestion: after `listRepositories` in `ExecuteSyncUseCaseImpl`, call `provider.resolveOwnership(...)` for each non-archived repo and publish one envelope per repo with payload `{tenantId, connectionId, repositoryFullName, ownerTeams, pathOwners}`. Reuse the existing `KafkaTemplate` and `traceparent` propagation pattern. Stop discarding the return value at the current call site.
+- [ ] 1.39f [CODE] Registry consumer for `cartogra.ingestion.ownership.resolved`: look up the tenant's `Team` by name, and apply the rule decided in ADR-0015. On ambiguous or unmatched ownership data, write an `audit_events` row with `action='codeowners.unmatched'` once 2.35 lands; until then, log at WARN with the connection + repo identity.
+- [ ] 1.39g [TEST] Add `CodeownersFlowIT` covering WireMock GitHub repo with a `CODEOWNERS` file → sync → ownership envelope published → registry consumes → service `teamId` is set (or `service_codeowners` row exists, depending on the ADR-0015 outcome).
+- [ ] 1.40 [CODE] Decide whether guest demo access is enabled in Phase 1; if enabled, enforce read-only behavior and keep gateway rate limits active.
 - [ ] 1.40 [CODE] Decide whether guest demo access is enabled in Phase 1; if enabled, enforce read-only behavior and keep gateway rate limits active.
 - [ ] 1.41 [UI] Craft Login, Register, Verify email, and OAuth handoff screens using `/impeccable craft login` and `/impeccable craft register`; all auth state must use httpOnly cookies — never `localStorage`.
 - [ ] 1.42 [UI] Craft the Catalog list and detail flows using `/impeccable craft catalog home`; include filters for team, health, tech stack, SCM provider, and search, plus orphan highlighting.
@@ -218,7 +227,9 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 ### Infrastructure hardening and missing flows
 
 - [ ] 1.66 [CODE] Publish `scm_connection.created`, `scm_connection.updated`, and `scm_connection.deleted` lifecycle events from registry with the shared Kafka envelope and `traceparent` propagation. These events are the prerequisite for tasks 1.58 (connection cache consumer), 1.59 (scheduler), and 1.61 (webhook registration).
-- [ ] 1.67 [CODE] Consume `cartogra.registry.sync.completed` events in registry to update `scm_connections.last_synced_at` and `last_sync_status`. This closes the ingestion → registry feedback loop.
+- [ ] 1.66a [DOCS] One-line decision: the `sync.completed` topic name. The producer at `SyncResultProducer` already publishes to `cartogra.ingestion.sync.completed`; the original 1.67 wording referenced `cartogra.registry.sync.completed`. Accept the producer's existing name (events belong to the domain that produced them) and update `docs/architecture/kafka-topics.md` to make it canonical. No code change.
+- [ ] 1.67 [CODE] Consume `cartogra.ingestion.sync.completed` events in registry (topic name fixed by 1.66a) to update `scm_connections.last_synced_at` and `last_sync_status`. Depends on the prerequisite migration 1.67a that adds those columns to `scm_connections`. This closes the ingestion → registry feedback loop.
+- [ ] 1.67a [INFRA] Add registry Flyway migration `V0NN__add_last_sync_to_scm_connections.sql` (zero-padded, next available version) adding `last_synced_at TIMESTAMPTZ` and `last_sync_status TEXT` columns to `scm_connections`. Verify against the existing `V004__create_scm_connections.sql` that these columns are not already present.
 - [ ] 1.68 [CODE] Implement the password reset flow in gateway: `POST /auth/forgot-password` sends a time-limited reset token via Resend; `POST /auth/reset-password` validates the token and updates the password hash. Apply the same rate limiting as other `/auth/*` endpoints.
 - [ ] 1.69 [CODE] Extend `RateLimitWebFilter` to use per-tenant Redis keys (`rate_limit:tenant:<tenantId>:<route>`) on all authenticated routes, falling back to per-IP only for unauthenticated paths. Per-tenant limits must be configurable per plan tier.
 - [ ] 1.70 [INFRA] Configure graceful shutdown for all JVM services: `server.shutdown=graceful` and `spring.lifecycle.timeout-per-shutdown-phase=30s` in each service's `application.yml`. Verify that in-flight Kafka consumer commits complete before the pod terminates.
@@ -270,7 +281,8 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 - [ ] 2.18 [CODE] Implement the `topology-graph-builder` consumer so registry events update topology state idempotently.
 - [ ] 2.19 [CODE] Publish topology dependency events with shared Kafka envelope and trace propagation.
-- [ ] 2.20 [CODE] Implement `OtelSpanWorker` so real or synthetic spans can create observed edges.
+- [ ] 2.19a [DOCS] Write ADR-0016 — `OtelSpanWorker` ingestion path. The current 2.20 wording does not specify how topology receives span data. Recommend: the OTel Collector exports spans to a Kafka topic `cartogra.observability.spans` (configured in `infra/docker-compose/otel-collector.yml`); topology consumes that topic. Document the topic in `docs/architecture/kafka-topics.md`. ADR `Accepted` only after Allan signs off.
+- [ ] 2.20 [CODE] Implement `OtelSpanWorker` per ADR-0016: consume `cartogra.observability.spans`, derive observed edges idempotently, and persist them via the topology repositories. Synthetic span fixtures must work without a live collector.
 - [ ] 2.21 [TEST] Add fixture-based integration tests that prove a span batch produces observed edges and mode toggling works.
 - [ ] 2.22 [CODE] Instrument MV refresh duration, consumer lag, and graph query latency metrics.
 - [ ] 2.23 [DOCS] Write the ADR or design note that captures the Kafka topic taxonomy and idempotency strategy for graph updates.
@@ -290,8 +302,10 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 ### Audit logging, search, and billing foundation
 
-- [ ] 2.34 [INFRA] Add a Flyway migration for `audit_events` — a generic audit table (`id`, `tenant_id`, `entity_type`, `entity_id`, `action`, `actor_id`, `payload` JSONB, `created_at`) with tenant isolation, RLS, and a GIN index on `payload`. Check existing migration files to determine the correct version number for the owning service.
-- [ ] 2.35 [CODE] Populate `audit_events` from all mutating use cases in registry, topology, and contract (service create/update/delete, dependency change, contract version upload). Use a shared `AuditEventPublisher` in `shared:common` with zero Spring dependencies.
+- [ ] 2.33a [DOCS] Write ADR-0017 — Audit events: owning service and `AuditEventPort` shape. The 2.34 wording does not specify which service owns the table; the 2.35 wording places a JDBC writer in `shared:common`, which violates the zero-Spring-deps rule. Recommend: registry owns `audit_events`; `shared:common` defines a plain-Java `AuditEventPort` interface; each service ships its own adapter (registry writes directly via JDBC; topology/contract/intelligence publish a `cartogra.audit.recorded` Kafka envelope consumed by registry). ADR `Accepted` only after Allan signs off.
+- [ ] 2.34 [INFRA] Add the registry Flyway migration `V0NN__create_audit_events.sql` (next-available version) per ADR-0017: generic audit table (`id`, `tenant_id`, `entity_type`, `entity_id`, `action`, `actor_id`, `payload` JSONB, `created_at`) with tenant isolation, RLS, and a GIN index on `payload`.
+- [ ] 2.35 [CODE] Implement the `AuditEventPort` and adapters per ADR-0017: plain-Java port in `shared:common`; JDBC adapter in registry (direct write); Kafka-publish adapter in topology and contract (publish `cartogra.audit.recorded`). Wire the port into all mutating use cases in registry, topology, and contract (service create/update/delete, dependency change, contract version upload).
+- [ ] 2.35a [CODE] Implement the registry consumer for `cartogra.audit.recorded` so cross-service audit envelopes from topology and contract land in the `audit_events` table. Idempotent on `eventId`; tenant filter enforced.
 - [ ] 2.36 [DOCS] Write the ADR documenting the generic `audit_events` table pattern versus per-entity `changed_by` columns; cross-reference the GDPR deletion task (3.41).
 - [ ] 2.37 [CODE] Add `GET /audit-events` admin endpoint in registry with filtering by `entity_type`, `entity_id`, date range, and actor; paginated; admin role required.
 - [ ] 2.38 [CODE] Implement TOTP-based MFA in gateway: `POST /auth/mfa/enable` returns a TOTP secret and QR code URI; `POST /auth/mfa/verify` validates the TOTP code and marks MFA active; `POST /auth/mfa/disable` requires current TOTP code. Enforce TOTP verification on login when MFA is enabled.
@@ -351,6 +365,7 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] 3.22 [DOCS] Write the ADR for the outbox pattern and cross-link it from deployment or incident docs.
 - [ ] 3.23 [BIP] Publish the outbox ADR after the relay integration test passes.
 - [ ] 3.24 [BIP] Publish the dual-write-bug article after the relay is demonstrably reliable.
+- [ ] 3.24a [DOCS] One-line decision (no full ADR): tenant API keys belong to **gateway** since the gateway is the sole token issuer per ADR-0010. The migration in 3.25 lives in gateway's Flyway dir, and the admin APIs in 3.26 are gateway endpoints proxied to the relevant tenant table. Update 3.25 and 3.26 wording to make this explicit.
 - [ ] 3.25 [INFRA] Add the tenant API key migration; store API keys hashed at rest.
 - [ ] 3.26 [CODE] Implement admin APIs to issue, list, and revoke tenant API keys.
 - [ ] 3.26a [UI] Craft the API key management UI: list active keys with scopes and expiry, create a key with scope selection, and revoke a key with a confirmation dialog. Wire to the admin APIs from 3.26.
@@ -358,7 +373,8 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] 3.27 [CODE] Implement `POST /ci/check` with API-key-only auth (`X-Cartogra-Api-Key`), envelope responses, and documented blocking semantics.
 - [ ] 3.28 [CODE] Implement the GitHub Action extension against `/ci/check`.
 - [ ] 3.29 [CODE] Implement the Azure Pipelines task against `/ci/check`.
-- [ ] 3.30 [CODE] Implement spec discovery from ingestion so discovered OpenAPI/AsyncAPI files are processed idempotently.
+- [ ] 3.29a [DOCS] Write ADR-0018 — Spec discovery transport. Ingestion can read OpenAPI/AsyncAPI files via the existing `ScmProvider.getFileContents(...)`, but the 3.30 wording doesn't say how the discovered spec reaches the contract service. Recommend: Kafka topic `cartogra.ingestion.spec.discovered` with payload `{tenant_id, repo_full_name, file_path, content_sha256, content_b64}`; contract consumes idempotently keyed on `(tenant_id, file_path, content_sha256)`. Document in `docs/architecture/kafka-topics.md`. ADR `Accepted` only after Allan signs off.
+- [ ] 3.30 [CODE] Implement spec discovery per ADR-0018: ingestion publishes `cartogra.ingestion.spec.discovered` envelopes after each successful sync; contract consumes idempotently and feeds the discovered spec through the same parse/validate/store pipeline used by 3.8. Idempotency key: `(tenant_id, file_path, content_sha256)`.
 - [ ] 3.31 [TEST] Add workflow smoke tests for both CI extensions and idempotency tests for spec discovery.
 - [ ] 3.32 [DOCS] Add example GitHub Actions and Azure Pipelines usage to docs and update `docs/api/contract.openapi.yaml`.
 - [ ] 3.33 [BIP] Publish the dual-marketplace article after both extension paths run against the same backend contract.
@@ -462,7 +478,8 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 - [ ] 5.2 [INFRA] Complete `seed/seed-data.json` for the Acme Fintech scenario set, including orphans, cycles, drift, and a pending breaking change.
 - [ ] 5.3 [CODE] Finalize the seed loader so it is idempotent and exercises the real public APIs.
-- [ ] 5.4 [CODE] Enforce guest read-only mode for the Acme tenant and sandbox isolation for authenticated demo users.
+- [ ] 5.3a [DOCS] Write ADR-0019 — Guest enforcement mechanism. ADR-0013 defers guest demo access to Phase 5 without specifying the enforcement shape. Recommend: gateway issues a special short-lived JWT with `roles=["guest"]` and `tid=<acme-tenant-id>`; method-level security on every mutating endpoint requires `member` or `admin`; no anonymous auth path. Acceptance for 5.4 then becomes a code audit verifying `@PreAuthorize` is present on every write across registry, topology, contract, intelligence. ADR `Accepted` only after Allan signs off.
+- [ ] 5.4 [CODE] Enforce guest read-only mode per ADR-0019: implement the gateway-issued guest JWT path; audit every mutating endpoint across backend services for `@PreAuthorize` requiring at least `member`. Sandbox isolation for authenticated demo users stays in scope.
 - [ ] 5.5 [CODE] Add sandbox cleanup automation.
 
 ### Deployment packaging and staging
@@ -502,7 +519,8 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] 5.28 [BIP] Record the architecture walkthrough video if it adds value without delaying launch.
 - [ ] 5.29 [BIP] Publish the public launch post with the live demo and how-to-try-it path.
 - [ ] 5.X [INFRA] Add K8s NetworkPolicy rules so registry, topology, contract, and intelligence accept inbound traffic only from the gateway namespace — no direct external access to backend service ports.
-- [ ] 5.Y [CODE] Implement gateway service-token validation in all proxied services (registry, topology, contract, intelligence): gateway signs a short-lived X-Gateway-Token (HS256, 30 s TTL, separate secret from user JWTs); each downstream service rejects requests missing or invalid tokens. Write a shared filter in `shared:common` to avoid repeating the validation logic in every service.
+- [ ] 5.W [DOCS] Write ADR-0020 — `shared:web` Gradle module. The 5.Y wording places a Spring filter in `shared:common`, which by CLAUDE.md is plain Java with zero Spring dependencies. Recommend: introduce a new Gradle module `shared:web` that depends on `spring-web`; both `OncePerRequestFilter` (servlet) and `WebFilter` (reactive) variants of cross-service filters live there. Update CLAUDE.md to distinguish `shared:web` from `shared:common`. ADR `Accepted` only after Allan signs off.
+- [ ] 5.Y [CODE] Implement gateway service-token validation in all proxied services (registry, topology, contract, intelligence) per ADR-0020: gateway signs a short-lived `X-Gateway-Token` (HS256, 30 s TTL, separate secret from user JWTs); each downstream service rejects requests missing or invalid tokens via a filter that lives in the new `shared:web` module (not `shared:common`).
 
 ### Phase 5 Gate
 
