@@ -519,8 +519,7 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] 5.28 [BIP] Record the architecture walkthrough video if it adds value without delaying launch.
 - [ ] 5.29 [BIP] Publish the public launch post with the live demo and how-to-try-it path.
 - [ ] 5.X [INFRA] Add K8s NetworkPolicy rules so registry, topology, contract, and intelligence accept inbound traffic only from the gateway namespace — no direct external access to backend service ports.
-- [ ] 5.W [DOCS] Write ADR-0020 — `shared:web` Gradle module. The 5.Y wording places a Spring filter in `shared:common`, which by CLAUDE.md is plain Java with zero Spring dependencies. Recommend: introduce a new Gradle module `shared:web` that depends on `spring-web`; both `OncePerRequestFilter` (servlet) and `WebFilter` (reactive) variants of cross-service filters live there. Update CLAUDE.md to distinguish `shared:web` from `shared:common`. ADR `Accepted` only after Allan signs off.
-- [ ] 5.Y [CODE] Implement gateway service-token validation in all proxied services (registry, topology, contract, intelligence) per ADR-0020: gateway signs a short-lived `X-Gateway-Token` (HS256, 30 s TTL, separate secret from user JWTs); each downstream service rejects requests missing or invalid tokens via a filter that lives in the new `shared:web` module (not `shared:common`).
+- [ ] 5.Y [CODE] Implement gateway service-token validation in all proxied services (registry, topology, contract, intelligence): gateway signs a short-lived X-Gateway-Token (HS256, 30 s TTL, separate secret from user JWTs); each downstream service rejects requests missing or invalid tokens. Write a shared filter in `shared:common` to avoid repeating the validation logic in every service.
 
 ### Phase 5 Gate
 
