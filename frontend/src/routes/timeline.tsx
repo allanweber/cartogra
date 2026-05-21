@@ -60,7 +60,7 @@ function TimelinePage() {
                 <span
                   className={cn(
                     'mr-1.5 inline-block size-1.5 rounded-full',
-                    typeConfig[f.value as TimelineEventType]?.color,
+                    typeConfig[f.value].color,
                   )}
                 />
               )}

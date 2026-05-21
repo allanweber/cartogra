@@ -57,7 +57,7 @@ function CatalogPage() {
             const count =
               f.value === 'all'
                 ? MOCK_SERVICES.length
-                : healthCounts[f.value as keyof typeof healthCounts]
+                : healthCounts[f.value]
             return (
               <button
                 key={f.value}

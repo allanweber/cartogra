@@ -99,8 +99,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     : allItems.filter((item) => item.group === 'Pages')
 
   const grouped = filtered.reduce<Record<string, CommandItem[]>>((acc, item) => {
-    if (!acc[item.group]) acc[item.group] = []
-    acc[item.group].push(item)
+    ;(acc[item.group] ??= []).push(item)
     return acc
   }, {})
 
