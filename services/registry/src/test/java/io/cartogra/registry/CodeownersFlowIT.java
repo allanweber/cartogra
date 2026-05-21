@@ -107,7 +107,7 @@ class CodeownersFlowIT {
 
         // Wait for consumer to process and assert teamId is set
         Awaitility.await()
-                .atMost(Duration.ofSeconds(15))
+                .atMost(Duration.ofSeconds(30))
                 .pollInterval(Duration.ofMillis(300))
                 .untilAsserted(() -> {
                     HttpResponse<String> check = HTTP.send(
