@@ -1,12 +1,10 @@
-import { Bell, BellDot, CheckCheck, GitBranch, AlertTriangle, Rocket, Activity, ExternalLink } from 'lucide-react'
+import { Bell, BellDot, CheckCheck, ExternalLink } from 'lucide-react'
 import { useState } from 'react'
 
 import { Badge } from '#/components/ui/badge'
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '#/components/ui/dropdown-menu'
@@ -88,7 +86,7 @@ export function NotificationBell() {
             <Bell className="size-4" />
           )}
           {unreadCount > 0 && (
-            <span className="absolute right-1.5 top-1.5 flex size-[7px] items-center justify-center rounded-full bg-red-500" />
+            <span className="absolute right-1.5 top-1.5 flex size-1.75 items-center justify-center rounded-full bg-red-500" />
           )}
         </button>
       </DropdownMenuTrigger>
@@ -122,7 +120,7 @@ export function NotificationBell() {
             <p className="text-sm text-muted-foreground">All clear</p>
           </div>
         ) : (
-          <ScrollArea className="max-h-[380px]">
+          <ScrollArea className="max-h-95">
             <div className="py-1">
               {notifications.map((n) => (
                 <button

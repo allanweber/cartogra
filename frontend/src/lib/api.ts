@@ -17,7 +17,7 @@ export async function apiFetch<T>(
   init?: RequestInit,
 ): Promise<T> {
   const baseUrl = import.meta.env.VITE_API_BASE_URL ?? ''
-  const tenantId = useTenantStore.getState().tenantId
+  const tenantId = useTenantStore.getState().currentTenantId
 
   const headers = new Headers(init?.headers)
   if (tenantId) {
