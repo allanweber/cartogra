@@ -13,7 +13,7 @@ import { cn } from '#/lib/utils'
 
 import type { Service, TimelineEvent } from '#/lib/mock-data'
 
-export const Route = createFileRoute('/dashboard')({
+export const Route = createFileRoute('/_authenticated/dashboard')({
   component: DashboardPage,
 })
 

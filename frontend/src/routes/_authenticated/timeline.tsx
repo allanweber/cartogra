@@ -8,7 +8,7 @@ import { cn } from '#/lib/utils'
 
 import type { TimelineEventType } from '#/lib/mock-data'
 
-export const Route = createFileRoute('/timeline')({
+export const Route = createFileRoute('/_authenticated/timeline')({
   component: TimelinePage,
 })
 

@@ -58,7 +58,7 @@ public class RegisterUserUseCaseImpl implements RegisterUserUseCase {
         String hash = passwordEncoder.encode(request.password());
 
         User user = new User(null, tenant.id(), request.email(), "local", null, hash,
-            false, List.of("ADMIN"), otp, otpExp, null, null, null);
+            false, List.of("ADMIN"), otp, otpExp, null, null, null, null, null);
         userRepository.save(user);
 
         emailExecutor.submit(() -> emailSender.sendVerification(request.email(), otp));

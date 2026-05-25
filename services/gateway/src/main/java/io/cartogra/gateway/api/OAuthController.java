@@ -1,11 +1,12 @@
 package io.cartogra.gateway.api;
 
-import io.cartogra.gateway.api.dto.ApiResponse;
 import io.cartogra.gateway.api.dto.TokenResponse;
 import io.cartogra.gateway.application.OAuthCallbackUseCase;
 import io.cartogra.gateway.application.OAuthStartUseCase;
+import io.cartogra.gateway.config.FrontendProperties;
 import io.cartogra.gateway.infrastructure.tracing.TraceContext;
-import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
@@ -15,19 +16,23 @@ import org.springframework.web.bind.annotation.*;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/v1/auth/oauth")
+@RequestMapping("/api/auth/oauth")
 public class OAuthController {
 
+    private static final Logger log = LoggerFactory.getLogger(OAuthController.class);
     private static final String COOKIE_JWT = "jwt";
     private static final String COOKIE_REFRESH = "jwt_refresh";
 
     private final OAuthStartUseCase oauthStart;
     private final OAuthCallbackUseCase oauthCallback;
+    private final FrontendProperties frontend;
     private final TraceContext traceContext;
 
-    public OAuthController(OAuthStartUseCase oauthStart, OAuthCallbackUseCase oauthCallback, TraceContext traceContext) {
+    public OAuthController(OAuthStartUseCase oauthStart, OAuthCallbackUseCase oauthCallback,
+                           FrontendProperties frontend, TraceContext traceContext) {
         this.oauthStart = oauthStart;
         this.oauthCallback = oauthCallback;
+        this.frontend = frontend;
         this.traceContext = traceContext;
     }
 
@@ -43,27 +48,35 @@ public class OAuthController {
     }
 
     @GetMapping("/{provider}/callback")
-    public ResponseEntity<ApiResponse<TokenResponse>> callback(
+    public ResponseEntity<Void> callback(
             @PathVariable String provider,
             @RequestParam String code,
-            @RequestParam String state,
-            HttpServletResponse response) {
+            @RequestParam String state) {
         String traceId = traceContext.currentTraceId();
-        TokenResponse result = oauthCallback.execute(provider, code, state);
-        if (result.accessToken() != null) {
-            response.addHeader(HttpHeaders.SET_COOKIE,
-                ResponseCookie.from(COOKIE_JWT, result.accessToken())
-                    .httpOnly(true).secure(true).sameSite("Lax").path("/")
-                    .maxAge(result.expiresIn()).build().toString());
+        try {
+            TokenResponse result = oauthCallback.execute(provider, code, state);
+            HttpHeaders headers = new HttpHeaders();
+            headers.add(HttpHeaders.LOCATION, frontend.baseUrl() + "/dashboard");
+            headers.add("X-Trace-Id", traceId);
+            if (result.accessToken() != null) {
+                headers.add(HttpHeaders.SET_COOKIE,
+                    ResponseCookie.from(COOKIE_JWT, result.accessToken())
+                        .httpOnly(true).secure(false).sameSite("Lax").path("/")
+                        .maxAge(result.expiresIn()).build().toString());
+            }
+            if (result.refreshToken() != null) {
+                headers.add(HttpHeaders.SET_COOKIE,
+                    ResponseCookie.from(COOKIE_REFRESH, result.refreshToken())
+                        .httpOnly(true).secure(false).sameSite("Lax").path("/api/auth/refresh")
+                        .maxAge(30L * 24 * 3600).build().toString());
+            }
+            return ResponseEntity.status(HttpStatus.FOUND).headers(headers).build();
+        } catch (Exception e) {
+            log.warn("OAuth callback failed for provider {}: {}", provider, e.getMessage());
+            return ResponseEntity.status(HttpStatus.FOUND)
+                .header(HttpHeaders.LOCATION, frontend.baseUrl() + "/login?error=oauth_failed")
+                .header("X-Trace-Id", traceId)
+                .build();
         }
-        if (result.refreshToken() != null) {
-            response.addHeader(HttpHeaders.SET_COOKIE,
-                ResponseCookie.from(COOKIE_REFRESH, result.refreshToken())
-                    .httpOnly(true).secure(true).sameSite("Lax").path("/v1/auth/refresh")
-                    .maxAge(30L * 24 * 3600).build().toString());
-        }
-        return ResponseEntity.ok()
-            .header("X-Trace-Id", traceId)
-            .body(new ApiResponse<>(result, traceId));
     }
 }

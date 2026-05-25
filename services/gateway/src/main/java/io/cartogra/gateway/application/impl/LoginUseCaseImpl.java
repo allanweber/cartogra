@@ -19,7 +19,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HexFormat;
-import java.util.UUID;
 
 @Service
 public class LoginUseCaseImpl implements LoginUseCase {
@@ -42,8 +41,8 @@ public class LoginUseCaseImpl implements LoginUseCase {
     }
 
     @Override
-    public TokenResponse execute(UUID tenantId, String email, String password) {
-        User user = userRepository.findByTenantAndEmail(tenantId, email)
+    public TokenResponse execute(String email, String password) {
+        User user = userRepository.findByEmail(email)
             .orElseThrow(() -> new UnauthorizedException("Invalid credentials"));
 
         if (user.deletedAt() != null) {

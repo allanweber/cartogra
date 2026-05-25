@@ -8,9 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
 import { MOCK_CONTRACTS, MOCK_SERVICES, MOCK_TIMELINE } from '#/lib/mock-data'
 import { cn } from '#/lib/utils'
 
-import type { ServiceHealth } from '#/lib/mock-data'
+import type { ScmProvider, ServiceHealth } from '#/lib/mock-data'
 
-export const Route = createFileRoute('/catalog/$serviceId')({
+export const Route = createFileRoute('/_authenticated/catalog/$serviceId')({
   component: ServiceDetailPage,
   loader: ({ params }) => {
     const service = MOCK_SERVICES.find((s) => s.id === params.serviceId)
@@ -56,6 +56,15 @@ function ServiceDetailPage() {
               <MetaItem icon={<Users className="size-3.5" />} label="Owner" value={service.owner ?? 'Unowned'} />
               <MetaItem icon={<Clock className="size-3.5" />} label="Last deploy" value={service.lastDeploy} />
               <MetaItem icon={<GitBranch className="size-3.5" />} label="Dependencies" value={String(service.deps)} />
+              <div className="flex items-center gap-1.5">
+                <span className="text-muted-foreground">
+                  <GitBranch className="size-3.5" aria-hidden="true" />
+                </span>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">SCM</p>
+                  <ScmBadge provider={service.scmProvider} />
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -74,13 +83,15 @@ function ServiceDetailPage() {
         </div>
 
         {/* Tab bar */}
-        <div className="flex gap-0 overflow-hidden rounded-lg border border-border">
+        <div role="tablist" className="flex gap-0 overflow-hidden rounded-lg border border-border">
           {(['overview', 'contracts', 'activity'] as const).map((t) => (
             <button
               key={t}
+              role="tab"
+              aria-selected={tab === t}
               onClick={() => setTab(t)}
               className={cn(
-                'flex-1 px-4 py-2.5 text-sm font-medium capitalize transition-colors',
+                'flex-1 px-4 py-2.5 text-sm font-medium capitalize transition-colors focus-visible:outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-ring',
                 tab === t
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -162,7 +173,7 @@ function ServiceDetailPage() {
                   key={event.id}
                   className="flex items-start gap-3 rounded-lg border border-border bg-card p-3"
                 >
-                  <div className={cn('mt-1.5 size-2 rounded-full', typeColor(event.type))} />
+                  <div className={cn('mt-1.5 size-2 rounded-full', typeColor(event.type))} aria-hidden="true" />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm">{event.msg}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
@@ -279,5 +290,18 @@ function EmptyTab({ icon, message }: { icon: React.ReactNode; message: string })
       <div className="mb-3 text-muted-foreground/50">{icon}</div>
       <p className="text-sm text-muted-foreground">{message}</p>
     </div>
+  )
+}
+
+const SCM_LABELS: Record<ScmProvider, string> = {
+  github: 'GitHub',
+  gitlab: 'GitLab',
+  'azure-devops': 'Azure DevOps',
+  bitbucket: 'Bitbucket',
+}
+
+function ScmBadge({ provider }: { provider: ScmProvider }) {
+  return (
+    <span className="text-sm font-medium">{SCM_LABELS[provider]}</span>
   )
 }

@@ -10,7 +10,7 @@ import { cn } from '#/lib/utils'
 
 import type { RiskSeverity } from '#/lib/mock-data'
 
-export const Route = createFileRoute('/risks')({
+export const Route = createFileRoute('/_authenticated/risks')({
   component: RisksPage,
 })
 

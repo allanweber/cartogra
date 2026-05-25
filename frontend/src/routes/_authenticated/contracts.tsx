@@ -8,7 +8,7 @@ import { cn } from '#/lib/utils'
 
 import type { ContractStatus } from '#/lib/mock-data'
 
-export const Route = createFileRoute('/contracts')({
+export const Route = createFileRoute('/_authenticated/contracts')({
   component: ContractsPage,
 })
 

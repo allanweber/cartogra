@@ -11,6 +11,11 @@ spring:
           routes: []
 
 app:
+  frontend:
+    base-url: http://localhost:3000
+  cors:
+    allowed-origins:
+      - http://localhost:3000
   jwt:
     secret: test-secret-32-bytes-padding-here!
     access-token-expiry-seconds: 900
@@ -23,13 +28,13 @@ app:
     google:
       client-id: test-google-client
       client-secret: test-google-secret
-      redirect-uri: http://localhost/v1/auth/oauth/google/callback
+      redirect-uri: http://localhost/api/auth/oauth/google/callback
       token-uri: https://oauth2.googleapis.com/token
       userinfo-uri: https://openidconnect.googleapis.com/v1/userinfo
     github:
       client-id: test-github-client
       client-secret: test-github-secret
-      redirect-uri: http://localhost/v1/auth/oauth/github/callback
+      redirect-uri: http://localhost/api/auth/oauth/github/callback
       token-uri: https://github.com/login/oauth/access_token
       userinfo-uri: https://api.github.com/user
   rate-limit:

@@ -1,5 +1,7 @@
 import {
   HeadContent,
+  Link,
+  Navigate,
   Outlet,
   Scripts,
   createRootRouteWithContext,
@@ -13,6 +15,7 @@ import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert'
 import { Button } from '../components/ui/button'
 import { TooltipProvider } from '../components/ui/tooltip'
 import { ApiError } from '../lib/api'
+import { useAuthStore } from '../stores/useAuthStore'
 
 import appCss from '../styles.css?url'
 
@@ -55,7 +58,7 @@ function RootLayout() {
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>
@@ -90,6 +93,12 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 }
 
 function RootNotFound() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" />
+  }
+
   return (
     <AppLayout
       title="This page does not exist"
@@ -97,7 +106,7 @@ function RootNotFound() {
       eyebrow="Not found"
       actions={
         <Button asChild>
-          <a href="/dashboard">Go to Catalog</a>
+          <Link to="/dashboard">Go to Catalog</Link>
         </Button>
       }
     >

@@ -10,7 +10,7 @@ import { cn } from '#/lib/utils'
 
 import type { Team } from '#/lib/mock-data'
 
-export const Route = createFileRoute('/teams')({
+export const Route = createFileRoute('/_authenticated/teams')({
   component: TeamsPage,
 })
 

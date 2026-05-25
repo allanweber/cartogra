@@ -1,0 +1,75 @@
+@startuml
+title Auth Screens — Login / Register / Verify / OAuth Handoff
+
+actor User
+participant "Browser" as B
+participant "RootLayout\n(useEffect)" as RL
+participant "LoginPage" as LP
+participant "RegisterPage" as RP
+participant "VerifyEmailPage" as VE
+participant "OAuthHandoffPage" as OH
+participant "useAuthStore" as S
+participant "Gateway /api" as GW
+
+== App mount — session restoration ==
+B -> RL: mount
+RL -> GW: GET /api/auth/me (httpOnly cookie)
+alt authenticated
+  GW --> RL: 200 { data: AuthUser }
+  RL -> S: setUser(user)
+else unauthenticated
+  GW --> RL: 401
+  RL -> S: (no change — user stays null)
+end
+
+== Email / password login ==
+User -> LP: submit email + password
+LP -> GW: POST /api/auth/login { email, password }
+alt success
+  GW --> LP: 200 { data: { user } }
+  LP -> S: setUser(user)
+  LP -> B: navigate(/dashboard)
+else error
+  GW --> LP: 4xx { error: { code, message }, traceId }
+  LP -> User: display error + traceId
+end
+
+== OAuth login ==
+User -> LP: click "Continue with GitHub"
+LP -> B: window.location.href = /api/auth/oauth/github
+B -> GW: GET /api/auth/oauth/github
+GW --> B: 302 → GitHub authorization URL
+B -> B: navigate to GitHub
+B -> GW: GET /api/auth/oauth/callback?code=...
+GW --> B: 302 → /oauth-handoff?code=...
+B -> OH: mount with ?code=
+OH -> GW: GET /api/auth/oauth/callback?code=...
+alt success
+  GW --> OH: 200 { data: { user } }
+  OH -> S: setUser(user)
+  OH -> B: navigate(/dashboard)
+else error
+  GW --> OH: 4xx { error, traceId }
+  OH -> User: display error + traceId
+end
+
+== Registration ==
+User -> RP: submit name + email + password
+RP -> GW: POST /api/auth/register { name, email, password }
+alt success
+  GW --> RP: 201 { data: { user } }
+  RP -> S: setUser(user)
+  RP -> B: navigate(/verify-email)
+  User -> VE: sees "check your inbox"
+  opt resend
+    User -> VE: click resend
+    VE -> GW: POST /api/auth/resend-verification { email }
+    GW --> VE: 200
+    VE -> User: "Email sent"
+  end
+else error
+  GW --> RP: 4xx { error, traceId }
+  RP -> User: display error + traceId
+end
+
+@enduml

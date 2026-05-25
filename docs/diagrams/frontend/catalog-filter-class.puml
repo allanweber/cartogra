@@ -1,0 +1,85 @@
+@startuml
+title Catalog Filter — Component & Data Model
+
+package "routes" {
+  class CatalogPage {
+    - query: string
+    - teamFilter: string
+    - healthFilter: ServiceHealth | "all"
+    - scmFilter: ScmProvider | "all"
+    - techFilter: string[]
+    - view: "grid" | "list"
+    + toggleTech(tech: string): void
+    + filtered: Service[]
+  }
+
+  class ServiceCard {
+    + service: Service
+    - isOrphan: boolean
+  }
+
+  class ServiceListRow {
+    + service: Service
+    - isOrphan: boolean
+  }
+
+  class ServiceDetailPage {
+    + service: Service
+    - tab: "overview" | "contracts" | "activity"
+    + contracts: Contract[]
+    + activity: TimelineEvent[]
+  }
+}
+
+package "lib/mock-data" {
+  class Service {
+    + id: string
+    + name: string
+    + health: ServiceHealth
+    + owner: string | null
+    + tier: ServiceTier
+    + tech: string[]
+    + lastDeploy: string
+    + riskScore: number
+    + deps: number
+    + warnings: ServiceWarning[]
+    + description: string
+    + scmProvider: ScmProvider
+  }
+
+  enum ServiceHealth {
+    healthy
+    degraded
+    down
+  }
+
+  enum ScmProvider {
+    github
+    gitlab
+    azure-devops
+    bitbucket
+  }
+
+  enum ServiceWarning {
+    stale
+    breaking-change
+    orphan
+  }
+}
+
+CatalogPage ..> Service : filters
+CatalogPage --> ServiceCard : renders (grid)
+CatalogPage --> ServiceListRow : renders (list)
+ServiceCard ..> Service : displays
+ServiceListRow ..> Service : displays
+ServiceDetailPage ..> Service : loader data
+Service *-- ServiceHealth
+Service *-- ScmProvider
+Service *-- ServiceWarning
+
+note right of ServiceCard
+  isOrphan = warnings.includes("orphan")
+  → ring-2 ring-amber-500 ring-offset-1
+end note
+
+@enduml

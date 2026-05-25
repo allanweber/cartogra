@@ -58,7 +58,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return;
         }
 
-        boolean isAuthPath = path.startsWith("/v1/auth/");
+        boolean isAuthPath = path.startsWith("/api/auth/");
         String clientIp = resolveClientIp(request);
 
         if (isAllowed(clientIp, isAuthPath)) {

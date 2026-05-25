@@ -12,15 +12,14 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 @RestController
-@RequestMapping("/v1/auth")
+@RequestMapping("/api/auth")
 public class AuthController {
 
     private static final String COOKIE_JWT = "jwt";
@@ -28,22 +27,31 @@ public class AuthController {
 
     private final RegisterUserUseCase registerUser;
     private final VerifyEmailUseCase verifyEmail;
+    private final ResendVerificationUseCase resendVerification;
     private final LoginUseCase login;
     private final RefreshTokenUseCase refreshToken;
     private final LogoutUseCase logout;
+    private final ForgotPasswordUseCase forgotPassword;
+    private final ResetPasswordUseCase resetPassword;
     private final TraceContext traceContext;
 
     public AuthController(RegisterUserUseCase registerUser,
                           VerifyEmailUseCase verifyEmail,
+                          ResendVerificationUseCase resendVerification,
                           LoginUseCase login,
                           RefreshTokenUseCase refreshToken,
                           LogoutUseCase logout,
+                          ForgotPasswordUseCase forgotPassword,
+                          ResetPasswordUseCase resetPassword,
                           TraceContext traceContext) {
         this.registerUser = registerUser;
         this.verifyEmail = verifyEmail;
+        this.resendVerification = resendVerification;
         this.login = login;
         this.refreshToken = refreshToken;
         this.logout = logout;
+        this.forgotPassword = forgotPassword;
+        this.resetPassword = resetPassword;
         this.traceContext = traceContext;
     }
 
@@ -67,13 +75,22 @@ public class AuthController {
             .body(new ApiResponse<>(null, traceId));
     }
 
+    @PostMapping("/resend-verification")
+    public ResponseEntity<ApiResponse<Void>> resendVerification(
+            @Valid @RequestBody ResendVerificationRequest request) {
+        String traceId = traceContext.currentTraceId();
+        resendVerification.execute(request.email());
+        return ResponseEntity.ok()
+            .header("X-Trace-Id", traceId)
+            .body(new ApiResponse<>(null, traceId));
+    }
+
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<TokenResponse>> login(
             @Valid @RequestBody LoginRequest request,
             HttpServletResponse response) {
         String traceId = traceContext.currentTraceId();
-        UUID tenantId = request.tenantId() != null ? request.tenantId() : UUID.randomUUID();
-        TokenResponse result = login.execute(tenantId, request.email(), request.password());
+        TokenResponse result = login.execute(request.email(), request.password());
         setAuthCookies(response, result);
         return ResponseEntity.ok()
             .header("X-Trace-Id", traceId)
@@ -111,10 +128,30 @@ public class AuthController {
             .body(new ApiResponse<>(null, traceId));
     }
 
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest request) {
+        String traceId = traceContext.currentTraceId();
+        forgotPassword.execute(request.email());
+        return ResponseEntity.ok()
+            .header("X-Trace-Id", traceId)
+            .body(new ApiResponse<>(null, traceId));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(
+            @Valid @RequestBody ResetPasswordRequest request) {
+        String traceId = traceContext.currentTraceId();
+        resetPassword.execute(request.token(), request.newPassword());
+        return ResponseEntity.ok()
+            .header("X-Trace-Id", traceId)
+            .body(new ApiResponse<>(null, traceId));
+    }
+
     @GetMapping("/userinfo")
-    public ResponseEntity<ApiResponse<UserInfoResponse>> userinfo(
-            @AuthenticationPrincipal JwtAuthentication principal) {
-        if (principal == null) {
+    public ResponseEntity<ApiResponse<UserInfoResponse>> userinfo() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (!(auth instanceof JwtAuthentication principal)) {
             throw new UnauthorizedException("Authentication required");
         }
         String traceId = traceContext.currentTraceId();
@@ -139,7 +176,7 @@ public class AuthController {
         if (tokens.refreshToken() != null) {
             response.addHeader(HttpHeaders.SET_COOKIE,
                 ResponseCookie.from(COOKIE_REFRESH, tokens.refreshToken())
-                    .httpOnly(true).secure(true).sameSite("Lax").path("/v1/auth/refresh")
+                    .httpOnly(true).secure(true).sameSite("Lax").path("/api/auth/refresh")
                     .maxAge(30L * 24 * 3600).build().toString());
         }
     }
@@ -150,7 +187,7 @@ public class AuthController {
                 .httpOnly(true).secure(true).path("/").maxAge(0).build().toString());
         response.addHeader(HttpHeaders.SET_COOKIE,
             ResponseCookie.from(COOKIE_REFRESH, "")
-                .httpOnly(true).secure(true).path("/v1/auth/refresh").maxAge(0).build().toString());
+                .httpOnly(true).secure(true).path("/api/auth/refresh").maxAge(0).build().toString());
     }
 
     private String extractRefreshToken(HttpServletRequest request) {

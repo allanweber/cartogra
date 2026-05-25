@@ -1,6 +1,7 @@
 export type ServiceHealth = 'healthy' | 'degraded' | 'down'
 export type ServiceTier = 'critical' | 'standard'
 export type ServiceWarning = 'stale' | 'breaking-change' | 'orphan'
+export type ScmProvider = 'github' | 'gitlab' | 'azure-devops' | 'bitbucket'
 
 export interface Service {
   id: string
@@ -14,6 +15,7 @@ export interface Service {
   deps: number
   warnings: ServiceWarning[]
   description: string
+  scmProvider: ScmProvider
 }
 
 export type RiskSeverity = 'critical' | 'warning' | 'info'
@@ -89,18 +91,18 @@ export interface OperationsEvent {
 }
 
 export const MOCK_SERVICES: Service[] = [
-  { id: 'svc-1', name: 'API Gateway', health: 'healthy', owner: 'Platform', tier: 'critical', tech: ['Node.js', 'K8s', 'Nginx'], lastDeploy: '2h ago', riskScore: 12, deps: 11, warnings: [], description: 'Central entry point for all external traffic. Routes and authenticates all API requests.' },
-  { id: 'svc-2', name: 'Auth Service', health: 'healthy', owner: 'Security', tier: 'critical', tech: ['Go', 'Redis', 'JWT'], lastDeploy: '1d ago', riskScore: 8, deps: 3, warnings: [], description: 'Handles authentication and authorization for all services. Manages JWT issuance and session tokens.' },
-  { id: 'svc-3', name: 'Payment Service', health: 'degraded', owner: 'Payments', tier: 'critical', tech: ['Java', 'Postgres', 'Kafka'], lastDeploy: '5d ago', riskScore: 78, deps: 4, warnings: ['stale', 'breaking-change'], description: 'Processes all payment transactions. Integrates with Stripe and internal billing.' },
-  { id: 'svc-4', name: 'User Service', health: 'healthy', owner: 'Core', tier: 'standard', tech: ['Python', 'MySQL', 'Redis'], lastDeploy: '3h ago', riskScore: 24, deps: 5, warnings: [], description: 'Manages user profiles, preferences, and account lifecycle.' },
-  { id: 'svc-5', name: 'Notification Service', health: 'healthy', owner: 'Platform', tier: 'standard', tech: ['Node.js', 'Redis', 'SMTP'], lastDeploy: '2d ago', riskScore: 15, deps: 2, warnings: [], description: 'Sends emails, push notifications, and SMS. Supports templates and scheduling.' },
-  { id: 'svc-6', name: 'Analytics Engine', health: 'degraded', owner: 'Data', tier: 'standard', tech: ['Python', 'Kafka', 'ClickHouse'], lastDeploy: '12d ago', riskScore: 56, deps: 3, warnings: ['stale'], description: 'Processes and aggregates event data for dashboards and reports.' },
-  { id: 'svc-7', name: 'Search Service', health: 'down', owner: null, tier: 'standard', tech: ['Elasticsearch', 'Go'], lastDeploy: '20d ago', riskScore: 92, deps: 1, warnings: ['orphan', 'stale'], description: 'Provides full-text search across products, users, and content.' },
-  { id: 'svc-8', name: 'ML Pipeline', health: 'healthy', owner: 'Data', tier: 'standard', tech: ['Python', 'K8s', 'MLflow'], lastDeploy: '1d ago', riskScore: 31, deps: 4, warnings: [], description: 'Trains and serves machine learning models for recommendations and fraud detection.' },
-  { id: 'svc-9', name: 'Billing Service', health: 'healthy', owner: 'Payments', tier: 'critical', tech: ['Java', 'Postgres', 'gRPC'], lastDeploy: '6h ago', riskScore: 18, deps: 2, warnings: [], description: 'Manages subscription plans, invoices, and revenue recognition.' },
-  { id: 'svc-10', name: 'Config Service', health: 'healthy', owner: 'Platform', tier: 'standard', tech: ['Go', 'etcd', 'gRPC'], lastDeploy: '4d ago', riskScore: 9, deps: 0, warnings: [], description: 'Centralized feature flag and configuration management for all services.' },
-  { id: 'svc-11', name: 'Report Service', health: 'healthy', owner: null, tier: 'standard', tech: ['Python', 'PostgreSQL', 'Celery'], lastDeploy: '8d ago', riskScore: 22, deps: 2, warnings: ['orphan'], description: 'Generates scheduled and on-demand reports in PDF and CSV formats.' },
-  { id: 'svc-12', name: 'Media Service', health: 'degraded', owner: 'Core', tier: 'standard', tech: ['Node.js', 'S3', 'FFmpeg'], lastDeploy: '15d ago', riskScore: 44, deps: 2, warnings: ['stale'], description: 'Handles image and video upload, transcoding, and CDN distribution.' },
+  { id: 'svc-1', name: 'API Gateway', health: 'healthy', owner: 'Platform', tier: 'critical', tech: ['Node.js', 'K8s', 'Nginx'], lastDeploy: '2h ago', riskScore: 12, deps: 11, warnings: [], description: 'Central entry point for all external traffic. Routes and authenticates all API requests.', scmProvider: 'github' },
+  { id: 'svc-2', name: 'Auth Service', health: 'healthy', owner: 'Security', tier: 'critical', tech: ['Go', 'Redis', 'JWT'], lastDeploy: '1d ago', riskScore: 8, deps: 3, warnings: [], description: 'Handles authentication and authorization for all services. Manages JWT issuance and session tokens.', scmProvider: 'github' },
+  { id: 'svc-3', name: 'Payment Service', health: 'degraded', owner: 'Payments', tier: 'critical', tech: ['Java', 'Postgres', 'Kafka'], lastDeploy: '5d ago', riskScore: 78, deps: 4, warnings: ['stale', 'breaking-change'], description: 'Processes all payment transactions. Integrates with Stripe and internal billing.', scmProvider: 'azure-devops' },
+  { id: 'svc-4', name: 'User Service', health: 'healthy', owner: 'Core', tier: 'standard', tech: ['Python', 'MySQL', 'Redis'], lastDeploy: '3h ago', riskScore: 24, deps: 5, warnings: [], description: 'Manages user profiles, preferences, and account lifecycle.', scmProvider: 'github' },
+  { id: 'svc-5', name: 'Notification Service', health: 'healthy', owner: 'Platform', tier: 'standard', tech: ['Node.js', 'Redis', 'SMTP'], lastDeploy: '2d ago', riskScore: 15, deps: 2, warnings: [], description: 'Sends emails, push notifications, and SMS. Supports templates and scheduling.', scmProvider: 'github' },
+  { id: 'svc-6', name: 'Analytics Engine', health: 'degraded', owner: 'Data', tier: 'standard', tech: ['Python', 'Kafka', 'ClickHouse'], lastDeploy: '12d ago', riskScore: 56, deps: 3, warnings: ['stale'], description: 'Processes and aggregates event data for dashboards and reports.', scmProvider: 'gitlab' },
+  { id: 'svc-7', name: 'Search Service', health: 'down', owner: null, tier: 'standard', tech: ['Elasticsearch', 'Go'], lastDeploy: '20d ago', riskScore: 92, deps: 1, warnings: ['orphan', 'stale'], description: 'Provides full-text search across products, users, and content.', scmProvider: 'gitlab' },
+  { id: 'svc-8', name: 'ML Pipeline', health: 'healthy', owner: 'Data', tier: 'standard', tech: ['Python', 'K8s', 'MLflow'], lastDeploy: '1d ago', riskScore: 31, deps: 4, warnings: [], description: 'Trains and serves machine learning models for recommendations and fraud detection.', scmProvider: 'gitlab' },
+  { id: 'svc-9', name: 'Billing Service', health: 'healthy', owner: 'Payments', tier: 'critical', tech: ['Java', 'Postgres', 'gRPC'], lastDeploy: '6h ago', riskScore: 18, deps: 2, warnings: [], description: 'Manages subscription plans, invoices, and revenue recognition.', scmProvider: 'azure-devops' },
+  { id: 'svc-10', name: 'Config Service', health: 'healthy', owner: 'Platform', tier: 'standard', tech: ['Go', 'etcd', 'gRPC'], lastDeploy: '4d ago', riskScore: 9, deps: 0, warnings: [], description: 'Centralized feature flag and configuration management for all services.', scmProvider: 'github' },
+  { id: 'svc-11', name: 'Report Service', health: 'healthy', owner: null, tier: 'standard', tech: ['Python', 'PostgreSQL', 'Celery'], lastDeploy: '8d ago', riskScore: 22, deps: 2, warnings: ['orphan'], description: 'Generates scheduled and on-demand reports in PDF and CSV formats.', scmProvider: 'bitbucket' },
+  { id: 'svc-12', name: 'Media Service', health: 'degraded', owner: 'Core', tier: 'standard', tech: ['Node.js', 'S3', 'FFmpeg'], lastDeploy: '15d ago', riskScore: 44, deps: 2, warnings: ['stale'], description: 'Handles image and video upload, transcoding, and CDN distribution.', scmProvider: 'github' },
 ]
 
 export const MOCK_RISKS: Risk[] = [

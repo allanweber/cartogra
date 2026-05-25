@@ -1,17 +1,18 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { AlertTriangle, LayoutGrid, List, Search } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, LayoutGrid, List, Search } from 'lucide-react'
 import { useState } from 'react'
 
 import { AppLayout } from '#/components/AppLayout'
 import { Badge } from '#/components/ui/badge'
 import { Card, CardContent } from '#/components/ui/card'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '#/components/ui/dropdown-menu'
 import { Input } from '#/components/ui/input'
 import { MOCK_SERVICES } from '#/lib/mock-data'
 import { cn } from '#/lib/utils'
 
-import type { Service, ServiceHealth } from '#/lib/mock-data'
+import type { ScmProvider, Service, ServiceHealth } from '#/lib/mock-data'
 
-export const Route = createFileRoute('/catalog')({
+export const Route = createFileRoute('/_authenticated/catalog')({
   component: CatalogPage,
 })
 
@@ -22,24 +23,41 @@ const HEALTH_FILTERS: Array<{ label: string; value: ServiceHealth | 'all' }> = [
   { label: 'Degraded', value: 'degraded' },
   { label: 'Down', value: 'down' },
 ]
+const SCM_PROVIDERS: Array<{ label: string; value: ScmProvider | 'all' }> = [
+  { label: 'All SCM', value: 'all' },
+  { label: 'GitHub', value: 'github' },
+  { label: 'GitLab', value: 'gitlab' },
+  { label: 'Azure DevOps', value: 'azure-devops' },
+  { label: 'Bitbucket', value: 'bitbucket' },
+]
+
+const ALL_TECH = Array.from(new Set(MOCK_SERVICES.flatMap((s) => s.tech))).sort()
 
 function CatalogPage() {
   const [query, setQuery] = useState('')
   const [teamFilter, setTeamFilter] = useState('All Teams')
   const [healthFilter, setHealthFilter] = useState<ServiceHealth | 'all'>('all')
+  const [scmFilter, setScmFilter] = useState<ScmProvider | 'all'>('all')
+  const [techFilter, setTechFilter] = useState<string[]>([])
   const [view, setView] = useState<'grid' | 'list'>('grid')
+
+  function toggleTech(tech: string) {
+    setTechFilter((prev) =>
+      prev.includes(tech) ? prev.filter((t) => t !== tech) : [...prev, tech],
+    )
+  }
 
   const filtered = MOCK_SERVICES.filter((s) => {
     const matchesQuery =
       query === '' ||
       s.name.toLowerCase().includes(query.toLowerCase()) ||
       s.tech.some((t) => t.toLowerCase().includes(query.toLowerCase()))
-    const matchesTeam =
-      teamFilter === 'All Teams' ||
-      s.owner === teamFilter
-    const matchesHealth =
-      healthFilter === 'all' || s.health === healthFilter
-    return matchesQuery && matchesTeam && matchesHealth
+    const matchesTeam = teamFilter === 'All Teams' || s.owner === teamFilter
+    const matchesHealth = healthFilter === 'all' || s.health === healthFilter
+    const matchesScm = scmFilter === 'all' || s.scmProvider === scmFilter
+    const matchesTech =
+      techFilter.length === 0 || techFilter.every((t) => s.tech.includes(t))
+    return matchesQuery && matchesTeam && matchesHealth && matchesScm && matchesTech
   })
 
   const healthCounts = {
@@ -63,7 +81,7 @@ function CatalogPage() {
                 key={f.value}
                 onClick={() => setHealthFilter(f.value)}
                 className={cn(
-                  'flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                  'flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
                   healthFilter === f.value
                     ? 'border-primary bg-primary text-primary-foreground'
                     : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground',
@@ -71,6 +89,8 @@ function CatalogPage() {
               >
                 {f.value !== 'all' && (
                   <span
+                    role="img"
+                    aria-label={`${f.label} health`}
                     className={cn(
                       'size-1.5 rounded-full',
                       f.value === 'healthy' && 'bg-emerald-500',
@@ -98,17 +118,21 @@ function CatalogPage() {
         {/* Search + filters bar */}
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1" style={{ minWidth: '180px' }}>
-            <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <Input
               placeholder="Search services or tech..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="pl-8 text-sm"
+              aria-label="Search services"
             />
           </div>
+
+          {/* Team filter */}
           <select
             value={teamFilter}
             onChange={(e) => setTeamFilter(e.target.value)}
+            aria-label="Filter by team"
             className="rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
           >
             {TEAMS.map((t) => (
@@ -117,43 +141,116 @@ function CatalogPage() {
               </option>
             ))}
           </select>
+
+          {/* SCM provider filter */}
+          <select
+            value={scmFilter}
+            onChange={(e) => setScmFilter(e.target.value as ScmProvider | 'all')}
+            aria-label="Filter by SCM provider"
+            className="rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            {SCM_PROVIDERS.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+
+          {/* Tech stack multi-select */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className={cn(
+                  'flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                  techFilter.length > 0
+                    ? 'border-primary bg-primary/5 text-foreground'
+                    : 'border-input bg-background text-foreground',
+                )}
+                aria-label="Filter by tech stack"
+              >
+                {techFilter.length === 0
+                  ? 'Tech Stack'
+                  : `Tech (${techFilter.length})`}
+                <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden="true" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
+              {ALL_TECH.map((tech) => (
+                <DropdownMenuItem
+                  key={tech}
+                  onSelect={(e) => {
+                    e.preventDefault()
+                    toggleTech(tech)
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <span
+                    className={cn(
+                      'flex size-4 items-center justify-center rounded border',
+                      techFilter.includes(tech)
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-border',
+                    )}
+                    aria-hidden="true"
+                  >
+                    {techFilter.includes(tech) && <Check className="size-2.5" />}
+                  </span>
+                  {tech}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Tech filter clear */}
+          {techFilter.length > 0 && (
+            <button
+              onClick={() => setTechFilter([])}
+              className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+            >
+              Clear tech
+            </button>
+          )}
+
+          {/* Grid/list toggle */}
           <div className="flex overflow-hidden rounded-md border border-border">
             <button
               onClick={() => setView('grid')}
               className={cn(
-                'flex items-center px-2.5 py-2 transition-colors',
+                'flex items-center px-2.5 py-2 transition-colors focus-visible:outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-ring',
                 view === 'grid'
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-background text-muted-foreground hover:bg-muted',
               )}
               aria-label="Grid view"
+              aria-pressed={view === 'grid'}
             >
-              <LayoutGrid className="size-4" />
+              <LayoutGrid className="size-4" aria-hidden="true" />
             </button>
             <button
               onClick={() => setView('list')}
               className={cn(
-                'flex items-center px-2.5 py-2 transition-colors',
+                'flex items-center px-2.5 py-2 transition-colors focus-visible:outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-ring',
                 view === 'list'
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-background text-muted-foreground hover:bg-muted',
               )}
               aria-label="List view"
+              aria-pressed={view === 'list'}
             >
-              <List className="size-4" />
+              <List className="size-4" aria-hidden="true" />
             </button>
           </div>
         </div>
 
         {/* Results count */}
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground" aria-live="polite">
           {filtered.length} of {MOCK_SERVICES.length} services
         </p>
 
         {/* Service cards */}
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16 text-center">
-            <Search className="mb-3 size-8 text-muted-foreground/50" />
+            <Search className="mb-3 size-8 text-muted-foreground/50" aria-hidden="true" />
             <p className="text-sm font-medium">No services match your filters</p>
             <p className="mt-1 text-xs text-muted-foreground">Try adjusting the search or filters</p>
           </div>
@@ -178,6 +275,8 @@ function CatalogPage() {
 function HealthDot({ health }: { health: ServiceHealth }) {
   return (
     <span
+      role="img"
+      aria-label={`${health} health`}
       className={cn(
         'inline-block size-2 rounded-full',
         health === 'healthy' && 'bg-emerald-500',
@@ -226,9 +325,15 @@ function RiskScore({ score }: { score: number }) {
 }
 
 function ServiceCard({ service }: { service: Service }) {
+  const isOrphan = service.warnings.includes('orphan')
   return (
     <Link to="/catalog/$serviceId" params={{ serviceId: service.id }}>
-      <Card className="group h-full cursor-pointer transition-all hover:border-primary/50 hover:shadow-md">
+      <Card
+        className={cn(
+          'group h-full cursor-pointer transition-all hover:border-primary/50 hover:shadow-md',
+          isOrphan && 'ring-2 ring-amber-500 ring-offset-1',
+        )}
+      >
         <CardContent className="flex h-full flex-col gap-3 p-4">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
@@ -270,7 +375,7 @@ function ServiceCard({ service }: { service: Service }) {
                   key={w}
                   className="flex items-center gap-0.5 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-400"
                 >
-                  <AlertTriangle className="size-2.5" />
+                  <AlertTriangle className="size-2.5" aria-hidden="true" />
                   {w}
                 </span>
               ))}
@@ -284,9 +389,15 @@ function ServiceCard({ service }: { service: Service }) {
 }
 
 function ServiceListRow({ service }: { service: Service }) {
+  const isOrphan = service.warnings.includes('orphan')
   return (
     <Link to="/catalog/$serviceId" params={{ serviceId: service.id }}>
-      <div className="group flex items-center gap-4 rounded-lg border border-border bg-card p-3 transition-all hover:border-primary/50 hover:shadow-sm">
+      <div
+        className={cn(
+          'group flex items-center gap-4 rounded-lg border border-border bg-card p-3 transition-all hover:border-primary/50 hover:shadow-sm',
+          isOrphan && 'ring-2 ring-amber-500 ring-offset-1',
+        )}
+      >
         <HealthDot health={service.health} />
         <div className="min-w-0 flex-1">
           <p className="font-medium group-hover:text-primary">{service.name}</p>

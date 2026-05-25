@@ -7,7 +7,6 @@ import io.cartogra.gateway.config.OAuthConfig;
 import io.cartogra.gateway.domain.RefreshToken;
 import io.cartogra.gateway.domain.Tenant;
 import io.cartogra.gateway.domain.User;
-import io.cartogra.gateway.domain.exception.ConflictException;
 import io.cartogra.gateway.domain.exception.InvalidOAuthStateException;
 import io.cartogra.gateway.infrastructure.jdbc.RefreshTokenRepository;
 import io.cartogra.gateway.infrastructure.jdbc.TenantRepository;
@@ -82,34 +81,24 @@ public class OAuthCallbackUseCaseImpl implements OAuthCallbackUseCase {
         if ("new".equals(stateValue)) {
             var maybeExisting = userRepository.findByEmail(profile.email());
             if (maybeExisting.isPresent()) {
-                User existing = maybeExisting.get();
-                if (!provider.equals(existing.authProvider())) {
-                    throw new ConflictException(
-                        "This email is already linked to a %s account. Please sign in with %s."
-                            .formatted(existing.authProvider(), existing.authProvider()));
-                }
-                user = existing;
+                user = maybeExisting.get();
             } else {
                 Tenant tenant = tenantRepository.save(
                     new Tenant(null, null, profile.email(), null, "free", null, null, null));
                 User newUser = new User(null, tenant.id(), profile.email(), provider,
                     profile.subject(), null, true, List.of("ADMIN"),
-                    null, null, null, null, null);
+                    null, null, null, null, null, null, null);
                 user = userRepository.save(newUser);
             }
         } else {
             UUID tenantId = UUID.fromString(stateValue);
             user = userRepository.findByTenantAndEmail(tenantId, profile.email())
                 .map(existing -> {
-                    if (!provider.equals(existing.authProvider())) {
-                        throw new ConflictException(
-                            "This account uses %s. Please sign in with %s."
-                                .formatted(existing.authProvider(), existing.authProvider()));
-                    }
-                    if (!profile.subject().equals(existing.authSubject())) {
+                    if (provider.equals(existing.authProvider()) && !profile.subject().equals(existing.authSubject())) {
                         return new User(existing.id(), existing.tenantId(), existing.email(),
                             provider, profile.subject(), existing.passwordHash(),
                             true, existing.roles(), null, null,
+                            existing.passwordResetToken(), existing.passwordResetTokenExp(),
                             existing.createdAt(), existing.updatedAt(), existing.deletedAt());
                     }
                     return existing;
@@ -118,7 +107,7 @@ public class OAuthCallbackUseCaseImpl implements OAuthCallbackUseCase {
                 .orElseGet(() -> {
                     User newUser = new User(null, tenantId, profile.email(), provider,
                         profile.subject(), null, true, List.of("VIEWER"),
-                        null, null, null, null, null);
+                        null, null, null, null, null, null, null);
                     return userRepository.save(newUser);
                 });
         }

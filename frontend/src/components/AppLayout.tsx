@@ -1,4 +1,4 @@
-import { Link, useRouterState } from '@tanstack/react-router'
+import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
 import {
   Activity,
   Brain,
@@ -11,6 +11,7 @@ import {
   FolderKanban,
   GitBranch,
   LayoutDashboard,
+  LogOut,
   Menu,
   Moon,
   Search,
@@ -46,7 +47,10 @@ import {
 } from '#/components/ui/tooltip'
 import { CommandPalette } from '#/components/CommandPalette'
 import { NotificationBell } from '#/components/NotificationBell'
+import { apiMutate } from '#/lib/api'
+import { clearSessionCookie } from '#/lib/session'
 import { cn } from '#/lib/utils'
+import { useAuthStore } from '#/stores/useAuthStore'
 import { useThemeStore } from '#/stores/useThemeStore'
 import { TENANTS, useCurrentTenant, useTenantStore } from '#/stores/useTenantStore'
 
@@ -135,7 +139,7 @@ export function AppLayout({
 
       {/* Main content area */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background/90 px-4 py-2.5 backdrop-blur sm:px-6">
+        <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background/90 px-4 backdrop-blur sm:px-6">
           {/* Mobile nav trigger */}
           <div className="md:hidden">
             <NavigationSheet pathname={pathname} />
@@ -271,7 +275,7 @@ function SidebarContent({
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Logo row */}
-      <div className={cn('flex items-center border-b border-border py-3', collapsed ? 'justify-center px-2' : 'gap-2 px-4')}>
+      <div className={cn('flex h-14 shrink-0 items-center border-b border-border', collapsed ? 'justify-center px-2' : 'gap-2 px-4')}>
         {!collapsed && (
           <span className="flex-1 text-base font-bold tracking-tight">Cartogra</span>
         )}
@@ -346,9 +350,9 @@ function SidebarContent({
               aria-label="Toggle theme"
             >
               {theme === 'dark' ? (
-                <Sun className="size-4 shrink-0" />
+                <Sun className="size-4 shrink-0" aria-hidden="true" />
               ) : (
-                <Moon className="size-4 shrink-0" />
+                <Moon className="size-4 shrink-0" aria-hidden="true" />
               )}
               {!collapsed && (
                 <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
@@ -362,20 +366,87 @@ function SidebarContent({
           )}
         </Tooltip>
 
-        {/* User avatar */}
-        {!collapsed && (
-          <div className="flex items-center gap-2.5 rounded-lg px-2.5 py-2">
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-purple-700 text-xs font-bold text-white">
-              AW
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">Allan Weber</p>
-              <p className="truncate text-xs text-muted-foreground">admin@cartogra.io</p>
-            </div>
-          </div>
-        )}
+        {/* User menu */}
+        <UserMenu collapsed={collapsed} />
       </div>
     </div>
+  )
+}
+
+function UserMenu({ collapsed }: { collapsed: boolean }) {
+  const user = useAuthStore((s) => s.user)
+  const clearAuth = useAuthStore((s) => s.clearAuth)
+  const navigate = useNavigate()
+
+  const initials = user?.email
+    ? user.email.slice(0, 2).toUpperCase()
+    : '??'
+
+  async function handleLogout() {
+    try {
+      await apiMutate('/auth/logout', {})
+    } catch {
+      // proceed even if the server call fails
+    }
+    clearSessionCookie()
+    clearAuth()
+    navigate({ to: '/login' })
+  }
+
+  const avatar = (
+    <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-violet-500 to-purple-700 text-xs font-bold text-white">
+      {initials}
+    </div>
+  )
+
+  if (collapsed) {
+
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="flex w-full justify-center rounded-lg py-1 hover:bg-sidebar-accent"
+                aria-label="User menu"
+              >
+                {avatar}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="right" align="end" className="w-44">
+              <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive">
+                <LogOut className="size-4" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </TooltipTrigger>
+        <TooltipContent side="right">Account</TooltipContent>
+      </Tooltip>
+    )
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-sidebar-accent">
+          {avatar}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{user?.email ?? '—'}</p>
+            <p className="truncate text-xs text-muted-foreground capitalize">{user?.roles?.[0] ?? 'user'}</p>
+          </div>
+          <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="start" className="w-52">
+        <DropdownMenuLabel className="truncate text-xs text-muted-foreground">{user?.email}</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive">
+          <LogOut className="size-4" />
+          Sign out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 

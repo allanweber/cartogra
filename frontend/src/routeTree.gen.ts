@@ -9,43 +9,44 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as TimelineRouteImport } from './routes/timeline'
-import { Route as TeamsRouteImport } from './routes/teams'
-import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as RisksRouteImport } from './routes/risks'
-import { Route as OpsRouteImport } from './routes/ops'
+import { Route as VerifyEmailRouteImport } from './routes/verify-email'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as RegisterRouteImport } from './routes/register'
+import { Route as OauthHandoffRouteImport } from './routes/oauth-handoff'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as IntelligenceRouteImport } from './routes/intelligence'
-import { Route as GraphRouteImport } from './routes/graph'
-import { Route as DashboardRouteImport } from './routes/dashboard'
-import { Route as ContractsRouteImport } from './routes/contracts'
-import { Route as CatalogRouteImport } from './routes/catalog'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as CatalogServiceIdRouteImport } from './routes/catalog.$serviceId'
+import { Route as AuthenticatedTimelineRouteImport } from './routes/_authenticated/timeline'
+import { Route as AuthenticatedTeamsRouteImport } from './routes/_authenticated/teams'
+import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedRisksRouteImport } from './routes/_authenticated/risks'
+import { Route as AuthenticatedOpsRouteImport } from './routes/_authenticated/ops'
+import { Route as AuthenticatedIntelligenceRouteImport } from './routes/_authenticated/intelligence'
+import { Route as AuthenticatedGraphRouteImport } from './routes/_authenticated/graph'
+import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedContractsRouteImport } from './routes/_authenticated/contracts'
+import { Route as AuthenticatedCatalogRouteImport } from './routes/_authenticated/catalog'
+import { Route as AuthenticatedCatalogServiceIdRouteImport } from './routes/_authenticated/catalog.$serviceId'
 
-const TimelineRoute = TimelineRouteImport.update({
-  id: '/timeline',
-  path: '/timeline',
+const VerifyEmailRoute = VerifyEmailRouteImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TeamsRoute = TeamsRouteImport.update({
-  id: '/teams',
-  path: '/teams',
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SettingsRoute = SettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
+const RegisterRoute = RegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
   getParentRoute: () => rootRouteImport,
 } as any)
-const RisksRoute = RisksRouteImport.update({
-  id: '/risks',
-  path: '/risks',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const OpsRoute = OpsRouteImport.update({
-  id: '/ops',
-  path: '/ops',
+const OauthHandoffRoute = OauthHandoffRouteImport.update({
+  id: '/oauth-handoff',
+  path: '/oauth-handoff',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -53,29 +54,13 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IntelligenceRoute = IntelligenceRouteImport.update({
-  id: '/intelligence',
-  path: '/intelligence',
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
-const GraphRoute = GraphRouteImport.update({
-  id: '/graph',
-  path: '/graph',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DashboardRoute = DashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ContractsRoute = ContractsRouteImport.update({
-  id: '/contracts',
-  path: '/contracts',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CatalogRoute = CatalogRouteImport.update({
-  id: '/catalog',
-  path: '/catalog',
+const AuthenticatedRoute = AuthenticatedRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -83,68 +68,141 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CatalogServiceIdRoute = CatalogServiceIdRouteImport.update({
-  id: '/$serviceId',
-  path: '/$serviceId',
-  getParentRoute: () => CatalogRoute,
+const AuthenticatedTimelineRoute = AuthenticatedTimelineRouteImport.update({
+  id: '/timeline',
+  path: '/timeline',
+  getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedTeamsRoute = AuthenticatedTeamsRouteImport.update({
+  id: '/teams',
+  path: '/teams',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedRisksRoute = AuthenticatedRisksRouteImport.update({
+  id: '/risks',
+  path: '/risks',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedOpsRoute = AuthenticatedOpsRouteImport.update({
+  id: '/ops',
+  path: '/ops',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedIntelligenceRoute =
+  AuthenticatedIntelligenceRouteImport.update({
+    id: '/intelligence',
+    path: '/intelligence',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedGraphRoute = AuthenticatedGraphRouteImport.update({
+  id: '/graph',
+  path: '/graph',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedContractsRoute = AuthenticatedContractsRouteImport.update({
+  id: '/contracts',
+  path: '/contracts',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedCatalogRoute = AuthenticatedCatalogRouteImport.update({
+  id: '/catalog',
+  path: '/catalog',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedCatalogServiceIdRoute =
+  AuthenticatedCatalogServiceIdRouteImport.update({
+    id: '/$serviceId',
+    path: '/$serviceId',
+    getParentRoute: () => AuthenticatedCatalogRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/catalog': typeof CatalogRouteWithChildren
-  '/contracts': typeof ContractsRoute
-  '/dashboard': typeof DashboardRoute
-  '/graph': typeof GraphRoute
-  '/intelligence': typeof IntelligenceRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
-  '/ops': typeof OpsRoute
-  '/risks': typeof RisksRoute
-  '/settings': typeof SettingsRoute
-  '/teams': typeof TeamsRoute
-  '/timeline': typeof TimelineRoute
-  '/catalog/$serviceId': typeof CatalogServiceIdRoute
+  '/oauth-handoff': typeof OauthHandoffRoute
+  '/register': typeof RegisterRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/verify-email': typeof VerifyEmailRoute
+  '/catalog': typeof AuthenticatedCatalogRouteWithChildren
+  '/contracts': typeof AuthenticatedContractsRoute
+  '/dashboard': typeof AuthenticatedDashboardRoute
+  '/graph': typeof AuthenticatedGraphRoute
+  '/intelligence': typeof AuthenticatedIntelligenceRoute
+  '/ops': typeof AuthenticatedOpsRoute
+  '/risks': typeof AuthenticatedRisksRoute
+  '/settings': typeof AuthenticatedSettingsRoute
+  '/teams': typeof AuthenticatedTeamsRoute
+  '/timeline': typeof AuthenticatedTimelineRoute
+  '/catalog/$serviceId': typeof AuthenticatedCatalogServiceIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/catalog': typeof CatalogRouteWithChildren
-  '/contracts': typeof ContractsRoute
-  '/dashboard': typeof DashboardRoute
-  '/graph': typeof GraphRoute
-  '/intelligence': typeof IntelligenceRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
-  '/ops': typeof OpsRoute
-  '/risks': typeof RisksRoute
-  '/settings': typeof SettingsRoute
-  '/teams': typeof TeamsRoute
-  '/timeline': typeof TimelineRoute
-  '/catalog/$serviceId': typeof CatalogServiceIdRoute
+  '/oauth-handoff': typeof OauthHandoffRoute
+  '/register': typeof RegisterRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/verify-email': typeof VerifyEmailRoute
+  '/catalog': typeof AuthenticatedCatalogRouteWithChildren
+  '/contracts': typeof AuthenticatedContractsRoute
+  '/dashboard': typeof AuthenticatedDashboardRoute
+  '/graph': typeof AuthenticatedGraphRoute
+  '/intelligence': typeof AuthenticatedIntelligenceRoute
+  '/ops': typeof AuthenticatedOpsRoute
+  '/risks': typeof AuthenticatedRisksRoute
+  '/settings': typeof AuthenticatedSettingsRoute
+  '/teams': typeof AuthenticatedTeamsRoute
+  '/timeline': typeof AuthenticatedTimelineRoute
+  '/catalog/$serviceId': typeof AuthenticatedCatalogServiceIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/catalog': typeof CatalogRouteWithChildren
-  '/contracts': typeof ContractsRoute
-  '/dashboard': typeof DashboardRoute
-  '/graph': typeof GraphRoute
-  '/intelligence': typeof IntelligenceRoute
+  '/_authenticated': typeof AuthenticatedRouteWithChildren
+  '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
-  '/ops': typeof OpsRoute
-  '/risks': typeof RisksRoute
-  '/settings': typeof SettingsRoute
-  '/teams': typeof TeamsRoute
-  '/timeline': typeof TimelineRoute
-  '/catalog/$serviceId': typeof CatalogServiceIdRoute
+  '/oauth-handoff': typeof OauthHandoffRoute
+  '/register': typeof RegisterRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/verify-email': typeof VerifyEmailRoute
+  '/_authenticated/catalog': typeof AuthenticatedCatalogRouteWithChildren
+  '/_authenticated/contracts': typeof AuthenticatedContractsRoute
+  '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/graph': typeof AuthenticatedGraphRoute
+  '/_authenticated/intelligence': typeof AuthenticatedIntelligenceRoute
+  '/_authenticated/ops': typeof AuthenticatedOpsRoute
+  '/_authenticated/risks': typeof AuthenticatedRisksRoute
+  '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/teams': typeof AuthenticatedTeamsRoute
+  '/_authenticated/timeline': typeof AuthenticatedTimelineRoute
+  '/_authenticated/catalog/$serviceId': typeof AuthenticatedCatalogServiceIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/forgot-password'
+    | '/login'
+    | '/oauth-handoff'
+    | '/register'
+    | '/reset-password'
+    | '/verify-email'
     | '/catalog'
     | '/contracts'
     | '/dashboard'
     | '/graph'
     | '/intelligence'
-    | '/login'
     | '/ops'
     | '/risks'
     | '/settings'
@@ -154,12 +212,17 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/forgot-password'
+    | '/login'
+    | '/oauth-handoff'
+    | '/register'
+    | '/reset-password'
+    | '/verify-email'
     | '/catalog'
     | '/contracts'
     | '/dashboard'
     | '/graph'
     | '/intelligence'
-    | '/login'
     | '/ops'
     | '/risks'
     | '/settings'
@@ -169,70 +232,65 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/catalog'
-    | '/contracts'
-    | '/dashboard'
-    | '/graph'
-    | '/intelligence'
+    | '/_authenticated'
+    | '/forgot-password'
     | '/login'
-    | '/ops'
-    | '/risks'
-    | '/settings'
-    | '/teams'
-    | '/timeline'
-    | '/catalog/$serviceId'
+    | '/oauth-handoff'
+    | '/register'
+    | '/reset-password'
+    | '/verify-email'
+    | '/_authenticated/catalog'
+    | '/_authenticated/contracts'
+    | '/_authenticated/dashboard'
+    | '/_authenticated/graph'
+    | '/_authenticated/intelligence'
+    | '/_authenticated/ops'
+    | '/_authenticated/risks'
+    | '/_authenticated/settings'
+    | '/_authenticated/teams'
+    | '/_authenticated/timeline'
+    | '/_authenticated/catalog/$serviceId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  CatalogRoute: typeof CatalogRouteWithChildren
-  ContractsRoute: typeof ContractsRoute
-  DashboardRoute: typeof DashboardRoute
-  GraphRoute: typeof GraphRoute
-  IntelligenceRoute: typeof IntelligenceRoute
+  AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
-  OpsRoute: typeof OpsRoute
-  RisksRoute: typeof RisksRoute
-  SettingsRoute: typeof SettingsRoute
-  TeamsRoute: typeof TeamsRoute
-  TimelineRoute: typeof TimelineRoute
+  OauthHandoffRoute: typeof OauthHandoffRoute
+  RegisterRoute: typeof RegisterRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
+  VerifyEmailRoute: typeof VerifyEmailRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/timeline': {
-      id: '/timeline'
-      path: '/timeline'
-      fullPath: '/timeline'
-      preLoaderRoute: typeof TimelineRouteImport
+    '/verify-email': {
+      id: '/verify-email'
+      path: '/verify-email'
+      fullPath: '/verify-email'
+      preLoaderRoute: typeof VerifyEmailRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/teams': {
-      id: '/teams'
-      path: '/teams'
-      fullPath: '/teams'
-      preLoaderRoute: typeof TeamsRouteImport
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
+    '/register': {
+      id: '/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof RegisterRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/risks': {
-      id: '/risks'
-      path: '/risks'
-      fullPath: '/risks'
-      preLoaderRoute: typeof RisksRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/ops': {
-      id: '/ops'
-      path: '/ops'
-      fullPath: '/ops'
-      preLoaderRoute: typeof OpsRouteImport
+    '/oauth-handoff': {
+      id: '/oauth-handoff'
+      path: '/oauth-handoff'
+      fullPath: '/oauth-handoff'
+      preLoaderRoute: typeof OauthHandoffRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -242,39 +300,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/intelligence': {
-      id: '/intelligence'
-      path: '/intelligence'
-      fullPath: '/intelligence'
-      preLoaderRoute: typeof IntelligenceRouteImport
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/graph': {
-      id: '/graph'
-      path: '/graph'
-      fullPath: '/graph'
-      preLoaderRoute: typeof GraphRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/contracts': {
-      id: '/contracts'
-      path: '/contracts'
-      fullPath: '/contracts'
-      preLoaderRoute: typeof ContractsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/catalog': {
-      id: '/catalog'
-      path: '/catalog'
-      fullPath: '/catalog'
-      preLoaderRoute: typeof CatalogRouteImport
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -284,50 +321,147 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/catalog/$serviceId': {
-      id: '/catalog/$serviceId'
+    '/_authenticated/timeline': {
+      id: '/_authenticated/timeline'
+      path: '/timeline'
+      fullPath: '/timeline'
+      preLoaderRoute: typeof AuthenticatedTimelineRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/teams': {
+      id: '/_authenticated/teams'
+      path: '/teams'
+      fullPath: '/teams'
+      preLoaderRoute: typeof AuthenticatedTeamsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/settings': {
+      id: '/_authenticated/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/risks': {
+      id: '/_authenticated/risks'
+      path: '/risks'
+      fullPath: '/risks'
+      preLoaderRoute: typeof AuthenticatedRisksRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/ops': {
+      id: '/_authenticated/ops'
+      path: '/ops'
+      fullPath: '/ops'
+      preLoaderRoute: typeof AuthenticatedOpsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/intelligence': {
+      id: '/_authenticated/intelligence'
+      path: '/intelligence'
+      fullPath: '/intelligence'
+      preLoaderRoute: typeof AuthenticatedIntelligenceRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/graph': {
+      id: '/_authenticated/graph'
+      path: '/graph'
+      fullPath: '/graph'
+      preLoaderRoute: typeof AuthenticatedGraphRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/dashboard': {
+      id: '/_authenticated/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/contracts': {
+      id: '/_authenticated/contracts'
+      path: '/contracts'
+      fullPath: '/contracts'
+      preLoaderRoute: typeof AuthenticatedContractsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/catalog': {
+      id: '/_authenticated/catalog'
+      path: '/catalog'
+      fullPath: '/catalog'
+      preLoaderRoute: typeof AuthenticatedCatalogRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/catalog/$serviceId': {
+      id: '/_authenticated/catalog/$serviceId'
       path: '/$serviceId'
       fullPath: '/catalog/$serviceId'
-      preLoaderRoute: typeof CatalogServiceIdRouteImport
-      parentRoute: typeof CatalogRoute
+      preLoaderRoute: typeof AuthenticatedCatalogServiceIdRouteImport
+      parentRoute: typeof AuthenticatedCatalogRoute
     }
   }
 }
 
-interface CatalogRouteChildren {
-  CatalogServiceIdRoute: typeof CatalogServiceIdRoute
+interface AuthenticatedCatalogRouteChildren {
+  AuthenticatedCatalogServiceIdRoute: typeof AuthenticatedCatalogServiceIdRoute
 }
 
-const CatalogRouteChildren: CatalogRouteChildren = {
-  CatalogServiceIdRoute: CatalogServiceIdRoute,
+const AuthenticatedCatalogRouteChildren: AuthenticatedCatalogRouteChildren = {
+  AuthenticatedCatalogServiceIdRoute: AuthenticatedCatalogServiceIdRoute,
 }
 
-const CatalogRouteWithChildren =
-  CatalogRoute._addFileChildren(CatalogRouteChildren)
+const AuthenticatedCatalogRouteWithChildren =
+  AuthenticatedCatalogRoute._addFileChildren(AuthenticatedCatalogRouteChildren)
+
+interface AuthenticatedRouteChildren {
+  AuthenticatedCatalogRoute: typeof AuthenticatedCatalogRouteWithChildren
+  AuthenticatedContractsRoute: typeof AuthenticatedContractsRoute
+  AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedGraphRoute: typeof AuthenticatedGraphRoute
+  AuthenticatedIntelligenceRoute: typeof AuthenticatedIntelligenceRoute
+  AuthenticatedOpsRoute: typeof AuthenticatedOpsRoute
+  AuthenticatedRisksRoute: typeof AuthenticatedRisksRoute
+  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedTeamsRoute: typeof AuthenticatedTeamsRoute
+  AuthenticatedTimelineRoute: typeof AuthenticatedTimelineRoute
+}
+
+const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedCatalogRoute: AuthenticatedCatalogRouteWithChildren,
+  AuthenticatedContractsRoute: AuthenticatedContractsRoute,
+  AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedGraphRoute: AuthenticatedGraphRoute,
+  AuthenticatedIntelligenceRoute: AuthenticatedIntelligenceRoute,
+  AuthenticatedOpsRoute: AuthenticatedOpsRoute,
+  AuthenticatedRisksRoute: AuthenticatedRisksRoute,
+  AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedTeamsRoute: AuthenticatedTeamsRoute,
+  AuthenticatedTimelineRoute: AuthenticatedTimelineRoute,
+}
+
+const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
+  AuthenticatedRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  CatalogRoute: CatalogRouteWithChildren,
-  ContractsRoute: ContractsRoute,
-  DashboardRoute: DashboardRoute,
-  GraphRoute: GraphRoute,
-  IntelligenceRoute: IntelligenceRoute,
+  AuthenticatedRoute: AuthenticatedRouteWithChildren,
+  ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
-  OpsRoute: OpsRoute,
-  RisksRoute: RisksRoute,
-  SettingsRoute: SettingsRoute,
-  TeamsRoute: TeamsRoute,
-  TimelineRoute: TimelineRoute,
+  OauthHandoffRoute: OauthHandoffRoute,
+  RegisterRoute: RegisterRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
+  VerifyEmailRoute: VerifyEmailRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
 
 import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
+import type { startInstance } from './start.ts'
 declare module '@tanstack/react-start' {
   interface Register {
     ssr: true
     router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
   }
 }
