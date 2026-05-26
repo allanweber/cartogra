@@ -198,14 +198,14 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [X] 1.44 [UI] Run `/impeccable audit` on all Phase 1 screens before the phase gate; address any blocking findings.
 - [x] 1.45 [TEST] Add contract tests that verify gateway and registry responses match the OpenAPI envelope and `X-Trace-Id` contract.
 - [x] 1.46 [DOCS] Update `docs/api/registry.openapi.yaml` to reflect the implemented registry surface.
-- [ ] 1.47 [BIP] Publish the envelope-and-trace-ID thread after gateway proxying works end to end.
-- [ ] 1.48 [BIP] Publish the Gateway-auth rationale thread after local auth and at least one OAuth provider work end to end.
-- [ ] 1.49 [BIP] Publish the self-healing-registry article after the catalog and sync story are demonstrable.
-- [ ] 1.50 [BIP] Publish the multi-tenant plus temporal-versioning article after history and ownership flows work.
-- [ ] 1.51 [BIP] Publish the enterprise-SCM angle on LinkedIn after both providers are visible in the catalog.
-- [ ] 1.52 [BIP] Publish screenshots plus OpenAPI links after the catalog UI is stable enough to demo.
-- [ ] 1.53 [BIP] Publish the dual-mode auth article (httpOnly cookies + Bearer tokens in a Spring Security 7 reactive gateway) after JWT issuance is stable end-to-end.
-- [ ] 1.54 [BIP] Publish the Redis rate-limiting article (token buckets, per-tenant key isolation, 429 behavior) after rate limiting is tested and observable.
+- [x] 1.47 [BIP] Publish the envelope-and-trace-ID thread after gateway proxying works end to end.
+- [x] 1.48 [BIP] Publish the Gateway-auth rationale thread after local auth and at least one OAuth provider work end to end.
+- [x] 1.49 [BIP] Publish the self-healing-registry article after the catalog and sync story are demonstrable.
+- [x] 1.50 [BIP] Publish the multi-tenant plus temporal-versioning article after history and ownership flows work.
+- [x] 1.51 [BIP] Publish the enterprise-SCM angle on LinkedIn after both providers are visible in the catalog.
+- [x] 1.52 [BIP] Publish screenshots plus OpenAPI links after the catalog UI is stable enough to demo.
+- [x] 1.53 [BIP] Publish the dual-mode auth article (httpOnly cookies + Bearer tokens in a Spring Security 7 reactive gateway) after JWT issuance is stable end-to-end.
+- [x] 1.54 [BIP] Publish the Redis rate-limiting article (token buckets, per-tenant key isolation, 429 behavior) after rate limiting is tested and observable.
 - [ ] 1.55 [CODE] Wire `KubernetesWorker` to publish a `cartogra.registry.sync.command` Kafka message (`EventEnvelope` + `traceparent`) whenever a K8s `Service` is ADDED or MODIFIED in a watched namespace. Resolve tenant ID from the service's `cartogra.io/tenant-id` namespace label; use a configured synthetic connection UUID (`ingestion.workers.k8s.connection-id`) as the connection identity. Document the label contract in `docs/runbooks/local-development.md`.
 - [ ] 1.56 [TEST] Add `KubernetesWorkerIT` using `io.fabric8:kubernetes-server-mock` (no real cluster or `kind` required) + `@EmbeddedKafka`: simulate a `Service` ADDED event in a watched namespace and assert a `cartogra.registry.sync.command` message is published with the correct `tenant_id`, `traceparent` header, and `providerType = "kubernetes"`. Add `testImplementation("io.fabric8:kubernetes-server-mock:7.0.0")` to `services/ingestion/build.gradle.kts`.
 
