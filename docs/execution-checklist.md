@@ -198,10 +198,10 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [X] 1.44 [UI] Run `/impeccable audit` on all Phase 1 screens before the phase gate; address any blocking findings.
 - [x] 1.45 [TEST] Add contract tests that verify gateway and registry responses match the OpenAPI envelope and `X-Trace-Id` contract.
 - [x] 1.46 [DOCS] Update `docs/api/registry.openapi.yaml` to reflect the implemented registry surface.
-- [ ] 1.47 [BIP] Publish the envelope-and-trace-ID thread after gateway proxying works end to end.
-- [ ] 1.48 [BIP] Publish the Gateway-auth rationale thread after local auth and at least one OAuth provider work end to end.
-- [ ] 1.49 [BIP] Publish the self-healing-registry article after the catalog and sync story are demonstrable.
-- [ ] 1.50 [BIP] Publish the multi-tenant plus temporal-versioning article after history and ownership flows work.
+- [x] 1.47 [BIP] Publish the envelope-and-trace-ID thread after gateway proxying works end to end.
+- [x] 1.48 [BIP] Publish the Gateway-auth rationale thread after local auth and at least one OAuth provider work end to end.
+- [x] 1.49 [BIP] Publish the self-healing-registry article after the catalog and sync story are demonstrable.
+- [x] 1.50 [BIP] Publish the multi-tenant plus temporal-versioning article after history and ownership flows work.
 - [ ] 1.51 [BIP] Publish the enterprise-SCM angle on LinkedIn after both providers are visible in the catalog.
 - [ ] 1.52 [BIP] Publish screenshots plus OpenAPI links after the catalog UI is stable enough to demo.
 - [ ] 1.53 [BIP] Publish the dual-mode auth article (httpOnly cookies + Bearer tokens in a Spring Security 7 reactive gateway) after JWT issuance is stable end-to-end.
