@@ -1,5 +1,4 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { GitBranch } from 'lucide-react'
 import { useState } from 'react'
 
 import { AuthFormShell } from '#/components/AuthFormShell'
@@ -48,9 +47,6 @@ function ForgotPasswordPage() {
   return (
     <AuthFormShell>
       <div className="mb-5">
-        <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-primary/10">
-          <GitBranch className="size-5 text-primary" />
-        </div>
         <h2 className="text-base font-semibold">Reset your password</h2>
         <p className="mt-0.5 text-sm text-muted-foreground">
           Enter your email and we'll send you a 6-digit reset code.

@@ -57,7 +57,7 @@ function RisksPage() {
         {/* Risk cards */}
         <div className="space-y-2">
           {filtered.map((risk) => (
-            <RiskCard key={risk.id} risk={typeof risk === 'object' ? risk : risk} />
+            <RiskCard key={risk.id} risk={risk} />
           ))}
         </div>
       </div>
@@ -83,18 +83,18 @@ function SummaryCard({
       onClick={onClick}
       className={cn(
         'rounded-xl border p-4 text-left transition-all',
-        active && variant === 'critical' && 'border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-950/30',
-        active && variant === 'warning' && 'border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30',
-        active && variant === 'info' && 'border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/30',
+        active && variant === 'critical' && 'border-[oklch(0.70_0.15_28)] bg-[oklch(0.97_0.05_28)] dark:border-[oklch(0.55_0.18_28)] dark:bg-[oklch(0.27_0.05_28)]',
+        active && variant === 'warning' && 'border-[oklch(0.72_0.14_60)] bg-[oklch(0.97_0.06_80)] dark:border-[oklch(0.60_0.15_60)] dark:bg-[oklch(0.27_0.06_80)]',
+        active && variant === 'info' && 'border-[oklch(0.65_0.12_240)] bg-[oklch(0.96_0.04_240)] dark:border-[oklch(0.55_0.14_240)] dark:bg-[oklch(0.26_0.04_240)]',
         !active && 'border-border bg-card hover:bg-muted/50',
       )}
     >
       <p
         className={cn(
           'text-2xl font-bold',
-          variant === 'critical' && 'text-red-600 dark:text-red-400',
-          variant === 'warning' && 'text-amber-600 dark:text-amber-400',
-          variant === 'info' && 'text-blue-600 dark:text-blue-400',
+          variant === 'critical' && 'text-[oklch(0.58_0.23_28)] dark:text-[oklch(0.72_0.18_28)]',
+          variant === 'warning' && 'text-[oklch(0.65_0.18_60)] dark:text-[oklch(0.78_0.14_60)]',
+          variant === 'info' && 'text-[oklch(0.60_0.18_240)] dark:text-[oklch(0.70_0.16_240)]',
         )}
       >
         {count}
@@ -109,19 +109,19 @@ function RiskCard({ risk }: { risk: (typeof MOCK_RISKS)[number] }) {
 
   const severityConfig = {
     critical: {
-      border: 'border-l-red-500',
-      bg: 'bg-red-50 dark:bg-red-950/20',
-      badge: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-400',
+      border: 'border-l-[oklch(0.58_0.23_28)]',
+      bg: 'bg-[oklch(0.97_0.05_28)] dark:bg-[oklch(0.27_0.05_28)]',
+      badge: 'bg-severity-critical border-current',
     },
     warning: {
-      border: 'border-l-amber-500',
-      bg: 'bg-amber-50 dark:bg-amber-950/20',
-      badge: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-400',
+      border: 'border-l-[oklch(0.65_0.18_60)]',
+      bg: 'bg-[oklch(0.97_0.06_80)] dark:bg-[oklch(0.27_0.06_80)]',
+      badge: 'bg-severity-warning border-current',
     },
     info: {
-      border: 'border-l-blue-400',
-      bg: 'bg-blue-50 dark:bg-blue-950/20',
-      badge: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-400',
+      border: 'border-l-[oklch(0.60_0.18_240)]',
+      bg: 'bg-[oklch(0.96_0.04_240)] dark:bg-[oklch(0.26_0.04_240)]',
+      badge: 'bg-severity-info border-current',
     },
   }
 
@@ -132,6 +132,7 @@ function RiskCard({ risk }: { risk: (typeof MOCK_RISKS)[number] }) {
       <button
         className="w-full text-left"
         onClick={() => setExpanded((e) => !e)}
+        aria-expanded={expanded}
       >
         <CardContent className={cn('flex items-start gap-3 p-4', config.bg)}>
           <div className="flex-1">

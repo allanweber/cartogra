@@ -1,5 +1,5 @@
 import { createFileRoute, Link, notFound } from '@tanstack/react-router'
-import { Activity, ArrowLeft, Clock, GitBranch, Shield, Users } from 'lucide-react'
+import { Activity, ArrowLeft, Clock, Code2, GitBranch, Shield, Users } from 'lucide-react'
 import { useState } from 'react'
 
 import { AppLayout } from '#/components/AppLayout'
@@ -58,7 +58,7 @@ function ServiceDetailPage() {
               <MetaItem icon={<GitBranch className="size-3.5" />} label="Dependencies" value={String(service.deps)} />
               <div className="flex items-center gap-1.5">
                 <span className="text-muted-foreground">
-                  <GitBranch className="size-3.5" aria-hidden="true" />
+                  <Code2 className="size-3.5" aria-hidden="true" />
                 </span>
                 <div>
                   <p className="text-[10px] uppercase tracking-wide text-muted-foreground">SCM</p>
@@ -87,8 +87,10 @@ function ServiceDetailPage() {
           {(['overview', 'contracts', 'activity'] as const).map((t) => (
             <button
               key={t}
+              id={`tab-${t}`}
               role="tab"
               aria-selected={tab === t}
+              aria-controls={`panel-${t}`}
               onClick={() => setTab(t)}
               className={cn(
                 'flex-1 px-4 py-2.5 text-sm font-medium capitalize transition-colors focus-visible:outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-ring',
@@ -104,7 +106,7 @@ function ServiceDetailPage() {
 
         {/* Tab panels */}
         {tab === 'overview' && (
-          <div className="grid gap-4 md:grid-cols-2">
+          <div id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" className="grid gap-4 md:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm">Tech Stack</CardTitle>
@@ -142,7 +144,7 @@ function ServiceDetailPage() {
         )}
 
         {tab === 'contracts' && (
-          <div className="space-y-2">
+          <div id="panel-contracts" role="tabpanel" aria-labelledby="tab-contracts" className="space-y-2">
             {contracts.length === 0 ? (
               <EmptyTab icon={<Shield className="size-8" />} message="No contracts for this service." />
             ) : (
@@ -164,7 +166,7 @@ function ServiceDetailPage() {
         )}
 
         {tab === 'activity' && (
-          <div className="space-y-2">
+          <div id="panel-activity" role="tabpanel" aria-labelledby="tab-activity" className="space-y-2">
             {activity.length === 0 ? (
               <EmptyTab icon={<Activity className="size-8" />} message="No recent activity." />
             ) : (
@@ -195,11 +197,11 @@ function ServiceDetailPage() {
 
 function typeColor(type: string) {
   const map: Record<string, string> = {
-    deploy: 'bg-emerald-500',
-    contract: 'bg-violet-500',
-    risk: 'bg-red-500',
-    ownership: 'bg-amber-500',
-    dependency: 'bg-blue-500',
+    deploy: 'bg-[oklch(0.55_0.18_145)]',
+    contract: 'bg-[oklch(0.55_0.18_260)]',
+    risk: 'bg-[oklch(0.58_0.23_28)]',
+    ownership: 'bg-[oklch(0.65_0.18_60)]',
+    dependency: 'bg-[oklch(0.60_0.18_240)]',
   }
   return map[type] ?? 'bg-muted-foreground'
 }
@@ -208,15 +210,7 @@ function HealthBadge({ health }: { health: ServiceHealth }) {
   return (
     <Badge
       variant="outline"
-      className={cn(
-        'gap-1.5 capitalize',
-        health === 'healthy' &&
-          'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400',
-        health === 'degraded' &&
-          'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-400',
-        health === 'down' &&
-          'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-400',
-      )}
+      className={cn('gap-1.5 capitalize border-current', `bg-health-${health}`)}
     >
       {health}
     </Badge>

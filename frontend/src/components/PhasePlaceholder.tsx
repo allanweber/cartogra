@@ -1,4 +1,5 @@
 import { ArrowRight, Sparkles } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
 
 import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
 
@@ -6,12 +7,14 @@ interface PhasePlaceholderProps {
   summary: string
   capabilities: string[]
   deliveryPhase: string
+  feedbackRoute?: '/dashboard' | '/catalog' | '/risks'
 }
 
 export function PhasePlaceholder({
   summary,
   capabilities,
   deliveryPhase,
+  feedbackRoute = '/dashboard',
 }: PhasePlaceholderProps) {
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(20rem,0.9fr)]">
@@ -23,8 +26,15 @@ export function PhasePlaceholder({
           </div>
           <CardTitle className="text-xl tracking-[-0.02em]">Decision support, not empty chrome</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <p className="max-w-2xl text-sm leading-7 text-muted-foreground">{summary}</p>
+          <Link
+            to={feedbackRoute}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-3 hover:underline"
+          >
+            Back to what's live now
+            <ArrowRight className="size-3.5" aria-hidden="true" />
+          </Link>
         </CardContent>
       </Card>
 

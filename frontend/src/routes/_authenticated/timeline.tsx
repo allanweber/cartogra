@@ -27,11 +27,11 @@ const typeConfig: Record<
   TimelineEventType,
   { color: string; bgColor: string; label: string }
 > = {
-  deploy: { color: 'bg-emerald-500', bgColor: 'bg-emerald-50 dark:bg-emerald-950/30', label: 'Deploy' },
-  contract: { color: 'bg-violet-500', bgColor: 'bg-violet-50 dark:bg-violet-950/30', label: 'Contract' },
-  risk: { color: 'bg-red-500', bgColor: 'bg-red-50 dark:bg-red-950/30', label: 'Risk' },
-  ownership: { color: 'bg-amber-500', bgColor: 'bg-amber-50 dark:bg-amber-950/30', label: 'Ownership' },
-  dependency: { color: 'bg-blue-500', bgColor: 'bg-blue-50 dark:bg-blue-950/30', label: 'Dependency' },
+  deploy: { color: 'bg-[oklch(0.55_0.18_145)]', bgColor: 'bg-[oklch(0.96_0.05_145)] dark:bg-[oklch(0.25_0.06_145)]', label: 'Deploy' },
+  contract: { color: 'bg-[oklch(0.55_0.18_260)]', bgColor: 'bg-[oklch(0.96_0.04_260)] dark:bg-[oklch(0.25_0.05_260)]', label: 'Contract' },
+  risk: { color: 'bg-[oklch(0.58_0.23_28)]', bgColor: 'bg-[oklch(0.97_0.05_28)] dark:bg-[oklch(0.27_0.05_28)]', label: 'Risk' },
+  ownership: { color: 'bg-[oklch(0.65_0.18_60)]', bgColor: 'bg-[oklch(0.97_0.06_80)] dark:bg-[oklch(0.27_0.06_80)]', label: 'Ownership' },
+  dependency: { color: 'bg-[oklch(0.60_0.18_240)]', bgColor: 'bg-[oklch(0.96_0.04_240)] dark:bg-[oklch(0.26_0.04_240)]', label: 'Dependency' },
 }
 
 function TimelinePage() {
@@ -49,6 +49,7 @@ function TimelinePage() {
             <button
               key={f.value}
               onClick={() => setFilter(f.value)}
+              aria-pressed={filter === f.value}
               className={cn(
                 'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                 filter === f.value
@@ -83,7 +84,7 @@ function TimelinePage() {
                       config.color,
                     )}
                   >
-                    <span className="text-[9px] font-bold text-white uppercase">
+                    <span className="text-[9px] font-bold text-primary-foreground uppercase">
                       {event.type.slice(0, 2)}
                     </span>
                   </div>

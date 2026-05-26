@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { AlertTriangle, Check, ChevronDown, LayoutGrid, List, Search } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { AppLayout } from '#/components/AppLayout'
 import { Badge } from '#/components/ui/badge'
@@ -47,7 +47,7 @@ function CatalogPage() {
     )
   }
 
-  const filtered = MOCK_SERVICES.filter((s) => {
+  const filtered = useMemo(() => MOCK_SERVICES.filter((s) => {
     const matchesQuery =
       query === '' ||
       s.name.toLowerCase().includes(query.toLowerCase()) ||
@@ -58,13 +58,13 @@ function CatalogPage() {
     const matchesTech =
       techFilter.length === 0 || techFilter.every((t) => s.tech.includes(t))
     return matchesQuery && matchesTeam && matchesHealth && matchesScm && matchesTech
-  })
+  }), [query, teamFilter, healthFilter, scmFilter, techFilter])
 
-  const healthCounts = {
+  const healthCounts = useMemo(() => ({
     healthy: MOCK_SERVICES.filter((s) => s.health === 'healthy').length,
     degraded: MOCK_SERVICES.filter((s) => s.health === 'degraded').length,
     down: MOCK_SERVICES.filter((s) => s.health === 'down').length,
-  }
+  }), [])
 
   return (
     <AppLayout title="Service Catalog" description="Browse, filter, and inspect your services">
@@ -93,9 +93,9 @@ function CatalogPage() {
                     aria-label={`${f.label} health`}
                     className={cn(
                       'size-1.5 rounded-full',
-                      f.value === 'healthy' && 'bg-emerald-500',
-                      f.value === 'degraded' && 'bg-amber-500',
-                      f.value === 'down' && 'bg-red-500',
+                      f.value === 'healthy' && 'bg-[oklch(0.55_0.18_145)]',
+                      f.value === 'degraded' && 'bg-[oklch(0.65_0.18_60)]',
+                      f.value === 'down' && 'bg-[oklch(0.58_0.23_28)]',
                     )}
                   />
                 )}
@@ -117,7 +117,7 @@ function CatalogPage() {
 
         {/* Search + filters bar */}
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1" style={{ minWidth: '180px' }}>
+          <div className="relative min-w-45 flex-1">
             <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <Input
               placeholder="Search services or tech..."
@@ -279,9 +279,9 @@ function HealthDot({ health }: { health: ServiceHealth }) {
       aria-label={`${health} health`}
       className={cn(
         'inline-block size-2 rounded-full',
-        health === 'healthy' && 'bg-emerald-500',
-        health === 'degraded' && 'bg-amber-500',
-        health === 'down' && 'bg-red-500',
+        health === 'healthy' && 'bg-[oklch(0.55_0.18_145)]',
+        health === 'degraded' && 'bg-[oklch(0.65_0.18_60)]',
+        health === 'down' && 'bg-[oklch(0.58_0.23_28)]',
       )}
     />
   )
@@ -291,15 +291,7 @@ function HealthBadge({ health }: { health: ServiceHealth }) {
   return (
     <Badge
       variant="outline"
-      className={cn(
-        'gap-1.5 text-xs capitalize',
-        health === 'healthy' &&
-          'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400',
-        health === 'degraded' &&
-          'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-400',
-        health === 'down' &&
-          'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-400',
-      )}
+      className={cn('gap-1.5 text-xs capitalize border-current', `bg-health-${health}`)}
     >
       <HealthDot health={health} />
       {health}

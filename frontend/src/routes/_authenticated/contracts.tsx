@@ -118,18 +118,18 @@ function SummaryChip({
     <div
       className={cn(
         'rounded-xl border p-4 text-center',
-        variant === 'breaking' && 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30',
-        variant === 'compatible' && 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30',
-        variant === 'warning' && 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30',
+        variant === 'breaking' && 'border-[oklch(0.70_0.15_28)] bg-[oklch(0.97_0.05_28)] dark:border-[oklch(0.45_0.15_28)] dark:bg-[oklch(0.27_0.05_28)]',
+        variant === 'compatible' && 'border-[oklch(0.70_0.15_145)] bg-[oklch(0.96_0.05_145)] dark:border-[oklch(0.45_0.12_145)] dark:bg-[oklch(0.25_0.06_145)]',
+        variant === 'warning' && 'border-[oklch(0.72_0.14_60)] bg-[oklch(0.97_0.06_80)] dark:border-[oklch(0.50_0.12_60)] dark:bg-[oklch(0.27_0.06_80)]',
         variant === 'stale' && 'border-border bg-muted/50',
       )}
     >
       <p
         className={cn(
           'text-2xl font-bold',
-          variant === 'breaking' && 'text-red-600 dark:text-red-400',
-          variant === 'compatible' && 'text-emerald-600 dark:text-emerald-400',
-          variant === 'warning' && 'text-amber-600 dark:text-amber-400',
+          variant === 'breaking' && 'text-[oklch(0.50_0.20_28)] dark:text-[oklch(0.72_0.18_28)]',
+          variant === 'compatible' && 'text-[oklch(0.38_0.14_145)] dark:text-[oklch(0.72_0.16_145)]',
+          variant === 'warning' && 'text-[oklch(0.50_0.15_60)] dark:text-[oklch(0.78_0.14_60)]',
           variant === 'stale' && 'text-muted-foreground',
         )}
       >

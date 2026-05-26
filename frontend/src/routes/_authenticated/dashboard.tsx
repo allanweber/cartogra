@@ -34,32 +34,34 @@ function DashboardPage() {
   return (
     <AppLayout title="Dashboard" description="Architecture health overview">
       <div className="space-y-6">
-        {/* Top stat cards */}
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatCard
+        {/* Metrics bar — single row, 4 inline metrics separated by dividers */}
+        <div className="grid grid-cols-2 divide-x divide-y divide-border overflow-hidden rounded-xl border border-border bg-card sm:grid-cols-4 sm:divide-y-0">
+          <MetricCell
             label="Health Score"
             value={`${healthScore}%`}
-            sub={`${healthyCount} healthy`}
-            variant={healthScore >= 80 ? 'healthy' : healthScore >= 60 ? 'degraded' : 'down'}
+            sub={`${healthyCount} of ${totalServices} healthy`}
+            valueClass={cn(
+              healthScore >= 80 ? 'health-healthy' : healthScore >= 60 ? 'health-degraded' : 'health-down',
+            )}
           />
-          <StatCard
+          <MetricCell
             label="Services"
-            value={totalServices}
+            value={String(totalServices)}
             sub={`${criticalTier} critical tier`}
-            icon={<Server className="size-4" />}
+            icon={<Server className="size-3.5" />}
           />
-          <StatCard
+          <MetricCell
             label="Active Risks"
-            value={criticalRisks + warningRisks}
-            sub={`${criticalRisks} critical`}
-            variant={criticalRisks > 0 ? 'down' : 'healthy'}
-            icon={<AlertTriangle className="size-4" />}
+            value={String(criticalRisks + warningRisks)}
+            sub={`${criticalRisks} critical · ${warningRisks} warning`}
+            valueClass={criticalRisks > 0 ? 'health-down' : 'health-healthy'}
+            icon={<AlertTriangle className="size-3.5" />}
           />
-          <StatCard
+          <MetricCell
             label="Teams"
-            value={5}
+            value="5"
             sub={`${orphanServices.length} orphaned services`}
-            icon={<Users className="size-4" />}
+            icon={<Users className="size-3.5" />}
           />
         </div>
 
@@ -76,24 +78,24 @@ function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="mb-3 flex h-2.5 overflow-hidden rounded-full bg-muted">
+            <div className="mb-3 flex h-2.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={`Health: ${healthyCount} healthy, ${degradedCount} degraded, ${downCount} down`}>
               <div
-                className="bg-emerald-500 transition-all"
+                className="bg-[oklch(0.55_0.18_145)] transition-all"
                 style={{ width: `${(healthyCount / totalServices) * 100}%` }}
               />
               <div
-                className="bg-amber-500 transition-all"
+                className="bg-[oklch(0.65_0.18_60)] transition-all"
                 style={{ width: `${(degradedCount / totalServices) * 100}%` }}
               />
               <div
-                className="bg-red-500 transition-all"
+                className="bg-[oklch(0.58_0.23_28)] transition-all"
                 style={{ width: `${(downCount / totalServices) * 100}%` }}
               />
             </div>
             <div className="flex gap-4 text-xs">
-              <LegendItem color="bg-emerald-500" label="Healthy" count={healthyCount} />
-              <LegendItem color="bg-amber-500" label="Degraded" count={degradedCount} />
-              <LegendItem color="bg-red-500" label="Down" count={downCount} />
+              <LegendItem colorClass="bg-[oklch(0.55_0.18_145)]" label="Healthy" count={healthyCount} />
+              <LegendItem colorClass="bg-[oklch(0.65_0.18_60)]" label="Degraded" count={degradedCount} />
+              <LegendItem colorClass="bg-[oklch(0.58_0.23_28)]" label="Down" count={downCount} />
             </div>
           </CardContent>
         </Card>
@@ -115,11 +117,7 @@ function DashboardPage() {
                   key={risk.id}
                   className={cn(
                     'flex items-start gap-3 rounded-lg border-l-2 p-3',
-                    risk.severity === 'critical'
-                      ? 'border-l-red-500 bg-red-50 dark:bg-red-950/30'
-                      : risk.severity === 'warning'
-                        ? 'border-l-amber-500 bg-amber-50 dark:bg-amber-950/30'
-                        : 'border-l-blue-400 bg-blue-50 dark:bg-blue-950/30',
+                    `bg-severity-${risk.severity}`,
                   )}
                 >
                   <div className="min-w-0 flex-1">
@@ -176,46 +174,35 @@ function DashboardPage() {
   )
 }
 
-function StatCard({
+function MetricCell({
   label,
   value,
   sub,
-  variant,
+  valueClass,
   icon,
 }: {
   label: string
-  value: string | number
+  value: string
   sub: string
-  variant?: 'healthy' | 'degraded' | 'down'
+  valueClass?: string
   icon?: React.ReactNode
 }) {
   return (
-    <Card>
-      <CardContent className="pt-5">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</p>
-          {icon && <span className="text-muted-foreground">{icon}</span>}
-        </div>
-        <p
-          className={cn(
-            'mt-2 text-3xl font-bold',
-            variant === 'healthy' && 'text-emerald-600 dark:text-emerald-400',
-            variant === 'degraded' && 'text-amber-600 dark:text-amber-400',
-            variant === 'down' && 'text-red-600 dark:text-red-400',
-          )}
-        >
-          {value}
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground">{sub}</p>
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-1 px-5 py-4">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">{label}</p>
+        {icon && <span className="text-muted-foreground">{icon}</span>}
+      </div>
+      <p className={cn('text-2xl font-semibold tabular-nums', valueClass)}>{value}</p>
+      <p className="text-xs text-muted-foreground">{sub}</p>
+    </div>
   )
 }
 
-function LegendItem({ color, label, count }: { color: string; label: string; count: number }) {
+function LegendItem({ colorClass, label, count }: { colorClass: string; label: string; count: number }) {
   return (
     <div className="flex items-center gap-1.5">
-      <div className={cn('size-2 rounded-full', color)} />
+      <div className={cn('size-2 rounded-full', colorClass)} />
       <span className="text-muted-foreground">
         {label} <span className="font-medium text-foreground">{count}</span>
       </span>
@@ -230,7 +217,7 @@ function StaleServiceRow({ service }: { service: Service }) {
         <p className="text-sm font-medium">{service.name}</p>
         <p className="text-xs text-muted-foreground">{service.owner ?? 'No owner'}</p>
       </div>
-      <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+      <div className="flex items-center gap-1 text-xs text-[oklch(0.65_0.18_60)] dark:text-[oklch(0.78_0.14_60)]">
         <Clock className="size-3" />
         {service.lastDeploy}
       </div>
@@ -240,11 +227,11 @@ function StaleServiceRow({ service }: { service: Service }) {
 
 function ActivityList({ events }: { events: TimelineEvent[] }) {
   const typeColors: Record<string, string> = {
-    deploy: 'bg-emerald-500',
-    contract: 'bg-violet-500',
-    risk: 'bg-red-500',
-    ownership: 'bg-amber-500',
-    dependency: 'bg-blue-500',
+    deploy: 'bg-[oklch(0.55_0.18_145)]',
+    contract: 'bg-primary',
+    risk: 'bg-[oklch(0.58_0.23_28)]',
+    ownership: 'bg-[oklch(0.65_0.18_60)]',
+    dependency: 'bg-[oklch(0.60_0.18_240)]',
   }
 
   return (
@@ -273,9 +260,9 @@ function SeverityBadge({ severity }: { severity: string }) {
       variant="outline"
       className={cn(
         'shrink-0 text-[10px] font-semibold uppercase',
-        severity === 'critical' && 'border-red-300 text-red-600 dark:border-red-700 dark:text-red-400',
-        severity === 'warning' && 'border-amber-300 text-amber-600 dark:border-amber-700 dark:text-amber-400',
-        severity === 'info' && 'border-blue-300 text-blue-600 dark:border-blue-700 dark:text-blue-400',
+        severity === 'critical' && 'border-[oklch(0.58_0.23_28)] text-[oklch(0.58_0.23_28)] dark:border-[oklch(0.68_0.18_28)] dark:text-[oklch(0.68_0.18_28)]',
+        severity === 'warning' && 'border-[oklch(0.65_0.18_60)] text-[oklch(0.65_0.18_60)] dark:border-[oklch(0.75_0.16_60)] dark:text-[oklch(0.75_0.16_60)]',
+        severity === 'info' && 'border-[oklch(0.60_0.18_240)] text-[oklch(0.60_0.18_240)] dark:border-[oklch(0.70_0.16_240)] dark:text-[oklch(0.70_0.16_240)]',
       )}
     >
       {severity}

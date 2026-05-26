@@ -12,7 +12,7 @@ import {
   TriangleAlert,
   Users,
 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 
 import { MOCK_SERVICES, MOCK_TEAMS } from '#/lib/mock-data'
@@ -57,7 +57,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     setActiveIdx(0)
   }
 
-  function buildItems(): CommandItem[] {
+  const allItems = useMemo<CommandItem[]>(() => {
     const pages: CommandItem[] = PAGE_ITEMS.map((p) => ({
       id: `page-${p.to}`,
       label: p.label,
@@ -86,9 +86,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     }))
 
     return [...pages, ...services, ...teams]
-  }
-
-  const allItems = buildItems()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const filtered = query.trim()
     ? allItems.filter(
@@ -109,11 +108,6 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     setActiveIdx(0)
   }, [query])
 
-  useEffect(() => {
-    if (open) {
-      setTimeout(() => inputRef.current?.focus(), 10)
-    }
-  }, [open])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -138,6 +132,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           className="fixed left-1/2 top-[12%] z-50 w-full max-w-2xl -translate-x-1/2 overflow-hidden rounded-2xl border border-border bg-popover shadow-2xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=open]:slide-in-from-left-1/2"
           aria-label="Command palette"
           onKeyDown={handleKeyDown}
+          onOpenAutoFocus={(e) => { e.preventDefault(); inputRef.current?.focus() }}
         >
           {/* Search input */}
           <div className="flex items-center gap-3 border-b border-border px-4 py-3.5">

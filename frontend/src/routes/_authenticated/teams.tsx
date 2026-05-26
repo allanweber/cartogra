@@ -73,20 +73,15 @@ function StatCard({
   return (
     <Card>
       <CardContent className="p-4">
-        <p className="text-2xl font-bold
-          {variant === 'critical' && ' text-red-600 dark:text-red-400'}
-          {variant === 'warning' && ' text-amber-600 dark:text-amber-400'}
-        ">
-          <span
-            className={cn(
-              'text-2xl font-bold',
-              variant === 'critical' && 'text-red-600 dark:text-red-400',
-              variant === 'warning' && 'text-amber-600 dark:text-amber-400',
-            )}
-          >
-            {value}
-          </span>
-        </p>
+        <span
+          className={cn(
+            'text-2xl font-bold',
+            variant === 'critical' && 'text-[oklch(0.58_0.23_28)] dark:text-[oklch(0.72_0.18_28)]',
+            variant === 'warning' && 'text-[oklch(0.65_0.18_60)] dark:text-[oklch(0.78_0.14_60)]',
+          )}
+        >
+          {value}
+        </span>
         <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
       </CardContent>
     </Card>
@@ -105,6 +100,7 @@ function TeamRow({
   return (
     <button
       onClick={onClick}
+      aria-pressed={selected}
       className={cn(
         'w-full rounded-xl border p-4 text-left transition-all',
         selected
@@ -116,7 +112,7 @@ function TeamRow({
         {/* Team avatar */}
         <div
           className="flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
-          style={{ background: teamGradient(team.name) }}
+          style={{ background: teamColor(team.name) }}
         >
           {team.name.slice(0, 2).toUpperCase()}
         </div>
@@ -156,7 +152,7 @@ function TeamDetailPanel({ team, onClose }: { team: Team; onClose: () => void })
           <div className="flex items-center gap-3">
             <div
               className="flex size-12 items-center justify-center rounded-full text-base font-bold text-white"
-              style={{ background: teamGradient(team.name) }}
+              style={{ background: teamColor(team.name) }}
             >
               {team.name.slice(0, 2).toUpperCase()}
             </div>
@@ -214,12 +210,7 @@ function HealthBadge({ health }: { health: string }) {
   return (
     <Badge
       variant="outline"
-      className={cn(
-        'capitalize',
-        health === 'healthy' && 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400',
-        health === 'degraded' && 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-400',
-        health === 'down' && 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-400',
-      )}
+      className={cn('capitalize border-current', `bg-health-${health}`)}
     >
       {health}
     </Badge>
@@ -233,9 +224,9 @@ function RiskExposureBadge({ exposure }: { exposure: string }) {
       className={cn(
         'capitalize',
         exposure === 'low' && 'text-muted-foreground',
-        exposure === 'medium' && 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:text-amber-400',
-        exposure === 'high' && 'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:text-orange-400',
-        exposure === 'critical' && 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-400',
+        exposure === 'medium' && 'border-[oklch(0.72_0.14_60)] bg-[oklch(0.97_0.06_80)] text-[oklch(0.50_0.15_60)] dark:border-[oklch(0.55_0.14_60)] dark:text-[oklch(0.78_0.14_60)]',
+        exposure === 'high' && 'border-[oklch(0.68_0.14_40)] bg-[oklch(0.97_0.05_40)] text-[oklch(0.52_0.18_40)] dark:border-[oklch(0.55_0.14_40)] dark:text-[oklch(0.76_0.16_40)]',
+        exposure === 'critical' && 'border-[oklch(0.70_0.15_28)] bg-[oklch(0.97_0.05_28)] text-[oklch(0.50_0.20_28)] dark:border-[oklch(0.55_0.18_28)] dark:bg-[oklch(0.27_0.05_28)] dark:text-[oklch(0.72_0.18_28)]',
       )}
     >
       {exposure} risk
@@ -243,14 +234,8 @@ function RiskExposureBadge({ exposure }: { exposure: string }) {
   )
 }
 
-function teamGradient(name: string) {
-  const gradients = [
-    'linear-gradient(135deg, #7c3aed, #4f46e5)',
-    'linear-gradient(135deg, #0ea5e9, #06b6d4)',
-    'linear-gradient(135deg, #10b981, #059669)',
-    'linear-gradient(135deg, #f59e0b, #d97706)',
-    'linear-gradient(135deg, #ef4444, #dc2626)',
-  ]
-  const idx = name.charCodeAt(0) % gradients.length
-  return gradients[idx]
+function teamColor(name: string): string {
+  const hues = [145, 60, 240, 28, 320]
+  const hue = hues[name.charCodeAt(0) % hues.length]
+  return `oklch(0.50 0.18 ${hue})`
 }

@@ -1,5 +1,6 @@
 import { Bell, BellDot, CheckCheck, ExternalLink } from 'lucide-react'
 import { useState } from 'react'
+import { Link } from '@tanstack/react-router'
 
 import { Badge } from '#/components/ui/badge'
 import {
@@ -50,17 +51,16 @@ function buildNotifications(): Notification[] {
   return [...risks, ...events]
 }
 
-const INITIAL_NOTIFICATIONS = buildNotifications()
 
-const severityConfig = {
-  critical: { dot: 'bg-red-500', text: 'text-red-600 dark:text-red-400' },
-  warning: { dot: 'bg-amber-500', text: 'text-amber-600 dark:text-amber-400' },
-  info: { dot: 'bg-blue-500', text: 'text-blue-600 dark:text-blue-400' },
-  success: { dot: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400' },
+const severityConfig: Record<Notification['severity'], { dot: string; text: string }> = {
+  critical: { dot: 'bg-[oklch(0.58_0.23_28)]', text: 'text-[oklch(0.58_0.23_28)]' },
+  warning: { dot: 'bg-[oklch(0.65_0.18_60)]', text: 'text-[oklch(0.65_0.18_60)]' },
+  info: { dot: 'bg-[oklch(0.60_0.18_240)]', text: 'text-[oklch(0.60_0.18_240)]' },
+  success: { dot: 'bg-[oklch(0.55_0.18_145)]', text: 'text-[oklch(0.55_0.18_145)]' },
 }
 
 export function NotificationBell() {
-  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS)
+  const [notifications, setNotifications] = useState<Notification[]>(buildNotifications)
   const unreadCount = notifications.filter((n) => !n.read).length
 
   function markAllRead() {
@@ -86,7 +86,7 @@ export function NotificationBell() {
             <Bell className="size-4" />
           )}
           {unreadCount > 0 && (
-            <span className="absolute right-1.5 top-1.5 flex size-1.75 items-center justify-center rounded-full bg-red-500" />
+            <span className="absolute right-1.5 top-1.5 flex size-2 items-center justify-center rounded-full bg-[oklch(0.58_0.23_28)]" />
           )}
         </button>
       </DropdownMenuTrigger>
@@ -157,13 +157,13 @@ export function NotificationBell() {
 
         <DropdownMenuSeparator className="m-0" />
         <div className="px-4 py-2.5">
-          <a
-            href="/risks"
+          <Link
+            to="/risks"
             className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             <ExternalLink className="size-3" />
             View all risks
-          </a>
+          </Link>
         </div>
       </DropdownMenuContent>
     </DropdownMenu>

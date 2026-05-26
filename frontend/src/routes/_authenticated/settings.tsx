@@ -4,6 +4,8 @@ import { Moon, Sun } from 'lucide-react'
 import { AppLayout } from '#/components/AppLayout'
 import { Badge } from '#/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
+import { useAuthStore } from '#/stores/useAuthStore'
+import { useCurrentTenant } from '#/stores/useTenantStore'
 import { useThemeStore } from '#/stores/useThemeStore'
 import { cn } from '#/lib/utils'
 
@@ -13,6 +15,13 @@ export const Route = createFileRoute('/_authenticated/settings')({
 
 function SettingsPage() {
   const { theme, setTheme } = useThemeStore()
+  const user = useAuthStore((s) => s.user)
+  const currentTenant = useCurrentTenant()
+
+  const initials = user?.email
+    ? user.email.slice(0, 2).toUpperCase()
+    : '??'
+  const role = user?.roles?.[0] ?? 'user'
 
   return (
     <AppLayout title="Settings" description="Account and workspace preferences">
@@ -24,14 +33,14 @@ function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-3">
-              <div className="flex size-12 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-purple-700 text-base font-bold text-white">
-                AW
+              <div className="flex size-12 items-center justify-center rounded-full bg-primary text-base font-bold text-primary-foreground">
+                {initials}
               </div>
               <div>
-                <p className="font-semibold">Allan Weber</p>
-                <p className="text-sm text-muted-foreground">a.cassianoweber@gmail.com</p>
+                <p className="font-semibold">{user?.email ?? '—'}</p>
+                <p className="text-sm text-muted-foreground capitalize">{role}</p>
               </div>
-              <Badge className="ml-auto">Admin</Badge>
+              <Badge className="ml-auto capitalize">{role}</Badge>
             </div>
           </CardContent>
         </Card>
@@ -45,16 +54,16 @@ function SettingsPage() {
             <div className="flex items-center justify-between rounded-lg bg-muted/50 px-4 py-3">
               <div>
                 <p className="text-sm font-medium">Tenant</p>
-                <p className="text-xs text-muted-foreground">Acme Fintech</p>
+                <p className="text-xs text-muted-foreground">{currentTenant.name}</p>
               </div>
               <Badge variant="secondary">Active</Badge>
             </div>
             <div className="flex items-center justify-between rounded-lg bg-muted/50 px-4 py-3">
               <div>
                 <p className="text-sm font-medium">Plan</p>
-                <p className="text-xs text-muted-foreground">Phase 0 Alpha</p>
+                <p className="text-xs text-muted-foreground">{currentTenant.plan}</p>
               </div>
-              <Badge variant="outline">Alpha</Badge>
+              <Badge variant="outline">{currentTenant.plan}</Badge>
             </div>
           </CardContent>
         </Card>

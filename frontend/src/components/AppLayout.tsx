@@ -123,6 +123,14 @@ export function AppLayout({
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
+      {/* Skip to main content */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:ring-2 focus:ring-ring focus:outline-none"
+      >
+        Skip to content
+      </a>
+
       {/* Desktop sidebar */}
       <aside
         className={cn(
@@ -394,35 +402,31 @@ function UserMenu({ collapsed }: { collapsed: boolean }) {
   }
 
   const avatar = (
-    <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-violet-500 to-purple-700 text-xs font-bold text-white">
+    <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
       {initials}
     </div>
   )
 
   if (collapsed) {
-
     return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="flex w-full justify-center rounded-lg py-1 hover:bg-sidebar-accent"
-                aria-label="User menu"
-              >
-                {avatar}
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side="right" align="end" className="w-44">
-              <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive">
-                <LogOut className="size-4" />
-                Sign out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </TooltipTrigger>
-        <TooltipContent side="right">Account</TooltipContent>
-      </Tooltip>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            className="flex w-full justify-center rounded-lg py-1 hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="User menu"
+          >
+            {avatar}
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="right" align="end" className="w-44">
+          <DropdownMenuLabel className="truncate text-xs text-muted-foreground">{user?.email}</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive">
+            <LogOut className="size-4" />
+            Sign out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     )
   }
 
