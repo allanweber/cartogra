@@ -11,7 +11,7 @@ function IntelligencePage() {
   return (
     <AppLayout
       title="Intelligence"
-      description="Evidence-first analysis for natural-language questions, anti-patterns, and service health narratives."
+      description="NL queries, anti-pattern findings, and health narratives — grounded in evidence."
     >
       <PhasePlaceholder
         deliveryPhase="Phase 4"

@@ -109,7 +109,7 @@ function VerifyEmailPage() {
         </div>
 
         {resent && (
-          <div className="flex items-center justify-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400">
+          <div className="flex items-center justify-center gap-1.5 text-sm text-[oklch(0.38_0.14_145)] dark:text-[oklch(0.72_0.16_145)]">
             <CheckCircle className="size-4" aria-hidden="true" />
             Code resent successfully
           </div>

@@ -23,6 +23,14 @@ const TYPE_FILTERS: Array<{ label: string; value: TypeFilter }> = [
   { label: 'Dependency', value: 'dependency' },
 ]
 
+const TYPE_ABBR: Record<TimelineEventType, string> = {
+  deploy: 'dpl',
+  contract: 'con',
+  risk: 'rsk',
+  ownership: 'own',
+  dependency: 'dep',
+}
+
 const typeConfig: Record<
   TimelineEventType,
   { color: string; bgColor: string; label: string }
@@ -85,7 +93,7 @@ function TimelinePage() {
                     )}
                   >
                     <span className="text-[9px] font-bold text-primary-foreground uppercase">
-                      {event.type.slice(0, 2)}
+                      {TYPE_ABBR[event.type]}
                     </span>
                   </div>
                   {idx < filtered.length - 1 && (

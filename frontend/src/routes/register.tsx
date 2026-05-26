@@ -59,17 +59,17 @@ function RegisterPage() {
   return (
     <AuthFormShell>
       <div className="mb-5">
-        <h2 className="text-base font-semibold">Create your account</h2>
-        <p className="mt-0.5 text-sm text-muted-foreground">Get started with your workspace</p>
+        <h2 className="text-base font-semibold">Create your workspace</h2>
+        <p className="mt-0.5 text-sm text-muted-foreground">You'll be the workspace admin.</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1.5">
-          <label htmlFor="name" className="text-sm font-medium">Full name</label>
+          <label htmlFor="name" className="text-sm font-medium">Organization name</label>
           <Input
             id="name"
             type="text"
-            placeholder="Jane Smith"
+            placeholder="Acme Corp"
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoComplete="name"

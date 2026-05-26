@@ -131,7 +131,7 @@ function ServiceDetailPage() {
                     {service.warnings.map((w) => (
                       <div
                         key={w}
-                        className="flex items-center gap-2 rounded-lg border-l-2 border-l-amber-500 bg-amber-50 px-3 py-2 text-sm dark:bg-amber-950/30"
+                        className="flex items-center gap-2 rounded-lg border-l-2 border-l-[oklch(0.65_0.18_60)] bg-[oklch(0.97_0.06_80)] px-3 py-2 text-sm text-[oklch(0.50_0.15_60)] dark:bg-[oklch(0.27_0.06_80)] dark:text-[oklch(0.78_0.14_60)]"
                       >
                         {w}
                       </div>
@@ -223,9 +223,9 @@ function ContractStatusBadge({ status }: { status: string }) {
       variant="outline"
       className={cn(
         'capitalize',
-        status === 'compatible' && 'border-emerald-200 text-emerald-700 dark:text-emerald-400',
-        status === 'breaking' && 'border-red-200 text-red-700 dark:text-red-400',
-        status === 'warning' && 'border-amber-200 text-amber-700 dark:text-amber-400',
+        status === 'compatible' && 'border-[oklch(0.70_0.15_145)] bg-[oklch(0.96_0.05_145)] text-[oklch(0.38_0.14_145)] dark:border-[oklch(0.45_0.12_145)] dark:bg-[oklch(0.25_0.06_145)] dark:text-[oklch(0.72_0.16_145)]',
+        status === 'breaking' && 'border-[oklch(0.70_0.15_28)] bg-[oklch(0.97_0.05_28)] text-[oklch(0.50_0.20_28)] dark:border-[oklch(0.55_0.15_28)] dark:bg-[oklch(0.27_0.05_28)] dark:text-[oklch(0.72_0.18_28)]',
+        status === 'warning' && 'border-[oklch(0.72_0.14_60)] bg-[oklch(0.97_0.06_80)] text-[oklch(0.50_0.15_60)] dark:border-[oklch(0.60_0.15_60)] dark:bg-[oklch(0.27_0.06_80)] dark:text-[oklch(0.78_0.14_60)]',
         status === 'stale' && 'text-muted-foreground',
       )}
     >
@@ -259,8 +259,8 @@ function InsightChip({
     <div
       className={cn(
         'rounded-lg border px-3 py-2',
-        variant === 'critical' && 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30',
-        variant === 'warning' && 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30',
+        variant === 'critical' && 'border-[oklch(0.70_0.15_28)] bg-[oklch(0.97_0.05_28)] dark:border-[oklch(0.55_0.15_28)] dark:bg-[oklch(0.27_0.05_28)]',
+        variant === 'warning' && 'border-[oklch(0.72_0.14_60)] bg-[oklch(0.97_0.06_80)] dark:border-[oklch(0.60_0.15_60)] dark:bg-[oklch(0.27_0.06_80)]',
         !variant && 'border-border bg-muted/50',
       )}
     >
@@ -268,8 +268,8 @@ function InsightChip({
       <p
         className={cn(
           'text-sm font-semibold',
-          variant === 'critical' && 'text-red-700 dark:text-red-400',
-          variant === 'warning' && 'text-amber-700 dark:text-amber-400',
+          variant === 'critical' && 'text-[oklch(0.50_0.20_28)] dark:text-[oklch(0.72_0.18_28)]',
+          variant === 'warning' && 'text-[oklch(0.50_0.15_60)] dark:text-[oklch(0.78_0.14_60)]',
         )}
       >
         {value}

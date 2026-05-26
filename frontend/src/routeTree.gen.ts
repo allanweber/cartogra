@@ -27,6 +27,7 @@ import { Route as AuthenticatedGraphRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedContractsRouteImport } from './routes/_authenticated/contracts'
 import { Route as AuthenticatedCatalogRouteImport } from './routes/_authenticated/catalog'
+import { Route as AuthenticatedCatalogIndexRouteImport } from './routes/_authenticated/catalog.index'
 import { Route as AuthenticatedCatalogServiceIdRouteImport } from './routes/_authenticated/catalog.$serviceId'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
@@ -119,6 +120,12 @@ const AuthenticatedCatalogRoute = AuthenticatedCatalogRouteImport.update({
   path: '/catalog',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedCatalogIndexRoute =
+  AuthenticatedCatalogIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedCatalogRoute,
+  } as any)
 const AuthenticatedCatalogServiceIdRoute =
   AuthenticatedCatalogServiceIdRouteImport.update({
     id: '/$serviceId',
@@ -145,6 +152,7 @@ export interface FileRoutesByFullPath {
   '/teams': typeof AuthenticatedTeamsRoute
   '/timeline': typeof AuthenticatedTimelineRoute
   '/catalog/$serviceId': typeof AuthenticatedCatalogServiceIdRoute
+  '/catalog/': typeof AuthenticatedCatalogIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -154,7 +162,6 @@ export interface FileRoutesByTo {
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
-  '/catalog': typeof AuthenticatedCatalogRouteWithChildren
   '/contracts': typeof AuthenticatedContractsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/graph': typeof AuthenticatedGraphRoute
@@ -165,6 +172,7 @@ export interface FileRoutesByTo {
   '/teams': typeof AuthenticatedTeamsRoute
   '/timeline': typeof AuthenticatedTimelineRoute
   '/catalog/$serviceId': typeof AuthenticatedCatalogServiceIdRoute
+  '/catalog': typeof AuthenticatedCatalogIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -187,6 +195,7 @@ export interface FileRoutesById {
   '/_authenticated/teams': typeof AuthenticatedTeamsRoute
   '/_authenticated/timeline': typeof AuthenticatedTimelineRoute
   '/_authenticated/catalog/$serviceId': typeof AuthenticatedCatalogServiceIdRoute
+  '/_authenticated/catalog/': typeof AuthenticatedCatalogIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -209,6 +218,7 @@ export interface FileRouteTypes {
     | '/teams'
     | '/timeline'
     | '/catalog/$serviceId'
+    | '/catalog/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -218,7 +228,6 @@ export interface FileRouteTypes {
     | '/register'
     | '/reset-password'
     | '/verify-email'
-    | '/catalog'
     | '/contracts'
     | '/dashboard'
     | '/graph'
@@ -229,6 +238,7 @@ export interface FileRouteTypes {
     | '/teams'
     | '/timeline'
     | '/catalog/$serviceId'
+    | '/catalog'
   id:
     | '__root__'
     | '/'
@@ -250,6 +260,7 @@ export interface FileRouteTypes {
     | '/_authenticated/teams'
     | '/_authenticated/timeline'
     | '/_authenticated/catalog/$serviceId'
+    | '/_authenticated/catalog/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -391,6 +402,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCatalogRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/catalog/': {
+      id: '/_authenticated/catalog/'
+      path: '/'
+      fullPath: '/catalog/'
+      preLoaderRoute: typeof AuthenticatedCatalogIndexRouteImport
+      parentRoute: typeof AuthenticatedCatalogRoute
+    }
     '/_authenticated/catalog/$serviceId': {
       id: '/_authenticated/catalog/$serviceId'
       path: '/$serviceId'
@@ -403,10 +421,12 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedCatalogRouteChildren {
   AuthenticatedCatalogServiceIdRoute: typeof AuthenticatedCatalogServiceIdRoute
+  AuthenticatedCatalogIndexRoute: typeof AuthenticatedCatalogIndexRoute
 }
 
 const AuthenticatedCatalogRouteChildren: AuthenticatedCatalogRouteChildren = {
   AuthenticatedCatalogServiceIdRoute: AuthenticatedCatalogServiceIdRoute,
+  AuthenticatedCatalogIndexRoute: AuthenticatedCatalogIndexRoute,
 }
 
 const AuthenticatedCatalogRouteWithChildren =

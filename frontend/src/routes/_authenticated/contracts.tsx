@@ -92,11 +92,11 @@ function ContractStatusBadge({ status }: { status: ContractStatus }) {
       className={cn(
         'capitalize',
         status === 'compatible' &&
-          'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400',
+          'border-[oklch(0.70_0.15_145)] bg-[oklch(0.96_0.05_145)] text-[oklch(0.38_0.14_145)] dark:border-[oklch(0.45_0.12_145)] dark:bg-[oklch(0.25_0.06_145)] dark:text-[oklch(0.72_0.16_145)]',
         status === 'breaking' &&
-          'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-400',
+          'border-[oklch(0.70_0.15_28)] bg-[oklch(0.97_0.05_28)] text-[oklch(0.50_0.20_28)] dark:border-[oklch(0.55_0.15_28)] dark:bg-[oklch(0.27_0.05_28)] dark:text-[oklch(0.72_0.18_28)]',
         status === 'warning' &&
-          'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-400',
+          'border-[oklch(0.72_0.14_60)] bg-[oklch(0.97_0.06_80)] text-[oklch(0.50_0.15_60)] dark:border-[oklch(0.60_0.15_60)] dark:bg-[oklch(0.27_0.06_80)] dark:text-[oklch(0.78_0.14_60)]',
         status === 'stale' && 'text-muted-foreground',
       )}
     >

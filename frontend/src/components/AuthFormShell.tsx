@@ -1,4 +1,6 @@
+import { Compass } from 'lucide-react'
 import { useState, useEffect } from 'react'
+
 import { Skeleton } from '#/components/ui/skeleton'
 
 interface AuthFormShellProps {
@@ -16,8 +18,11 @@ export function AuthFormShell({ children }: AuthFormShellProps) {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm">
         <div className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight">Cartogra</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 mb-1">
+            <Compass className="size-5 shrink-0 text-primary" aria-hidden="true" />
+            <h1 className="text-2xl font-semibold tracking-tight">Cartogra</h1>
+          </div>
+          <p className="text-sm text-muted-foreground">
             Service registry &amp; dependency intelligence
           </p>
         </div>

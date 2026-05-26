@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Compass,
   FileText,
   FolderKanban,
   GitBranch,
@@ -159,7 +160,7 @@ export function AppLayout({
                 {eyebrow}
               </p>
             )}
-            <h1 className="truncate text-lg font-semibold tracking-tight leading-none">{title}</h1>
+            <h1 className="truncate text-xl font-semibold tracking-tight leading-none">{title}</h1>
             {description && (
               <p className="mt-0.5 truncate text-xs text-muted-foreground">{description}</p>
             )}
@@ -283,9 +284,10 @@ function SidebarContent({
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Logo row */}
-      <div className={cn('flex h-14 shrink-0 items-center border-b border-border', collapsed ? 'justify-center px-2' : 'gap-2 px-4')}>
+      <div className={cn('flex h-14 shrink-0 items-center border-b border-border', collapsed ? 'justify-center gap-1.5 px-2' : 'gap-2.5 px-4')}>
+        <Compass className="size-4 shrink-0 text-primary" aria-hidden="true" />
         {!collapsed && (
-          <span className="flex-1 text-base font-bold tracking-tight">Cartogra</span>
+          <span className="flex-1 text-sm font-semibold tracking-tight">Cartogra</span>
         )}
         <button
           onClick={onToggleCollapse}

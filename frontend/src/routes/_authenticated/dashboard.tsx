@@ -31,77 +31,91 @@ function DashboardPage() {
 
   const healthScore = Math.round((healthyCount / totalServices) * 100)
 
+  const healthScoreClass = cn(
+    healthScore >= 80 ? 'health-healthy' : healthScore >= 60 ? 'health-degraded' : 'health-down',
+  )
+
   return (
     <AppLayout title="Dashboard" description="Architecture health overview">
-      <div className="space-y-6">
-        {/* Metrics bar — single row, 4 inline metrics separated by dividers */}
-        <div className="grid grid-cols-2 divide-x divide-y divide-border overflow-hidden rounded-xl border border-border bg-card sm:grid-cols-4 sm:divide-y-0">
-          <MetricCell
-            label="Health Score"
-            value={`${healthScore}%`}
-            sub={`${healthyCount} of ${totalServices} healthy`}
-            valueClass={cn(
-              healthScore >= 80 ? 'health-healthy' : healthScore >= 60 ? 'health-degraded' : 'health-down',
-            )}
-          />
-          <MetricCell
-            label="Services"
-            value={String(totalServices)}
-            sub={`${criticalTier} critical tier`}
-            icon={<Server className="size-3.5" />}
-          />
-          <MetricCell
-            label="Active Risks"
-            value={String(criticalRisks + warningRisks)}
-            sub={`${criticalRisks} critical · ${warningRisks} warning`}
-            valueClass={criticalRisks > 0 ? 'health-down' : 'health-healthy'}
-            icon={<AlertTriangle className="size-3.5" />}
-          />
-          <MetricCell
-            label="Teams"
-            value="5"
-            sub={`${orphanServices.length} orphaned services`}
-            icon={<Users className="size-3.5" />}
-          />
+      <div className="space-y-4">
+        {/* Health overview panel — health score primary, secondary metrics compact strip */}
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:gap-6">
+            {/* Health score — primary signal */}
+            <div className="shrink-0">
+              <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+                Health Score
+              </p>
+              <p className={cn('mt-1 text-4xl font-semibold tabular-nums leading-none', healthScoreClass)}>
+                {healthScore}%
+              </p>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                {healthyCount} of {totalServices} healthy
+              </p>
+            </div>
+
+            <div className="hidden h-16 w-px shrink-0 bg-border sm:block" />
+
+            {/* Health bar + legend */}
+            <div className="flex flex-1 flex-col gap-2.5">
+              <div
+                className="flex h-2.5 overflow-hidden rounded-full bg-muted"
+                role="img"
+                aria-label={`Health: ${healthyCount} healthy, ${degradedCount} degraded, ${downCount} down`}
+              >
+                <div
+                  className="bg-[oklch(0.55_0.18_145)] transition-all"
+                  style={{ width: `${(healthyCount / totalServices) * 100}%` }}
+                />
+                <div
+                  className="bg-[oklch(0.65_0.18_60)] transition-all"
+                  style={{ width: `${(degradedCount / totalServices) * 100}%` }}
+                />
+                <div
+                  className="bg-[oklch(0.58_0.23_28)] transition-all"
+                  style={{ width: `${(downCount / totalServices) * 100}%` }}
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                <LegendItem colorClass="bg-[oklch(0.55_0.18_145)]" label="Healthy" count={healthyCount} />
+                <LegendItem colorClass="bg-[oklch(0.65_0.18_60)]" label="Degraded" count={degradedCount} />
+                <LegendItem colorClass="bg-[oklch(0.58_0.23_28)]" label="Down" count={downCount} />
+                <Link
+                  to="/catalog"
+                  className="ml-auto flex items-center gap-1 text-primary hover:underline"
+                >
+                  View all <ArrowRight className="size-3" />
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* Secondary metrics strip */}
+          <div className="grid grid-cols-3 divide-x divide-border border-t border-border">
+            <StatStrip
+              icon={<Server className="size-3.5" />}
+              value={String(totalServices)}
+              label="services"
+              sub={`${criticalTier} critical tier`}
+            />
+            <StatStrip
+              icon={<AlertTriangle className="size-3.5" />}
+              value={String(criticalRisks + warningRisks)}
+              label="risks"
+              sub={`${criticalRisks} critical · ${warningRisks} warning`}
+              valueClass={criticalRisks > 0 ? 'health-down' : 'health-healthy'}
+            />
+            <StatStrip
+              icon={<Users className="size-3.5" />}
+              value="5"
+              label="teams"
+              sub={`${orphanServices.length} unowned`}
+            />
+          </div>
         </div>
 
-        {/* Health summary bar */}
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Service Health
-              </CardTitle>
-              <Link to="/catalog" className="flex items-center gap-1 text-xs text-primary hover:underline">
-                View all <ArrowRight className="size-3" />
-              </Link>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="mb-3 flex h-2.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={`Health: ${healthyCount} healthy, ${degradedCount} degraded, ${downCount} down`}>
-              <div
-                className="bg-[oklch(0.55_0.18_145)] transition-all"
-                style={{ width: `${(healthyCount / totalServices) * 100}%` }}
-              />
-              <div
-                className="bg-[oklch(0.65_0.18_60)] transition-all"
-                style={{ width: `${(degradedCount / totalServices) * 100}%` }}
-              />
-              <div
-                className="bg-[oklch(0.58_0.23_28)] transition-all"
-                style={{ width: `${(downCount / totalServices) * 100}%` }}
-              />
-            </div>
-            <div className="flex gap-4 text-xs">
-              <LegendItem colorClass="bg-[oklch(0.55_0.18_145)]" label="Healthy" count={healthyCount} />
-              <LegendItem colorClass="bg-[oklch(0.65_0.18_60)]" label="Degraded" count={degradedCount} />
-              <LegendItem colorClass="bg-[oklch(0.58_0.23_28)]" label="Down" count={downCount} />
-            </div>
-          </CardContent>
-        </Card>
-
         <div className="grid gap-4 md:grid-cols-2">
-          {/* Recent risks */}
+          {/* Active risks */}
           <Card>
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
@@ -138,7 +152,7 @@ function DashboardPage() {
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-medium">Stale Services</CardTitle>
                 <Link to="/catalog" className="flex items-center gap-1 text-xs text-primary hover:underline">
-                  View all <ArrowRight className="size-3" />
+                  All services <ArrowRight className="size-3" />
                 </Link>
               </div>
             </CardHeader>
@@ -174,31 +188,6 @@ function DashboardPage() {
   )
 }
 
-function MetricCell({
-  label,
-  value,
-  sub,
-  valueClass,
-  icon,
-}: {
-  label: string
-  value: string
-  sub: string
-  valueClass?: string
-  icon?: React.ReactNode
-}) {
-  return (
-    <div className="flex flex-col gap-1 px-5 py-4">
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">{label}</p>
-        {icon && <span className="text-muted-foreground">{icon}</span>}
-      </div>
-      <p className={cn('text-2xl font-semibold tabular-nums', valueClass)}>{value}</p>
-      <p className="text-xs text-muted-foreground">{sub}</p>
-    </div>
-  )
-}
-
 function LegendItem({ colorClass, label, count }: { colorClass: string; label: string; count: number }) {
   return (
     <div className="flex items-center gap-1.5">
@@ -206,6 +195,33 @@ function LegendItem({ colorClass, label, count }: { colorClass: string; label: s
       <span className="text-muted-foreground">
         {label} <span className="font-medium text-foreground">{count}</span>
       </span>
+    </div>
+  )
+}
+
+function StatStrip({
+  icon,
+  value,
+  label,
+  sub,
+  valueClass,
+}: {
+  icon: React.ReactNode
+  value: string
+  label: string
+  sub: string
+  valueClass?: string
+}) {
+  return (
+    <div className="flex items-center gap-3 px-5 py-3">
+      <span className="shrink-0 text-muted-foreground">{icon}</span>
+      <div className="min-w-0">
+        <div className="flex items-baseline gap-1">
+          <span className={cn('text-base font-semibold tabular-nums', valueClass)}>{value}</span>
+          <span className="text-xs text-muted-foreground">{label}</span>
+        </div>
+        <p className="truncate text-[11px] text-muted-foreground">{sub}</p>
+      </div>
     </div>
   )
 }
@@ -228,7 +244,7 @@ function StaleServiceRow({ service }: { service: Service }) {
 function ActivityList({ events }: { events: TimelineEvent[] }) {
   const typeColors: Record<string, string> = {
     deploy: 'bg-[oklch(0.55_0.18_145)]',
-    contract: 'bg-primary',
+    contract: 'bg-[oklch(0.55_0.18_260)]',
     risk: 'bg-[oklch(0.58_0.23_28)]',
     ownership: 'bg-[oklch(0.65_0.18_60)]',
     dependency: 'bg-[oklch(0.60_0.18_240)]',

@@ -38,7 +38,6 @@ function SettingsPage() {
               </div>
               <div>
                 <p className="font-semibold">{user?.email ?? '—'}</p>
-                <p className="text-sm text-muted-foreground capitalize">{role}</p>
               </div>
               <Badge className="ml-auto capitalize">{role}</Badge>
             </div>
@@ -53,10 +52,9 @@ function SettingsPage() {
           <CardContent className="space-y-3">
             <div className="flex items-center justify-between rounded-lg bg-muted/50 px-4 py-3">
               <div>
-                <p className="text-sm font-medium">Tenant</p>
+                <p className="text-sm font-medium">Workspace</p>
                 <p className="text-xs text-muted-foreground">{currentTenant.name}</p>
               </div>
-              <Badge variant="secondary">Active</Badge>
             </div>
             <div className="flex items-center justify-between rounded-lg bg-muted/50 px-4 py-3">
               <div>

@@ -88,7 +88,6 @@ function LoginPage() {
     <AuthFormShell>
       <div className="mb-5">
         <h2 className="text-base font-semibold">Sign in to your workspace</h2>
-        <p className="mt-0.5 text-sm text-muted-foreground">Enter your credentials to continue</p>
       </div>
 
       <div className="space-y-2">
