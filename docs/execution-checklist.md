@@ -19,10 +19,13 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 ## Working Rules
 
+- Each non-BIP task is an end-to-end vertical: schema (if needed) + backend + UI wiring (if user-facing) + integration tests + OpenAPI/diagram updates. Do not split a single feature across multiple tasks.
+- Do not introduce abstractions, tables, endpoints, or events that no in-phase task consumes. If it is only used "later," it ships in the later phase.
 - Keep this file chronological. Add new tasks where they should be executed, not at the end of a phase.
-- Keep user-story scope, rationale, and phase boundaries in [plan.md](c:/Users/allan/projects/cartogra/docs/plan.md).
+- Keep user-story scope, rationale, and phase boundaries in [plan.md](c:/Users/allan/projects/cartogra/docs/plan.md). Items explicitly deferred from MVP live in the **Explicitly out of MVP** section of `plan.md`.
 - When a task changes product scope or architecture, update the relevant ADR or source doc in the same PR.
 - When a task produces a BIP artifact, publish it immediately after the implementation or doc it depends on.
+- DONE tasks (e.g. `1.39f` referencing "until 2.35 lands") may contain stale task-ID references because tasks were renumbered. Do not edit DONE tasks; the audit-events feature now lives at `2.12`.
 
 ---
 
@@ -206,56 +209,50 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [x] 1.52 [BIP] Publish screenshots plus OpenAPI links after the catalog UI is stable enough to demo.
 - [x] 1.53 [BIP] Publish the dual-mode auth article (httpOnly cookies + Bearer tokens in a Spring Security 7 reactive gateway) after JWT issuance is stable end-to-end.
 - [x] 1.54 [BIP] Publish the Redis rate-limiting article (token buckets, per-tenant key isolation, 429 behavior) after rate limiting is tested and observable.
-- [ ] 1.55 [CODE] Wire `KubernetesWorker` to publish a `cartogra.registry.sync.command` Kafka message (`EventEnvelope` + `traceparent`) whenever a K8s `Service` is ADDED or MODIFIED in a watched namespace. Resolve tenant ID from the service's `cartogra.io/tenant-id` namespace label; use a configured synthetic connection UUID (`ingestion.workers.k8s.connection-id`) as the connection identity. Document the label contract in `docs/runbooks/local-development.md`.
-- [ ] 1.56 [TEST] Add `KubernetesWorkerIT` using `io.fabric8:kubernetes-server-mock` (no real cluster or `kind` required) + `@EmbeddedKafka`: simulate a `Service` ADDED event in a watched namespace and assert a `cartogra.registry.sync.command` message is published with the correct `tenant_id`, `traceparent` header, and `providerType = "kubernetes"`. Add `testImplementation("io.fabric8:kubernetes-server-mock:7.0.0")` to `services/ingestion/build.gradle.kts`.
 
-### Automatic sync — periodic scheduler
+### Service auto-discovery (E2E)
 
-- [ ] 1.57 [INFRA] Add ingestion Flyway `V003__create_scm_connection_cache.sql` — a local materialized table of SCM connection records (`id`, `tenant_id`, `provider_type`, `config` JSONB, `sync_interval_minutes`, `last_synced_at`, `deleted_at`) populated by consuming registry lifecycle events. Add a unique index on `(tenant_id, id)` and a partial index on connections due for re-sync (`last_synced_at + sync_interval_minutes * interval '1 min' <= now()`).
-- [ ] 1.58 [CODE] Consume `scm_connection.created`, `scm_connection.updated`, and `scm_connection.deleted` registry lifecycle events in ingestion and upsert the local `scm_connection_cache` table. This decouples ingestion from registry REST calls at sync time and is the prerequisite for both the scheduler and webhook registration.
-- [ ] 1.59 [CODE] Add a `@Scheduled` task in ingestion (interval configurable via `ingestion.sync.poll-interval`, default 15 min) that queries `scm_connection_cache` for connections due for re-sync, acquires a Postgres advisory lock (`pg_try_advisory_lock`) to prevent duplicate runs under horizontal scaling, then publishes one `cartogra.registry.sync.command` `EventEnvelope` per due connection with `traceparent` propagation. Update `last_synced_at` atomically before publishing.
-- [ ] 1.60 [TEST] Integration test for the scheduler: seed two connections in `scm_connection_cache` (one due, one not due), trigger the scheduled method directly, assert exactly one `sync.command` published to `@EmbeddedKafka`.
+- [ ] 1.55 [CODE] Service auto-discovery from SCM + Kubernetes. Define `cartogra.ingestion.service.discovered` envelope (`tenantId`, `connectionId`, `source ∈ {github,azure_devops,kubernetes}`, `externalId`, `name`, `description`, `repositoryUrl`, `repositoryRef`, `k8sCluster`, `k8sNamespace`, `k8sDeployment`, `techStack[]`, `healthStatus`, `healthEndpoint`, `lastCommitAt`, `lastCommitSha`). Extend `ExecuteSyncUseCaseImpl` so each non-archived repo: detects tech stack (presence of `pom.xml` / `build.gradle*` / `package.json` / `go.mod` / `Cargo.toml` / `requirements.txt`, plus Dockerfile `FROM` line via `provider.getFileContents`), pulls `lastCommitAt` + `lastCommitSha` via the SCM API, publishes the envelope before resolving ownership. Extend `KubernetesWorker` so on `Service` ADDED/MODIFIED in namespaces labeled `cartogra.io/tenant-id` it reads the pod/deployment Ready status (HEALTHY/DEGRADED/UNHEALTHY/UNKNOWN) and publishes the envelope with K8s metadata; namespace label resolves `tenantId`, configured synthetic connection UUID (`ingestion.workers.k8s.connection-id`) used as `connectionId`. Add `RegistryServiceDiscoveryConsumer` keyed on `(tenantId, externalId)` that upserts `services` (creating new rows when missing, updating tech stack / health / commit metadata when present), writes a `services_history` snapshot, and lets the existing `OwnershipResolvedConsumer` finish team assignment. ITs: `ServiceDiscoveryFlowIT` (WireMock GitHub repo with `pom.xml` + Dockerfile → `service.discovered` published → service appears in registry with `techStack=['java','spring-boot']`), `KubernetesWorkerIT` (`io.fabric8:kubernetes-server-mock` + `@EmbeddedKafka` — add `testImplementation("io.fabric8:kubernetes-server-mock:7.0.0")` to `services/ingestion/build.gradle.kts` — Service ADDED → service appears in registry with `healthStatus=HEALTHY`). Document the namespace label contract and tech-stack detection rules in `docs/runbooks/local-development.md`.
+- [ ] 1.56 [CODE] Periodic health probe for non-K8s services. `@Scheduled` task in registry (`registry.health.probe-interval`, default 60 s) iterates services where `health_endpoint IS NOT NULL`, performs a short-timeout HTTP GET, maps status to `HEALTHY` (2xx), `DEGRADED` (4xx/5xx), `UNHEALTHY` (timeout / connection error), updates `health_status` + `health_checked_at`, and snapshots `services_history` on transitions. IT covers all three response classes.
 
-### Webhook-driven sync
+### SCM sync — scheduled and webhook-driven (E2E)
 
-- [ ] 1.61 [CODE] Extend the `ScmProvider` SPI with four webhook methods: `registerWebhook(config, targetUrl)`, `deregisterWebhook(config, externalWebhookId)`, `verifyWebhookSignature(request, rawBody, config) → boolean`, and `isRelevantWebhookEvent(request) → boolean`. Add default no-op implementations so existing providers compile. Implement full webhook registration/deregistration in `GitHubProvider` (org-level hook via `POST /orgs/{org}/hooks`) and `AzureDevOpsProvider` (service hook via `POST /_apis/hooks/subscriptions`). Store the returned `external_id` and a hashed secret in `scm_webhooks` on registration; mark `deleted_at` on deregistration. Trigger registration by consuming the `scm_connection.created` event (task 1.58).
-- [ ] 1.62 [CODE] Add a single `WebhookController` in ingestion at `POST /webhooks/{providerType}/{connectionId}`. This route is excluded from gateway JWT auth and the response envelope. Read the raw request body before deserialization via `ContentCachingRequestWrapper`. Load connection config from `scm_connection_cache`, dispatch to `providers.get(providerType).verifyWebhookSignature()` — return 401 on failure with no body. On success, call `isRelevantWebhookEvent()` to skip pings and irrelevant event types, then publish `cartogra.registry.sync.command` and return 202. Update `scm_webhooks.last_received_at` on every successful verification.
-- [ ] 1.63 [CODE] Implement `verifyWebhookSignature` in `GitHubProvider` (HMAC-SHA256 over raw body, `X-Hub-Signature-256` header) and `AzureDevOpsProvider` (shared-secret header). Secret is read from `ScmConnectionConfig` — never from env vars. Adding a future provider (GitLab, Bitbucket) requires only a new `ScmProvider` implementation; no changes to the controller or routing.
-- [ ] 1.64 [TEST] Add `WebhookControllerIT` using `@EmbeddedKafka` and WireMock: correctly-signed GitHub push payload → assert `sync.command` published; tampered GitHub payload → assert 401 and no Kafka message; valid AzDO payload → assert `sync.command`; unknown `providerType` → assert 404; GitHub ping event → assert 202 but no Kafka message.
-- [ ] 1.65 [DOCS] Update `docs/api/ingestion.openapi.yaml` for `POST /webhooks/{providerType}/{connectionId}` (no auth, no envelope, 202 Accepted, 401 on bad signature, 404 on unknown provider). Add a "Webhook setup" section to the deployment runbook covering: required public URL, ngrok/Cloudflare Tunnel for local dev, GitHub org-level vs repo-level hook trade-offs, AzDO service hook setup, and how to add a future provider (implement `ScmProvider`, `verifyWebhookSignature` handles the new format automatically).
+- [ ] 1.57 [CODE] SCM connection lifecycle events + sync feedback loop. (1) Registry publishes `cartogra.registry.scm-connection.created/updated/deleted` envelopes with `traceparent` on every mutating use case. (2) Ingestion Flyway `V003__create_scm_connection_cache.sql` (`id`, `tenant_id`, `provider_type`, `config` JSONB, `sync_interval_minutes`, `last_synced_at`, `deleted_at`, unique on `(tenant_id, id)`, partial index for due connections) and a consumer that upserts the cache. (3) Registry Flyway adds `last_synced_at TIMESTAMPTZ` and `last_sync_status TEXT` to `scm_connections`. (4) Registry consumes the existing `cartogra.ingestion.sync.completed` topic and updates those columns. Canonicalize the topic name in `docs/architecture/kafka-topics.md`. Integration tests cover all four flows.
+- [ ] 1.58 [CODE] Periodic SCM sync scheduler. `@Scheduled` task in ingestion (interval `ingestion.sync.poll-interval`, default 15 min) queries `scm_connection_cache` for due connections, acquires a `pg_try_advisory_lock` keyed on connection ID to prevent duplicate runs under horizontal scaling, publishes one `cartogra.registry.sync.command` envelope per due connection with `traceparent`, then atomically updates `last_synced_at`. IT seeds two cached connections (one due, one not) and asserts exactly one command is published.
+- [ ] 1.59 [CODE] Webhook-driven SCM sync. Extend `ScmProvider` SPI with `registerWebhook(config, targetUrl) → WebhookRegistration`, `deregisterWebhook(config, externalWebhookId)`, `verifyWebhookSignature(request, rawBody, config) → boolean`, `isRelevantWebhookEvent(request) → boolean` (default no-op for existing providers). Implement fully for `GitHubProvider` (HMAC-SHA256 over raw body, `X-Hub-Signature-256`, org-level hook via `POST /orgs/{org}/hooks`) and `AzureDevOpsProvider` (shared-secret header + `POST /_apis/hooks/subscriptions`). Add `WebhookController` at `POST /webhooks/{providerType}/{connectionId}` excluded from gateway JWT auth and the envelope: read raw body via `ContentCachingRequestWrapper`, dispatch signature verification, on success publish `cartogra.registry.sync.command` and return 202; 401 on bad signature; 404 on unknown provider; 202 with no Kafka on irrelevant events (e.g. GitHub ping). Trigger registration off `scm_connection.created`; store `external_id` + hashed secret in `scm_webhooks`. `WebhookControllerIT` (`@EmbeddedKafka` + WireMock) covers signed/tampered/ping/AzDO/unknown paths.
+- [ ] 1.60 [DOCS] Update `docs/api/ingestion.openapi.yaml` for `POST /webhooks/{providerType}/{connectionId}` (no auth, no envelope, 202/401/404). Add "Webhook setup" and "Scheduled sync configuration" sections to `docs/runbooks/deployment.md` (public URL, ngrok/Cloudflare Tunnel for local dev, GitHub org-level hooks, AzDO service hooks, `ingestion.sync.poll-interval`, adding a new provider via `ScmProvider`).
 
-### Infrastructure hardening and missing flows
+### Auth UX
 
-- [ ] 1.66 [CODE] Publish `scm_connection.created`, `scm_connection.updated`, and `scm_connection.deleted` lifecycle events from registry with the shared Kafka envelope and `traceparent` propagation. These events are the prerequisite for tasks 1.58 (connection cache consumer), 1.59 (scheduler), and 1.61 (webhook registration).
-- [ ] 1.66a [DOCS] One-line decision: the `sync.completed` topic name. The producer at `SyncResultProducer` already publishes to `cartogra.ingestion.sync.completed`; the original 1.67 wording referenced `cartogra.registry.sync.completed`. Accept the producer's existing name (events belong to the domain that produced them) and update `docs/architecture/kafka-topics.md` to make it canonical. No code change.
-- [ ] 1.67 [CODE] Consume `cartogra.ingestion.sync.completed` events in registry (topic name fixed by 1.66a) to update `scm_connections.last_synced_at` and `last_sync_status`. Depends on the prerequisite migration 1.67a that adds those columns to `scm_connections`. This closes the ingestion → registry feedback loop.
-- [ ] 1.67a [INFRA] Add registry Flyway migration `V0NN__add_last_sync_to_scm_connections.sql` (zero-padded, next available version) adding `last_synced_at TIMESTAMPTZ` and `last_sync_status TEXT` columns to `scm_connections`. Verify against the existing `V004__create_scm_connections.sql` that these columns are not already present.
-- [ ] 1.68 [CODE] Implement the password reset flow in gateway: `POST /auth/forgot-password` sends a time-limited reset token via Resend; `POST /auth/reset-password` validates the token and updates the password hash. Apply the same rate limiting as other `/auth/*` endpoints.
-- [ ] 1.69 [CODE] Extend `RateLimitWebFilter` to use per-tenant Redis keys (`rate_limit:tenant:<tenantId>:<route>`) on all authenticated routes, falling back to per-IP only for unauthenticated paths. Per-tenant limits must be configurable per plan tier.
-- [ ] 1.70 [INFRA] Configure graceful shutdown for all JVM services: `server.shutdown=graceful` and `spring.lifecycle.timeout-per-shutdown-phase=30s` in each service's `application.yml`. Verify that in-flight Kafka consumer commits complete before the pod terminates.
-- [ ] 1.71 [CODE] Add Resilience4j circuit breakers on all gateway `RestClient` calls to downstream services (registry, topology, contract, intelligence). Expose circuit-breaker state in each service's `/actuator/health` response.
-- [ ] 1.72 [UI] Verify and implement the root error boundary claimed done in task 0.37. Audit `frontend/src/` for an `ErrorBoundary` component; if absent, implement it as a React class component with `componentDidCatch`, display the `traceId` from the caught `ApiError`, and add a Vitest snapshot test.
+- [ ] 1.61 [CODE] Password reset end-to-end. Gateway: `POST /v1/auth/forgot-password` issues a time-limited reset token via Resend; `POST /v1/auth/reset-password` validates the token and updates the password hash; both rate-limited like other `/auth/*` endpoints. UI: `/forgot-password` and `/reset-password` routes (excluded from the route guard), TanStack Forms wiring, success/error states surface `traceId`. ITs cover happy path, expired token, and rate limit.
+- [ ] 1.62 [UI] Auth route guards + sign out. `beforeLoad` in `__root.tsx` protects every route except `/login`, `/register`, `/verify-email`, `/forgot-password`, `/reset-password`, `/oauth-handoff`; unauth requests redirect to `/login` with a `redirect` search param; after login or OAuth, navigate to `redirect` or `/dashboard`. Add a "Sign out" action in `AppLayout` sidebar bottom that calls `POST /api/auth/logout`, then `useAuthStore.clearAuth()`, then navigates to `/login`. Vitest covers guard logic and the sign-out flow.
+- [ ] 1.63 [CODE] User profile management. Gateway: `PUT /v1/auth/userinfo` accepts `{ name, email }`, validates email uniqueness, returns the updated user in the envelope (httpOnly cookie or Bearer required). UI: `/settings/profile` shows name/email/role from `useAuthStore`, updates via TanStack Forms, links "Change password" to `/forgot-password`. `/settings` index lists Profile + SCM Connections.
 
-### UI–Backend integration
+### Catalog UI wired to real APIs
 
-- [ ] 1.73 [UI] Add TanStack Router route guards: protect all routes except `/login`, `/register`, `/verify-email`, `/forgot-password`, `/reset-password`, and `/oauth-handoff`. Use `beforeLoad` in `__root.tsx` (or a route group) to check `useAuthStore.isAuthenticated`; if false after the session-restore effect settles, throw `redirect({ to: '/login', search: { redirect: location.pathname } })`; after successful login/OAuth, navigate to the `redirect` search param or fall back to `/dashboard`.
-- [ ] 1.74 [UI] Add a "Sign out" action in `AppLayout` sidebar bottom section (next to the user avatar): calls `POST /api/auth/logout` via `apiFetch`, on success calls `useAuthStore.clearAuth()` and navigates to `/login`. Handle the API error case inline — never leave the user in an inconsistent auth state.
-- [ ] 1.75 [UI] Craft the Forgot Password screen at `/forgot-password` and Reset Password screen at `/reset-password`: `POST /api/auth/forgot-password` submits the email; success state shows "check your inbox"; `POST /api/auth/reset-password` accepts `token` (from query param) + `newPassword`; on success navigate to `/login`. Both routes excluded from the auth guard (1.73). Depends on backend task 1.68.
-- [ ] 1.76 [UI] Craft the SCM Connections management screen at `/settings/scm-connections`: list connections via `GET /api/registry/v1/scm-connections` (TanStack Query); add a new connection with a drawer/dialog form (provider selector, name, PAT/token field); delete with a confirmation dialog using `DELETE /api/registry/v1/scm-connections/{id}`; show last-synced status and sync health badge. Use TanStack Query mutations for create and delete. Design was shape-briefed in 1.2 but this screen was never built.
-- [ ] 1.77 [UI] Wire the Catalog list and detail pages to the real registry API: replace `MOCK_SERVICES` with a TanStack Query `useQuery` on `GET /api/registry/v1/services` (pass `team`, `health`, `q` query params from filter state); replace the detail route loader with `GET /api/registry/v1/services/{id}`; show `Skeleton` loading and `Alert` with `traceId` on error; remove all `MOCK_SERVICES` imports from `catalog.tsx` and `catalog.$serviceId.tsx`. Client-side tech-stack and SCM-provider filtering remains until 2.39 full-text search lands server-side.
-- [ ] 1.78 [UI] Wire the Teams page to the real registry API: replace `MOCK_TEAMS` with a TanStack Query `useQuery` on `GET /api/registry/v1/teams`; show `Skeleton` loading and `Alert` with `traceId` on error; remove `MOCK_TEAMS` import from `teams.tsx`.
-- [ ] 1.79 [CODE] Add `PUT /v1/auth/userinfo` endpoint in gateway: accepts `{ name, email }`, validates email uniqueness, updates the user record, returns the updated user in the response envelope. Requires authentication (httpOnly cookie or Bearer). This is the backend counterpart to the profile update UI in 1.80.
-- [ ] 1.80 [UI] Add a Settings layout with a Profile page at `/settings/profile`: display name, email, and role from `useAuthStore`; allow name/email updates via `PUT /api/auth/userinfo` (1.79) using TanStack Forms; surface a "Change password" link pointing to `/forgot-password`. Create a `/settings` index page that lists available sections (Profile, SCM Connections; Billing added in 3.45). Add `/settings/profile` and `/settings/scm-connections` as file-based sub-routes.
+- [ ] 1.64 [UI] Catalog list + detail wired to registry. Replace `MOCK_SERVICES` with a TanStack Query on `GET /api/registry/v1/services` (passes `team`, `health`, `q` from filter state — client-side `q` until Phase 2 server FTS); detail route loader hits `GET /api/registry/v1/services/{id}`. Render `Skeleton` while loading and `Alert` with `traceId` on error. Remove all `MOCK_SERVICES` imports.
+- [ ] 1.65 [CODE] Service profile editing. Registry: `PATCH /v1/services/{id}` accepts `description`, `documentation_url`, `runbook_url`, `sla_target`, `tier`, `tags`, `owner_team_id` (admin role or owning-team member). Validates `tier ∈ {critical, standard, experimental}`. Snapshots `services_history` on every change. UI: edit drawer in Catalog detail with TanStack Forms (tier select, tags chip input, owner team dropdown, free-text URLs). Optimistic update via TanStack Query mutation; rollback on error; surface `traceId`. ITs assert the patch + history snapshot + envelope.
+- [ ] 1.66 [UI] Teams page wired to `GET /api/registry/v1/teams`. Replace `MOCK_TEAMS`, add `Skeleton` and `Alert`-with-`traceId` states.
+- [ ] 1.67 [UI] SCM Connections management at `/settings/scm-connections`. List via `GET /api/registry/v1/scm-connections`; create connection via drawer form (provider selector, name, PAT/token); delete with confirmation dialog (`DELETE /api/registry/v1/scm-connections/{id}`). Last-synced status + health badge fed by 1.57. TanStack Query mutations for create/delete.
+
+### Production hardening
+
+- [ ] 1.68 [CODE] Per-tenant Redis rate limits. Extend `RateLimitWebFilter` to key on `rate_limit:tenant:<tenantId>:<route>` for authenticated routes (fall back to per-IP only for unauthenticated paths). Per-tenant limits configurable per plan tier from config (Phase 3 wires plan resolution; until then read from `application.yml` defaults). ITs assert 429 + `Retry-After` for both authenticated and unauthenticated paths.
+- [ ] 1.69 [INFRA] Graceful shutdown across all JVM services. Set `server.shutdown=graceful` and `spring.lifecycle.timeout-per-shutdown-phase=30s` in every `application.yml`. IT verifies in-flight Kafka consumer commits complete before pod terminates and HTTP requests in flight finish cleanly.
+- [ ] 1.70 [CODE] Resilience4j circuit breakers on every gateway `RestClient` (registry, topology, contract, intelligence). Expose breaker state in `/actuator/health`. IT proves the breaker opens on repeated downstream failures and surfaces a domain error mapped to the envelope.
+- [ ] 1.71 [UI] Verify the root error boundary claimed in 0.37. If absent, add a React class component with `componentDidCatch`, display `traceId` from the caught `ApiError`, add a Vitest snapshot test. If present, add the `traceId` rendering + test.
 
 ### Phase 1 Gate
 
-- [ ] [GATE] Registry CRUD, history, ownership, orphan detection, sync initiation, local auth, at least one OAuth provider, and Bearer auth are working.
+- [ ] [GATE] Registry CRUD, history, ownership, orphan detection, local auth, at least one OAuth provider, and Bearer auth are working.
 - [ ] [GATE] Tenant OIDC is either working or explicitly deferred with a public note that preserves scope discipline.
-- [ ] [GATE] Both SCM sync workers succeed in scripted or runbooked tests; Kafka events are visible.
-- [ ] [GATE] 429 behavior is smoke-tested and documented.
-- [ ] [GATE] Gateway proxies registry via Spring Cloud Gateway with trace propagation.
-- [ ] [GATE] Gateway and registry OpenAPI docs match the implemented envelope and auth behavior.
-- [ ] [GATE] Phase 1 screens have passed `/impeccable audit`; no blocking accessibility or envelope-handling regressions.
+- [ ] [GATE] Service auto-discovery: SCM and K8s syncs create `services` rows automatically with detected `tech_stack`, repository/commit metadata, K8s metadata, and initial `health_status`. The OwnershipResolvedConsumer no longer warns about missing services on the happy path.
+- [ ] [GATE] Health: K8s pods set `health_status` on ADDED/MODIFIED; periodic prober updates `health_status` for services with `health_endpoint`. Catalog `health` filter returns non-empty results.
+- [ ] [GATE] K8s, scheduler-driven, and webhook-driven SCM sync all succeed end-to-end; `last_sync_status` is reflected in the UI; Kafka events visible.
+- [ ] [GATE] Password reset, route guards, sign out, profile management, Catalog (incl. service profile editing)/Teams/SCM-connections UIs operate against real APIs.
+- [ ] [GATE] Per-tenant rate limits (429 + `Retry-After`), graceful shutdown, circuit breakers, and root error boundary all demonstrably in place.
+- [ ] [GATE] Gateway proxies registry via Spring Cloud Gateway with trace propagation; gateway/registry/ingestion OpenAPI match the implemented envelope and auth behavior.
+- [ ] [GATE] Phase 1 screens have passed `/impeccable audit`.
 - [ ] [GATE] Minimum BIP set shipped: two ADR/design notes, two deep-dive writeups, and two short-form technical threads.
 
 ---
@@ -264,87 +261,62 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 ### System design and UX — Phase 2
 
-- [ ] 2.1 [UI] Run `/shape dependency graph` to produce a confirmed design brief for the D3 graph view, blast radius panel, SPOF findings, and cycle warnings before writing any graph UI code.
+- [ ] 2.1 [UI] Run `/shape dependency graph` to produce a confirmed design brief for the D3 graph view, blast radius panel, SPOF findings, cycle warnings, drift overlay, and Risks page before writing any Phase 2 UI code.
 
-### Schema and persistence
+### Topology foundation
 
-- [ ] 2.2 [CODE] Create the topology module skeleton with Spring Data JDBC, Flyway, OTel, and virtual-thread settings.
-- [ ] 2.3 [INFRA] Add topology Flyway `V001__create_dependencies.sql` with declared and observed edge fields, tenant isolation, and the self-edge guard.
-- [ ] 2.4 [INFRA] Add topology Flyway `V002__create_dependency_drifts.sql` with tenant isolation and resolution fields.
-- [ ] 2.5 [INFRA] Add topology Flyway `V003__create_dependency_graph_view.sql` with indexes and a documented refresh strategy.
-- [ ] 2.6 [CODE] Implement repositories for dependency insert/update/delete, observed-edge enrichment, and drift persistence.
-- [ ] 2.7 [CODE] Decide and document the materialized-view refresh strategy, including any debounce or advisory-lock behavior.
+- [ ] 2.2 [CODE] Topology service skeleton + persistence. Spring Data JDBC, Flyway, OTel, virtual threads. Migrations: `V001__create_dependencies.sql` (declared + observed edges, tenant isolation, self-edge guard, indexes), `V002__create_dependency_drifts.sql` (resolution fields), `V003__create_dependency_graph_view.sql` (materialized view + indexes + documented refresh strategy with debounce + advisory lock). Repositories for insert/update/delete, observed-edge enrichment, drift persistence. Hexagonal layout matching registry.
 
-### Graph algorithms and APIs
+### Graph features (each one is a vertical: API + UI + tests + OpenAPI)
 
-- [ ] 2.8 [CODE] Implement the declared-dependency CRUD API and graph read endpoints with the shared response envelope.
-- [ ] 2.9 [CODE] Implement recursive CTEs for blast radius with bounded depth and path-explosion guards.
-- [ ] 2.10 [CODE] Implement cycle detection with normalized and deduplicated cycle output.
-- [ ] 2.11 [CODE] Implement the SPOF heuristic with a documented fan-in threshold and any redundancy assumptions.
-- [ ] 2.11a [CODE] Add `GET /api/topology/v1/risks` endpoint: aggregates SPOF findings, cycle detections, drift alerts, and orphan detections into a paginated risk-summary list. Each item has `severity` (critical/warning/info), `type` (spof/cycle/drift/orphan), `affectedServices[]`, `title`, and `description`. This is the data source for the Risks page (2.28b) and the Dashboard risk section (2.28d).
-- [ ] 2.12 [CODE] Implement drift detection plus the resolve endpoint.
-- [ ] 2.13 [TEST] Add fixed graph fixtures and tests for graph reads, blast radius, cycle detection, SPOF, and drift resolution.
-- [ ] 2.14 [DOCS] Update `docs/api/topology.openapi.yaml` to match the implemented graph, drift, and analysis endpoints.
-- [ ] 2.15 [DOCS] Write the ADR that documents PostgreSQL recursive CTEs and materialized views for the graph layer.
-- [ ] 2.16 [BIP] Publish the recursive-CTE article after the graph algorithms have passing fixtures.
-- [ ] 2.17 [BIP] Publish the blast-radius SQL thread after the blast-radius endpoint is reviewable.
+- [ ] 2.3 [CODE] Declared dependency CRUD + graph view. `POST/PUT/DELETE /v1/dependencies` + `GET /v1/graph` (nodes + edges, paginated for large tenants). D3 force-directed graph with zoom/pan/declared-vs-observed toggle/node selection (use `/impeccable craft dependency graph`), shadcn chrome around the canvas, TanStack Query for fetch, `Skeleton`/`Alert`-with-`traceId` states. Replace any static fixture data.
+- [ ] 2.4 [CODE] Blast radius. Recursive CTE-backed `GET /v1/blast-radius/{serviceId}` with bounded depth + path-explosion guards. Upstream/downstream detail panels (use `/impeccable craft blast radius panel`) and on-graph highlighting. Fixture-based ITs.
+- [ ] 2.5 [CODE] Cycle detection + SPOF heuristic + Risks page. `GET /v1/cycles` (normalized + deduplicated), `GET /v1/spofs` (documented fan-in threshold + redundancy assumptions), `GET /v1/risks` aggregating SPOF/cycle/drift/orphan into a paginated risk-summary list (`severity`, `type`, `affectedServices[]`, `title`, `description`). Risks page replaces `MOCK_RISKS` via TanStack Query; `Skeleton`/`Alert` states. Fixture-based ITs.
+- [ ] 2.6 [CODE] Drift detection + resolve. `GET /v1/drifts` + `POST /v1/drifts/{id}/resolve`. Drift overlay on the graph + drift list view + resolution workflow wired via TanStack Query mutations. Fixture-based ITs.
 
-### Event-driven graph updates and observed dependencies
+### Event-driven graph + observed dependencies
 
-- [ ] 2.18 [CODE] Implement the `topology-graph-builder` consumer so registry events update topology state idempotently.
-- [ ] 2.19 [CODE] Publish topology dependency events with shared Kafka envelope and trace propagation.
-- [ ] 2.19a [DOCS] Write ADR-0016 — `OtelSpanWorker` ingestion path. The current 2.20 wording does not specify how topology receives span data. Recommend: the OTel Collector exports spans to a Kafka topic `cartogra.observability.spans` (configured in `infra/docker-compose/otel-collector.yml`); topology consumes that topic. Document the topic in `docs/architecture/kafka-topics.md`. ADR `Accepted` only after Allan signs off.
-- [ ] 2.20 [CODE] Implement `OtelSpanWorker` per ADR-0016: consume `cartogra.observability.spans`, derive observed edges idempotently, and persist them via the topology repositories. Synthetic span fixtures must work without a live collector.
-- [ ] 2.21 [TEST] Add fixture-based integration tests that prove a span batch produces observed edges and mode toggling works.
-- [ ] 2.22 [CODE] Instrument MV refresh duration, consumer lag, and graph query latency metrics.
-- [ ] 2.23 [DOCS] Write the ADR or design note that captures the Kafka topic taxonomy and idempotency strategy for graph updates.
-- [ ] 2.24 [BIP] Publish the Kafka topic design article after topology topics and consumers are visible.
-- [ ] 2.25 [BIP] Publish the UUIDv5/idempotency thread after the event flow is stable.
+- [ ] 2.7 [CODE] `topology-graph-builder` consumer. Consume `cartogra.registry.service.*` envelopes and update topology state idempotently (UUIDv5 dedupe + `(tenantId, eventId)` dedupe table). ITs prove service-registered creates a node, service-deregistered soft-deletes it, and a replayed envelope is a no-op.
+- [ ] 2.8 [CODE] OTel span ingestion → observed edges. OTel Collector exports spans to `cartogra.observability.spans` (configure in `infra/docker-compose/otel-collector.yml`); `OtelSpanWorker` consumes and derives observed edges idempotently. Synthetic span fixtures must work without a live collector. ADR-0016 written and accepted inline in this PR; document the topic in `docs/architecture/kafka-topics.md`.
+- [ ] 2.9 [CODE] Publish topology dependency lifecycle events (`dependency.declared/observed/removed/drift-detected`) with the shared Kafka envelope and `traceparent` propagation. Consumer side covered by the Phase 4 intelligence analyzer when it lands.
 
-### Graph UI
+### Cross-cutting catalog and audit
 
-- [ ] 2.26 [UI] Craft the D3 graph with zoom, pan, declared-vs-observed toggle, node selection, and drift overlays using `/impeccable craft dependency graph`; use D3 for the canvas and shadcn/ui for all surrounding chrome.
-- [ ] 2.27 [UI] Craft the upstream/downstream detail panels and blast-radius highlighting using `/impeccable craft blast radius panel`.
-- [ ] 2.28 [UI] Run `/impeccable audit` on all Phase 2 screens before the phase gate.
+- [ ] 2.10 [CODE] Full-text search on services + Catalog server-side search. PostgreSQL `to_tsvector` + `plainto_tsquery` on `name`, `description`, `metadata::text` with a GIN index migration on registry. Expose `?q=` on `GET /v1/services`. Catalog wires server-side search (replacing the client-side `q` from 1.63). IT covers ranking + multi-term queries.
+- [ ] 2.11 [CODE] Server-side pagination. Pagination on `GET /v1/services`, `GET /v1/teams`, `GET /v1/audit-events` (`page`, `size`, `total` in envelope `meta`). Shadcn-based page controls + page-size selector + total count, wired into Catalog, Teams, and Timeline.
+- [ ] 2.12 [CODE] Audit events end-to-end. Registry Flyway migration for `audit_events` (`id`, `tenant_id`, `entity_type`, `entity_id`, `action`, `actor_id`, `payload` JSONB, `created_at`; tenant isolation; RLS; GIN on `payload`). `AuditEventPort` plain-Java interface in `shared:common`. Registry adapter writes directly via JDBC; topology adapter publishes `cartogra.platform.audit.recorded` envelopes consumed by registry (idempotent on `eventId`). Wire the port into all mutating use cases in registry + topology (contract and intelligence wired in 3.2 and 4.2). Admin `GET /v1/audit-events` filterable by `entity_type`, `entity_id`, date range, actor (paginated, admin role). Timeline page wires to it; remove `MOCK_TIMELINE`. ADR-0017 written and accepted inline.
 
-### Phase 2 UI–Backend wiring
+### Dashboard
 
-- [ ] 2.28a [UI] Wire the D3 dependency graph view to the real topology API: replace any static fixture data with TanStack Query calls to `GET /api/topology/v1/graph` (nodes + edges) and `GET /api/topology/v1/blast-radius/{id}`; pass the graph response shape to the D3 renderer from 2.26; show a `Skeleton` overlay during load and `Alert` with `traceId` on error.
-- [ ] 2.28b [UI] Wire the Risks page to the real topology risk findings: replace `MOCK_RISKS` with a TanStack Query `useQuery` on `GET /api/topology/v1/risks` (2.11a); show `Skeleton` loading and `Alert` with `traceId` on error; remove `MOCK_RISKS` import from `risks.tsx`.
-- [ ] 2.28c [UI] Wire the Timeline page to real audit events: replace `MOCK_TIMELINE` with a TanStack Query `useQuery` on `GET /api/registry/v1/audit-events` (paginated, from 2.37); show `Skeleton` loading and `Alert` with `traceId` on error; remove `MOCK_TIMELINE` import from `timeline.tsx`.
-- [ ] 2.28d [UI] Wire the Dashboard to real API data: replace the `MOCK_SERVICES` service health summary with `GET /api/registry/v1/services` (count + health breakdown); replace the risk section with `GET /api/topology/v1/risks?limit=4&severity=critical`; replace recent activity with `GET /api/registry/v1/audit-events?limit=5`; remove all `MOCK_*` imports from `dashboard.tsx`. Depends on 2.28b and 2.28c.
+- [ ] 2.13 [UI] Dashboard wired to real APIs. Service health summary via `GET /api/registry/v1/services` (count + health breakdown); top risks via `GET /api/topology/v1/risks?limit=4&severity=critical`; recent activity via `GET /api/registry/v1/audit-events?limit=5`. Remove all `MOCK_*` imports. Vitest covers loading/error/empty states.
 
-- [ ] 2.29 [TEST] Measure and document graph render behavior for the 20-service seed target and capture the target hardware used.
-- [ ] 2.30 [BIP] Publish the declared-vs-observed dependencies article after the toggle and overlay work.
-- [ ] 2.31 [BIP] Publish the materialized-view-for-speed thread after the performance story is defensible.
-- [ ] 2.32 [BIP] Publish the event-naming/partitioning LinkedIn post after topic naming is settled.
-- [ ] 2.33 [BIP] Record the optional live-impact-analysis video if it does not block the phase gate.
+### Observability, perf, docs, audit
 
-### Audit logging, search, and billing foundation
+- [ ] 2.14 [CODE] Topology observability metrics. Instrument MV refresh duration, consumer lag per group, graph query latency (Micrometer → Prometheus, exposed via `/actuator/prometheus`).
+- [ ] 2.15 [TEST] Document graph render perf with the 20-service seed; capture target hardware + any debounce settings in `docs/architecture/topology-performance.md`.
+- [ ] 2.16 [DOCS] Topology OpenAPI updated to match the implemented surface. Single ADR covering recursive CTEs + materialized views and the Kafka topic taxonomy + idempotency strategy for graph updates. ADR-0020 — service-discovered-to-graph flow uses event choreography (idempotent Kafka consumers) with DLQ replay (5.9) as the compensation mechanism, not orchestrated sagas with synchronous compensating actions; documents the trade-off vs. project-scope.md §3. ADR-0021 — actual persistence model is hexagonal use cases over Spring Data JDBC + Kafka publish per service, not the textbook CQRS / event-store described in scope §3; supersedes the CQRS framing in that section.
+- [ ] 2.17 [UI] Run `/impeccable audit` on all Phase 2 screens before the phase gate.
 
-- [ ] 2.33a [DOCS] Write ADR-0017 — Audit events: owning service and `AuditEventPort` shape. The 2.34 wording does not specify which service owns the table; the 2.35 wording places a JDBC writer in `shared:common`, which violates the zero-Spring-deps rule. Recommend: registry owns `audit_events`; `shared:common` defines a plain-Java `AuditEventPort` interface; each service ships its own adapter (registry writes directly via JDBC; topology/contract/intelligence publish a `cartogra.audit.recorded` Kafka envelope consumed by registry). ADR `Accepted` only after Allan signs off.
-- [ ] 2.34 [INFRA] Add the registry Flyway migration `V0NN__create_audit_events.sql` (next-available version) per ADR-0017: generic audit table (`id`, `tenant_id`, `entity_type`, `entity_id`, `action`, `actor_id`, `payload` JSONB, `created_at`) with tenant isolation, RLS, and a GIN index on `payload`.
-- [ ] 2.35 [CODE] Implement the `AuditEventPort` and adapters per ADR-0017: plain-Java port in `shared:common`; JDBC adapter in registry (direct write); Kafka-publish adapter in topology and contract (publish `cartogra.audit.recorded`). Wire the port into all mutating use cases in registry, topology, and contract (service create/update/delete, dependency change, contract version upload).
-- [ ] 2.35a [CODE] Implement the registry consumer for `cartogra.audit.recorded` so cross-service audit envelopes from topology and contract land in the `audit_events` table. Idempotent on `eventId`; tenant filter enforced.
-- [ ] 2.36 [DOCS] Write the ADR documenting the generic `audit_events` table pattern versus per-entity `changed_by` columns; cross-reference the GDPR deletion task (3.41).
-- [ ] 2.37 [CODE] Add `GET /audit-events` admin endpoint in registry with filtering by `entity_type`, `entity_id`, date range, and actor; paginated; admin role required.
-- [ ] 2.38 [CODE] Implement TOTP-based MFA in gateway: `POST /auth/mfa/enable` returns a TOTP secret and QR code URI; `POST /auth/mfa/verify` validates the TOTP code and marks MFA active; `POST /auth/mfa/disable` requires current TOTP code. Enforce TOTP verification on login when MFA is enabled.
-- [ ] 2.39 [CODE] Add full-text search on services in registry using PostgreSQL `to_tsvector` + `plainto_tsquery` on `name`, `description`, and `metadata::text`. Add a GIN index on the tsvector column and expose a `?q=` query parameter on the services list endpoint.
-- [ ] 2.40 [UI] Implement server-side pagination UI components (page controls, page-size selector, total count) and wire them to the Catalog list and any other list endpoint that returns more than 20 rows.
-- [ ] 2.41 [INFRA] Add Flyway migration(s) for Stripe billing tables: `billing_plans` (`id`, `name`, `stripe_price_id`, `limits` JSONB), `tenant_subscriptions` (`tenant_id`, `stripe_customer_id`, `stripe_subscription_id`, `plan_id`, `status`, `current_period_end`), and `billing_events` (`id`, `tenant_id`, `stripe_event_id`, `type`, `payload` JSONB, `processed_at`). Use soft delete and `TIMESTAMPTZ` throughout.
-- [ ] 2.42 [CODE] Implement `StripeClient` in gateway infrastructure: wraps the Stripe Java SDK, always passes idempotency keys, reads `STRIPE_SECRET_KEY` from env vars (never hardcoded), and maps Stripe exceptions to domain exceptions at the infrastructure boundary.
-- [ ] 2.43 [CODE] Add `POST /billing/stripe/webhook` in gateway: read raw body before deserialization; verify Stripe signature using `STRIPE_WEBHOOK_SECRET` from env; handle `customer.subscription.updated`, `customer.subscription.deleted`, and `invoice.payment_failed` events; update `tenant_subscriptions` accordingly; return 200 with no envelope (Stripe ignores response body).
-- [ ] 2.44 [CODE] Add `PlanEnforcementFilter` in gateway that reads the tenant's current plan from `tenant_subscriptions` (via Redis cache, TTL 60 s), injects an `X-Plan-Tier` header downstream, and returns 402 when a request exceeds plan limits (service count, API key count, intelligence query count).
-- [ ] 2.45 [DOCS] Write the billing ADR capturing the Stripe + `PlanEnforcementFilter` approach; add a "Stripe setup" section to `docs/runbooks/deployment.md` covering `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, webhook endpoint registration, and local testing with the Stripe CLI.
+### BIP — Phase 2
+
+- [ ] 2.18 [BIP] Publish the recursive-CTE article after the graph algorithms have passing fixtures.
+- [ ] 2.19 [BIP] Publish the blast-radius SQL thread after the blast-radius endpoint is reviewable.
+- [ ] 2.20 [BIP] Publish the declared-vs-observed dependencies article after the toggle and overlay work.
+- [ ] 2.21 [BIP] Publish the materialized-view-for-speed thread after the performance story is defensible.
+- [ ] 2.22 [BIP] Publish the Kafka topic design article after topology topics and consumers are visible.
+- [ ] 2.23 [BIP] Publish the UUIDv5/idempotency thread after the event flow is stable.
+- [ ] 2.24 [BIP] Publish the event-naming/partitioning LinkedIn post after topic naming is settled.
+- [ ] 2.25 [BIP] Record the optional live-impact-analysis video if it does not block the phase gate.
 
 ### Phase 2 Gate
 
-- [ ] [GATE] The graph renders for a tenant-sized dataset without browser freeze on the documented target hardware.
-- [ ] [GATE] Blast radius, cycles, SPOF, and drift endpoints return stable results on known fixtures.
-- [ ] [GATE] Observed dependencies can be produced from a trace fixture or synthetic span path.
-- [ ] [GATE] Consumer lag and topology metrics are visible in observability tooling.
+- [ ] [GATE] Graph renders for tenant-sized dataset (≥20 services) without browser freeze on documented target hardware.
+- [ ] [GATE] Blast radius, cycles, SPOF, drift endpoints return stable results on known fixtures; observed dependencies producible from a synthetic span path.
+- [ ] [GATE] Risks, Timeline, Dashboard, Catalog (server FTS), Teams (paginated) all wired to real APIs.
+- [ ] [GATE] Audit events captured across registry + topology mutating operations; admin endpoint paginated.
+- [ ] [GATE] Consumer lag, MV refresh, and graph latency visible in Grafana.
 - [ ] [GATE] Phase 2 screens have passed `/impeccable audit`.
-- [ ] [GATE] Minimum BIP set shipped: one ADR/design note, two deep-dive posts, and three short-form technical posts.
+- [ ] [GATE] Minimum BIP set shipped: one ADR/design note, two deep-dive posts, three short-form technical posts.
 
 ---
 
@@ -352,81 +324,75 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 ### System design and UX — Phase 3
 
-- [ ] 3.1 [UI] Run `/shape contract hub` to produce a confirmed design brief for the side-by-side diff viewer, compatibility matrix heatmap, version timeline, and CI check detail screens before writing any contract UI code.
+- [ ] 3.1 [UI] Run `/shape contract hub` to produce a confirmed design brief for the diff viewer, compatibility matrix heatmap, version timeline, breaking-check queue, API key management, and billing screens before writing any Phase 3 UI code.
 
-### Contract data model and CRUD
+### Contract foundation
 
-- [ ] 3.2 [CODE] Create the contract module skeleton with JDBC, Flyway, and transaction boundaries for contract plus outbox writes.
-- [ ] 3.3 [INFRA] Add contract Flyway `V001__create_api_contracts.sql`.
-- [ ] 3.4 [INFRA] Add contract Flyway `V002__create_contract_versions.sql`.
-- [ ] 3.5 [INFRA] Add contract Flyway `V003__create_contract_consumers.sql`.
-- [ ] 3.6 [INFRA] Add contract Flyway `V004__create_contract_checks.sql`.
-- [ ] 3.7 [INFRA] Add contract Flyway `V005__create_outbox_events.sql`.
-- [ ] 3.8 [CODE] Implement OpenAPI 3 and AsyncAPI 2 parse/validate/store flows with canonical JSON storage.
-- [ ] 3.9 [CODE] Implement contract CRUD, version history, consumers, and contract check endpoints with the shared response envelope.
-- [ ] 3.10 [TEST] Add valid and invalid spec tests plus versioning and canonicalization coverage.
+- [ ] 3.2 [CODE] Contract service skeleton + persistence. JDBC, Flyway, OTel, virtual threads, hexagonal layout. Migrations: `V001__create_api_contracts.sql`, `V002__create_contract_versions.sql`, `V003__create_contract_consumers.sql`, `V004__create_contract_checks.sql`, `V005__create_outbox_events.sql`. Repositories with named-param SQL. Transactional boundary spans contract version write + outbox insert in the same DB transaction. Inject the `AuditEventPort` (defined in 2.12) and call it from every mutating use case (publish contract, publish version, approve/block check, register/revoke consumer); audit events publish to `cartogra.platform.audit.recorded` for the registry consumer to persist.
 
-### Breaking-change engine and compatibility workflows
+### Contract lifecycle (E2E)
 
-- [ ] 3.11 [CODE] Implement breaking-change rules for removed fields, type changes, added required fields, and enum removals.
-- [ ] 3.12 [CODE] Implement structured `changes` output plus `affected_consumers` resolution.
-- [ ] 3.13 [CODE] Implement approve/block workflows for breaking checks.
-- [ ] 3.14 [TEST] Add golden tests for compatible and breaking spec pairs.
-- [ ] 3.15 [BIP] Publish the structured-diff thread after the golden tests and diff payloads are stable.
-- [ ] 3.16 [BIP] Publish the breaking-change algorithm article after the engine is reviewable.
+- [ ] 3.3 [CODE] OpenAPI 3 + AsyncAPI 2 parse/validate/store. `POST /v1/contracts` and `POST /v1/contracts/{id}/versions` accept the spec, validate, canonicalize JSON, persist with `spec_hash`. Reject invalid specs with envelope-compliant errors. ITs cover valid + invalid + canonicalization parity.
+- [ ] 3.4 [CODE] Contract list + diff viewer + version timeline. `GET /v1/contracts` (paginated) and `GET /v1/contracts/{id}/versions/{version}/diff` returns structured diff vs previous version. UI: list view replacing `MOCK_CONTRACTS`, side-by-side diff with required/added/removed highlights (use `/impeccable craft contract diff`), version timeline. TanStack Query everywhere; `Skeleton`/`Alert` states.
+- [ ] 3.5 [CODE] Breaking-change engine + affected-consumers resolution. Rules: removed fields, type changes, added required fields, enum removals. Diff payload returns `is_breaking`, structured `changes[]`, `affected_consumers[]` resolved against `contract_consumers`. Golden tests cover compatible + breaking pairs across both spec types.
+- [ ] 3.6 [CODE] Approve/block workflow + compatibility matrix UI. `POST /v1/checks/{id}/approve` and `/block` (admin role). Compatibility matrix heatmap + breaking-check queue (use `/impeccable craft contract matrix`); statuses update via TanStack Query mutations.
 
-### Outbox, notifications, and CI surface
+### Outbox + notifications (E2E)
 
-- [ ] 3.17 [CODE] Implement the transactional outbox so contract version writes and outbox events commit atomically.
-- [ ] 3.18 [CODE] Implement the outbox relay with backoff, publish tracking, and poison-message handling.
-- [ ] 3.19 [CODE] Publish schema and check events with shared Kafka envelope and trace propagation.
-- [ ] 3.20 [CODE] Implement notification rules, delivery logs, and at least one proven outbound channel path (Slack or Teams webhook).
-- [ ] 3.21 [TEST] Add integration coverage proving contract write → outbox row → relay → Kafka → notification log.
-- [ ] 3.22 [DOCS] Write the ADR for the outbox pattern and cross-link it from deployment or incident docs.
-- [ ] 3.23 [BIP] Publish the outbox ADR after the relay integration test passes.
-- [ ] 3.24 [BIP] Publish the dual-write-bug article after the relay is demonstrably reliable.
-- [ ] 3.24a [DOCS] One-line decision (no full ADR): tenant API keys belong to **gateway** since the gateway is the sole token issuer per ADR-0010. The migration in 3.25 lives in gateway's Flyway dir, and the admin APIs in 3.26 are gateway endpoints proxied to the relevant tenant table. Update 3.25 and 3.26 wording to make this explicit.
-- [ ] 3.25 [INFRA] Add the tenant API key migration; store API keys hashed at rest.
-- [ ] 3.26 [CODE] Implement admin APIs to issue, list, and revoke tenant API keys.
-- [ ] 3.26a [UI] Craft the API key management UI: list active keys with scopes and expiry, create a key with scope selection, and revoke a key with a confirmation dialog. Wire to the admin APIs from 3.26.
-- [ ] 3.26b [CODE] Extend the tenant API key model with per-key scopes (e.g. `ci:check`, `webhooks:push`, `catalog:read`). Validate scopes at `POST /ci/check` and any other API-key-authenticated endpoint; reject requests where the key's scopes do not cover the requested operation.
-- [ ] 3.27 [CODE] Implement `POST /ci/check` with API-key-only auth (`X-Cartogra-Api-Key`), envelope responses, and documented blocking semantics.
-- [ ] 3.28 [CODE] Implement the GitHub Action extension against `/ci/check`.
-- [ ] 3.29 [CODE] Implement the Azure Pipelines task against `/ci/check`.
-- [ ] 3.29a [DOCS] Write ADR-0018 — Spec discovery transport. Ingestion can read OpenAPI/AsyncAPI files via the existing `ScmProvider.getFileContents(...)`, but the 3.30 wording doesn't say how the discovered spec reaches the contract service. Recommend: Kafka topic `cartogra.ingestion.spec.discovered` with payload `{tenant_id, repo_full_name, file_path, content_sha256, content_b64}`; contract consumes idempotently keyed on `(tenant_id, file_path, content_sha256)`. Document in `docs/architecture/kafka-topics.md`. ADR `Accepted` only after Allan signs off.
-- [ ] 3.30 [CODE] Implement spec discovery per ADR-0018: ingestion publishes `cartogra.ingestion.spec.discovered` envelopes after each successful sync; contract consumes idempotently and feeds the discovered spec through the same parse/validate/store pipeline used by 3.8. Idempotency key: `(tenant_id, file_path, content_sha256)`.
-- [ ] 3.31 [TEST] Add workflow smoke tests for both CI extensions and idempotency tests for spec discovery.
-- [ ] 3.32 [DOCS] Add example GitHub Actions and Azure Pipelines usage to docs and update `docs/api/contract.openapi.yaml`.
-- [ ] 3.33 [BIP] Publish the dual-marketplace article after both extension paths run against the same backend contract.
-- [ ] 3.34 [BIP] Publish the one-check-two-CI-systems thread after both extensions pass smoke tests.
+- [ ] 3.7 [CODE] Transactional outbox + relay. Contract version writes + outbox events commit atomically. Relay polls `outbox_events`, publishes to Kafka with `traceparent`, applies exponential backoff and poison-message handling, routes terminal failures to `cartogra.platform.dead-letter`. IT covers contract write → outbox row → relay → Kafka → notification log.
+- [ ] 3.8 [CODE] Notification rules + delivery. `notification_rules` + `notification_log` migrations + rule CRUD admin endpoints. Three outbound channels ship fully: Slack webhook, Microsoft Teams webhook (Adaptive Card), and Email via the existing Resend client. Each channel has delivery log entries, retry/backoff, and an IT that proves a breaking-check event reaches the channel mock. UI: notification rules management drawer in `/settings/notifications` (channel selector, target, event-type filter, enable toggle).
 
-### Contract Hub UI
+### CI surface (E2E)
 
-- [ ] 3.35 [UI] Craft the side-by-side diff viewer with required, added, and removed highlights using `/impeccable craft contract diff`.
-- [ ] 3.36 [UI] Craft the compatibility matrix heatmap, version timeline, and breaking-check queue using `/impeccable craft contract matrix`.
-- [ ] 3.37 [UI] Run `/impeccable audit` on all Phase 3 screens before the phase gate.
-- [ ] 3.37a [UI] Wire the Contracts page to the real contract API: replace `MOCK_CONTRACTS` with a TanStack Query `useQuery` on `GET /api/contract/v1/contracts`; wire the diff viewer to `GET /api/contract/v1/contracts/{id}/diff`, the version timeline to version history endpoints, and the breaking-check queue to the check endpoints from 3.9; show `Skeleton` loading and `Alert` with `traceId` on error; remove `MOCK_CONTRACTS` import from `contracts.tsx`.
-- [ ] 3.38 [BIP] Publish the schema-diff UI demo after the Contract Hub is stable enough to show.
-- [ ] 3.39 [BIP] Publish the compatibility-matrix story after the matrix is wired to real data.
-- [ ] 3.40 [BIP] Publish the marketplace listing or a documented blocker/timeline immediately when the packaging outcome is known.
+- [ ] 3.9 [CODE] Tenant API keys. Migration in gateway (hashed at rest, per-key scopes `ci:check`, `webhooks:push`, `catalog:read`, etc.). Gateway admin endpoints to issue/list/revoke keys with scope selection. UI: API key management page (list + create with scope selector + revoke with confirmation). Scope validation enforced at every API-key-authenticated endpoint. ITs cover happy + insufficient-scope paths.
+- [ ] 3.10 [CODE] `POST /ci/check`. API-key-only auth via `X-Cartogra-Api-Key`, envelope responses, documented blocking/passing semantics, scope `ci:check` required. Runs the breaking-change engine from 3.5. ITs cover compatible + breaking inputs and missing/expired/wrong-scope keys.
+- [ ] 3.11 [CODE] GitHub Action + Azure Pipelines task against `/ci/check`. Both extensions live under `ci-extensions/`, accept tenant API key from the platform secret store, block merges on breaking changes, pass on compatible ones. Smoke tests run against example repos in both ecosystems.
 
-### Billing customer flow and GDPR
+### Spec discovery (E2E)
 
-- [ ] 3.41 [CODE] Implement GDPR tenant deletion (`DELETE /admin/tenants/{id}/gdpr-erase`): soft-delete the tenant, anonymize personal data in users and audit_events, publish a `tenant.erased` Kafka event, schedule a 30-day hard-delete job, and return a signed erasure receipt. Admin role and re-authentication required.
-- [ ] 3.42 [DOCS] Write the ADR for tenant lifecycle management — trial → active → suspended → erased — including the 30-day grace period, data residency boundaries, and how Stripe subscription cancellation interacts with the erasure flow.
-- [ ] 3.43 [CODE] Implement Stripe Checkout: `POST /billing/checkout` creates a Stripe Checkout Session for the selected plan and returns the session URL; the frontend redirects the user to Stripe-hosted payment. On success, Stripe fires `customer.subscription.created`, which the webhook receiver (2.43) processes.
-- [ ] 3.44 [CODE] Implement Stripe Customer Portal passthrough: `POST /billing/portal` creates a Stripe Customer Portal session URL; the frontend redirects the user there for plan upgrades, downgrades, and payment method changes. No custom billing UI is required for Phase 3.
-- [ ] 3.45 [UI] Add a Billing settings page at `/settings/billing`: show current plan name, next renewal date, and a "Manage billing" button that triggers the Customer Portal flow (3.44). Show an upgrade prompt when the tenant is on the free tier.
-- [ ] 3.46 [DOCS] Add a "Go live with billing" section to `docs/runbooks/deployment.md`: how to create Stripe products and prices, map `stripe_price_id` to `billing_plans`, configure the webhook endpoint in the Stripe dashboard, verify webhook delivery with the Stripe CLI, and what to do when a subscription lapses.
+- [ ] 3.12 [CODE] Spec discovery end-to-end. Ingestion publishes `cartogra.ingestion.spec.discovered` envelopes (`{tenant_id, repo_full_name, file_path, content_sha256, content_b64}`) after each successful sync. Contract consumes idempotently keyed on `(tenant_id, file_path, content_sha256)` and feeds discovered specs through the parse/validate/store pipeline from 3.3. ADR-0018 written and accepted inline. Document the topic in `docs/architecture/kafka-topics.md`.
+- [ ] 3.12a [CODE] Consumer relationship discovery (observed + manual). Extend `OtelSpanWorker` (2.8): when an observed edge resolves to a service that produces a known contract (match span peer URL against `api_contracts.spec_content` servers + base paths), insert/update `contract_consumers` with `evidence_type='observed'`, populate `consumed_version` from the calling service's pinned spec version (heuristic: the latest version known when the span was observed). Add admin `POST /v1/contracts/{id}/consumers` and `DELETE /v1/contracts/{id}/consumers/{consumerId}` for `evidence_type='manual'`. UI: in Contract detail, "Consumers" panel lists all consumers grouped by evidence type with add/remove for manual entries. ITs: trace span creates observed consumer; manual add creates manual consumer; both appear in compatibility matrix (3.6) and feed `affected_consumers` in breaking-change diffs (3.5).
+- [ ] 3.12b [CODE] Field-level deprecation impact. `GET /v1/contracts/{id}/impact?field=<jsonpath>` returns the list of consumers (from 3.12a) whose `consumed_version` references the field. UI: in Contract detail diff viewer (3.4), each "removed" or "changed-type" field has a "Plan deprecation" action that opens a panel showing affected consumers and a copy-paste migration note. Backend resolves field references by JSONPath against `contract_versions.spec_content`. ITs: removing `paths./payments.post.requestBody.idempotency_key` returns the consumers that reference v2 (which has the field) and excludes consumers on v3 (which removed it).
+
+### Billing (E2E — built only here because this is where it is used)
+
+- [ ] 3.13 [CODE] Stripe billing backend. Gateway-owned Flyway migrations for `billing_plans` (`id`, `name`, `stripe_price_id`, `limits` JSONB), `tenant_subscriptions` (`tenant_id`, `stripe_customer_id`, `stripe_subscription_id`, `plan_id`, `status`, `current_period_end`), `billing_events` (`id`, `tenant_id`, `stripe_event_id`, `type`, `payload`, `processed_at`). `StripeClient` wraps the Stripe Java SDK with idempotency keys and secret from env. `POST /v1/billing/checkout` returns a Checkout Session URL; `POST /v1/billing/portal` returns a Customer Portal URL; `POST /v1/billing/stripe/webhook` reads raw body, verifies signature, handles `customer.subscription.updated/deleted` and `invoice.payment_failed`, updates `tenant_subscriptions`, returns 200 without an envelope. `PlanEnforcementFilter` reads the tenant plan via Redis cache (60 s TTL), injects `X-Plan-Tier` downstream, returns 402 when a request exceeds plan limits (service count, API key count). ITs cover webhook signature + happy/overage paths.
+- [ ] 3.14 [UI] Billing settings page at `/settings/billing`. Current plan name + next renewal date + "Manage billing" button redirecting through `/v1/billing/portal`. Upgrade prompt on free tier. `/settings` index updated to include Billing.
+
+### Lifecycle + GDPR
+
+- [ ] 3.15 [CODE] GDPR tenant deletion. `DELETE /v1/admin/tenants/{id}/gdpr-erase` (admin role + re-authentication required): soft-delete the tenant, anonymize personal data in `users` and `audit_events`, publish a `tenant.erased` envelope, schedule a 30-day hard-delete job, return a signed erasure receipt. IT covers the happy path and the 30-day hard-delete trigger.
+
+### Docs + audit
+
+- [ ] 3.16 [DOCS] Contract OpenAPI updated to match the implemented surface. Single combined ADR set: outbox pattern, tenant lifecycle (trial → active → suspended → erased) with 30-day grace period + data residency + Stripe-cancellation interaction. Add a "Go live with billing" section to `docs/runbooks/deployment.md` (Stripe products/prices, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, webhook registration, Stripe CLI local testing, subscription-lapse handling).
+- [ ] 3.17 [UI] Run `/impeccable audit` on all Phase 3 screens before the phase gate.
+
+### BIP — Phase 3
+
+- [ ] 3.18 [BIP] Publish the structured-diff thread after golden tests and diff payloads are stable.
+- [ ] 3.19 [BIP] Publish the breaking-change algorithm article after the engine is reviewable.
+- [ ] 3.20 [BIP] Publish the outbox ADR after the relay integration test passes.
+- [ ] 3.21 [BIP] Publish the dual-write-bug article after the relay is demonstrably reliable.
+- [ ] 3.22 [BIP] Publish the dual-marketplace article after both CI extensions run against the same backend.
+- [ ] 3.23 [BIP] Publish the one-check-two-CI-systems thread after both extensions pass smoke tests.
+- [ ] 3.24 [BIP] Publish the schema-diff UI demo after the Contract Hub is stable enough to show.
+- [ ] 3.25 [BIP] Publish the compatibility-matrix story after the matrix is wired to real data.
+- [ ] 3.26 [BIP] Publish the marketplace listing (or a documented blocker/timeline) when the packaging outcome is known.
 
 ### Phase 3 Gate
 
-- [ ] [GATE] End-to-end contract flow works locally: new spec version, compatibility check, Kafka publication, and notification log entry.
-- [ ] [GATE] `POST /ci/check` works with tenant API keys only and returns the global response envelope.
-- [ ] [GATE] GitHub Action and Azure Pipelines task both demonstrate failing and passing scenarios.
-- [ ] [GATE] Contract OpenAPI and CI-extension docs are current.
+- [ ] [GATE] End-to-end contract flow works locally: new spec version → compatibility check → Kafka publication → notification log entry across all three channels (Slack + Teams + Email).
+- [ ] [GATE] `POST /ci/check` works with tenant API keys only and returns the global envelope; GitHub Action and Azure Pipelines task demonstrate both failing and passing scenarios.
+- [ ] [GATE] Spec discovery roundtrips ingestion → contract idempotently.
+- [ ] [GATE] `contract_consumers` populates automatically from OTel observed traffic; manual admin overrides work; consumer list visible in Contract detail; compatibility matrix and `affected_consumers` driven by real data.
+- [ ] [GATE] Field-level deprecation impact returns affected consumers for a given JSONPath; UI surfaces it from the diff viewer.
+- [ ] [GATE] Stripe Checkout, Customer Portal, webhook receiver, and `PlanEnforcementFilter` work end-to-end.
+- [ ] [GATE] GDPR erasure produces a signed receipt and schedules hard-delete.
+- [ ] [GATE] Contract + audit (cross-service) flows: every mutating contract use case writes an audit event consumed by the registry.
+- [ ] [GATE] Contract OpenAPI + CI-extension docs + Stripe runbook current.
 - [ ] [GATE] Phase 3 screens have passed `/impeccable audit`.
-- [ ] [GATE] Minimum BIP set shipped: one ADR, three substantive posts, and three short-form updates; marketplace publish completed or publicly blocked with explanation.
+- [ ] [GATE] Minimum BIP set shipped: one ADR, three substantive posts, three short-form updates; marketplace publish completed or publicly blocked with explanation.
 
 ---
 
@@ -434,58 +400,54 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 ### System design and UX — Phase 4
 
-- [ ] 4.1 [UI] Run `/shape intelligence panel` to produce a confirmed design brief for the NL query panel, anti-pattern findings feed, health score trend, and weekly digest views before writing any intelligence UI code.
+- [ ] 4.1 [UI] Run `/shape intelligence panel` to produce a confirmed design brief for the NL query panel, anti-pattern findings feed, health score trend, and weekly digest views before writing any Phase 4 UI code.
 
-### Service, storage, and guardrails
+### Intelligence foundation
 
-- [ ] 4.2 [CODE] Create the intelligence module skeleton with JDBC, Flyway, prompt-loading support, and the Claude client abstraction.
-- [ ] 4.3 [INFRA] Add intelligence Flyway `V001__create_analysis_runs.sql`.
-- [ ] 4.4 [INFRA] Add intelligence Flyway `V002__create_anti_pattern_findings.sql`.
-- [ ] 4.5 [INFRA] Add intelligence Flyway `V003__create_nl_query_log.sql`.
-- [ ] 4.6 [CODE] Externalize prompt templates for NL query, anti-pattern analysis, and digest generation under `resources/prompts/`.
-- [ ] 4.7 [CODE] Add Redis caching and per-tenant rate limits for all AI-backed flows.
-- [ ] 4.8 [CODE] Record token counts, latency, and execution status on every AI-backed request.
-- [ ] 4.9 [DOCS] Write the ADR or design note for Claude integration, prompt structure, and deterministic-evidence rules.
+- [ ] 4.2 [CODE] Intelligence service skeleton + Claude client + guardrails. JDBC, Flyway, OTel, virtual threads, hexagonal layout. Migrations: `V001__create_analysis_runs.sql`, `V002__create_anti_pattern_findings.sql`, `V003__create_nl_query_log.sql`. Externalize prompt templates under `resources/prompts/`. Claude client abstraction wired to the cheapest current model, Redis cache + per-tenant rate limits, token/latency tracking persisted on every AI-backed request. Inject the `AuditEventPort` (from 2.12) and call it from every mutating use case (analyze run started/completed, finding acknowledged/resolved, query feedback recorded) so cross-service audits land in the registry's `audit_events` table. ADR — Claude integration, prompt structure, deterministic-evidence rules — written and accepted inline.
 
-### Natural-language query flow
+### NL query (E2E)
 
-- [ ] 4.10 [CODE] Implement SQL safety guardrails: allowlisted sources only, read-only execution, parameter binding, row limits, and timeout handling.
-- [ ] 4.11 [CODE] Implement `POST /intelligence/query` returning `answer`, optional `data`, optional `generated_sql`, and a durable `query_id`.
-- [ ] 4.12 [CODE] Implement `POST /intelligence/query/{id}/feedback` and store the result in `nl_query_log`.
-- [ ] 4.13 [TEST] Add unit and integration coverage for safe vs unsafe query handling and prompt formatting.
-- [ ] 4.14 [DOCS] Update `docs/api/intelligence.openapi.yaml` for query and feedback endpoints.
-- [ ] 4.15 [BIP] Publish the NL-over-PostgreSQL article after the guarded query flow works.
-- [ ] 4.16 [BIP] Publish the token-and-latency tracking thread after those metrics are visible.
+- [ ] 4.3 [CODE] NL query with SQL safety guardrails. Allowlisted sources only, read-only execution, parameter binding, row limits, timeout. `POST /v1/intelligence/query` returns `{answer, data?, generated_sql?, query_id}`. `POST /v1/intelligence/query/{id}/feedback` writes to `nl_query_log`. ITs cover safe + unsafe + prompt-formatting cases. NL query panel (use `/impeccable craft intelligence panel`) renders answers, optional generated-SQL disclosure, and feedback controls — wired via TanStack Query.
+- [ ] 4.4 [TEST] NL query evaluation set with a documented pass/fail bar over fixtures or seed data; committed under `services/intelligence/src/test/resources/nl-eval/`.
 
-### Analysis jobs, findings, and health score
+### Anti-patterns + analysis (E2E)
 
-- [ ] 4.17 [CODE] Implement deterministic anti-pattern detection for at least circular dependency, god service, and orphaned service.
-- [ ] 4.18 [CODE] Layer LLM narrative on top of deterministic evidence instead of letting the model invent unsupported claims.
-- [ ] 4.19 [CODE] Implement `POST /intelligence/analyze`, findings list, acknowledge/resolve flows, health score, and digest retrieval.
-- [ ] 4.20 [CODE] Publish intelligence analysis request and result events.
-- [ ] 4.21 [TEST] Add fixture coverage proving known anti-patterns produce findings and health-score updates.
-- [ ] 4.22 [BIP] Publish the evidence-first anti-pattern thread after deterministic findings are stable.
-- [ ] 4.23 [BIP] Publish the trust-model thread after the deterministic-plus-LLM split is documented.
+- [ ] 4.5 [CODE] Deterministic anti-pattern detection. At least circular dependency, god service, and orphaned service. Output structured evidence (`cycle path`, `fan-in count`, `last commit at`). Fixture-based ITs assert deterministic findings on known graph shapes.
+- [ ] 4.6 [CODE] LLM narrative layered on top of deterministic evidence — the model writes the explanation, never invents the evidence. `POST /v1/intelligence/analyze` + `GET /v1/intelligence/findings` + acknowledge/resolve mutations. Findings feed UI with severity badges + actions (use `/impeccable craft anti-pattern feed`), wired via TanStack Query.
+- [ ] 4.6a [CODE] AI ownership suggestions for orphans. `POST /v1/intelligence/ownership-suggestions/{serviceId}` returns ranked candidate teams for an orphaned service. Deterministic input layer: aggregate git commit authors from the last 90 days (via existing SCM provider `getCommitHistory`), join to `users.team_id`, count per team; surface co-edit patterns with other services owned by each team. LLM layer ranks the candidates and writes a one-sentence rationale per candidate citing the evidence (never inventing names). Persist into `anti_pattern_findings` with `pattern_type='orphaned_service'` and `evidence.suggested_owners[]`. UI: each orphan in the findings feed shows a "Suggest owner" action that opens a panel with the ranked teams and an "Assign" mutation that calls `POST /v1/services/{id}/owner`.
+- [ ] 4.6b [CODE] Anomaly detection. Nightly `@Scheduled` job in intelligence: compute per-tenant baselines for (a) dependency-change rate per service per week, (b) deploy cadence per service per week (from `services.last_deploy_at` history). Flag services exceeding ±3σ as `anti_pattern_findings` with `pattern_type='dependency_anomaly'` or `'deploy_anomaly'` and structured evidence (the metric, the baseline, the current value, the timeframe). LLM layer writes the narrative. Findings appear in the same feed as 4.6. ITs use fixture history data to trigger known anomalies.
 
-### Intelligence UI and operator visibility
+### Health + digest (E2E)
 
-- [ ] 4.24 [UI] Craft the NL query panel with answer rendering, optional generated-SQL disclosure, and feedback controls using `/impeccable craft intelligence panel`.
-- [ ] 4.25 [UI] Craft the findings feed with severity badges and acknowledge/resolve actions using `/impeccable craft anti-pattern feed`.
-- [ ] 4.26 [UI] Craft the health-score trend and latest digest views using `/impeccable craft health score`.
-- [ ] 4.27 [UI] Run `/impeccable audit` on all Phase 4 screens before the phase gate.
-- [ ] 4.28 [TEST] Create an evaluation set of NL questions against fixtures or seed data and document the pass/fail bar.
-- [ ] 4.29 [DOCS] Finish `docs/api/intelligence.openapi.yaml` for the full implemented surface.
-- [ ] 4.30 [BIP] Publish the LLM-for-infrastructure-intelligence article after the UI and API are demoable.
-- [ ] 4.31 [BIP] Record the NL query demo video after the query path is stable enough to show live.
+- [ ] 4.7 [CODE] Health score endpoint + persisted trend. Trend view (use `/impeccable craft health score`) wired via TanStack Query.
+- [ ] 4.8 [CODE] Weekly digest endpoint + persisted runs. Latest-digest view wired via TanStack Query.
+
+### Events + docs + audit
+
+- [ ] 4.9 [CODE] Publish intelligence analysis request and result events to Kafka with the shared envelope and `traceparent` propagation.
+- [ ] 4.10 [DOCS] Update `docs/api/intelligence.openapi.yaml` for the full implemented surface.
+- [ ] 4.11 [UI] Run `/impeccable audit` on all Phase 4 screens before the phase gate.
+
+### BIP — Phase 4
+
+- [ ] 4.12 [BIP] Publish the NL-over-PostgreSQL article after the guarded query flow works.
+- [ ] 4.13 [BIP] Publish the token-and-latency tracking thread after those metrics are visible.
+- [ ] 4.14 [BIP] Publish the evidence-first anti-pattern thread after deterministic findings are stable.
+- [ ] 4.15 [BIP] Publish the trust-model thread after the deterministic-plus-LLM split is documented.
+- [ ] 4.16 [BIP] Publish the LLM-for-infrastructure-intelligence article after the UI and API are demoable.
+- [ ] 4.17 [BIP] Record the NL query demo video after the query path is stable enough to show live.
 
 ### Phase 4 Gate
 
-- [ ] [GATE] NL queries are guarded by documented safety rules and abuse limits.
-- [ ] [GATE] At least three anti-pattern types produce findings on fixtures or seed data with deterministic evidence.
-- [ ] [GATE] Health score and digest are available via API and visible in the UI.
-- [ ] [GATE] Token usage, latency, and quota behavior are observable enough to support demo operations.
+- [ ] [GATE] NL queries are guarded by documented safety rules and abuse limits; evaluation set passes the bar.
+- [ ] [GATE] At least three anti-pattern types produce findings on fixtures or seed data with deterministic evidence + LLM narrative.
+- [ ] [GATE] Orphan services produce ranked ownership suggestions with cited evidence; assigning from the suggestion writes back to `services.owner_team_id`.
+- [ ] [GATE] Anomaly detection produces findings for dependency and deploy patterns on fixture history.
+- [ ] [GATE] Health score + digest available via API and visible in the UI.
+- [ ] [GATE] Token usage, latency, and quota behavior observable.
 - [ ] [GATE] Phase 4 screens have passed `/impeccable audit`.
-- [ ] [GATE] Minimum BIP set shipped: one ADR/design note, two substantive articles, and two short-form posts.
+- [ ] [GATE] Minimum BIP set shipped: one ADR/design note, two substantive articles, two short-form posts.
 
 ---
 
@@ -495,59 +457,59 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 - [ ] 5.1 [UI] Run `/shape operations view` to produce a confirmed design brief for the Operations view, digest page, and admin/settings screens before writing any Phase 5 UI code.
 
-### Seed data and demo hardening
+### Seed + demo
 
-- [ ] 5.2 [INFRA] Complete `seed/seed-data.json` for the Acme Fintech scenario set, including orphans, cycles, drift, and a pending breaking change.
-- [ ] 5.3 [CODE] Finalize the seed loader so it is idempotent and exercises the real public APIs.
-- [ ] 5.3a [DOCS] Write ADR-0019 — Guest enforcement mechanism. ADR-0013 defers guest demo access to Phase 5 without specifying the enforcement shape. Recommend: gateway issues a special short-lived JWT with `roles=["guest"]` and `tid=<acme-tenant-id>`; method-level security on every mutating endpoint requires `member` or `admin`; no anonymous auth path. Acceptance for 5.4 then becomes a code audit verifying `@PreAuthorize` is present on every write across registry, topology, contract, intelligence. ADR `Accepted` only after Allan signs off.
-- [ ] 5.4 [CODE] Enforce guest read-only mode per ADR-0019: implement the gateway-issued guest JWT path; audit every mutating endpoint across backend services for `@PreAuthorize` requiring at least `member`. Sandbox isolation for authenticated demo users stays in scope.
-- [ ] 5.5 [CODE] Add sandbox cleanup automation.
+- [ ] 5.2 [INFRA] Acme Fintech seed data + idempotent loader + sandbox cleanup. `seed/seed-data.json` covers 20 services across 5 teams sourced from both GitHub and Azure DevOps and includes 3 orphans, 2 cycles, 1 god service (12 dependents), declared-vs-observed drift, and 1 pending breaking change. Loader exercises the real public APIs idempotently. Sandbox cleanup automation reaps demo tenants per a configured TTL.
+- [ ] 5.3 [CODE] Guest read-only mode. Gateway issues a special short-lived JWT with `roles=["guest"]` and `tid=<acme-tenant-id>`; no anonymous auth path. Code audit verifies `@PreAuthorize` (member or admin) is present on every mutating endpoint across registry, topology, contract, intelligence — fix any gaps. IT proves a guest token can read demo data and is rejected on every write. ADR-0019 written and accepted inline.
 
-### Deployment packaging and staging
+### Deployment packaging
 
-- [ ] 5.6 [INFRA] Build the Helm umbrella chart and per-service charts with required probes, security context, resources, and non-root defaults.
-- [ ] 5.7 [INFRA] Add staging and production Helm values.
-- [ ] 5.8 [INFRA] Finalize Terraform modules and at least one concrete staging environment.
-- [ ] 5.9 [INFRA] Configure remote Terraform state with S3 backend, DynamoDB lock table, encryption, and bucket versioning.
-- [ ] 5.10 [INFRA] Add staging deployment CI plus post-deploy smoke tests.
-- [ ] 5.10a [TEST] Implement a post-deploy smoke test suite as a standalone Gradle task (`:smoke:test`) that runs after every staging deploy: call `/actuator/health/ready` on all services, execute one authenticated request per service, and assert all responses match the documented envelope. CI must gate on this suite after each deploy.
+- [ ] 5.4 [INFRA] Helm umbrella chart + per-service charts. Required probes, security context, resources, non-root defaults; staging + production values committed.
+- [ ] 5.5 [INFRA] Terraform modules + at least one concrete staging environment + remote state (S3 backend, DynamoDB lock table, encryption, bucket versioning).
+- [ ] 5.6 [INFRA] Staging deploy CI + post-deploy smoke tests. Standalone Gradle task (`:smoke:test`) runs after every staging deploy: hits `/actuator/health/ready` on all services, executes one authenticated request per service, asserts envelope conformance. CI gates on this suite.
+- [ ] 5.7 [CODE] K8s NetworkPolicy + gateway service-token validation. NetworkPolicy restricts registry/topology/contract/intelligence to gateway-namespace ingress only. Gateway signs a short-lived `X-Gateway-Token` (HS256, 30 s TTL, separate secret from user JWTs); each downstream service rejects requests missing or invalid tokens via a shared filter in `shared:common`. IT proves the bypass attempt is rejected.
 
-### Observability, DLQ, and operations
+### Observability + DLQ
 
-- [ ] 5.11 [INFRA] Finalize the staging OTel, Tempo, Loki, Prometheus, and Grafana path (K8s Helm values in `infra/k8s/infra/helm/`; run `install.sh`).
-- [ ] 5.11a [INFRA] Add Grafana dashboard provisioning JSON templates under `infra/docker-compose/grafana/dashboards/`: one per service (request rate, error rate, p95 latency, JVM heap) plus one platform-wide overview (Kafka consumer lag, Postgres connections, Redis hit rate). Dashboards must appear automatically on first `docker compose up` via `grafana.ini` provisioning.
-- [ ] 5.12 [INFRA] Add alerts for consumer lag, elevated error rate, and critical-path failures.
-- [ ] 5.13 [CODE] Implement the dead-letter topic path and replay admin API with audit logging.
-- [ ] 5.14 [UI] Craft the Operations view for connector health, recent platform events, lag visibility, and observability links using `/impeccable craft operations view`.
-- [ ] 5.15 [UI] Run `/impeccable audit` on all Phase 5 screens before the phase gate.
-- [ ] 5.16 [DOCS] Expand deployment and incident runbooks for staging, alerts, DLQ replay, and operator workflows.
-- [ ] 5.16a [CODE] Add a batch service creation endpoint (`POST /services/batch`) that accepts an array of service definitions and creates all or none within a single transaction. Return per-item status in the response. Add a matching integration test.
-- [ ] 5.16b [CODE] Add export (`GET /tenants/{id}/export`) and import (`POST /tenants/{id}/import`) endpoints for the full service catalog (services, teams, dependencies, contracts as a ZIP archive). Implement idempotent import with a `dryRun=true` query parameter. Supports disaster recovery and environment cloning.
-- [ ] 5.17 [BIP] Publish the observability-stack article after dashboards and alerts are reviewable.
-- [ ] 5.18 [BIP] Publish the Flyway-in-a-multi-service-monorepo article after the deployment story is settled.
+- [ ] 5.8 [INFRA] Staging OTel/Tempo/Loki/Prometheus/Grafana stack via Helm (`infra/k8s/infra/helm/`, `install.sh`). Grafana dashboard provisioning JSON templates under `infra/docker-compose/grafana/dashboards/` — one per service (request rate, error rate, p95 latency, JVM heap) plus a platform overview (Kafka consumer lag, Postgres connections, Redis hit rate). Auto-load on first `docker compose up`. Alerts for consumer lag, elevated error rate, and critical-path failures.
+- [ ] 5.9 [CODE] DLQ topic + replay admin API + audit logging. Failed messages land in `cartogra.platform.dead-letter` with original-topic/partition/offset/error metadata. Admin endpoint replays selected DLQ messages and writes `audit_events` rows. IT proves a poison message routes to DLQ and replay succeeds.
 
-### Docs site, end-to-end tests, and launch
+### Operations + extensions
 
-- [ ] 5.19 [DOCS] Build the Docusaurus docs site with ADR index, onboarding guide, API references, and cross-linked runbooks.
-- [ ] 5.20 [TEST] Add Playwright E2E coverage for guest browse, graph exploration, contract matrix, and one NL query path.
-- [ ] 5.21 [TEST] Add k6 scripts and thresholds for graph reads, impact analysis, and `/ci/check`.
-- [ ] 5.22 [CODE] Tune indexes, MV refresh behavior, and critical-path performance based on k6 results.
-- [ ] 5.23 [INFRA] Finalize the `cartogra.dev` domain, ingress, TLS, and launch checklist.
-- [ ] 5.24 [BIP] Publish the full data-architecture retrospective after the final shape of the system is stable.
-- [ ] 5.25 [BIP] Publish the ADR-index/build-in-public reflection after the docs site is live.
-- [ ] 5.26 [BIP] Publish the ship-retrospective thread near launch.
-- [ ] 5.27 [BIP] Publish the real-incident DLQ thread only if it is true and useful.
-- [ ] 5.28 [BIP] Record the architecture walkthrough video if it adds value without delaying launch.
-- [ ] 5.29 [BIP] Publish the public launch post with the live demo and how-to-try-it path.
-- [ ] 5.X [INFRA] Add K8s NetworkPolicy rules so registry, topology, contract, and intelligence accept inbound traffic only from the gateway namespace — no direct external access to backend service ports.
-- [ ] 5.Y [CODE] Implement gateway service-token validation in all proxied services (registry, topology, contract, intelligence): gateway signs a short-lived X-Gateway-Token (HS256, 30 s TTL, separate secret from user JWTs); each downstream service rejects requests missing or invalid tokens. Write a shared filter in `shared:common` to avoid repeating the validation logic in every service.
+- [ ] 5.10 [UI] Operations view (use `/impeccable craft operations view`). Connector health, recent platform events, lag visibility, observability links. Wired to real APIs.
+- [ ] 5.11 [UI] Run `/impeccable audit` on all Phase 5 screens before the phase gate.
+- [ ] 5.12 [CODE] Batch service creation. `POST /v1/services/batch` accepts an array of service definitions, creates all-or-nothing in a single transaction, returns per-item status. IT covers happy + partial-failure rollback.
+- [ ] 5.13 [CODE] Tenant export/import. `GET /v1/tenants/{id}/export` returns a ZIP of services + teams + dependencies + contracts. `POST /v1/tenants/{id}/import` accepts the ZIP, supports `dryRun=true`, is idempotent on re-import. IT covers round-trip parity.
+
+### E2E + performance
+
+- [ ] 5.14 [TEST] Playwright E2E for guest browse, graph exploration, contract matrix, and one NL query path. Runs in CI against staging.
+- [ ] 5.15 [TEST] k6 scripts + thresholds for graph reads, impact analysis, and `/ci/check`; tune indexes, MV refresh behavior, and critical-path performance based on results; commit before/after numbers under `perf/results/`.
+
+### Docs + domain + launch
+
+- [ ] 5.16 [DOCS] Docusaurus docs site (ADR index, onboarding guide, API references, cross-linked runbooks); expand deployment + incident runbooks for staging, alerts, DLQ replay, and operator workflows.
+- [ ] 5.17 [INFRA] Finalize `cartogra.dev` domain, ingress, TLS, launch checklist.
+
+### BIP — Phase 5
+
+- [ ] 5.18 [BIP] Publish the observability-stack article after dashboards and alerts are reviewable.
+- [ ] 5.19 [BIP] Publish the Flyway-in-a-multi-service-monorepo article after the deployment story is settled.
+- [ ] 5.20 [BIP] Publish the full data-architecture retrospective after the final shape is stable.
+- [ ] 5.21 [BIP] Publish the ADR-index/build-in-public reflection after the docs site is live.
+- [ ] 5.22 [BIP] Publish the ship-retrospective thread near launch.
+- [ ] 5.23 [BIP] Publish the real-incident DLQ thread only if it is true and useful.
+- [ ] 5.24 [BIP] Record the architecture walkthrough video if it adds value without delaying launch.
+- [ ] 5.25 [BIP] Publish the public launch post with the live demo and how-to-try-it path.
 
 ### Phase 5 Gate
 
-- [ ] [GATE] Staging is reproducible from docs, and the seed loader populates the Acme demo cleanly.
-- [ ] [GATE] Guest demo scenarios match the documented Acme Fintech story.
-- [ ] [GATE] Observability answers "what is broken" and "which consumer is lagging" within a few minutes for a maintainer.
-- [ ] [GATE] Playwright and k6 gates pass in CI with documented thresholds.
+- [ ] [GATE] Staging is reproducible from docs; seed loader populates the Acme demo cleanly.
+- [ ] [GATE] Guest demo scenarios match the documented Acme Fintech story; mutating endpoints reject guest tokens.
+- [ ] [GATE] Observability answers "what is broken" and "which consumer is lagging" within a few minutes.
+- [ ] [GATE] Playwright + k6 gates pass in CI with documented thresholds.
+- [ ] [GATE] NetworkPolicy + gateway service-token validation verified end-to-end.
+- [ ] [GATE] DLQ replay flow audited end-to-end.
 - [ ] [GATE] Phase 5 screens have passed `/impeccable audit`.
 - [ ] [GATE] Minimum BIP set shipped: observability writeup, data-architecture retrospective, launch post, and at least one retrospective artifact.
 

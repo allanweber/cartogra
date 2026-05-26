@@ -345,72 +345,85 @@ Every message on every topic follows this envelope:
 
 ### Topic Catalog
 
+> Naming convention is `cartogra.{domain}.{entity}.{event}` — dots only, no hyphens. This matches the implemented producers and consumers; the execution checklist is the canonical source for topic names if this table drifts.
+
 #### Registry Domain — `cartogra.registry.*`
 
 | Topic | Key | Producers | Consumers | Purpose |
 |-------|-----|-----------|-----------|---------|
-| `cartogra.registry.service-events` | service_id | Registry Service | Topology, Intelligence, Notification | Core lifecycle: `service.registered`, `service.updated`, `service.deregistered`, `service.ownership-changed`, `service.health-changed` |
-| `cartogra.registry.sync-commands` | sync_job_id | Gateway (scheduled), Admin UI | Ingestion Workers | Triggers: `sync.github.requested`, `sync.azure-devops.requested`, `sync.kubernetes.requested` |
-| `cartogra.registry.sync-results` | sync_job_id | Ingestion Workers | Registry Service | Completion: `sync.completed`, `sync.failed`, `sync.partial` |
-
-#### Topology Domain — `cartogra.topology.*`
-
-| Topic | Key | Producers | Consumers | Purpose |
-|-------|-----|-----------|-----------|---------|
-| `cartogra.topology.dependency-events` | source_service_id | Topology Service | Intelligence, Notification | Lifecycle: `dependency.declared`, `dependency.observed`, `dependency.removed`, `dependency.drift-detected` |
-| `cartogra.topology.analysis-results` | analysis_id | Topology Service | Intelligence, Frontend (SSE) | Impact analysis, SPOF detection, circular dependency findings |
-| `cartogra.topology.otel-spans` | trace_id | OTel Ingestion Worker | Topology Service | Pre-processed spans with service-to-service call metadata |
-
-#### Contract Domain — `cartogra.contract.*`
-
-| Topic | Key | Producers | Consumers | Purpose |
-|-------|-----|-----------|-----------|---------|
-| `cartogra.contract.schema-events` | contract_id | Contract Service | Topology, Intelligence, Notification | Lifecycle: `schema.published`, `schema.updated`, `schema.deprecated` |
-| `cartogra.contract.check-events` | check_id | Contract Service | Notification, CI Workers | Results: `check.passed`, `check.breaking-change-detected`, `check.approved`, `check.blocked` |
-| `cartogra.contract.outbox` | contract_id | Contract Service (DB relay) | Outbox Publisher | Transactional outbox → re-publishes to schema-events and check-events |
-
-#### Intelligence Domain — `cartogra.intelligence.*`
-
-| Topic | Key | Producers | Consumers | Purpose |
-|-------|-----|-----------|-----------|---------|
-| `cartogra.intelligence.analysis-requests` | tenant_id | Scheduled Jobs, Admin UI | Intelligence Service | Triggers: `analysis.anti-pattern-scan.requested`, `analysis.digest.requested`, `analysis.health-score.requested` |
-| `cartogra.intelligence.analysis-results` | tenant_id | Intelligence Service | Notification, Frontend (SSE) | Results: `analysis.anti-patterns-found`, `analysis.digest-generated`, `analysis.health-score-computed` |
+| `cartogra.registry.service.registered` / `.updated` / `.deleted` | service_id | Registry Service | Topology, Intelligence, Notification | Core lifecycle events |
+| `cartogra.registry.scm-connection.created` / `.updated` / `.deleted` | connection_id | Registry Service | Ingestion (connection cache) | SCM connection lifecycle |
+| `cartogra.registry.sync.command` | connection_id | Webhook Controller, Scheduler, Admin UI, K8s Worker | Ingestion Workers | Trigger a sync run |
 
 #### Ingestion Domain — `cartogra.ingestion.*`
 
 | Topic | Key | Producers | Consumers | Purpose |
 |-------|-----|-----------|-----------|---------|
-| `cartogra.ingestion.webhook-events` | provider + repo_id | Webhook Controller (Gateway) | Ingestion Workers | Raw webhooks: `webhook.github.push`, `webhook.github.pull-request`, `webhook.azuredevops.git-push`, `webhook.azuredevops.build-complete` |
-| `cartogra.ingestion.spec-discovered` | repo_id | Ingestion Workers | Contract Service | Specs found: `spec.openapi.found`, `spec.asyncapi.found` |
+| `cartogra.ingestion.sync.completed` | sync_job_id | Ingestion Workers | Registry Service | Sync result with status (`COMPLETED`, `FAILED`, `PARTIAL`) |
+| `cartogra.ingestion.ownership.resolved` | repo_id | Ingestion Workers | Registry Service | Per-repo CODEOWNERS resolution |
+| `cartogra.ingestion.service.discovered` | external_id | Ingestion Workers (SCM + K8s) | Registry Service | Auto-discovered services with tech stack + repo/k8s metadata |
+| `cartogra.ingestion.spec.discovered` | content_sha256 | Ingestion Workers | Contract Service | OpenAPI / AsyncAPI specs found in repos |
+
+> Webhook controller publishes `cartogra.registry.sync.command` directly — there is no separate `webhook-events` topic. Raw webhook signature verification happens at the controller; only successfully verified, relevant events become sync commands.
+
+#### Topology Domain — `cartogra.topology.*`
+
+| Topic | Key | Producers | Consumers | Purpose |
+|-------|-----|-----------|-----------|---------|
+| `cartogra.topology.dependency.declared` / `.observed` / `.removed` / `.drift-detected` | source_service_id | Topology Service | Intelligence, Notification | Dependency lifecycle |
+| `cartogra.topology.analysis.completed` | analysis_id | Topology Service | Intelligence, Frontend | Impact analysis / SPOF / cycle findings |
+
+#### Observability — `cartogra.observability.*`
+
+| Topic | Key | Producers | Consumers | Purpose |
+|-------|-----|-----------|-----------|---------|
+| `cartogra.observability.spans` | trace_id | OTel Collector | Topology Service (`OtelSpanWorker`) | Pre-processed spans used to derive observed dependencies |
+
+#### Contract Domain — `cartogra.contract.*`
+
+| Topic | Key | Producers | Consumers | Purpose |
+|-------|-----|-----------|-----------|---------|
+| `cartogra.contract.schema.published` / `.updated` / `.deprecated` | contract_id | Outbox Relay | Topology, Intelligence, Notification | Schema lifecycle (sourced from outbox table) |
+| `cartogra.contract.check.passed` / `.breaking` / `.approved` / `.blocked` | check_id | Outbox Relay | Notification, CI extensions | Compatibility check results |
+
+#### Intelligence Domain — `cartogra.intelligence.*`
+
+| Topic | Key | Producers | Consumers | Purpose |
+|-------|-----|-----------|-----------|---------|
+| `cartogra.intelligence.analysis.requested` | tenant_id | Scheduled Jobs, Admin UI | Intelligence Service | Trigger anti-pattern scan / digest / health-score / ownership-suggestion / anomaly-detection runs |
+| `cartogra.intelligence.analysis.completed` | tenant_id | Intelligence Service | Notification, Frontend | Run results |
 
 #### Platform / Cross-cutting — `cartogra.platform.*`
 
 | Topic | Key | Producers | Consumers | Purpose |
 |-------|-----|-----------|-----------|---------|
-| `cartogra.platform.audit-log` | entity_id | All Services | Audit Service, Intelligence | Immutable audit trail. 1-year retention. |
-| `cartogra.platform.notifications` | recipient_team_id | Notification Service | Delivery Workers | Fan-out: `notification.slack`, `notification.teams`, `notification.webhook`, `notification.email` |
-| `cartogra.platform.dead-letter` | original_topic | All Consumers (on failure) | Ops Dashboard, Alerting | Failed messages after retry exhaustion |
+| `cartogra.platform.audit.recorded` | entity_id | All non-registry services | Registry Service (`audit_events` writer) | Cross-service audit events centralized in the registry table |
+| `cartogra.platform.notification.queued` | recipient_team_id | Notification Service | Delivery Workers (Slack, Teams, Email, Webhook) | Outbound notification fan-out |
+| `cartogra.platform.dead.letter` | original_topic | All Consumers (on failure) | Ops Dashboard, DLQ replay admin API | Failed messages after retry exhaustion |
 
 ### Consumer Groups
 
 | Consumer Group | Subscribes To | Purpose |
 |----------------|---------------|---------|
-| `topology-graph-builder` | registry.service-events, contract.schema-events, topology.otel-spans | Rebuilds dependency graph on relevant changes |
-| `intelligence-analyzer` | registry.service-events, topology.dependency-events, contract.schema-events | Feeds AI analysis pipeline |
-| `notification-router` | contract.check-events, topology.dependency-events, intelligence.analysis-results, registry.service-events | Routes events to notification fan-out |
-| `notification-delivery-slack` | platform.notifications (filtered) | Delivers to Slack |
-| `notification-delivery-teams` | platform.notifications (filtered) | Delivers to Microsoft Teams |
-| `audit-writer` | platform.audit-log | Writes to long-term storage |
-| `ingestion-github` | ingestion.webhook-events (filtered: provider=github), registry.sync-commands | GitHub-specific ingestion |
-| `ingestion-azuredevops` | ingestion.webhook-events (filtered: provider=azuredevops), registry.sync-commands | Azure DevOps-specific ingestion |
-| `contract-spec-processor` | ingestion.spec-discovered | Parses discovered specs, registers/updates contracts |
-| `outbox-relay` | (polls DB outbox table, not Kafka) | Publishes outbox rows to contract topics |
+| `topology-graph-builder` | `cartogra.registry.service.*`, `cartogra.contract.schema.*`, `cartogra.observability.spans` | Rebuilds dependency graph on relevant changes |
+| `intelligence-analyzer` | `cartogra.registry.service.*`, `cartogra.topology.dependency.*`, `cartogra.contract.schema.*` | Feeds AI analysis pipeline |
+| `notification-router` | `cartogra.contract.check.*`, `cartogra.topology.dependency.*`, `cartogra.intelligence.analysis.completed`, `cartogra.registry.service.*` | Routes events to notification fan-out |
+| `notification-delivery-slack` | `cartogra.platform.notification.queued` (filtered) | Delivers to Slack |
+| `notification-delivery-teams` | `cartogra.platform.notification.queued` (filtered) | Delivers to Microsoft Teams |
+| `notification-delivery-email` | `cartogra.platform.notification.queued` (filtered) | Delivers via Resend |
+| `audit-writer` (in Registry Service) | `cartogra.platform.audit.recorded` | Persists cross-service audit events into `audit_events` |
+| `registry-service-discovery` | `cartogra.ingestion.service.discovered` | Upserts services discovered by SCM / K8s workers |
+| `registry-ownership-consumer` | `cartogra.ingestion.ownership.resolved` | Assigns teams to services via CODEOWNERS |
+| `ingestion-sync` | `cartogra.registry.sync.command` | Dispatches sync runs to GitHub / Azure DevOps / Kubernetes providers |
+| `ingestion-connection-cache` | `cartogra.registry.scm-connection.*` | Maintains the local SCM connection cache used by scheduler + webhooks |
+| `contract-spec-processor` | `cartogra.ingestion.spec.discovered` | Parses discovered specs, registers/updates contracts |
+| `outbox-relay` | (polls DB `outbox_events` table, not Kafka) | Publishes outbox rows to `cartogra.contract.schema.*` and `cartogra.contract.check.*` |
 
 ### Dead Letter Queue Strategy
 
 When a consumer fails to process a message after 3 retries (exponential backoff: 1s, 5s, 25s):
 
-1. Original message published to `cartogra.platform.dead-letter` with metadata: original topic, partition, offset, consumer group, error, stack trace, retry count
+1. Original message published to `cartogra.platform.dead.letter` with metadata: original topic, partition, offset, consumer group, error, stack trace, retry count
 2. Alert fired to Grafana ops dashboard
 3. DLQ messages replayable via admin API endpoint after root cause is fixed
 

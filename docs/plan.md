@@ -336,10 +336,23 @@ After launch, evaluate:
 
 ---
 
+## Explicitly out of MVP
+
+These features appear in [project-scope.md](project-scope.md) or were considered during planning, but are not in scope for the 0.1 launch. They are deferred — not forgotten — and may be revisited after the production launch when real user signal exists.
+
+- **Declared dependencies auto-derived from API specs / build files** (Scope §2 Pillar 2). MVP keeps declared-dependency CRUD manual (Phase 2 task 2.3). OpenAPI server-refs / AsyncAPI bindings → dependency rows is a parser project of its own; revisit after the contract service stabilizes.
+- **Cluster-by-team graph layout** (Scope §5). Dep graph ships with zoom / pan / declared-vs-observed toggle in Phase 2; clustering is visual polish that the Risks page already addresses for triage.
+- **Multi-turn chat NL queries** (Scope §5). MVP NL panel is one-shot (Phase 4 task 4.3). Conversation state, follow-ups, and history-aware prompts are a separate product surface.
+- **`tenants.settings.auto_approve_non_breaking`**. Schema field exists but is not honored by the approve/block workflow (3.6). Approval stays explicit for MVP.
+- **Catalog staleness filter using `tenants.settings.staleness_threshold_days`**. Schema field exists; surfacing stale services in the catalog is deferred until we have real usage data.
+- **Saga pattern with synchronous compensating actions**. Scope §3 describes orchestrated sagas; MVP uses event choreography with DLQ replay (5.9) as the recovery mechanism. ADR-0020 documents the trade-off.
+
+If any of these become must-have during phase execution, lift them out of this section with a public note in the corresponding phase doc.
+
 ## Cross-phase backlog (non-blocking but planned)
 
 - **Notification service** as first-class consumer groups — start minimal in Phase 3, harden in Phase 5.
-- **Audit service** writing `cartogra.platform.audit-log` — Phase 5 if needed.
+- **Audit service** writing `cartogra.platform.audit.recorded` — Phase 5 if needed.
 - **Elasticsearch upgrade** for search — Postgres FTS initially.
 
 ## Risk register
