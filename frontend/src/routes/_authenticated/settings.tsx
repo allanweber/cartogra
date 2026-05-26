@@ -21,7 +21,7 @@ function SettingsPage() {
   const initials = user?.email
     ? user.email.slice(0, 2).toUpperCase()
     : '??'
-  const role = user?.roles?.[0] ?? 'user'
+  const role = user?.roles[0] ?? 'user'
 
   return (
     <AppLayout title="Settings" description="Account and workspace preferences">

@@ -86,7 +86,6 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     }))
 
     return [...pages, ...services, ...teams]
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const filtered = query.trim()
