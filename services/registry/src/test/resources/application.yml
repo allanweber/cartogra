@@ -1,6 +1,10 @@
 spring:
   kafka:
     bootstrap-servers: localhost:9092
+  datasource:
+    hikari:
+      maximum-pool-size: 2
+      minimum-idle: 1
 
 management:
   tracing:

@@ -15,6 +15,9 @@ info:
     - Error: `{ "error": { "code", "message", "details" }, "traceId": "<32-hex>" }`
     - Header: `X-Trace-Id: <same 32-hex traceId>`
 
+    **Pagination:** List endpoints use `limit` (default 20, max 100) and `offset` (default 0).
+    Paginated `data` shape: `{ "items": [...], "total": N, "limit": 20, "offset": 0 }`.
+
 servers:
   - url: http://localhost:8081/api/v1
     description: Local development (direct)
@@ -45,19 +48,23 @@ paths:
         - cookieAuth: []
         - bearerAuth: []
       parameters:
-        - $ref: "#/components/parameters/PageParam"
-        - $ref: "#/components/parameters/SizeParam"
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/OffsetParam"
         - name: teamId
           in: query
           schema:
             type: string
             format: uuid
-        - name: healthStatus
+        - name: health
           in: query
           schema:
             type: string
             enum: [healthy, degraded, unknown]
-        - name: q
+        - name: techStack
+          in: query
+          schema:
+            type: string
+        - name: search
           in: query
           description: Full-text search on name and description
           schema:
@@ -74,6 +81,8 @@ paths:
                 $ref: "#/components/schemas/ServicePageResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
     post:
       summary: Register a new service
@@ -104,6 +113,34 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "409":
           $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /services/orphaned:
+    get:
+      summary: List services with no team assignment
+      operationId: listOrphanedServices
+      tags: [services]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/OffsetParam"
+      responses:
+        "200":
+          description: Paginated list of orphaned services
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServicePageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   /services/{serviceId}:
     get:
@@ -117,6 +154,7 @@ paths:
         - $ref: "#/components/parameters/ServiceIdParam"
       responses:
         "200":
+          description: Service found
           headers:
             X-Trace-Id:
               $ref: "#/components/headers/XTraceId"
@@ -128,8 +166,10 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
-    patch:
+    put:
       summary: Update service metadata
       operationId: updateService
       tags: [services]
@@ -146,6 +186,7 @@ paths:
               $ref: "#/components/schemas/UpdateServiceRequest"
       responses:
         "200":
+          description: Service updated
           headers:
             X-Trace-Id:
               $ref: "#/components/headers/XTraceId"
@@ -159,6 +200,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
     delete:
       summary: Soft-delete a service
@@ -179,6 +222,43 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /services/{serviceId}/owner:
+    patch:
+      summary: Assign team ownership to a service
+      operationId: assignServiceOwner
+      tags: [services]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ServiceIdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignOwnerRequest"
+      responses:
+        "200":
+          description: Ownership assigned
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   /services/{serviceId}/history:
     get:
@@ -190,10 +270,17 @@ paths:
         - bearerAuth: []
       parameters:
         - $ref: "#/components/parameters/ServiceIdParam"
-        - $ref: "#/components/parameters/PageParam"
-        - $ref: "#/components/parameters/SizeParam"
+        - name: at
+          in: query
+          description: Point-in-time snapshot (ISO-8601). If supplied, returns the single snapshot closest to this timestamp.
+          schema:
+            type: string
+            format: date-time
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/OffsetParam"
       responses:
         "200":
+          description: Paginated history entries
           headers:
             X-Trace-Id:
               $ref: "#/components/headers/XTraceId"
@@ -205,6 +292,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   # ── Teams ──────────────────────────────────────────────────────────────────
 
@@ -216,8 +305,12 @@ paths:
       security:
         - cookieAuth: []
         - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/OffsetParam"
       responses:
         "200":
+          description: Paginated list of teams
           headers:
             X-Trace-Id:
               $ref: "#/components/headers/XTraceId"
@@ -227,6 +320,8 @@ paths:
                 $ref: "#/components/schemas/TeamListResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
     post:
       summary: Create a new team
@@ -243,6 +338,7 @@ paths:
               $ref: "#/components/schemas/CreateTeamRequest"
       responses:
         "201":
+          description: Team created
           headers:
             X-Trace-Id:
               $ref: "#/components/headers/XTraceId"
@@ -254,6 +350,91 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /teams/{teamId}:
+    get:
+      summary: Get team by ID
+      operationId: getTeam
+      tags: [teams]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TeamIdParam"
+      responses:
+        "200":
+          description: Team found
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    put:
+      summary: Update team
+      operationId: updateTeam
+      tags: [teams]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TeamIdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTeamRequest"
+      responses:
+        "200":
+          description: Team updated
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    delete:
+      summary: Soft-delete a team
+      operationId: deleteTeam
+      tags: [teams]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TeamIdParam"
+      responses:
+        "204":
+          description: Team soft-deleted
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   # ── SCM Connections ────────────────────────────────────────────────────────
 
@@ -265,8 +446,12 @@ paths:
       security:
         - cookieAuth: []
         - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/OffsetParam"
       responses:
         "200":
+          description: Paginated list of SCM connections
           headers:
             X-Trace-Id:
               $ref: "#/components/headers/XTraceId"
@@ -276,6 +461,8 @@ paths:
                 $ref: "#/components/schemas/ScmConnectionListResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
     post:
       summary: Add a new SCM connection
@@ -292,6 +479,7 @@ paths:
               $ref: "#/components/schemas/CreateScmConnectionRequest"
       responses:
         "201":
+          description: SCM connection created
           headers:
             X-Trace-Id:
               $ref: "#/components/headers/XTraceId"
@@ -303,8 +491,70 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   /scm-connections/{connectionId}:
+    get:
+      summary: Get SCM connection by ID
+      operationId: getScmConnection
+      tags: [scm-connections]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ConnectionIdParam"
+      responses:
+        "200":
+          description: SCM connection found
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScmConnectionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    put:
+      summary: Update SCM connection
+      operationId: updateScmConnection
+      tags: [scm-connections]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ConnectionIdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateScmConnectionRequest"
+      responses:
+        "200":
+          description: SCM connection updated
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScmConnectionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
     delete:
       summary: Remove SCM connection
       operationId: deleteScmConnection
@@ -313,14 +563,10 @@ paths:
         - cookieAuth: []
         - bearerAuth: []
       parameters:
-        - name: connectionId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - $ref: "#/components/parameters/ConnectionIdParam"
       responses:
         "204":
+          description: SCM connection removed
           headers:
             X-Trace-Id:
               $ref: "#/components/headers/XTraceId"
@@ -328,6 +574,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   # ── CI ─────────────────────────────────────────────────────────────────────
 
@@ -336,7 +584,8 @@ paths:
       summary: Submit a contract check from CI pipeline
       description: |
         Used by GitHub Action and Azure DevOps task. Authenticated with `X-Cartogra-Api-Key`.
-        **Not wrapped in the standard envelope** — responds with a flat result for easy CI script parsing.
+        **Not wrapped in the standard envelope** — responds with a flat `CiCheckResult` for easy
+        CI script parsing. The `traceId` field is included at the top level of the result itself.
       operationId: ciCheck
       tags: [ci]
       security:
@@ -349,7 +598,7 @@ paths:
               $ref: "#/components/schemas/CiCheckRequest"
       responses:
         "200":
-          description: Check result
+          description: Check result (compatible or warning)
           headers:
             X-Trace-Id:
               $ref: "#/components/headers/XTraceId"
@@ -363,10 +612,15 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "422":
           description: Breaking changes detected
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/CiCheckResult"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   # ── Health ────────────────────────────────────────────────────────────────
 
@@ -422,21 +676,35 @@ components:
       schema:
         type: string
         format: uuid
-    PageParam:
-      name: page
-      in: query
+    TeamIdParam:
+      name: teamId
+      in: path
+      required: true
       schema:
-        type: integer
-        minimum: 0
-        default: 0
-    SizeParam:
-      name: size
+        type: string
+        format: uuid
+    ConnectionIdParam:
+      name: connectionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    LimitParam:
+      name: limit
       in: query
       schema:
         type: integer
         minimum: 1
         maximum: 100
         default: 20
+    OffsetParam:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
 
   schemas:
     # ── Envelope ─────────────────────────────────────────────────────────────
@@ -473,20 +741,6 @@ components:
           type: string
           pattern: "^[0-9a-f]{32}$"
 
-    Page:
-      description: Pagination metadata
-      type: object
-      properties:
-        totalElements:
-          type: integer
-          format: int64
-        totalPages:
-          type: integer
-        page:
-          type: integer
-        size:
-          type: integer
-
     # ── Service ───────────────────────────────────────────────────────────────
 
     ServiceDto:
@@ -512,13 +766,13 @@ components:
           type: string
           nullable: true
         techStack:
-          type: object
-          additionalProperties: true
+          type: string
           nullable: true
+          description: Serialized tech stack metadata
         metadata:
-          type: object
-          additionalProperties: true
+          type: string
           nullable: true
+          description: Serialized service metadata
         healthStatus:
           type: string
           enum: [healthy, degraded, unknown]
@@ -540,69 +794,88 @@ components:
         name:
           type: string
           minLength: 1
-          maxLength: 100
+          maxLength: 255
         description:
           type: string
-          maxLength: 1000
         teamId:
           type: string
           format: uuid
         repositoryUrl:
           type: string
-          format: uri
         techStack:
-          type: object
-          additionalProperties: true
+          type: string
         metadata:
-          type: object
-          additionalProperties: true
+          type: string
 
     UpdateServiceRequest:
       type: object
+      required: [name]
       properties:
         name:
           type: string
           minLength: 1
-          maxLength: 100
+          maxLength: 255
         description:
           type: string
-        teamId:
-          type: string
-          format: uuid
           nullable: true
         repositoryUrl:
           type: string
-          format: uri
+          nullable: true
+        techStack:
+          type: string
           nullable: true
         metadata:
-          type: object
-          additionalProperties: true
+          type: string
+          nullable: true
+        healthStatus:
+          type: string
+          enum: [healthy, degraded, unknown]
+          nullable: true
+
+    AssignOwnerRequest:
+      type: object
+      required: [teamId]
+      properties:
+        teamId:
+          type: string
+          format: uuid
 
     ServiceResponse:
-      allOf:
-        - $ref: "#/components/schemas/ApiResponse"
-        - type: object
-          properties:
-            data:
-              $ref: "#/components/schemas/ServiceDto"
+      type: object
+      required: [data, traceId]
+      properties:
+        data:
+          $ref: "#/components/schemas/ServiceDto"
+        traceId:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
 
     ServicePageResponse:
-      allOf:
-        - $ref: "#/components/schemas/ApiResponse"
-        - type: object
+      type: object
+      required: [data, traceId]
+      properties:
+        data:
+          type: object
+          required: [items, total, limit, offset]
           properties:
-            data:
-              type: object
-              properties:
-                content:
-                  type: array
-                  items:
-                    $ref: "#/components/schemas/ServiceDto"
-                page:
-                  $ref: "#/components/schemas/Page"
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/ServiceDto"
+            total:
+              type: integer
+              format: int64
+            limit:
+              type: integer
+            offset:
+              type: integer
+        traceId:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
 
     ServiceHistoryEntry:
       type: object
+      required: [id, serviceId, tenantId, snapshot, changedAt]
       properties:
         id:
           type: string
@@ -610,8 +883,12 @@ components:
         serviceId:
           type: string
           format: uuid
+        tenantId:
+          type: string
+          format: uuid
         snapshot:
-          $ref: "#/components/schemas/ServiceDto"
+          type: string
+          description: JSON snapshot of the service state at the time of the change
         changedBy:
           type: string
           format: uuid
@@ -621,25 +898,33 @@ components:
           format: date-time
 
     ServiceHistoryPageResponse:
-      allOf:
-        - $ref: "#/components/schemas/ApiResponse"
-        - type: object
+      type: object
+      required: [data, traceId]
+      properties:
+        data:
+          type: object
+          required: [items, total, limit, offset]
           properties:
-            data:
-              type: object
-              properties:
-                content:
-                  type: array
-                  items:
-                    $ref: "#/components/schemas/ServiceHistoryEntry"
-                page:
-                  $ref: "#/components/schemas/Page"
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/ServiceHistoryEntry"
+            total:
+              type: integer
+              format: int64
+            limit:
+              type: integer
+            offset:
+              type: integer
+        traceId:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
 
     # ── Team ──────────────────────────────────────────────────────────────────
 
     TeamDto:
       type: object
-      required: [id, tenantId, name, createdAt]
+      required: [id, tenantId, name, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -649,10 +934,10 @@ components:
           format: uuid
         name:
           type: string
-        slackChannel:
-          type: string
-          nullable: true
         createdAt:
+          type: string
+          format: date-time
+        updatedAt:
           type: string
           format: date-time
 
@@ -663,32 +948,53 @@ components:
         name:
           type: string
           minLength: 1
-        slackChannel:
+
+    UpdateTeamRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
           type: string
+          minLength: 1
 
     TeamResponse:
-      allOf:
-        - $ref: "#/components/schemas/ApiResponse"
-        - type: object
-          properties:
-            data:
-              $ref: "#/components/schemas/TeamDto"
+      type: object
+      required: [data, traceId]
+      properties:
+        data:
+          $ref: "#/components/schemas/TeamDto"
+        traceId:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
 
     TeamListResponse:
-      allOf:
-        - $ref: "#/components/schemas/ApiResponse"
-        - type: object
+      type: object
+      required: [data, traceId]
+      properties:
+        data:
+          type: object
+          required: [items, total, limit, offset]
           properties:
-            data:
+            items:
               type: array
               items:
                 $ref: "#/components/schemas/TeamDto"
+            total:
+              type: integer
+              format: int64
+            limit:
+              type: integer
+            offset:
+              type: integer
+        traceId:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
 
     # ── SCM Connection ─────────────────────────────────────────────────────────
 
     ScmConnectionDto:
       type: object
-      required: [id, tenantId, provider, createdAt]
+      required: [id, tenantId, provider, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -699,45 +1005,70 @@ components:
         provider:
           type: string
           enum: [github, azure_devops]
-        installationId:
+        config:
           type: string
           nullable: true
+          description: Serialized provider configuration
         createdAt:
+          type: string
+          format: date-time
+        updatedAt:
           type: string
           format: date-time
 
     CreateScmConnectionRequest:
       type: object
-      required: [provider]
+      required: [provider, config]
       properties:
         provider:
           type: string
           enum: [github, azure_devops]
-        installationId:
+        config:
           type: string
-          description: GitHub App installation ID
-        credentials:
-          type: object
-          description: Encrypted provider credentials (PAT/SP for Azure DevOps)
-          additionalProperties: true
+          description: Serialized provider configuration (credentials, installation IDs, etc.)
+
+    UpdateScmConnectionRequest:
+      type: object
+      required: [provider, config]
+      properties:
+        provider:
+          type: string
+          enum: [github, azure_devops]
+        config:
+          type: string
 
     ScmConnectionResponse:
-      allOf:
-        - $ref: "#/components/schemas/ApiResponse"
-        - type: object
-          properties:
-            data:
-              $ref: "#/components/schemas/ScmConnectionDto"
+      type: object
+      required: [data, traceId]
+      properties:
+        data:
+          $ref: "#/components/schemas/ScmConnectionDto"
+        traceId:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
 
     ScmConnectionListResponse:
-      allOf:
-        - $ref: "#/components/schemas/ApiResponse"
-        - type: object
+      type: object
+      required: [data, traceId]
+      properties:
+        data:
+          type: object
+          required: [items, total, limit, offset]
           properties:
-            data:
+            items:
               type: array
               items:
                 $ref: "#/components/schemas/ScmConnectionDto"
+            total:
+              type: integer
+              format: int64
+            limit:
+              type: integer
+            offset:
+              type: integer
+        traceId:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
 
     # ── CI ────────────────────────────────────────────────────────────────────
 
@@ -756,7 +1087,9 @@ components:
           description: Raw YAML or JSON spec content
 
     CiCheckResult:
-      description: Flat result (not wrapped in envelope) — for easy CI script parsing
+      description: |
+        Flat result — intentionally not wrapped in the standard envelope to simplify
+        CI script parsing. The `traceId` field is included at the top level.
       type: object
       required: [result, checkId]
       properties:
@@ -825,6 +1158,16 @@ components:
 
     Conflict:
       description: Resource already exists
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/XTraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
+    TooManyRequests:
+      description: Rate limit exceeded — enforced at the gateway
       headers:
         X-Trace-Id:
           $ref: "#/components/headers/XTraceId"

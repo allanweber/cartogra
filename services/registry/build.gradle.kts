@@ -7,6 +7,10 @@ tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
     archiveFileName.set("${project.name}.jar")
 }
 
+tasks.named<ProcessResources>("processTestResources") {
+    from(rootProject.file("docs/api/registry.openapi.yaml"))
+}
+
 dependencies {
     implementation(project(":shared:common"))
     implementation("org.springframework.boot:spring-boot-starter-web")
