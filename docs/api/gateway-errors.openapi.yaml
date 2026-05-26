@@ -1,0 +1,131 @@
+openapi: "3.1.0"
+info:
+  title: Cartogra Gateway Error Paths
+  version: "0.1.0"
+  description: |
+    Minimal spec covering gateway-owned error responses (401, 429, 400).
+    Used only by GatewayEnvelopeContractTest to validate error response shapes.
+    Proxy paths (2xx forwarded from downstream services) are not covered here.
+
+servers:
+  - url: http://localhost:8080
+    description: Local development (Gateway)
+
+paths:
+  /api/auth/login:
+    post:
+      summary: Authenticate with email and password
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Authenticated successfully
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnySuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/auth/userinfo:
+    get:
+      summary: Get authenticated user info (requires valid JWT)
+      operationId: userinfo
+      responses:
+        "200":
+          description: User info returned
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnySuccessResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+components:
+  headers:
+    XTraceId:
+      description: OTel trace ID — 32 lowercase hex characters, no dashes
+      schema:
+        type: string
+        pattern: "^[0-9a-f]{32}$"
+
+  schemas:
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+
+    AnySuccessResponse:
+      description: Placeholder for any successful response shape
+      type: object
+
+    ApiError:
+      description: Standard error envelope
+      type: object
+      required: [error, traceId]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+        traceId:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
+
+  responses:
+    BadRequest:
+      description: Invalid request payload or parameters
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/XTraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
+    Unauthorized:
+      description: Missing or invalid authentication
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/XTraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
+    TooManyRequests:
+      description: Rate limit exceeded
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/XTraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
