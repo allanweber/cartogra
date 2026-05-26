@@ -15,6 +15,8 @@ public record User(
     List<String> roles,
     String emailVerificationToken,
     Instant emailVerificationTokenExp,
+    String passwordResetToken,
+    Instant passwordResetTokenExp,
     Instant createdAt,
     Instant updatedAt,
     Instant deletedAt

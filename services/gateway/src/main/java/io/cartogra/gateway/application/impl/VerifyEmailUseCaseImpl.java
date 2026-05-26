@@ -32,7 +32,8 @@ public class VerifyEmailUseCaseImpl implements VerifyEmailUseCase {
 
         User verified = new User(user.id(), user.tenantId(), user.email(), user.authProvider(),
             user.authSubject(), user.passwordHash(), true, user.roles(),
-            null, null, user.createdAt(), user.updatedAt(), user.deletedAt());
+            null, null, user.passwordResetToken(), user.passwordResetTokenExp(),
+            user.createdAt(), user.updatedAt(), user.deletedAt());
         userRepository.save(verified);
     }
 }

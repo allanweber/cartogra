@@ -12,6 +12,11 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -19,9 +24,25 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final TraceContext traceContext;
+    private final CorsProperties corsProperties;
 
-    public SecurityConfig(TraceContext traceContext) {
+    public SecurityConfig(TraceContext traceContext, CorsProperties corsProperties) {
         this.traceContext = traceContext;
+        this.corsProperties = corsProperties;
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(corsProperties.allowedOrigins());
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setExposedHeaders(List.of("X-Trace-Id"));
+        config.setAllowCredentials(true);
+        config.setMaxAge(3600L);
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
     }
 
     @Bean
@@ -31,6 +52,7 @@ public class SecurityConfig {
             TenantInjectionFilter tenantFilter,
             ProxyRequestLoggingFilter proxyLoggingFilter) throws Exception {
         return http
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(AbstractHttpConfigurer::disable)
             .httpBasic(AbstractHttpConfigurer::disable)
             .formLogin(AbstractHttpConfigurer::disable)
@@ -40,12 +62,14 @@ public class SecurityConfig {
             .addFilterAfter(tenantFilter, RateLimitFilter.class)
             .addFilterAfter(proxyLoggingFilter, TenantInjectionFilter.class)
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/v1/auth/register", "/v1/auth/verify",
-                                 "/v1/auth/login", "/v1/auth/refresh",
-                                 "/v1/auth/logout", "/v1/auth/oauth/**").permitAll()
+                .requestMatchers("/api/auth/register", "/api/auth/verify",
+                                 "/api/auth/resend-verification",
+                                 "/api/auth/login", "/api/auth/refresh",
+                                 "/api/auth/logout", "/api/auth/oauth/**",
+                                 "/api/auth/forgot-password", "/api/auth/reset-password").permitAll()
                 .requestMatchers("/actuator/health/**").permitAll()
-                .requestMatchers("/v1/auth/userinfo").authenticated()
-                .requestMatchers("/v1/auth/admin/**").hasRole("ADMIN")
+                .requestMatchers("/api/auth/userinfo").authenticated()
+                .requestMatchers("/api/auth/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/v1/**").hasAnyRole("VIEWER", "MEMBER", "ADMIN")
                 .anyRequest().authenticated())

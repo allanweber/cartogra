@@ -55,18 +55,18 @@ class LoginUseCaseTest {
     private User verifiedUser(String password) {
         return new User(userId, tenantId, "user@test.com", "local", null,
             encoder.encode(password), true, List.of("VIEWER"), null, null,
-            Instant.now(), Instant.now(), null);
+            null, null, Instant.now(), Instant.now(), null);
     }
 
     @Test
     void validCredentialsReturnTokens() {
-        when(userRepository.findByTenantAndEmail(tenantId, "user@test.com"))
+        when(userRepository.findByEmail("user@test.com"))
             .thenReturn(Optional.of(verifiedUser("password123")));
         when(jwtTokenProvider.issueAccessToken(any(JwtClaims.class))).thenReturn("access-token");
         when(jwtTokenProvider.issueRefreshToken()).thenReturn("raw-refresh-token-64chars-padded-here-0000000000000000000000");
         when(refreshTokenRepository.save(any(RefreshToken.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        TokenResponse response = useCase.execute(tenantId, "user@test.com", "password123");
+        TokenResponse response = useCase.execute("user@test.com", "password123");
 
         assertThat(response.accessToken()).isEqualTo("access-token");
         assertThat(response.refreshToken()).isNotNull();
@@ -76,10 +76,10 @@ class LoginUseCaseTest {
 
     @Test
     void wrongPasswordThrowsUnauthorized() {
-        when(userRepository.findByTenantAndEmail(tenantId, "user@test.com"))
+        when(userRepository.findByEmail("user@test.com"))
             .thenReturn(Optional.of(verifiedUser("correct-password")));
 
-        assertThatThrownBy(() -> useCase.execute(tenantId, "user@test.com", "wrong-password"))
+        assertThatThrownBy(() -> useCase.execute("user@test.com", "wrong-password"))
             .isInstanceOf(UnauthorizedException.class);
 
         verify(jwtTokenProvider, never()).issueAccessToken(any());
@@ -87,10 +87,10 @@ class LoginUseCaseTest {
 
     @Test
     void unknownEmailThrowsUnauthorized() {
-        when(userRepository.findByTenantAndEmail(tenantId, "unknown@test.com"))
+        when(userRepository.findByEmail("unknown@test.com"))
             .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> useCase.execute(tenantId, "unknown@test.com", "password"))
+        assertThatThrownBy(() -> useCase.execute("unknown@test.com", "password"))
             .isInstanceOf(UnauthorizedException.class);
     }
 
@@ -98,11 +98,11 @@ class LoginUseCaseTest {
     void unverifiedUserThrowsUnverifiedEmailException() {
         User unverified = new User(userId, tenantId, "user@test.com", "local", null,
             encoder.encode("password123"), false, List.of("VIEWER"), "123456",
-            Instant.now().plusSeconds(900), Instant.now(), Instant.now(), null);
-        when(userRepository.findByTenantAndEmail(tenantId, "user@test.com"))
+            Instant.now().plusSeconds(900), null, null, Instant.now(), Instant.now(), null);
+        when(userRepository.findByEmail("user@test.com"))
             .thenReturn(Optional.of(unverified));
 
-        assertThatThrownBy(() -> useCase.execute(tenantId, "user@test.com", "password123"))
+        assertThatThrownBy(() -> useCase.execute("user@test.com", "password123"))
             .isInstanceOf(UnverifiedEmailException.class);
     }
 
@@ -110,32 +110,32 @@ class LoginUseCaseTest {
     void softDeletedUserThrowsUnauthorized() {
         User deleted = new User(userId, tenantId, "user@test.com", "local", null,
             encoder.encode("password123"), true, List.of("VIEWER"), null, null,
-            Instant.now(), Instant.now(), Instant.now());
-        when(userRepository.findByTenantAndEmail(tenantId, "user@test.com"))
+            null, null, Instant.now(), Instant.now(), Instant.now());
+        when(userRepository.findByEmail("user@test.com"))
             .thenReturn(Optional.of(deleted));
 
-        assertThatThrownBy(() -> useCase.execute(tenantId, "user@test.com", "password123"))
+        assertThatThrownBy(() -> useCase.execute("user@test.com", "password123"))
             .isInstanceOf(UnauthorizedException.class);
     }
 
     @Test
     void errorMessageIsIdenticalForWrongPasswordAndUnknownUser() {
-        when(userRepository.findByTenantAndEmail(tenantId, "unknown@test.com"))
+        when(userRepository.findByEmail("unknown@test.com"))
             .thenReturn(Optional.empty());
-        when(userRepository.findByTenantAndEmail(tenantId, "user@test.com"))
+        when(userRepository.findByEmail("user@test.com"))
             .thenReturn(Optional.of(verifiedUser("correct")));
 
         String notFoundMessage = null;
         String wrongPasswordMessage = null;
 
         try {
-            useCase.execute(tenantId, "unknown@test.com", "any");
+            useCase.execute("unknown@test.com", "any");
         } catch (UnauthorizedException e) {
             notFoundMessage = e.getMessage();
         }
 
         try {
-            useCase.execute(tenantId, "user@test.com", "wrong");
+            useCase.execute("user@test.com", "wrong");
         } catch (UnauthorizedException e) {
             wrongPasswordMessage = e.getMessage();
         }

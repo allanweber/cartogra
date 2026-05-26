@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { AppLayout } from '#/components/AppLayout'
 import { PhasePlaceholder } from '#/components/PhasePlaceholder'
 
-export const Route = createFileRoute('/intelligence')({
+export const Route = createFileRoute('/_authenticated/intelligence')({
   component: IntelligencePage,
 })
 
@@ -11,7 +11,7 @@ function IntelligencePage() {
   return (
     <AppLayout
       title="Intelligence"
-      description="Evidence-first analysis for natural-language questions, anti-patterns, and service health narratives."
+      description="NL queries, anti-pattern findings, and health narratives — grounded in evidence."
     >
       <PhasePlaceholder
         deliveryPhase="Phase 4"

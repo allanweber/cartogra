@@ -22,7 +22,7 @@ class RateLimitIT extends AbstractGatewayIT {
         List<Integer> statusCodes = new ArrayList<>();
 
         for (int i = 0; i <= AUTH_BURST_CAPACITY; i++) {
-            int status = mockMvc.perform(post("/v1/auth/login")
+            int status = mockMvc.perform(post("/api/auth/login")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""
                         {"email":"ratelimit-%s@test.com","password":"password123","tenantId":"%s"}
@@ -37,14 +37,14 @@ class RateLimitIT extends AbstractGatewayIT {
     @Test
     void rateLimited429ResponseContainsErrorEnvelope() throws Exception {
         for (int i = 0; i < AUTH_BURST_CAPACITY; i++) {
-            mockMvc.perform(post("/v1/auth/login")
+            mockMvc.perform(post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"email":"drain-%s@test.com","password":"password123","tenantId":"%s"}
                     """.formatted(UUID.randomUUID(), UUID.randomUUID())));
         }
 
-        var result = mockMvc.perform(post("/v1/auth/login")
+        var result = mockMvc.perform(post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"email":"over-limit@test.com","password":"password123","tenantId":"%s"}

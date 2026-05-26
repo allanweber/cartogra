@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { AppLayout } from '#/components/AppLayout'
 import { PhasePlaceholder } from '#/components/PhasePlaceholder'
 
-export const Route = createFileRoute('/graph')({
+export const Route = createFileRoute('/_authenticated/graph')({
   component: GraphPage,
 })
 

@@ -14,7 +14,7 @@ class OAuthControllerIT extends AbstractGatewayIT {
     void oauthStartRedirectsToProvider() throws Exception {
         UUID tenantId = UUID.randomUUID();
 
-        mockMvc.perform(get("/v1/auth/oauth/google/start")
+        mockMvc.perform(get("/api/auth/oauth/google/start")
                 .param("tenantId", tenantId.toString()))
             .andExpect(status().is3xxRedirection())
             .andExpect(header().string("Location", org.hamcrest.Matchers.containsString("accounts.google.com")));
@@ -24,19 +24,18 @@ class OAuthControllerIT extends AbstractGatewayIT {
     void oauthStartWithGithubRedirectsToGithub() throws Exception {
         UUID tenantId = UUID.randomUUID();
 
-        mockMvc.perform(get("/v1/auth/oauth/github/start")
+        mockMvc.perform(get("/api/auth/oauth/github/start")
                 .param("tenantId", tenantId.toString()))
             .andExpect(status().is3xxRedirection())
             .andExpect(header().string("Location", org.hamcrest.Matchers.containsString("github.com")));
     }
 
     @Test
-    void oauthCallbackWithInvalidStateReturns400() throws Exception {
-        mockMvc.perform(get("/v1/auth/oauth/google/callback")
+    void oauthCallbackWithInvalidStateRedirectsToLoginWithError() throws Exception {
+        mockMvc.perform(get("/api/auth/oauth/google/callback")
                 .param("code", "authcode")
                 .param("state", "invalid-state"))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.error.code").isNotEmpty())
-            .andExpect(jsonPath("$.traceId").isNotEmpty());
+            .andExpect(status().is3xxRedirection())
+            .andExpect(header().string("Location", org.hamcrest.Matchers.containsString("error=oauth_failed")));
     }
 }

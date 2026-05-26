@@ -16,7 +16,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/v1/auth/admin/oidc-config")
+@RequestMapping("/api/auth/admin/oidc-config")
 @PreAuthorize("hasRole('ADMIN')")
 public class TenantOidcAdminController {
 

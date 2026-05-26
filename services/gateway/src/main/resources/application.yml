@@ -62,6 +62,10 @@ management:
         url: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/metrics
 
 app:
+  frontend:
+    base-url: ${FRONTEND_BASE_URL:http://localhost:3006}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3006}
   jwt:
     secret: ${JWT_SECRET}
     access-token-expiry-seconds: ${JWT_ACCESS_EXPIRY_SECONDS:900}
@@ -74,13 +78,13 @@ app:
     google:
       client-id: ${GOOGLE_CLIENT_ID}
       client-secret: ${GOOGLE_CLIENT_SECRET}
-      redirect-uri: ${APP_BASE_URL}/v1/auth/oauth/google/callback
+      redirect-uri: ${APP_BASE_URL}/api/auth/oauth/google/callback
       token-uri: https://oauth2.googleapis.com/token
       userinfo-uri: https://openidconnect.googleapis.com/v1/userinfo
     github:
       client-id: ${GITHUB_CLIENT_ID}
       client-secret: ${GITHUB_CLIENT_SECRET}
-      redirect-uri: ${APP_BASE_URL}/v1/auth/oauth/github/callback
+      redirect-uri: ${APP_BASE_URL}/api/auth/oauth/github/callback
       token-uri: https://github.com/login/oauth/access_token
       userinfo-uri: https://api.github.com/user
   rate-limit:

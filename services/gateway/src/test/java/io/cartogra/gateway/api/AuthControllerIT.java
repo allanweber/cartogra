@@ -15,7 +15,7 @@ class AuthControllerIT extends AbstractGatewayIT {
 
     @Test
     void registerNewUserReturns201() throws Exception {
-        mockMvc.perform(post("/v1/auth/register")
+        mockMvc.perform(post("/api/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"email":"newuser@test.com","password":"password123","orgName":"Test Org"}
@@ -27,7 +27,7 @@ class AuthControllerIT extends AbstractGatewayIT {
 
     @Test
     void registerWithoutOrgNameUsesEmailAsTenantName() throws Exception {
-        mockMvc.perform(post("/v1/auth/register")
+        mockMvc.perform(post("/api/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"email":"noorg-%s@test.com","password":"password123"}
@@ -41,7 +41,7 @@ class AuthControllerIT extends AbstractGatewayIT {
         String email = "unverified-" + UUID.randomUUID() + "@test.com";
         UUID tenantId = registerAndExtractTenantId(email, "password123");
 
-        mockMvc.perform(post("/v1/auth/login")
+        mockMvc.perform(post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"email":"%s","password":"password123","tenantId":"%s"}
@@ -53,7 +53,7 @@ class AuthControllerIT extends AbstractGatewayIT {
 
     @Test
     void loginWithWrongPasswordReturns401() throws Exception {
-        mockMvc.perform(post("/v1/auth/login")
+        mockMvc.perform(post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"email":"nonexistent@test.com","password":"wrong","tenantId":"%s"}
@@ -70,7 +70,7 @@ class AuthControllerIT extends AbstractGatewayIT {
 
         Thread.sleep(100);
 
-        mockMvc.perform(post("/v1/auth/verify")
+        mockMvc.perform(post("/api/auth/verify")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"email":"%s","token":"000000"}
@@ -80,7 +80,7 @@ class AuthControllerIT extends AbstractGatewayIT {
 
     @Test
     void invalidEmailReturns400() throws Exception {
-        mockMvc.perform(post("/v1/auth/register")
+        mockMvc.perform(post("/api/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"email":"not-an-email","password":"password123"}
@@ -90,7 +90,7 @@ class AuthControllerIT extends AbstractGatewayIT {
 
     @Test
     void shortPasswordReturns400() throws Exception {
-        mockMvc.perform(post("/v1/auth/register")
+        mockMvc.perform(post("/api/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"email":"user@test.com","password":"short"}
@@ -107,7 +107,7 @@ class AuthControllerIT extends AbstractGatewayIT {
     }
 
     private UUID registerAndExtractTenantId(String email, String password) throws Exception {
-        String body = mockMvc.perform(post("/v1/auth/register")
+        String body = mockMvc.perform(post("/api/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"email":"%s","password":"%s"}

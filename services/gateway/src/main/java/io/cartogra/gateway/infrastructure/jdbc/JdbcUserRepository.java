@@ -38,6 +38,13 @@ public class JdbcUserRepository implements UserRepository {
     }
 
     @Override
+    public List<User> findAllByEmail(String email) {
+        String sql = "SELECT * FROM users WHERE email = :email AND deleted_at IS NULL";
+        var params = new MapSqlParameterSource("email", email);
+        return jdbc.query(sql, params, JdbcUserRepository::mapRow);
+    }
+
+    @Override
     public Optional<User> findByTenantAndEmail(UUID tenantId, String email) {
         String sql = """
             SELECT * FROM users
@@ -67,14 +74,26 @@ public class JdbcUserRepository implements UserRepository {
         return update(user);
     }
 
+    @Override
+    public Optional<User> findByPasswordResetToken(String token) {
+        String sql = """
+            SELECT * FROM users
+            WHERE password_reset_token = :token AND deleted_at IS NULL
+            """;
+        var params = new MapSqlParameterSource("token", token);
+        return jdbc.query(sql, params, JdbcUserRepository::mapRow).stream().findFirst();
+    }
+
     private User insert(User user) {
         UUID id = UUID.randomUUID();
         String sql = """
             INSERT INTO users (id, tenant_id, email, auth_provider, auth_subject, password_hash,
                 email_verified, email_verification_token, email_verification_token_exp,
+                password_reset_token, password_reset_token_exp,
                 roles, created_at, updated_at)
             VALUES (:id, :tenantId, :email, :authProvider, :authSubject, :passwordHash,
                 :emailVerified, :emailVerificationToken, :emailVerificationTokenExp,
+                :passwordResetToken, :passwordResetTokenExp,
                 :roles::text[], :createdAt, :updatedAt)
             """;
         Instant now = Instant.now();
@@ -89,6 +108,9 @@ public class JdbcUserRepository implements UserRepository {
             .addValue("emailVerificationToken", user.emailVerificationToken())
             .addValue("emailVerificationTokenExp", user.emailVerificationTokenExp() != null
                 ? Timestamp.from(user.emailVerificationTokenExp()) : null)
+            .addValue("passwordResetToken", user.passwordResetToken())
+            .addValue("passwordResetTokenExp", user.passwordResetTokenExp() != null
+                ? Timestamp.from(user.passwordResetTokenExp()) : null)
             .addValue("roles", "{" + String.join(",", user.roles()) + "}")
             .addValue("createdAt", Timestamp.from(now))
             .addValue("updatedAt", Timestamp.from(now));
@@ -96,6 +118,7 @@ public class JdbcUserRepository implements UserRepository {
         return new User(id, user.tenantId(), user.email(), user.authProvider(),
             user.authSubject(), user.passwordHash(), user.emailVerified(),
             user.roles(), user.emailVerificationToken(), user.emailVerificationTokenExp(),
+            user.passwordResetToken(), user.passwordResetTokenExp(),
             now, now, null);
     }
 
@@ -105,6 +128,8 @@ public class JdbcUserRepository implements UserRepository {
                 password_hash = :passwordHash, email_verified = :emailVerified,
                 email_verification_token = :emailVerificationToken,
                 email_verification_token_exp = :emailVerificationTokenExp,
+                password_reset_token = :passwordResetToken,
+                password_reset_token_exp = :passwordResetTokenExp,
                 roles = :roles::text[], updated_at = now()
             WHERE id = :id AND deleted_at IS NULL
             """;
@@ -117,6 +142,9 @@ public class JdbcUserRepository implements UserRepository {
             .addValue("emailVerificationToken", user.emailVerificationToken())
             .addValue("emailVerificationTokenExp", user.emailVerificationTokenExp() != null
                 ? Timestamp.from(user.emailVerificationTokenExp()) : null)
+            .addValue("passwordResetToken", user.passwordResetToken())
+            .addValue("passwordResetTokenExp", user.passwordResetTokenExp() != null
+                ? Timestamp.from(user.passwordResetTokenExp()) : null)
             .addValue("roles", "{" + String.join(",", user.roles()) + "}");
         jdbc.update(sql, params);
         return user;
@@ -136,6 +164,8 @@ public class JdbcUserRepository implements UserRepository {
             roles,
             rs.getString("email_verification_token"),
             toInstant(rs.getTimestamp("email_verification_token_exp")),
+            rs.getString("password_reset_token"),
+            toInstant(rs.getTimestamp("password_reset_token_exp")),
             toInstant(rs.getTimestamp("created_at")),
             toInstant(rs.getTimestamp("updated_at")),
             toInstant(rs.getTimestamp("deleted_at"))

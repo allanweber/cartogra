@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS users (
     email_verified                  BOOLEAN     NOT NULL DEFAULT false,
     email_verification_token        TEXT,
     email_verification_token_exp    TIMESTAMPTZ,
+    password_reset_token            TEXT,
+    password_reset_token_exp        TIMESTAMPTZ,
     roles                           TEXT[]      NOT NULL DEFAULT '{}',
     metadata                        JSONB,
     created_at                      TIMESTAMPTZ NOT NULL DEFAULT now(),

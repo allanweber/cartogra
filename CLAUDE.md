@@ -138,3 +138,47 @@ cartogra/
 @.claude/rules/infra.md
 @.claude/rules/patterns.md
 @.claude/rules/workflow.md
+
+## Design Context
+
+### Users
+
+Mixed audience across three distinct personas:
+
+- **Platform / infra engineers** — daily power users: service dependencies, API contracts, deployment history. Value density and speed.
+- **SREs / oncall engineers** — situational users under pressure: blast radius, ownership, risk exposure. Every extra click costs them.
+- **Tech leads / architects** — strategic users: architecture health, team structure, long-term risk trends. Present to stakeholders.
+
+All three need **immediate comprehension**. Complex data; the interface must not be.
+
+### Brand Personality
+
+**Precise · Dependable · Insightful** — a trusted instrument panel. Like a compass or hydrographic chart: never surprises, never decorates for its own sake, instantly legible under pressure.
+
+### Emotional Goal
+
+**Calm confidence** — "I can see everything, nothing surprises me." Even when displaying critical risks, the UI itself communicates control.
+
+### Aesthetic Direction
+
+**The precision instrument.** Hydrographic charts, technical blueprints, professional cartography. Dense with information, never chaotic.
+
+**Anti-references**: Generic SaaS dashboards (DataDog clones, metric card grids), enterprise bloat, startup playfulness (gradient everything, emoji in copy).
+
+**Brand color**: Deep cartographic blue, hue **215–225** (OKLCH). Example: `oklch(0.52 0.20 218)` light / `oklch(0.72 0.16 218)` dark. Replaces the current AI-startup violet (hue 295).
+
+**Semantic color system (do not change):**
+
+- Green 145 → healthy / deploy
+- Amber 60 → degraded / warning / ownership
+- Red 28 → down / critical / risk
+- Blue 240 → info / dependency
+- Blue-violet 260 → contract events
+
+### Design Principles
+
+1. **Data density over decoration** — Every pixel communicates. No decorative elements.
+2. **Structural calm** — Consistent grid, predictable patterns. Color encodes urgency; structure stays composed.
+3. **Progressive disclosure** — Primary views show health signals; drill-down surfaces root cause.
+4. **Semantic color only** — Color carries meaning, never mood. Brand accent used sparingly (primary actions, active states, focus rings).
+5. **Expert density** — Engineers read terminals. Short labels, tight spacing, no hand-holding copy.

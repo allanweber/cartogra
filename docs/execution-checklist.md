@@ -192,10 +192,10 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [x] 1.39g [TEST] Add `CodeownersFlowIT` covering WireMock GitHub repo with a `CODEOWNERS` file → sync → ownership envelope published → registry consumes → service `teamId` is set (or `service_codeowners` row exists, depending on the ADR-0015 outcome).
 - [X] 1.40 [CODE] Decide whether guest demo access is enabled in Phase 1; if enabled, enforce read-only behavior and keep gateway rate limits active.
 - [X] 1.40 (duplicated) [CODE] Decide whether guest demo access is enabled in Phase 1; if enabled, enforce read-only behavior and keep gateway rate limits active.
-- [ ] 1.41 [UI] Craft Login, Register, Verify email, and OAuth handoff screens using `/impeccable craft login` and `/impeccable craft register`; all auth state must use httpOnly cookies — never `localStorage`.
-- [ ] 1.42 [UI] Craft the Catalog list and detail flows using `/impeccable craft catalog home`; include filters for team, health, tech stack, SCM provider, and search, plus orphan highlighting.
-- [ ] 1.43 [UI] Centralize envelope parsing in the frontend API client; surface `traceId` in all error states via the `ApiError` class established in Phase 0.
-- [ ] 1.44 [UI] Run `/impeccable audit` on all Phase 1 screens before the phase gate; address any blocking findings.
+- [X] 1.41 [UI] Craft Login, Register, Verify email, and OAuth handoff screens using `/impeccable craft login` and `/impeccable craft register`; all auth state must use httpOnly cookies — never `localStorage`.
+- [X] 1.42 [UI] Craft the Catalog list and detail flows using `/impeccable craft catalog home`; include filters for team, health, tech stack, SCM provider, and search, plus orphan highlighting.
+- [X] 1.43 [UI] Centralize envelope parsing in the frontend API client; surface `traceId` in all error states via the `ApiError` class established in Phase 0.
+- [X] 1.44 [UI] Run `/impeccable audit` on all Phase 1 screens before the phase gate; address any blocking findings.
 - [ ] 1.45 [TEST] Add contract tests that verify gateway and registry responses match the OpenAPI envelope and `X-Trace-Id` contract.
 - [ ] 1.46 [DOCS] Update `docs/api/registry.openapi.yaml` to reflect the implemented registry surface.
 - [ ] 1.47 [BIP] Publish the envelope-and-trace-ID thread after gateway proxying works end to end.
@@ -236,6 +236,17 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] 1.71 [CODE] Add Resilience4j circuit breakers on all gateway `RestClient` calls to downstream services (registry, topology, contract, intelligence). Expose circuit-breaker state in each service's `/actuator/health` response.
 - [ ] 1.72 [UI] Verify and implement the root error boundary claimed done in task 0.37. Audit `frontend/src/` for an `ErrorBoundary` component; if absent, implement it as a React class component with `componentDidCatch`, display the `traceId` from the caught `ApiError`, and add a Vitest snapshot test.
 
+### UI–Backend integration
+
+- [ ] 1.73 [UI] Add TanStack Router route guards: protect all routes except `/login`, `/register`, `/verify-email`, `/forgot-password`, `/reset-password`, and `/oauth-handoff`. Use `beforeLoad` in `__root.tsx` (or a route group) to check `useAuthStore.isAuthenticated`; if false after the session-restore effect settles, throw `redirect({ to: '/login', search: { redirect: location.pathname } })`; after successful login/OAuth, navigate to the `redirect` search param or fall back to `/dashboard`.
+- [ ] 1.74 [UI] Add a "Sign out" action in `AppLayout` sidebar bottom section (next to the user avatar): calls `POST /api/auth/logout` via `apiFetch`, on success calls `useAuthStore.clearAuth()` and navigates to `/login`. Handle the API error case inline — never leave the user in an inconsistent auth state.
+- [ ] 1.75 [UI] Craft the Forgot Password screen at `/forgot-password` and Reset Password screen at `/reset-password`: `POST /api/auth/forgot-password` submits the email; success state shows "check your inbox"; `POST /api/auth/reset-password` accepts `token` (from query param) + `newPassword`; on success navigate to `/login`. Both routes excluded from the auth guard (1.73). Depends on backend task 1.68.
+- [ ] 1.76 [UI] Craft the SCM Connections management screen at `/settings/scm-connections`: list connections via `GET /api/registry/v1/scm-connections` (TanStack Query); add a new connection with a drawer/dialog form (provider selector, name, PAT/token field); delete with a confirmation dialog using `DELETE /api/registry/v1/scm-connections/{id}`; show last-synced status and sync health badge. Use TanStack Query mutations for create and delete. Design was shape-briefed in 1.2 but this screen was never built.
+- [ ] 1.77 [UI] Wire the Catalog list and detail pages to the real registry API: replace `MOCK_SERVICES` with a TanStack Query `useQuery` on `GET /api/registry/v1/services` (pass `team`, `health`, `q` query params from filter state); replace the detail route loader with `GET /api/registry/v1/services/{id}`; show `Skeleton` loading and `Alert` with `traceId` on error; remove all `MOCK_SERVICES` imports from `catalog.tsx` and `catalog.$serviceId.tsx`. Client-side tech-stack and SCM-provider filtering remains until 2.39 full-text search lands server-side.
+- [ ] 1.78 [UI] Wire the Teams page to the real registry API: replace `MOCK_TEAMS` with a TanStack Query `useQuery` on `GET /api/registry/v1/teams`; show `Skeleton` loading and `Alert` with `traceId` on error; remove `MOCK_TEAMS` import from `teams.tsx`.
+- [ ] 1.79 [CODE] Add `PUT /v1/auth/userinfo` endpoint in gateway: accepts `{ name, email }`, validates email uniqueness, updates the user record, returns the updated user in the response envelope. Requires authentication (httpOnly cookie or Bearer). This is the backend counterpart to the profile update UI in 1.80.
+- [ ] 1.80 [UI] Add a Settings layout with a Profile page at `/settings/profile`: display name, email, and role from `useAuthStore`; allow name/email updates via `PUT /api/auth/userinfo` (1.79) using TanStack Forms; surface a "Change password" link pointing to `/forgot-password`. Create a `/settings` index page that lists available sections (Profile, SCM Connections; Billing added in 3.45). Add `/settings/profile` and `/settings/scm-connections` as file-based sub-routes.
+
 ### Phase 1 Gate
 
 - [ ] [GATE] Registry CRUD, history, ownership, orphan detection, sync initiation, local auth, at least one OAuth provider, and Bearer auth are working.
@@ -270,6 +281,7 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] 2.9 [CODE] Implement recursive CTEs for blast radius with bounded depth and path-explosion guards.
 - [ ] 2.10 [CODE] Implement cycle detection with normalized and deduplicated cycle output.
 - [ ] 2.11 [CODE] Implement the SPOF heuristic with a documented fan-in threshold and any redundancy assumptions.
+- [ ] 2.11a [CODE] Add `GET /api/topology/v1/risks` endpoint: aggregates SPOF findings, cycle detections, drift alerts, and orphan detections into a paginated risk-summary list. Each item has `severity` (critical/warning/info), `type` (spof/cycle/drift/orphan), `affectedServices[]`, `title`, and `description`. This is the data source for the Risks page (2.28b) and the Dashboard risk section (2.28d).
 - [ ] 2.12 [CODE] Implement drift detection plus the resolve endpoint.
 - [ ] 2.13 [TEST] Add fixed graph fixtures and tests for graph reads, blast radius, cycle detection, SPOF, and drift resolution.
 - [ ] 2.14 [DOCS] Update `docs/api/topology.openapi.yaml` to match the implemented graph, drift, and analysis endpoints.
@@ -294,6 +306,14 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] 2.26 [UI] Craft the D3 graph with zoom, pan, declared-vs-observed toggle, node selection, and drift overlays using `/impeccable craft dependency graph`; use D3 for the canvas and shadcn/ui for all surrounding chrome.
 - [ ] 2.27 [UI] Craft the upstream/downstream detail panels and blast-radius highlighting using `/impeccable craft blast radius panel`.
 - [ ] 2.28 [UI] Run `/impeccable audit` on all Phase 2 screens before the phase gate.
+
+### Phase 2 UI–Backend wiring
+
+- [ ] 2.28a [UI] Wire the D3 dependency graph view to the real topology API: replace any static fixture data with TanStack Query calls to `GET /api/topology/v1/graph` (nodes + edges) and `GET /api/topology/v1/blast-radius/{id}`; pass the graph response shape to the D3 renderer from 2.26; show a `Skeleton` overlay during load and `Alert` with `traceId` on error.
+- [ ] 2.28b [UI] Wire the Risks page to the real topology risk findings: replace `MOCK_RISKS` with a TanStack Query `useQuery` on `GET /api/topology/v1/risks` (2.11a); show `Skeleton` loading and `Alert` with `traceId` on error; remove `MOCK_RISKS` import from `risks.tsx`.
+- [ ] 2.28c [UI] Wire the Timeline page to real audit events: replace `MOCK_TIMELINE` with a TanStack Query `useQuery` on `GET /api/registry/v1/audit-events` (paginated, from 2.37); show `Skeleton` loading and `Alert` with `traceId` on error; remove `MOCK_TIMELINE` import from `timeline.tsx`.
+- [ ] 2.28d [UI] Wire the Dashboard to real API data: replace the `MOCK_SERVICES` service health summary with `GET /api/registry/v1/services` (count + health breakdown); replace the risk section with `GET /api/topology/v1/risks?limit=4&severity=critical`; replace recent activity with `GET /api/registry/v1/audit-events?limit=5`; remove all `MOCK_*` imports from `dashboard.tsx`. Depends on 2.28b and 2.28c.
+
 - [ ] 2.29 [TEST] Measure and document graph render behavior for the 20-service seed target and capture the target hardware used.
 - [ ] 2.30 [BIP] Publish the declared-vs-observed dependencies article after the toggle and overlay work.
 - [ ] 2.31 [BIP] Publish the materialized-view-for-speed thread after the performance story is defensible.
@@ -385,6 +405,7 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 - [ ] 3.35 [UI] Craft the side-by-side diff viewer with required, added, and removed highlights using `/impeccable craft contract diff`.
 - [ ] 3.36 [UI] Craft the compatibility matrix heatmap, version timeline, and breaking-check queue using `/impeccable craft contract matrix`.
 - [ ] 3.37 [UI] Run `/impeccable audit` on all Phase 3 screens before the phase gate.
+- [ ] 3.37a [UI] Wire the Contracts page to the real contract API: replace `MOCK_CONTRACTS` with a TanStack Query `useQuery` on `GET /api/contract/v1/contracts`; wire the diff viewer to `GET /api/contract/v1/contracts/{id}/diff`, the version timeline to version history endpoints, and the breaking-check queue to the check endpoints from 3.9; show `Skeleton` loading and `Alert` with `traceId` on error; remove `MOCK_CONTRACTS` import from `contracts.tsx`.
 - [ ] 3.38 [BIP] Publish the schema-diff UI demo after the Contract Hub is stable enough to show.
 - [ ] 3.39 [BIP] Publish the compatibility-matrix story after the matrix is wired to real data.
 - [ ] 3.40 [BIP] Publish the marketplace listing or a documented blocker/timeline immediately when the packaging outcome is known.
