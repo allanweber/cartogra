@@ -46,7 +46,10 @@ public class DeleteServiceUseCaseImpl implements DeleteServiceUseCase {
                 existing.id(), existing.tenantId(), existing.name(), existing.description(),
                 existing.teamId(), existing.repositoryUrl(), existing.techStack(), existing.metadata(),
                 existing.healthStatus(), existing.lastDeployedAt(), existing.createdAt(),
-                deletedAt, deletedAt
+                deletedAt, deletedAt,
+                existing.externalId(), existing.connectionId(), existing.source(), existing.repositoryRef(),
+                existing.k8sCluster(), existing.k8sNamespace(), existing.k8sDeployment(),
+                existing.healthEndpoint(), existing.lastCommitAt(), existing.lastCommitSha()
         );
         historyRepository.save(toSnapshot(deleted, requestedBy));
         eventProducer.publishDeleted(existing, deletedAt);

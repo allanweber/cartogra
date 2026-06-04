@@ -1,14 +1,17 @@
 package io.cartogra.ingestion.application.usecase;
 
-import io.cartogra.ingestion.application.port.in.SyncCommandPayload;
+import io.cartogra.common.event.SyncCommandPayload;
+import io.cartogra.ingestion.application.port.out.CommitInfo;
 import io.cartogra.ingestion.application.port.out.OwnershipMap;
 import io.cartogra.ingestion.application.port.out.ScmConnectionConfig;
 import io.cartogra.ingestion.application.port.out.ScmProvider;
 import io.cartogra.ingestion.application.port.out.ScmProviderException;
 import io.cartogra.ingestion.application.port.out.ScmRepository;
+import io.cartogra.ingestion.application.port.out.ServiceDiscoveredPayload;
 import io.cartogra.ingestion.application.port.out.SyncJobRepository;
 import io.cartogra.ingestion.domain.SyncJob;
 import io.cartogra.ingestion.infrastructure.kafka.OwnershipResolvedProducer;
+import io.cartogra.ingestion.infrastructure.kafka.ServiceDiscoveredProducer;
 import io.cartogra.ingestion.infrastructure.kafka.SyncResultProducer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,6 +19,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -28,17 +32,23 @@ public class ExecuteSyncUseCaseImpl implements ExecuteSyncUseCase {
     private final SyncJobRepository syncJobRepository;
     private final SyncResultProducer resultProducer;
     private final OwnershipResolvedProducer ownershipProducer;
+    private final TechStackDetector techStackDetector;
+    private final ServiceDiscoveredProducer serviceDiscoveredProducer;
 
     public ExecuteSyncUseCaseImpl(
             List<ScmProvider> providers,
             SyncJobRepository syncJobRepository,
             SyncResultProducer resultProducer,
-            OwnershipResolvedProducer ownershipProducer) {
+            OwnershipResolvedProducer ownershipProducer,
+            TechStackDetector techStackDetector,
+            ServiceDiscoveredProducer serviceDiscoveredProducer) {
         this.providers = providers.stream()
                 .collect(Collectors.toMap(ScmProvider::providerType, Function.identity()));
         this.syncJobRepository = syncJobRepository;
         this.resultProducer = resultProducer;
         this.ownershipProducer = ownershipProducer;
+        this.techStackDetector = techStackDetector;
+        this.serviceDiscoveredProducer = serviceDiscoveredProducer;
     }
 
     @Override
@@ -73,6 +83,30 @@ public class ExecuteSyncUseCaseImpl implements ExecuteSyncUseCase {
             List<ScmRepository> repositories = provider.listRepositories(connectionConfig);
             for (ScmRepository repo : repositories) {
                 if (!repo.archived()) {
+                    try {
+                        List<String> techStack = techStackDetector.detect(provider, connectionConfig, repo);
+                        Optional<CommitInfo> commit = provider.getLastCommit(connectionConfig, repo);
+                        var payload = new ServiceDiscoveredPayload(
+                                command.tenantId(),
+                                command.connectionId(),
+                                command.providerType(),
+                                repo.fullPath(),
+                                repo.name(),
+                                repo.description(),
+                                repo.repositoryUrl(),
+                                repo.defaultBranch(),
+                                null, null, null,
+                                techStack,
+                                "UNKNOWN",
+                                null,
+                                commit.map(CommitInfo::committedAt).orElse(null),
+                                commit.map(CommitInfo::sha).orElse(null)
+                        );
+                        serviceDiscoveredProducer.publish(payload);
+                    } catch (Exception ex) {
+                        log.warn("Failed to publish service.discovered for repo={}: {}",
+                                repo.fullPath(), ex.getMessage());
+                    }
                     OwnershipMap ownership = provider.resolveOwnership(connectionConfig, repo);
                     ownershipProducer.publish(command.tenantId(), command.connectionId(), repo, ownership);
                 }

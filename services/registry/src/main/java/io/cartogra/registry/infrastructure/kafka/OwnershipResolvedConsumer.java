@@ -8,6 +8,7 @@ import io.cartogra.registry.application.usecase.AssignOwnerUseCase;
 import io.cartogra.registry.domain.Service;
 import io.cartogra.registry.domain.Team;
 import io.cartogra.registry.domain.event.OwnershipResolvedPayload;
+import io.cartogra.common.identity.SystemActors;
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
@@ -24,7 +25,6 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.stream.StreamSupport;
 
 @Component
@@ -46,7 +46,6 @@ public class OwnershipResolvedConsumer {
     };
 
     private static final Logger log = LoggerFactory.getLogger(OwnershipResolvedConsumer.class);
-    private static final UUID SYSTEM_ACTOR = UUID.fromString("00000000-0000-0000-0000-000000000000");
 
     private final ServiceRepository serviceRepository;
     private final TeamRepository teamRepository;
@@ -118,7 +117,7 @@ public class OwnershipResolvedConsumer {
         }
 
         assignOwnerUseCase.execute(new AssignOwnerCommand(
-                payload.tenantId(), service.id(), teamOpt.get().id(), SYSTEM_ACTOR));
+                payload.tenantId(), service.id(), teamOpt.get().id(), SystemActors.SYSTEM));
 
         log.info("ownership.resolved: assigned team={} to service={} via CODEOWNERS",
                 teamOpt.get().id(), service.id());

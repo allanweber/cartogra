@@ -247,3 +247,53 @@ curl "http://localhost:9090/api/v1/query?query=cartogra_jvm_memory_used_bytes"
 ```
 
 Open `http://localhost:3001` → Explore → Tempo Search to browse traces. Click any span to navigate to correlated Loki logs and RED metrics panels.
+
+## Service Auto-Discovery
+
+### Namespace label contract (Kubernetes)
+
+Cartogra discovers K8s Services in namespaces bearing the label:
+
+```yaml
+cartogra.io/tenant-id: <UUID>
+```
+
+Set this label on any namespace you want Cartogra to monitor:
+
+```bash
+kubectl label namespace my-app cartogra.io/tenant-id=<your-tenant-uuid>
+```
+
+The KubernetesWorker must be enabled (`ingestion.workers.k8s.enabled=true`) and a synthetic
+connection UUID must be configured (`ingestion.workers.k8s.connection-id=<UUID>`).
+
+### Health status mapping
+
+| Endpoints state                                      | Cartogra healthStatus |
+| ---------------------------------------------------- | --------------------- |
+| Resource absent or no subsets                        | UNKNOWN               |
+| All subsets have ready addresses only                | HEALTHY               |
+| Some subsets have both ready and not-ready addresses | DEGRADED              |
+| All subsets have only not-ready addresses            | UNHEALTHY             |
+
+### Tech-stack detection rules (SCM)
+
+Cartogra probes each non-archived repository via the SCM API for these files:
+
+| File                                          | Technology detected |
+| --------------------------------------------- | ------------------- |
+| `pom.xml`                                     | java                |
+| `pom.xml` containing `spring-boot`            | spring-boot         |
+| `build.gradle` or `build.gradle.kts`          | java                |
+| `build.gradle*` containing `spring-boot`      | spring-boot         |
+| `package.json`                                | javascript          |
+| `go.mod`                                      | go                  |
+| `Cargo.toml`                                  | rust                |
+| `requirements.txt`                            | python              |
+| `Dockerfile` FROM `eclipse-temurin:*`         | java                |
+| `Dockerfile` FROM `node:*`                    | javascript          |
+| `Dockerfile` FROM `python:*`                  | python              |
+| `Dockerfile` FROM `golang:*`                  | go                  |
+| `Dockerfile` FROM `rust:*`                    | rust                |
+
+Detection is additive: multiple signals result in a list (e.g., `["java","spring-boot"]`).

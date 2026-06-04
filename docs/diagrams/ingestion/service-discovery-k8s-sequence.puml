@@ -1,0 +1,33 @@
+@startuml
+title K8s Service Discovery — Watch → Kafka → Registry Upsert
+
+participant "KubernetesWorker" as KW
+participant "KubernetesClient\n(fabric8)" as KC
+queue "service.discovered\n(Kafka)" as KD
+participant "RegistryServiceDiscoveryConsumer" as RSDC
+participant "UpsertDiscoveredServiceUseCaseImpl" as Upsert
+database "services\n(Postgres)" as DB
+
+[-> KW: K8s Service ADDED/MODIFIED event
+
+KW -> KC: namespaces().withName(ns).get()
+KC --> KW: Namespace (with labels)
+note right: extract cartogra.io/tenant-id label\nskip if absent
+
+KW -> KC: endpoints().inNamespace(ns).withName(name).get()
+KC --> KW: Endpoints (ready/notReady counts)
+note right: map to HEALTHY/DEGRADED/UNHEALTHY/UNKNOWN
+
+KW -> KD: publish ServiceDiscoveredPayload\n(source=kubernetes, externalId=ns/name)
+
+KD -> RSDC: consume(EventEnvelope<ServiceDiscoveredPayload>)
+RSDC -> Upsert: execute(ServiceDiscoveryCommand)
+Upsert -> DB: findByExternalId(tenantId, ns/name)
+alt service absent
+  Upsert -> DB: INSERT services
+else service present
+  Upsert -> DB: UPDATE services SET healthStatus, ...
+end
+Upsert -> DB: INSERT services_history (snapshot)
+
+@enduml

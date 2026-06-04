@@ -786,6 +786,42 @@ components:
         updatedAt:
           type: string
           format: date-time
+        externalId:
+          type: string
+          nullable: true
+          description: Source-system stable key (e.g. org/repo for SCM, namespace/name for K8s)
+        connectionId:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID of the SCM or K8s connection that discovered this service
+        source:
+          type: string
+          nullable: true
+          description: Discovery source — "github", "azure_devops", or "kubernetes"
+        repositoryRef:
+          type: string
+          nullable: true
+          description: Default branch or ref of the SCM repository
+        k8sCluster:
+          type: string
+          nullable: true
+        k8sNamespace:
+          type: string
+          nullable: true
+        k8sDeployment:
+          type: string
+          nullable: true
+        healthEndpoint:
+          type: string
+          nullable: true
+        lastCommitAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastCommitSha:
+          type: string
+          nullable: true
 
     CreateServiceRequest:
       type: object

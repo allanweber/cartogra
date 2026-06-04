@@ -3,7 +3,7 @@ package io.cartogra.ingestion.infrastructure.kafka;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import io.cartogra.common.event.EventEnvelope;
-import io.cartogra.ingestion.application.port.in.SyncCommandPayload;
+import io.cartogra.common.event.SyncCommandPayload;
 import io.cartogra.ingestion.application.usecase.ExecuteSyncUseCase;
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
 import io.opentelemetry.context.Context;

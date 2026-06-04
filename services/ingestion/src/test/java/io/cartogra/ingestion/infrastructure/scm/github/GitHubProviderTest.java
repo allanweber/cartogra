@@ -85,7 +85,7 @@ class GitHubProviderTest {
                 .willReturn(okJson("{\"content\": \"" + encoded + "\"}")));
 
         var provider = new GitHubProvider();
-        var repo = new ScmRepository("1", "payments", "acme/payments", "main", false);
+        var repo = new ScmRepository("1", "payments", "acme/payments", "main", false, null, null);
         OwnershipMap map = provider.resolveOwnership(config("acme"), repo);
 
         assertThat(map.pathOwners()).containsKey("*");

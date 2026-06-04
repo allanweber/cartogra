@@ -1,11 +1,13 @@
 package io.cartogra.ingestion.infrastructure.scm.azuredevops;
 
+import io.cartogra.ingestion.application.port.out.CommitInfo;
 import io.cartogra.ingestion.application.port.out.ScmConnectionConfig;
 import io.cartogra.ingestion.application.port.out.ScmProviderException;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.web.client.RestClient;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -74,6 +76,37 @@ class AzureDevOpsRestClient {
                     })
                     .body(String.class);
             return Optional.ofNullable(content);
+        } catch (FileNotFoundException _) {
+            return Optional.empty();
+        }
+    }
+
+    Optional<CommitInfo> getLastCommit(String project, String repoName) {
+        try {
+            Map<String, Object> response = restClient.get()
+                    .uri("/{org}/{project}/_apis/git/repositories/{repo}/commits?$top=1&api-version=7.1",
+                            organization, project, repoName)
+                    .retrieve()
+                    .onStatus(status -> status.value() == 404, (req, res) -> {
+                        throw new FileNotFoundException();
+                    })
+                    .onStatus(HttpStatusCode::isError, (req, res) -> {
+                        throw new ScmProviderException("azuredevops",
+                                "AzDO API error fetching commits: " + res.getStatusCode());
+                    })
+                    .body(new ParameterizedTypeReference<>() {});
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> items = response != null
+                    ? (List<Map<String, Object>>) response.get("value") : null;
+            if (items == null || items.isEmpty()) return Optional.empty();
+            Map<String, Object> first = items.get(0);
+            String sha = Optional.ofNullable(first.get("commitId")).map(Object::toString).orElse(null);
+            String date = Optional.ofNullable(first.get("author"))
+                    .map(a -> ((Map<?, ?>) a).get("date"))
+                    .map(Object::toString)
+                    .orElse(null);
+            if (sha == null || date == null) return Optional.empty();
+            return Optional.of(new CommitInfo(Instant.parse(date), sha));
         } catch (FileNotFoundException _) {
             return Optional.empty();
         }

@@ -1,8 +1,8 @@
 package io.cartogra.ingestion.infrastructure.k8s;
 
+import io.cartogra.ingestion.infrastructure.kafka.ServiceDiscoveredProducer;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientBuilder;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,7 +19,7 @@ public class KubernetesWorkerConfig {
     @Bean
     public KubernetesWorker kubernetesWorker(
             KubernetesClient kubernetesClient,
-            @Value("${ingestion.workers.k8s.namespaces:default}") String namespaces) {
-        return new KubernetesWorker(kubernetesClient, namespaces);
+            ServiceDiscoveredProducer serviceDiscoveredProducer) {
+        return new KubernetesWorker(kubernetesClient, serviceDiscoveredProducer);
     }
 }

@@ -22,7 +22,17 @@ public final class ServiceMapper {
                 s.healthStatus().toDbValue(),
                 s.lastDeployedAt(),
                 s.createdAt(),
-                s.updatedAt()
+                s.updatedAt(),
+                s.externalId(),
+                s.connectionId(),
+                s.source(),
+                s.repositoryRef(),
+                s.k8sCluster(),
+                s.k8sNamespace(),
+                s.k8sDeployment(),
+                s.healthEndpoint(),
+                s.lastCommitAt(),
+                s.lastCommitSha()
         );
     }
 

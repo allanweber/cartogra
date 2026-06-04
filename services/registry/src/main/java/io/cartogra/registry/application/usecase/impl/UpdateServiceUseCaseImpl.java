@@ -60,7 +60,17 @@ public class UpdateServiceUseCaseImpl implements UpdateServiceUseCase {
                 existing.lastDeployedAt(),
                 existing.createdAt(),
                 Instant.now(),
-                null
+                null,
+                existing.externalId(),
+                existing.connectionId(),
+                existing.source(),
+                existing.repositoryRef(),
+                existing.k8sCluster(),
+                existing.k8sNamespace(),
+                existing.k8sDeployment(),
+                existing.healthEndpoint(),
+                existing.lastCommitAt(),
+                existing.lastCommitSha()
         );
 
         Service saved = serviceRepository.save(updated);

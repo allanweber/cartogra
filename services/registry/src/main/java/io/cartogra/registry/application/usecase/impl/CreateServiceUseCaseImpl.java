@@ -65,7 +65,8 @@ public class CreateServiceUseCaseImpl implements CreateServiceUseCase {
                 null,
                 now,
                 now,
-                null
+                null,
+                null, null, null, null, null, null, null, null, null, null
         );
 
         Service saved = serviceRepository.save(service);

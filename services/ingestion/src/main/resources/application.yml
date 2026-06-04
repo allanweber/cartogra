@@ -30,6 +30,9 @@ ingestion:
   sync:
     stale-timeout: PT30M
     reaper-interval: PT1M
+  workers:
+    k8s:
+      enabled: true
 
 server:
   port: 8085
