@@ -1,5 +1,6 @@
 package io.cartogra.ingestion.infrastructure.scm.github;
 
+import io.cartogra.ingestion.application.port.out.CommitInfo;
 import io.cartogra.ingestion.application.port.out.OwnershipMap;
 import io.cartogra.ingestion.application.port.out.ScmConnectionConfig;
 import io.cartogra.ingestion.application.port.out.ScmProvider;
@@ -31,9 +32,20 @@ public class GitHubProvider implements ScmProvider {
                         String.valueOf(r.get("name")),
                         String.valueOf(r.get("full_name")),
                         Optional.ofNullable(r.get("default_branch")).map(Object::toString).orElse("main"),
-                        Boolean.TRUE.equals(r.get("archived"))
+                        Boolean.TRUE.equals(r.get("archived")),
+                        Optional.ofNullable(r.get("description")).map(Object::toString).orElse(null),
+                        Optional.ofNullable(r.get("html_url")).map(Object::toString).orElse(null)
                 ))
                 .toList();
+    }
+
+    @Override
+    public Optional<CommitInfo> getLastCommit(ScmConnectionConfig config, ScmRepository repository) {
+        String[] parts = repository.fullPath().split("/", 2);
+        String owner = parts[0];
+        String repo = parts.length > 1 ? parts[1] : parts[0];
+        var client = new GitHubRestClient(config);
+        return client.getLastCommit(owner, repo);
     }
 
     @Override

@@ -1,5 +1,6 @@
 package io.cartogra.registry.infrastructure.jdbc;
 
+import io.cartogra.registry.application.dto.ServiceDiscoveryCommand;
 import io.cartogra.registry.application.dto.ServiceFilter;
 import io.cartogra.registry.application.repository.ServiceRepository;
 import io.cartogra.registry.domain.Service;
@@ -8,9 +9,11 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
+import tools.jackson.databind.ObjectMapper;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -20,9 +23,11 @@ import java.util.UUID;
 public class JdbcServiceRepository implements ServiceRepository {
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final ObjectMapper objectMapper;
 
-    public JdbcServiceRepository(NamedParameterJdbcTemplate jdbc) {
+    public JdbcServiceRepository(NamedParameterJdbcTemplate jdbc, ObjectMapper objectMapper) {
         this.jdbc = jdbc;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -87,23 +92,39 @@ public class JdbcServiceRepository implements ServiceRepository {
                 INSERT INTO services (
                     id, tenant_id, name, description, team_id, repository_url,
                     tech_stack, metadata, health_status, last_deployed_at,
-                    created_at, updated_at, deleted_at
+                    created_at, updated_at, deleted_at,
+                    external_id, connection_id, source, repository_ref,
+                    k8s_cluster, k8s_namespace, k8s_deployment, health_endpoint,
+                    last_commit_at, last_commit_sha
                 ) VALUES (
                     :id, :tenantId, :name, :description, :teamId, :repositoryUrl,
                     :techStack, CAST(:metadata AS JSONB), :healthStatus, :lastDeployedAt,
-                    :createdAt, :updatedAt, :deletedAt
+                    :createdAt, :updatedAt, :deletedAt,
+                    :externalId, :connectionId, :source, :repositoryRef,
+                    :k8sCluster, :k8sNamespace, :k8sDeployment, :healthEndpoint,
+                    :lastCommitAt, :lastCommitSha
                 )
                 ON CONFLICT (id) DO UPDATE SET
-                    name            = EXCLUDED.name,
-                    description     = EXCLUDED.description,
-                    team_id         = EXCLUDED.team_id,
-                    repository_url  = EXCLUDED.repository_url,
-                    tech_stack      = EXCLUDED.tech_stack,
-                    metadata        = EXCLUDED.metadata,
-                    health_status   = EXCLUDED.health_status,
+                    name             = EXCLUDED.name,
+                    description      = EXCLUDED.description,
+                    team_id          = EXCLUDED.team_id,
+                    repository_url   = EXCLUDED.repository_url,
+                    tech_stack       = EXCLUDED.tech_stack,
+                    metadata         = EXCLUDED.metadata,
+                    health_status    = EXCLUDED.health_status,
                     last_deployed_at = EXCLUDED.last_deployed_at,
-                    updated_at      = EXCLUDED.updated_at,
-                    deleted_at      = EXCLUDED.deleted_at
+                    updated_at       = EXCLUDED.updated_at,
+                    deleted_at       = EXCLUDED.deleted_at,
+                    external_id      = EXCLUDED.external_id,
+                    connection_id    = EXCLUDED.connection_id,
+                    source           = EXCLUDED.source,
+                    repository_ref   = EXCLUDED.repository_ref,
+                    k8s_cluster      = EXCLUDED.k8s_cluster,
+                    k8s_namespace    = EXCLUDED.k8s_namespace,
+                    k8s_deployment   = EXCLUDED.k8s_deployment,
+                    health_endpoint  = EXCLUDED.health_endpoint,
+                    last_commit_at   = EXCLUDED.last_commit_at,
+                    last_commit_sha  = EXCLUDED.last_commit_sha
                 RETURNING *
                 """;
         return jdbc.queryForObject(sql, toParams(service), SERVICE_MAPPER);
@@ -150,6 +171,108 @@ public class JdbcServiceRepository implements ServiceRepository {
         return count != null && count > 0;
     }
 
+    @Override
+    public Optional<Service> findByExternalId(UUID tenantId, String externalId) {
+        String sql = """
+                SELECT * FROM services
+                WHERE tenant_id = :tenantId AND external_id = :externalId AND deleted_at IS NULL
+                """;
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("externalId", externalId);
+        return jdbc.query(sql, params, SERVICE_MAPPER).stream().findFirst();
+    }
+
+    @Override
+    public Service upsertDiscovered(ServiceDiscoveryCommand command) {
+        String techStackJson = serializeTechStack(command.techStack());
+        Instant now = Instant.now();
+
+        // First try by externalId (the discovery key). If that misses, fall back to name so a
+        // service created manually before discovery was enabled gets claimed rather than duplicated.
+        Optional<Service> existing = findByExternalId(command.tenantId(), command.externalId());
+        if (existing.isEmpty()) {
+            existing = findByName(command.tenantId(), command.name());
+        }
+        if (existing.isPresent()) {
+            Service current = existing.get();
+            var updated = new Service(
+                    current.id(),
+                    current.tenantId(),
+                    current.name(),
+                    command.description() != null ? command.description() : current.description(),
+                    current.teamId(),
+                    command.repositoryUrl() != null ? command.repositoryUrl() : current.repositoryUrl(),
+                    !command.techStack().isEmpty() ? techStackJson : current.techStack(),
+                    current.metadata(),
+                    ServiceHealthStatus.fromString(command.healthStatus()),
+                    current.lastDeployedAt(),
+                    current.createdAt(),
+                    now,
+                    null,
+                    current.externalId(),
+                    command.connectionId(),
+                    command.source(),
+                    command.repositoryRef() != null ? command.repositoryRef() : current.repositoryRef(),
+                    command.k8sCluster() != null ? command.k8sCluster() : current.k8sCluster(),
+                    command.k8sNamespace() != null ? command.k8sNamespace() : current.k8sNamespace(),
+                    command.k8sDeployment() != null ? command.k8sDeployment() : current.k8sDeployment(),
+                    command.healthEndpoint() != null ? command.healthEndpoint() : current.healthEndpoint(),
+                    command.lastCommitAt() != null ? command.lastCommitAt() : current.lastCommitAt(),
+                    command.lastCommitSha() != null ? command.lastCommitSha() : current.lastCommitSha()
+            );
+            return save(updated);
+        }
+
+        var newService = new Service(
+                UUID.randomUUID(),
+                command.tenantId(),
+                command.name(),
+                command.description(),
+                null,
+                command.repositoryUrl(),
+                techStackJson,
+                null,
+                ServiceHealthStatus.fromString(command.healthStatus()),
+                null,
+                now,
+                now,
+                null,
+                command.externalId(),
+                command.connectionId(),
+                command.source(),
+                command.repositoryRef(),
+                command.k8sCluster(),
+                command.k8sNamespace(),
+                command.k8sDeployment(),
+                command.healthEndpoint(),
+                command.lastCommitAt(),
+                command.lastCommitSha()
+        );
+        return save(newService);
+    }
+
+    private Optional<Service> findByName(UUID tenantId, String name) {
+        String sql = """
+                SELECT * FROM services
+                WHERE tenant_id = :tenantId AND lower(name) = lower(:name) AND deleted_at IS NULL
+                LIMIT 1
+                """;
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("name", name);
+        return jdbc.query(sql, params, SERVICE_MAPPER).stream().findFirst();
+    }
+
+    private String serializeTechStack(List<String> techStack) {
+        if (techStack == null || techStack.isEmpty()) return null;
+        try {
+            return objectMapper.writeValueAsString(techStack);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private void applyFilter(StringBuilder sql, MapSqlParameterSource params, ServiceFilter filter) {
         if (filter.teamId() != null) {
             sql.append(" AND team_id = :teamId");
@@ -183,7 +306,17 @@ public class JdbcServiceRepository implements ServiceRepository {
                 .addValue("lastDeployedAt", s.lastDeployedAt() != null ? java.sql.Timestamp.from(s.lastDeployedAt()) : null)
                 .addValue("createdAt", java.sql.Timestamp.from(s.createdAt()))
                 .addValue("updatedAt", java.sql.Timestamp.from(s.updatedAt()))
-                .addValue("deletedAt", s.deletedAt() != null ? java.sql.Timestamp.from(s.deletedAt()) : null);
+                .addValue("deletedAt", s.deletedAt() != null ? java.sql.Timestamp.from(s.deletedAt()) : null)
+                .addValue("externalId", s.externalId())
+                .addValue("connectionId", s.connectionId())
+                .addValue("source", s.source())
+                .addValue("repositoryRef", s.repositoryRef())
+                .addValue("k8sCluster", s.k8sCluster())
+                .addValue("k8sNamespace", s.k8sNamespace())
+                .addValue("k8sDeployment", s.k8sDeployment())
+                .addValue("healthEndpoint", s.healthEndpoint())
+                .addValue("lastCommitAt", s.lastCommitAt() != null ? java.sql.Timestamp.from(s.lastCommitAt()) : null)
+                .addValue("lastCommitSha", s.lastCommitSha());
     }
 
     private static final RowMapper<Service> SERVICE_MAPPER = (rs, _) -> mapService(rs);
@@ -202,7 +335,17 @@ public class JdbcServiceRepository implements ServiceRepository {
                 rs.getTimestamp("last_deployed_at") != null ? rs.getTimestamp("last_deployed_at").toInstant() : null,
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant(),
-                rs.getTimestamp("deleted_at") != null ? rs.getTimestamp("deleted_at").toInstant() : null
+                rs.getTimestamp("deleted_at") != null ? rs.getTimestamp("deleted_at").toInstant() : null,
+                rs.getString("external_id"),
+                rs.getString("connection_id") != null ? UUID.fromString(rs.getString("connection_id")) : null,
+                rs.getString("source"),
+                rs.getString("repository_ref"),
+                rs.getString("k8s_cluster"),
+                rs.getString("k8s_namespace"),
+                rs.getString("k8s_deployment"),
+                rs.getString("health_endpoint"),
+                rs.getTimestamp("last_commit_at") != null ? rs.getTimestamp("last_commit_at").toInstant() : null,
+                rs.getString("last_commit_sha")
         );
     }
 }

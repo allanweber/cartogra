@@ -2,7 +2,7 @@ package io.cartogra.ingestion.infrastructure.kafka;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import io.cartogra.common.event.EventEnvelope;
-import io.cartogra.ingestion.application.port.in.SyncCommandPayload;
+import io.cartogra.common.event.SyncCommandPayload;
 import io.cartogra.test.PostgresTestSupport;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;

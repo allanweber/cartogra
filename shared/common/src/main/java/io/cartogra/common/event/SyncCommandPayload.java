@@ -1,4 +1,4 @@
-package io.cartogra.ingestion.application.port.in;
+package io.cartogra.common.event;
 
 import java.util.Map;
 import java.util.UUID;

@@ -1,11 +1,13 @@
 package io.cartogra.ingestion.infrastructure.scm.github;
 
+import io.cartogra.ingestion.application.port.out.CommitInfo;
 import io.cartogra.ingestion.application.port.out.ScmConnectionConfig;
 import io.cartogra.ingestion.application.port.out.ScmProviderException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.web.client.RestClient;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -58,6 +60,34 @@ class GitHubRestClient {
                     .map(r -> r.get("content"))
                     .map(Object::toString)
                     .map(GitHubRestClient::decodeBase64);
+        } catch (FileNotFoundException _) {
+            return Optional.empty();
+        }
+    }
+
+    Optional<CommitInfo> getLastCommit(String owner, String repo) {
+        try {
+            List<Map<String, Object>> commits = restClient.get()
+                    .uri("/repos/{owner}/{repo}/commits?per_page=1", owner, repo)
+                    .retrieve()
+                    .onStatus(status -> status.value() == 404, (req, res) -> {
+                        throw new FileNotFoundException();
+                    })
+                    .onStatus(HttpStatusCode::isError, (req, res) -> {
+                        throw new ScmProviderException("github",
+                                "GitHub API error fetching commits: " + res.getStatusCode());
+                    })
+                    .body(new org.springframework.core.ParameterizedTypeReference<>() {});
+            if (commits == null || commits.isEmpty()) return Optional.empty();
+            Map<String, Object> first = commits.get(0);
+            String sha = Optional.ofNullable(first.get("sha")).map(Object::toString).orElse(null);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> commit = (Map<String, Object>) first.get("commit");
+            @SuppressWarnings("unchecked")
+            Map<String, Object> committer = commit != null ? (Map<String, Object>) commit.get("committer") : null;
+            String date = committer != null ? Optional.ofNullable(committer.get("date")).map(Object::toString).orElse(null) : null;
+            if (sha == null || date == null) return Optional.empty();
+            return Optional.of(new CommitInfo(Instant.parse(date), sha));
         } catch (FileNotFoundException _) {
             return Optional.empty();
         }

@@ -11,5 +11,7 @@ public interface ScmProvider {
 
     Optional<String> getFileContents(ScmConnectionConfig config, String repoPath, String filePath);
 
+    Optional<CommitInfo> getLastCommit(ScmConnectionConfig config, ScmRepository repository);
+
     OwnershipMap resolveOwnership(ScmConnectionConfig config, ScmRepository repository);
 }

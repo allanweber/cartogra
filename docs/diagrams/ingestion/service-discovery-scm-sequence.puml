@@ -1,0 +1,46 @@
+@startuml
+title SCM Service Discovery — Sync → Kafka → Registry Upsert
+
+actor "Sync trigger" as Trigger
+participant "ExecuteSyncUseCaseImpl" as Sync
+participant "ScmProvider\n(GitHub/ADO)" as SCM
+participant "TechStackDetector" as TSD
+participant "ServiceDiscoveredProducer" as SDP
+participant "OwnershipResolvedProducer" as ORP
+queue "service.discovered\n(Kafka)" as KD
+queue "ownership.resolved\n(Kafka)" as KO
+participant "RegistryServiceDiscoveryConsumer" as RSDC
+participant "UpsertDiscoveredServiceUseCaseImpl" as Upsert
+database "services\n(Postgres)" as DB
+
+Trigger -> Sync: execute(SyncCommandPayload)
+Sync -> SCM: listRepositories(config)
+SCM --> Sync: [ScmRepository...]
+
+loop each non-archived repo
+  Sync -> TSD: detect(provider, config, repo)
+  TSD -> SCM: getFileContents(pom.xml)\ngetFileContents(Dockerfile)\n...
+  SCM --> TSD: file contents
+  TSD --> Sync: List<String> techStack
+
+  Sync -> SCM: getLastCommit(config, repo)
+  SCM --> Sync: Optional<CommitInfo>
+
+  Sync -> SDP: publish(ServiceDiscoveredPayload)
+  SDP -> KD: ProducerRecord(key=fullPath)
+
+  Sync -> ORP: publish(ownership)
+  ORP -> KO: ProducerRecord
+end
+
+KD -> RSDC: consume(EventEnvelope<ServiceDiscoveredPayload>)
+RSDC -> Upsert: execute(ServiceDiscoveryCommand)
+Upsert -> DB: findByExternalId(tenantId, externalId)
+alt service absent
+  Upsert -> DB: INSERT services
+else service present
+  Upsert -> DB: UPDATE services SET techStack, healthStatus, ...
+end
+Upsert -> DB: INSERT services_history (snapshot)
+
+@enduml

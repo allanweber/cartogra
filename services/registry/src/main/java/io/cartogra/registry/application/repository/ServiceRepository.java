@@ -1,5 +1,6 @@
 package io.cartogra.registry.application.repository;
 
+import io.cartogra.registry.application.dto.ServiceDiscoveryCommand;
 import io.cartogra.registry.application.dto.ServiceFilter;
 import io.cartogra.registry.domain.Service;
 
@@ -24,4 +25,8 @@ public interface ServiceRepository {
     boolean existsByName(UUID tenantId, String name, UUID excludeId);
 
     Optional<Service> findByRepositoryPath(UUID tenantId, String repositoryPath);
+
+    Optional<Service> findByExternalId(UUID tenantId, String externalId);
+
+    Service upsertDiscovered(ServiceDiscoveryCommand command);
 }

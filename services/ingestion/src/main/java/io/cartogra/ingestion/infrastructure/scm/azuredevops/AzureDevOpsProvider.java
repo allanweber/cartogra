@@ -1,5 +1,6 @@
 package io.cartogra.ingestion.infrastructure.scm.azuredevops;
 
+import io.cartogra.ingestion.application.port.out.CommitInfo;
 import io.cartogra.ingestion.application.port.out.OwnershipMap;
 import io.cartogra.ingestion.application.port.out.ScmConnectionConfig;
 import io.cartogra.ingestion.application.port.out.ScmProvider;
@@ -36,11 +37,22 @@ public class AzureDevOpsProvider implements ScmProvider {
                                     .map(Object::toString)
                                     .map(b -> b.replace("refs/heads/", ""))
                                     .orElse("main"),
-                            false
+                            false,
+                            null,
+                            Optional.ofNullable(r.get("remoteUrl")).map(Object::toString).orElse(null)
                     ))
                     .forEach(repositories::add);
         }
         return repositories;
+    }
+
+    @Override
+    public Optional<CommitInfo> getLastCommit(ScmConnectionConfig config, ScmRepository repository) {
+        String[] parts = repository.fullPath().split("/", 2);
+        String project = parts[0];
+        String repoName = parts.length > 1 ? parts[1] : parts[0];
+        var client = new AzureDevOpsRestClient(config);
+        return client.getLastCommit(project, repoName);
     }
 
     @Override

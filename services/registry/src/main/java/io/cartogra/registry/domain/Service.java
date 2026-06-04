@@ -1,5 +1,7 @@
 package io.cartogra.registry.domain;
 
+import org.jspecify.annotations.Nullable;
+
 import java.time.Instant;
 import java.util.UUID;
 
@@ -7,16 +9,27 @@ public record Service(
         UUID id,
         UUID tenantId,
         String name,
-        String description,
-        UUID teamId,
-        String repositoryUrl,
-        String techStack,
-        String metadata,
+        @Nullable String description,
+        @Nullable UUID teamId,
+        @Nullable String repositoryUrl,
+        @Nullable String techStack,
+        @Nullable String metadata,
         ServiceHealthStatus healthStatus,
-        Instant lastDeployedAt,
+        @Nullable Instant lastDeployedAt,
         Instant createdAt,
         Instant updatedAt,
-        Instant deletedAt
+        @Nullable Instant deletedAt,
+        // discovery fields — null for manually-created services
+        @Nullable String externalId,
+        @Nullable UUID connectionId,
+        @Nullable String source,
+        @Nullable String repositoryRef,
+        @Nullable String k8sCluster,
+        @Nullable String k8sNamespace,
+        @Nullable String k8sDeployment,
+        @Nullable String healthEndpoint,
+        @Nullable Instant lastCommitAt,
+        @Nullable String lastCommitSha
 ) {
     public boolean isOrphaned() {
         return teamId == null;
