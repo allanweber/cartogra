@@ -3,6 +3,7 @@ package io.cartogra.registry.application.usecase.impl;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import io.cartogra.registry.application.dto.UpdateServiceCommand;
+import io.cartogra.registry.application.port.HealthEndpointValidator;
 import io.cartogra.registry.application.repository.ServiceHistoryRepository;
 import io.cartogra.registry.application.repository.ServiceRepository;
 import io.cartogra.registry.application.usecase.UpdateServiceUseCase;
@@ -25,15 +26,18 @@ public class UpdateServiceUseCaseImpl implements UpdateServiceUseCase {
     private final ServiceHistoryRepository historyRepository;
     private final ObjectMapper objectMapper;
     private final ServiceLifecycleEventProducer eventProducer;
+    private final HealthEndpointValidator healthEndpointValidator;
 
     public UpdateServiceUseCaseImpl(ServiceRepository serviceRepository,
                                     ServiceHistoryRepository historyRepository,
                                     ObjectMapper objectMapper,
-                                    ServiceLifecycleEventProducer eventProducer) {
+                                    ServiceLifecycleEventProducer eventProducer,
+                                    HealthEndpointValidator healthEndpointValidator) {
         this.serviceRepository = serviceRepository;
         this.historyRepository = historyRepository;
         this.objectMapper = objectMapper;
         this.eventProducer = eventProducer;
+        this.healthEndpointValidator = healthEndpointValidator;
     }
 
     @Override
@@ -45,6 +49,9 @@ public class UpdateServiceUseCaseImpl implements UpdateServiceUseCase {
         if (!existing.name().equalsIgnoreCase(command.name())
                 && serviceRepository.existsByName(command.tenantId(), command.name(), command.serviceId())) {
             throw new DuplicateServiceNameException(command.name());
+        }
+        if (command.healthEndpoint() != null) {
+            healthEndpointValidator.validate(command.healthEndpoint());
         }
 
         var updated = new Service(
@@ -68,9 +75,10 @@ public class UpdateServiceUseCaseImpl implements UpdateServiceUseCase {
                 existing.k8sCluster(),
                 existing.k8sNamespace(),
                 existing.k8sDeployment(),
-                existing.healthEndpoint(),
+                command.healthEndpoint() != null ? command.healthEndpoint() : existing.healthEndpoint(),
                 existing.lastCommitAt(),
-                existing.lastCommitSha()
+                existing.lastCommitSha(),
+                existing.healthCheckedAt()
         );
 
         Service saved = serviceRepository.save(updated);

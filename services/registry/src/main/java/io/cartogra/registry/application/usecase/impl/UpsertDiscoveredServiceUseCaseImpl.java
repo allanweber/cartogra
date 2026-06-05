@@ -3,6 +3,7 @@ package io.cartogra.registry.application.usecase.impl;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import io.cartogra.registry.application.dto.ServiceDiscoveryCommand;
+import io.cartogra.registry.application.port.HealthEndpointValidator;
 import io.cartogra.registry.application.repository.ServiceHistoryRepository;
 import io.cartogra.registry.application.repository.ServiceRepository;
 import io.cartogra.registry.application.usecase.UpsertDiscoveredServiceUseCase;
@@ -21,18 +22,24 @@ public class UpsertDiscoveredServiceUseCaseImpl implements UpsertDiscoveredServi
     private final ServiceRepository serviceRepository;
     private final ServiceHistoryRepository historyRepository;
     private final ObjectMapper objectMapper;
+    private final HealthEndpointValidator healthEndpointValidator;
 
     public UpsertDiscoveredServiceUseCaseImpl(ServiceRepository serviceRepository,
                                                ServiceHistoryRepository historyRepository,
-                                               ObjectMapper objectMapper) {
+                                               ObjectMapper objectMapper,
+                                               HealthEndpointValidator healthEndpointValidator) {
         this.serviceRepository = serviceRepository;
         this.historyRepository = historyRepository;
         this.objectMapper = objectMapper;
+        this.healthEndpointValidator = healthEndpointValidator;
     }
 
     @Override
     @Transactional
     public Service execute(ServiceDiscoveryCommand command) {
+        if (command.healthEndpoint() != null) {
+            healthEndpointValidator.validate(command.healthEndpoint());
+        }
         Service saved = serviceRepository.upsertDiscovered(command);
         historyRepository.save(toSnapshot(saved));
         return saved;

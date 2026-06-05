@@ -32,7 +32,8 @@ public final class ServiceMapper {
                 s.k8sDeployment(),
                 s.healthEndpoint(),
                 s.lastCommitAt(),
-                s.lastCommitSha()
+                s.lastCommitSha(),
+                s.healthCheckedAt()
         );
     }
 

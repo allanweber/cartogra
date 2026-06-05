@@ -29,7 +29,8 @@ public record Service(
         @Nullable String k8sDeployment,
         @Nullable String healthEndpoint,
         @Nullable Instant lastCommitAt,
-        @Nullable String lastCommitSha
+        @Nullable String lastCommitSha,
+        @Nullable Instant healthCheckedAt
 ) {
     public boolean isOrphaned() {
         return teamId == null;

@@ -14,8 +14,8 @@ import tools.jackson.databind.ObjectMapper;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -95,36 +95,37 @@ public class JdbcServiceRepository implements ServiceRepository {
                     created_at, updated_at, deleted_at,
                     external_id, connection_id, source, repository_ref,
                     k8s_cluster, k8s_namespace, k8s_deployment, health_endpoint,
-                    last_commit_at, last_commit_sha
+                    last_commit_at, last_commit_sha, health_checked_at
                 ) VALUES (
                     :id, :tenantId, :name, :description, :teamId, :repositoryUrl,
                     :techStack, CAST(:metadata AS JSONB), :healthStatus, :lastDeployedAt,
                     :createdAt, :updatedAt, :deletedAt,
                     :externalId, :connectionId, :source, :repositoryRef,
                     :k8sCluster, :k8sNamespace, :k8sDeployment, :healthEndpoint,
-                    :lastCommitAt, :lastCommitSha
+                    :lastCommitAt, :lastCommitSha, :healthCheckedAt
                 )
                 ON CONFLICT (id) DO UPDATE SET
-                    name             = EXCLUDED.name,
-                    description      = EXCLUDED.description,
-                    team_id          = EXCLUDED.team_id,
-                    repository_url   = EXCLUDED.repository_url,
-                    tech_stack       = EXCLUDED.tech_stack,
-                    metadata         = EXCLUDED.metadata,
-                    health_status    = EXCLUDED.health_status,
-                    last_deployed_at = EXCLUDED.last_deployed_at,
-                    updated_at       = EXCLUDED.updated_at,
-                    deleted_at       = EXCLUDED.deleted_at,
-                    external_id      = EXCLUDED.external_id,
-                    connection_id    = EXCLUDED.connection_id,
-                    source           = EXCLUDED.source,
-                    repository_ref   = EXCLUDED.repository_ref,
-                    k8s_cluster      = EXCLUDED.k8s_cluster,
-                    k8s_namespace    = EXCLUDED.k8s_namespace,
-                    k8s_deployment   = EXCLUDED.k8s_deployment,
-                    health_endpoint  = EXCLUDED.health_endpoint,
-                    last_commit_at   = EXCLUDED.last_commit_at,
-                    last_commit_sha  = EXCLUDED.last_commit_sha
+                    name               = EXCLUDED.name,
+                    description        = EXCLUDED.description,
+                    team_id            = EXCLUDED.team_id,
+                    repository_url     = EXCLUDED.repository_url,
+                    tech_stack         = EXCLUDED.tech_stack,
+                    metadata           = EXCLUDED.metadata,
+                    health_status      = EXCLUDED.health_status,
+                    last_deployed_at   = EXCLUDED.last_deployed_at,
+                    updated_at         = EXCLUDED.updated_at,
+                    deleted_at         = EXCLUDED.deleted_at,
+                    external_id        = EXCLUDED.external_id,
+                    connection_id      = EXCLUDED.connection_id,
+                    source             = EXCLUDED.source,
+                    repository_ref     = EXCLUDED.repository_ref,
+                    k8s_cluster        = EXCLUDED.k8s_cluster,
+                    k8s_namespace      = EXCLUDED.k8s_namespace,
+                    k8s_deployment     = EXCLUDED.k8s_deployment,
+                    health_endpoint    = EXCLUDED.health_endpoint,
+                    last_commit_at     = EXCLUDED.last_commit_at,
+                    last_commit_sha    = EXCLUDED.last_commit_sha,
+                    health_checked_at  = EXCLUDED.health_checked_at
                 RETURNING *
                 """;
         return jdbc.queryForObject(sql, toParams(service), SERVICE_MAPPER);
@@ -219,7 +220,8 @@ public class JdbcServiceRepository implements ServiceRepository {
                     command.k8sDeployment() != null ? command.k8sDeployment() : current.k8sDeployment(),
                     command.healthEndpoint() != null ? command.healthEndpoint() : current.healthEndpoint(),
                     command.lastCommitAt() != null ? command.lastCommitAt() : current.lastCommitAt(),
-                    command.lastCommitSha() != null ? command.lastCommitSha() : current.lastCommitSha()
+                    command.lastCommitSha() != null ? command.lastCommitSha() : current.lastCommitSha(),
+                    current.healthCheckedAt()
             );
             return save(updated);
         }
@@ -247,9 +249,37 @@ public class JdbcServiceRepository implements ServiceRepository {
                 command.k8sDeployment(),
                 command.healthEndpoint(),
                 command.lastCommitAt(),
-                command.lastCommitSha()
+                command.lastCommitSha(),
+                null
         );
         return save(newService);
+    }
+
+    @Override
+    public List<Service> findAllWithHealthEndpoint() {
+        String sql = """
+                SELECT * FROM services
+                WHERE health_endpoint IS NOT NULL
+                  AND source IS DISTINCT FROM 'kubernetes'
+                  AND deleted_at IS NULL
+                """;
+        return jdbc.query(sql, Map.of(), SERVICE_MAPPER);
+    }
+
+    @Override
+    public void updateHealth(UUID tenantId, UUID id, ServiceHealthStatus status, Instant checkedAt) {
+        String sql = """
+                UPDATE services
+                SET health_status = :healthStatus,
+                    health_checked_at = :checkedAt,
+                    updated_at = :checkedAt
+                WHERE tenant_id = :tenantId AND id = :id AND deleted_at IS NULL
+                """;
+        jdbc.update(sql, new MapSqlParameterSource()
+                .addValue("healthStatus", status.toDbValue())
+                .addValue("checkedAt", java.sql.Timestamp.from(checkedAt))
+                .addValue("tenantId", tenantId)
+                .addValue("id", id));
     }
 
     private Optional<Service> findByName(UUID tenantId, String name) {
@@ -316,7 +346,8 @@ public class JdbcServiceRepository implements ServiceRepository {
                 .addValue("k8sDeployment", s.k8sDeployment())
                 .addValue("healthEndpoint", s.healthEndpoint())
                 .addValue("lastCommitAt", s.lastCommitAt() != null ? java.sql.Timestamp.from(s.lastCommitAt()) : null)
-                .addValue("lastCommitSha", s.lastCommitSha());
+                .addValue("lastCommitSha", s.lastCommitSha())
+                .addValue("healthCheckedAt", s.healthCheckedAt() != null ? java.sql.Timestamp.from(s.healthCheckedAt()) : null);
     }
 
     private static final RowMapper<Service> SERVICE_MAPPER = (rs, _) -> mapService(rs);
@@ -345,7 +376,8 @@ public class JdbcServiceRepository implements ServiceRepository {
                 rs.getString("k8s_deployment"),
                 rs.getString("health_endpoint"),
                 rs.getTimestamp("last_commit_at") != null ? rs.getTimestamp("last_commit_at").toInstant() : null,
-                rs.getString("last_commit_sha")
+                rs.getString("last_commit_sha"),
+                rs.getTimestamp("health_checked_at") != null ? rs.getTimestamp("health_checked_at").toInstant() : null
         );
     }
 }

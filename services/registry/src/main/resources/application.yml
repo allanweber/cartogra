@@ -31,6 +31,20 @@ spring:
 server:
   port: 8081
 
+registry:
+  health:
+    probe-interval: ${REGISTRY_HEALTH_PROBE_INTERVAL:PT60S}
+    probe-timeout: ${REGISTRY_HEALTH_PROBE_TIMEOUT:PT5S}
+    allow-http-endpoints: ${REGISTRY_HEALTH_ALLOW_HTTP_ENDPOINTS:false}
+    # Allow health endpoints on private IP ranges (10/8, 172.16/12, 192.168/16, fc00::/7).
+    # Set true for self-hosted deployments where probed services live on the same private network.
+    # Loopback (127/8, ::1) and link-local (169.254/16) are always blocked regardless of this flag.
+    allow-private-endpoints: ${REGISTRY_HEALTH_ALLOW_PRIVATE_ENDPOINTS:false}
+    # Comma-separated CIDR allowlist for private addresses when allow-private-endpoints is false.
+    # Example: 10.0.0.0/8,172.16.0.0/12
+    # Ignored when allow-private-endpoints=true (all private ranges are already permitted).
+    allowed-cidrs: ${REGISTRY_HEALTH_ALLOWED_CIDRS:}
+
 management:
   endpoints:
     web:

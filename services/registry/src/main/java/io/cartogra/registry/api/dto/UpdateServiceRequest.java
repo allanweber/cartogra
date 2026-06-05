@@ -9,5 +9,6 @@ public record UpdateServiceRequest(
         String repositoryUrl,
         String techStack,
         String metadata,
-        String healthStatus
+        String healthStatus,
+        String healthEndpoint
 ) {}

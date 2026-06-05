@@ -11,5 +11,6 @@ public record CreateServiceRequest(
         UUID teamId,
         String repositoryUrl,
         String techStack,
-        String metadata
+        String metadata,
+        String healthEndpoint
 ) {}
