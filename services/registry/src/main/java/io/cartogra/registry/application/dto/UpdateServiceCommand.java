@@ -11,5 +11,6 @@ public record UpdateServiceCommand(
         String techStack,
         String metadata,
         String healthStatus,
-        UUID requestedBy
+        UUID requestedBy,
+        String healthEndpoint
 ) {}

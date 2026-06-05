@@ -3,7 +3,9 @@ package io.cartogra.registry.application.repository;
 import io.cartogra.registry.application.dto.ServiceDiscoveryCommand;
 import io.cartogra.registry.application.dto.ServiceFilter;
 import io.cartogra.registry.domain.Service;
+import io.cartogra.registry.domain.ServiceHealthStatus;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -29,4 +31,9 @@ public interface ServiceRepository {
     Optional<Service> findByExternalId(UUID tenantId, String externalId);
 
     Service upsertDiscovered(ServiceDiscoveryCommand command);
+
+    /** Cross-tenant query; excludes K8s-sourced services and deleted rows. */
+    List<Service> findAllWithHealthEndpoint();
+
+    void updateHealth(UUID tenantId, UUID id, ServiceHealthStatus status, Instant checkedAt);
 }

@@ -1,5 +1,5 @@
 @startuml registry-er-diagram
-title Registry Service — Entity-Relationship Diagram (V001–V007)
+title Registry Service — Entity-Relationship Diagram (V001–V012)
 
 skinparam linetype ortho
 skinparam entityBackgroundColor #F8F8FF
@@ -40,6 +40,35 @@ entity "users" {
   * created_at : TIMESTAMPTZ
   * updated_at : TIMESTAMPTZ
   ~ deleted_at : TIMESTAMPTZ
+  .. V010 password reset ..
+  ~ password_reset_token : TEXT
+  ~ password_reset_token_exp : TIMESTAMPTZ
+}
+
+entity "refresh_tokens" {
+  * id : UUID <<PK>>
+  --
+  * tenant_id : UUID <<tenant>>
+  * user_id : UUID <<FK>>
+  * token_hash : TEXT (UNIQUE)
+  * issued_at : TIMESTAMPTZ
+  * expires_at : TIMESTAMPTZ
+  ~ revoked_at : TIMESTAMPTZ
+  * created_at : TIMESTAMPTZ
+  ~ deleted_at : TIMESTAMPTZ
+}
+
+entity "tenant_oidc_configs" {
+  * id : UUID <<PK>>
+  --
+  * tenant_id : UUID (UNIQUE)
+  * discovery_uri : TEXT
+  * client_id : TEXT
+  * client_secret : TEXT
+  * enabled : BOOLEAN
+  * created_at : TIMESTAMPTZ
+  * updated_at : TIMESTAMPTZ
+  ~ deleted_at : TIMESTAMPTZ
 }
 
 entity "scm_connections" {
@@ -68,6 +97,19 @@ entity "services" {
   * created_at : TIMESTAMPTZ
   * updated_at : TIMESTAMPTZ
   ~ deleted_at : TIMESTAMPTZ
+  .. V011 discovery fields ..
+  ~ external_id : TEXT
+  ~ connection_id : UUID <<FK>>
+  ~ source : TEXT
+  ~ repository_ref : TEXT
+  ~ k8s_cluster : TEXT
+  ~ k8s_namespace : TEXT
+  ~ k8s_deployment : TEXT
+  ~ health_endpoint : TEXT
+  ~ last_commit_at : TIMESTAMPTZ
+  ~ last_commit_sha : TEXT
+  .. V012 health probe ..
+  ~ health_checked_at : TIMESTAMPTZ
 }
 
 entity "services_history" {
@@ -100,9 +142,12 @@ entity "scm_webhooks" {
 
 teams }o--|| tenants : "tenant_id"
 users }o--|| tenants : "tenant_id"
+refresh_tokens }o--|| users : "user_id"
 scm_connections }o--|| tenants : "tenant_id"
+tenant_oidc_configs }o--|| tenants : "tenant_id (1:1)"
 services }o--|| tenants : "tenant_id"
 services }o--o| teams : "team_id (nullable = orphan)"
+services }o--o| scm_connections : "connection_id (nullable)"
 services_history }o--|| services : "service_id"
 services_history }o--o| users : "changed_by (nullable = system)"
 scm_webhooks }o--|| scm_connections : "scm_connection_id"
@@ -111,18 +156,27 @@ note bottom of services
   UNIQUE INDEX on (tenant_id, lower(name)) WHERE deleted_at IS NULL
   GIN INDEX on tech_stack, metadata
   GIN INDEX on to_tsvector(name || description)
-  health_status: healthy | degraded | unknown
+  Partial INDEX on (tenant_id) WHERE health_endpoint IS NOT NULL
+    AND source IS DISTINCT FROM 'kubernetes' AND deleted_at IS NULL
+  health_status: healthy | degraded | unhealthy | probe_auth_failed | unknown
+  source: manual | github | azure_devops | kubernetes
 end note
 
 note bottom of services_history
   Append-only — no UPDATE or DELETE
-  One row per mutation (create/update/delete/assign)
+  One row per mutation (create/update/delete/assign/health-transition)
   snapshot = full Service JSON at point-in-time
+  changed_by = NULL means system actor (e.g. health probe scheduler)
 end note
 
 note bottom of scm_webhooks
   status: active | inactive | error
   provider: github | azure_devops
+end note
+
+note bottom of refresh_tokens
+  token_hash is bcrypt/SHA-256 of the raw token
+  Unique index on token_hash WHERE revoked_at IS NULL AND deleted_at IS NULL
 end note
 
 @enduml

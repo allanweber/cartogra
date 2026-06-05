@@ -10,5 +10,6 @@ public record CreateServiceCommand(
         String repositoryUrl,
         String techStack,
         String metadata,
-        UUID requestedBy
+        UUID requestedBy,
+        String healthEndpoint
 ) {}

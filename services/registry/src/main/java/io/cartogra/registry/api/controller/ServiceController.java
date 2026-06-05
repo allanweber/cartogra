@@ -54,7 +54,8 @@ public class ServiceController {
             @Valid @RequestBody CreateServiceRequest req) {
         String traceId = Span.current().getSpanContext().getTraceId();
         var cmd = new CreateServiceCommand(tenantId, req.name(), req.description(),
-                req.teamId(), req.repositoryUrl(), req.techStack(), req.metadata(), userId);
+                req.teamId(), req.repositoryUrl(), req.techStack(), req.metadata(), userId,
+                req.healthEndpoint());
         var result = ServiceMapper.toResponse(createService.execute(cmd));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .header("X-Trace-Id", traceId)
@@ -113,7 +114,8 @@ public class ServiceController {
             @Valid @RequestBody UpdateServiceRequest req) {
         String traceId = Span.current().getSpanContext().getTraceId();
         var cmd = new UpdateServiceCommand(tenantId, id, req.name(), req.description(),
-                req.repositoryUrl(), req.techStack(), req.metadata(), req.healthStatus(), userId);
+                req.repositoryUrl(), req.techStack(), req.metadata(), req.healthStatus(), userId,
+                req.healthEndpoint());
         var result = ServiceMapper.toResponse(updateService.execute(cmd));
         return ResponseEntity.ok()
                 .header("X-Trace-Id", traceId)

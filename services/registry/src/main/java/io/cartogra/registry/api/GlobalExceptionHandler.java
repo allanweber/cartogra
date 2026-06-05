@@ -5,6 +5,7 @@ import io.cartogra.common.api.ApiErrorResponse;
 import io.cartogra.common.api.ErrorCodes;
 import io.cartogra.registry.domain.exception.DuplicateServiceNameException;
 import io.cartogra.registry.domain.exception.DuplicateTeamNameException;
+import io.cartogra.registry.domain.exception.InvalidHealthEndpointException;
 import io.cartogra.registry.domain.exception.ScmConnectionNotFoundException;
 import io.cartogra.registry.domain.exception.ServiceNotFoundException;
 import io.cartogra.registry.domain.exception.TeamNotFoundException;
@@ -13,6 +14,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -53,6 +55,14 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .header("X-Trace-Id", traceId)
                 .body(new ApiErrorResponse(ApiError.of(ErrorCodes.NOT_FOUND, ex.getMessage()), traceId));
+    }
+
+    @ExceptionHandler(InvalidHealthEndpointException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidHealthEndpoint(InvalidHealthEndpointException ex) {
+        String traceId = Span.current().getSpanContext().getTraceId();
+        return ResponseEntity.status(HttpStatusCode.valueOf(422))
+                .header("X-Trace-Id", traceId)
+                .body(new ApiErrorResponse(ApiError.of(ErrorCodes.INVALID_HEALTH_ENDPOINT, ex.getMessage()), traceId));
     }
 
     @ExceptionHandler(DuplicateServiceNameException.class)

@@ -58,7 +58,8 @@ public class AssignOwnerUseCaseImpl implements AssignOwnerUseCase {
                 Instant.now(), null,
                 existing.externalId(), existing.connectionId(), existing.source(), existing.repositoryRef(),
                 existing.k8sCluster(), existing.k8sNamespace(), existing.k8sDeployment(),
-                existing.healthEndpoint(), existing.lastCommitAt(), existing.lastCommitSha()
+                existing.healthEndpoint(), existing.lastCommitAt(), existing.lastCommitSha(),
+                existing.healthCheckedAt()
         );
 
         Service saved = serviceRepository.save(updated);

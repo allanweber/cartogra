@@ -775,7 +775,7 @@ components:
           description: Serialized service metadata
         healthStatus:
           type: string
-          enum: [healthy, degraded, unknown]
+          enum: [healthy, degraded, unhealthy, probe_auth_failed, unknown]
         lastDeployedAt:
           type: string
           format: date-time
@@ -822,6 +822,11 @@ components:
         lastCommitSha:
           type: string
           nullable: true
+        healthCheckedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp of the last health probe execution; null until first probe runs
 
     CreateServiceRequest:
       type: object
@@ -842,6 +847,10 @@ components:
           type: string
         metadata:
           type: string
+        healthEndpoint:
+          type: string
+          nullable: true
+          description: Optional URL for health probing; validated for SSRF on save
 
     UpdateServiceRequest:
       type: object
@@ -865,8 +874,12 @@ components:
           nullable: true
         healthStatus:
           type: string
-          enum: [healthy, degraded, unknown]
+          enum: [healthy, degraded, unhealthy, probe_auth_failed, unknown]
           nullable: true
+        healthEndpoint:
+          type: string
+          nullable: true
+          description: Optional URL for health probing; validated for SSRF on save
 
     AssignOwnerRequest:
       type: object

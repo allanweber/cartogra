@@ -3,6 +3,7 @@ package io.cartogra.registry.application.usecase.impl;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import io.cartogra.registry.application.dto.CreateServiceCommand;
+import io.cartogra.registry.application.port.HealthEndpointValidator;
 import io.cartogra.registry.application.repository.ServiceHistoryRepository;
 import io.cartogra.registry.application.repository.ServiceRepository;
 import io.cartogra.registry.application.repository.TeamRepository;
@@ -27,17 +28,20 @@ public class CreateServiceUseCaseImpl implements CreateServiceUseCase {
     private final TeamRepository teamRepository;
     private final ObjectMapper objectMapper;
     private final ServiceLifecycleEventProducer eventProducer;
+    private final HealthEndpointValidator healthEndpointValidator;
 
     public CreateServiceUseCaseImpl(ServiceRepository serviceRepository,
                                     ServiceHistoryRepository historyRepository,
                                     TeamRepository teamRepository,
                                     ObjectMapper objectMapper,
-                                    ServiceLifecycleEventProducer eventProducer) {
+                                    ServiceLifecycleEventProducer eventProducer,
+                                    HealthEndpointValidator healthEndpointValidator) {
         this.serviceRepository = serviceRepository;
         this.historyRepository = historyRepository;
         this.teamRepository = teamRepository;
         this.objectMapper = objectMapper;
         this.eventProducer = eventProducer;
+        this.healthEndpointValidator = healthEndpointValidator;
     }
 
     @Override
@@ -49,6 +53,9 @@ public class CreateServiceUseCaseImpl implements CreateServiceUseCase {
         if (command.teamId() != null) {
             teamRepository.findById(command.tenantId(), command.teamId())
                     .orElseThrow(() -> new TeamNotFoundException(command.teamId()));
+        }
+        if (command.healthEndpoint() != null) {
+            healthEndpointValidator.validate(command.healthEndpoint());
         }
 
         Instant now = Instant.now();
@@ -66,7 +73,7 @@ public class CreateServiceUseCaseImpl implements CreateServiceUseCase {
                 now,
                 now,
                 null,
-                null, null, null, null, null, null, null, null, null, null
+                null, null, null, null, null, null, null, command.healthEndpoint(), null, null, null
         );
 
         Service saved = serviceRepository.save(service);
