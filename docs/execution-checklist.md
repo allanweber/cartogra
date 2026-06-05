@@ -288,6 +288,7 @@ Each task carries an ID of the form `{phase}.{sequence}` (e.g. `0.3`, `1.17`). S
 
 ### Dashboard
 
+- [ ] 2.12a [CODE] Authenticated health endpoints. Extend `services` table with an optional `health_endpoint_bearer_token` column (AES-GCM encrypted at rest, key from env var `REGISTRY_HEALTH_TOKEN_ENCRYPTION_KEY`). `RestClientHealthChecker` injects `Authorization: Bearer <decrypted-token>` when the column is non-null. Semantics: no credential configured → 401/403 stays `PROBE_AUTH_FAILED` (established in 1.56); credential configured → 401/403 maps to `UNHEALTHY` (credential was rejected). `PATCH /v1/services/{id}` accepts optional `healthEndpointBearerToken`; stored encrypted, never returned in API responses. ITs cover: no token → 401 → `PROBE_AUTH_FAILED`; valid token → 200 → `HEALTHY`; wrong token → 401 → `UNHEALTHY`.
 - [ ] 2.13 [UI] Dashboard wired to real APIs. Service health summary via `GET /api/registry/v1/services` (count + health breakdown); top risks via `GET /api/topology/v1/risks?limit=4&severity=critical`; recent activity via `GET /api/registry/v1/audit-events?limit=5`. Remove all `MOCK_*` imports. Vitest covers loading/error/empty states.
 
 ### Observability, perf, docs, audit
