@@ -64,7 +64,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (isAllowed(clientIp, isAuthPath)) {
             filterChain.doFilter(request, response);
         } else {
-            write429(response);
+            write429(response, isAuthPath);
         }
     }
 
@@ -90,13 +90,16 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
     }
 
-    private void write429(HttpServletResponse response) throws IOException {
+    private void write429(HttpServletResponse response, boolean isAuthPath) throws IOException {
         String traceId = traceContext.currentTraceId();
+        long replenishRate = isAuthPath ? props.authReplenishRate() : props.defaultReplenishRate();
+        long retryAfter = Math.max(1L, (long) Math.ceil(1.0 / replenishRate));
         ApiErrorResponse body = new ApiErrorResponse(
             ApiError.of("RATE_LIMITED", "Too many requests"), traceId);
         response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setHeader("X-Trace-Id", traceId);
+        response.setHeader("Retry-After", String.valueOf(retryAfter));
         response.getOutputStream().write(objectMapper.writeValueAsBytes(body));
     }
 }

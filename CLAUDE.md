@@ -182,3 +182,17 @@ All three need **immediate comprehension**. Complex data; the interface must not
 3. **Progressive disclosure** — Primary views show health signals; drill-down surfaces root cause.
 4. **Semantic color only** — Color carries meaning, never mood. Brand accent used sparingly (primary actions, active states, focus rings).
 5. **Expert density** — Engineers read terminals. Short labels, tight spacing, no hand-holding copy.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as local markdown files under `.scratch/<feature-slug>/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Multi-context layout — `CONTEXT-MAP.md` at root points to per-service `CONTEXT.md` files; system-wide ADRs in `docs/adr/`. See `docs/agents/domain.md`.

@@ -17,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Instant;
 import java.util.List;
@@ -44,12 +45,12 @@ class LoginUseCaseTest {
 
     private final UUID userId = UUID.randomUUID();
     private final UUID tenantId = UUID.randomUUID();
-    private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+    private final PasswordEncoder encoder = new BCryptPasswordEncoder();
 
     @BeforeEach
     void setUp() {
         JwtConfig config = new JwtConfig("secret", 900L, 2592000L);
-        useCase = new LoginUseCaseImpl(userRepository, refreshTokenRepository, jwtTokenProvider, config);
+        useCase = new LoginUseCaseImpl(userRepository, refreshTokenRepository, jwtTokenProvider, config, encoder);
     }
 
     private User verifiedUser(String password) {

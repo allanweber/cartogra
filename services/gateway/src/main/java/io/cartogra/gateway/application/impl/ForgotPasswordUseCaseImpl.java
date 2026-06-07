@@ -6,6 +6,7 @@ import io.cartogra.gateway.infrastructure.email.EmailSender;
 import io.cartogra.gateway.infrastructure.jdbc.UserRepository;
 import org.springframework.stereotype.Service;
 
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -14,6 +15,7 @@ import java.util.concurrent.Executors;
 @Service
 public class ForgotPasswordUseCaseImpl implements ForgotPasswordUseCase {
 
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final ExecutorService emailExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
     private final UserRepository userRepository;
@@ -49,6 +51,6 @@ public class ForgotPasswordUseCaseImpl implements ForgotPasswordUseCase {
     }
 
     private String generateToken() {
-        return String.format("%06d", (int) (Math.random() * 1_000_000));
+        return String.format("%06d", SECURE_RANDOM.nextInt(1_000_000));
     }
 }

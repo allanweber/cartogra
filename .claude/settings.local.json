@@ -13,7 +13,12 @@
       "Bash(./gradlew :services:registry:test --tests \"io.cartogra.registry.infrastructure.scheduled.HealthProbeSchedulerIT\" --no-daemon)",
       "Bash(./gradlew :services:registry:test --tests \"io.cartogra.registry.infrastructure.scheduled.HealthProbeSchedulerIT.http200TransitionsToHealthy\" --no-daemon)",
       "Bash(Remove-Item *)",
-      "Bash(chmod +x *)"
+      "Bash(chmod +x *)",
+      "Bash(New-Item -ItemType Directory -Force \".scratch/1.61-password-reset/issues\")",
+      "Bash(Out-Null)",
+      "Bash(Write-Output \"created\")",
+      "Bash(./gradlew :services:gateway:compileJava *)",
+      "Bash(./gradlew :services:gateway:test *)"
     ]
   }
 }

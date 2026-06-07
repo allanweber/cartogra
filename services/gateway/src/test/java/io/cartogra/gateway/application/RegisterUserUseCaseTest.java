@@ -14,6 +14,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.UUID;
 
@@ -39,10 +41,11 @@ class RegisterUserUseCaseTest {
     private RegisterUserUseCaseImpl useCase;
 
     private final UUID fixedTenantId = UUID.randomUUID();
+    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     @BeforeEach
     void setUp() {
-        useCase = new RegisterUserUseCaseImpl(userRepository, tenantRepository, emailSender);
+        useCase = new RegisterUserUseCaseImpl(userRepository, tenantRepository, emailSender, passwordEncoder);
         when(tenantRepository.save(any(Tenant.class)))
             .thenReturn(new Tenant(fixedTenantId, fixedTenantId, "name", "slug", "free", null, null, null));
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
