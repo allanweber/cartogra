@@ -80,6 +80,9 @@ function LoginPage() {
   }
 
   function handleOAuth(provider: 'github' | 'google') {
+    if (redirectTo) {
+      sessionStorage.setItem('pendingRedirect', redirectTo)
+    }
     const apiBase = import.meta.env.VITE_API_BASE_URL ?? ''
     window.location.href = `${apiBase}/api/auth/oauth/${provider}/start`
   }

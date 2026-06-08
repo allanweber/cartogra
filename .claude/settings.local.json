@@ -18,7 +18,10 @@
       "Bash(Out-Null)",
       "Bash(Write-Output \"created\")",
       "Bash(./gradlew :services:gateway:compileJava *)",
-      "Bash(./gradlew :services:gateway:test *)"
+      "Bash(./gradlew :services:gateway:test *)",
+      "Bash(pnpm test *)",
+      "Bash(pnpm typecheck *)",
+      "Bash(pnpm list *)"
     ]
   }
 }

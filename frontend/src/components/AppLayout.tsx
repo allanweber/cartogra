@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
 import {
   Activity,
@@ -387,6 +388,7 @@ function UserMenu({ collapsed }: { collapsed: boolean }) {
   const user = useAuthStore((s) => s.user)
   const clearAuth = useAuthStore((s) => s.clearAuth)
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const initials = user?.email
     ? user.email.slice(0, 2).toUpperCase()
@@ -398,6 +400,7 @@ function UserMenu({ collapsed }: { collapsed: boolean }) {
     } catch {
       // proceed even if the server call fails
     }
+    queryClient.removeQueries({ queryKey: ['session'] })
     clearSessionCookie()
     clearAuth()
     navigate({ to: '/login' })

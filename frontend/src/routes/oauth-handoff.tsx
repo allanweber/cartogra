@@ -34,7 +34,9 @@ function OAuthHandoffPage() {
     apiFetch<unknown>(`/auth/oauth/callback?code=${encodeURIComponent(code)}`)
       .then(() => {
         queryClient.removeQueries({ queryKey: ['session'] })
-        navigate({ to: '/dashboard' })
+        const destination = sessionStorage.getItem('pendingRedirect')
+        sessionStorage.removeItem('pendingRedirect')
+        navigate({ to: destination ?? '/dashboard' })
       })
       .catch((err) => {
         if (err instanceof ApiError) {

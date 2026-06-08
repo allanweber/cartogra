@@ -9,11 +9,6 @@ import { nitro } from 'nitro/vite'
 
 const config = defineConfig({
   resolve: { tsconfigPaths: true },
-test: {
-    environment: 'happy-dom',
-    setupFiles: ['./src/test/setup.ts'],
-    passWithNoTests: true,
-  },
   plugins: [
     devtools(),
     nitro({ rollupConfig: { external: [/^@sentry\//] } }),
