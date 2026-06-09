@@ -1,6 +1,8 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { Route } from '#/routes/oauth-handoff'
+import { apiFetch, ApiError } from '#/lib/api'
 
 const navigateMock = vi.fn()
 const oauthParams: { code?: string; state?: string; error?: string } = {}
@@ -17,7 +19,7 @@ vi.mock('@tanstack/react-router', async () => ({
 
 vi.mock('#/lib/api', () => ({
   apiFetch: vi.fn(),
-  ApiError: class ApiError extends Error {
+  ApiError: class extends Error {
     code: string
     traceId: string
     constructor(code: string, message: string, traceId: string) {
@@ -28,11 +30,7 @@ vi.mock('#/lib/api', () => ({
   },
 }))
 
-import { Route } from '#/routes/oauth-handoff'
-import { apiFetch, ApiError } from '#/lib/api'
-
 function renderPage() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const Page = (Route as any).component
   return render(
     <QueryClientProvider client={new QueryClient()}>

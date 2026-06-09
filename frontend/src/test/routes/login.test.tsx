@@ -1,6 +1,8 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { Route } from '#/routes/login'
+import { apiMutate, ApiError } from '#/lib/api'
 
 const navigateMock = vi.fn()
 const searchParams: { redirect?: string; error?: string } = {}
@@ -16,7 +18,7 @@ vi.mock('@tanstack/react-router', async () => ({
 
 vi.mock('#/lib/api', () => ({
   apiMutate: vi.fn(),
-  ApiError: class ApiError extends Error {
+  ApiError: class extends Error {
     code: string
     traceId: string
     constructor(code: string, message: string, traceId: string) {
@@ -33,11 +35,7 @@ vi.mock('#/lib/session', () => ({ writeSessionCookie: vi.fn() }))
 const JWT_PAYLOAD = btoa(JSON.stringify({ sub: 'u1', tid: 't1', email: 'a@b.com', roles: ['user'] }))
 const MOCK_TOKEN = `header.${JWT_PAYLOAD}.sig`
 
-import { Route } from '#/routes/login'
-import { apiMutate, ApiError } from '#/lib/api'
-
 function renderPage() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const Page = (Route as any).component
   return render(
     <QueryClientProvider client={new QueryClient()}>

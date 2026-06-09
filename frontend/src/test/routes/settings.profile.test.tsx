@@ -1,5 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { Route } from '#/routes/_authenticated/settings.profile'
+import { apiMutate, ApiError } from '#/lib/api'
 
 const mockNavigate = vi.fn()
 
@@ -25,7 +27,7 @@ vi.mock('#/stores/useAuthStore', () => ({
 }))
 
 vi.mock('#/lib/api', () => ({
-  ApiError: class ApiError extends Error {
+  ApiError: class extends Error {
     code: string
     traceId: string
     constructor(code: string, message: string, traceId: string) {
@@ -37,13 +39,9 @@ vi.mock('#/lib/api', () => ({
   apiMutate: vi.fn(),
 }))
 
-import { Route } from '#/routes/_authenticated/settings.profile'
-import { apiMutate, ApiError } from '#/lib/api'
-
 const mockApiMutate = vi.mocked(apiMutate)
 
 function renderPage() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const Page = (Route as any).component
   return render(<Page />)
 }
@@ -135,7 +133,6 @@ describe('ProfilePage', () => {
 
   it('shows error alert with traceId when save fails', async () => {
     mockUser.mockReturnValue({ name: 'Alice', email: 'alice@example.com', authProvider: 'local', roles: ['ADMIN'] })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockApiMutate.mockRejectedValueOnce(new ApiError('SERVER_ERROR', 'Something went wrong', 'abc123'))
 
     renderPage()
@@ -151,7 +148,6 @@ describe('ProfilePage', () => {
 
   it('shows conflict error when email is already in use', async () => {
     mockUser.mockReturnValue({ name: 'Alice', email: 'alice@example.com', authProvider: 'local', roles: ['ADMIN'] })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockApiMutate.mockRejectedValueOnce(new ApiError('CONFLICT', 'Email is already in use.', 'trace999'))
 
     renderPage()

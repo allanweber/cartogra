@@ -1,5 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { Route } from '#/routes/forgot-password'
+import { apiMutate, ApiError } from '#/lib/api'
 
 const navigateMock = vi.fn()
 
@@ -14,7 +16,7 @@ vi.mock('@tanstack/react-router', async () => ({
 
 vi.mock('#/lib/api', () => ({
   apiMutate: vi.fn(),
-  ApiError: class ApiError extends Error {
+  ApiError: class extends Error {
     code: string
     traceId: string
     constructor(code: string, message: string, traceId: string) {
@@ -25,11 +27,7 @@ vi.mock('#/lib/api', () => ({
   },
 }))
 
-import { Route } from '#/routes/forgot-password'
-import { apiMutate, ApiError } from '#/lib/api'
-
 function renderPage() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const Page = (Route as any).component
   return render(<Page />)
 }
