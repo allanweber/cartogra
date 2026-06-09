@@ -54,7 +54,7 @@ class LoginUseCaseTest {
     }
 
     private User verifiedUser(String password) {
-        return new User(userId, tenantId, "user@test.com", "local", null,
+        return new User(userId, tenantId, "user@test.com", null, "local", null,
             encoder.encode(password), true, List.of("VIEWER"), null, null,
             null, null, Instant.now(), Instant.now(), null);
     }
@@ -97,7 +97,7 @@ class LoginUseCaseTest {
 
     @Test
     void unverifiedUserThrowsUnverifiedEmailException() {
-        User unverified = new User(userId, tenantId, "user@test.com", "local", null,
+        User unverified = new User(userId, tenantId, "user@test.com", null, "local", null,
             encoder.encode("password123"), false, List.of("VIEWER"), "123456",
             Instant.now().plusSeconds(900), null, null, Instant.now(), Instant.now(), null);
         when(userRepository.findByEmail("user@test.com"))
@@ -109,7 +109,7 @@ class LoginUseCaseTest {
 
     @Test
     void softDeletedUserThrowsUnauthorized() {
-        User deleted = new User(userId, tenantId, "user@test.com", "local", null,
+        User deleted = new User(userId, tenantId, "user@test.com", null, "local", null,
             encoder.encode("password123"), true, List.of("VIEWER"), null, null,
             null, null, Instant.now(), Instant.now(), Instant.now());
         when(userRepository.findByEmail("user@test.com"))

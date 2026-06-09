@@ -34,7 +34,7 @@ class JwtAuthFilterTest {
 
     private final UUID userId = UUID.randomUUID();
     private final UUID tenantId = UUID.randomUUID();
-    private final JwtClaims claims = new JwtClaims(userId, tenantId, "user@test.com", List.of("VIEWER"), null);
+    private final JwtClaims claims = new JwtClaims(userId, tenantId, "user@test.com", null, "local", List.of("VIEWER"), null);
 
     @BeforeEach
     void setUp() {

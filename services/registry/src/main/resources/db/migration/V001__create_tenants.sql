@@ -1,12 +1,12 @@
 CREATE TABLE tenants (
-    id          UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-    tenant_id   UUID        NOT NULL,
-    name        TEXT        NOT NULL,
-    slug        TEXT        NOT NULL UNIQUE,
-    plan        TEXT        NOT NULL DEFAULT 'free',
+    id          UUID          NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+    tenant_id   UUID          NOT NULL,
+    name        VARCHAR(255)  NOT NULL,
+    slug        VARCHAR(255)  NOT NULL UNIQUE,
+    plan        VARCHAR(50)   NOT NULL DEFAULT 'free',
     metadata    JSONB,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),
     deleted_at  TIMESTAMPTZ
 );
 

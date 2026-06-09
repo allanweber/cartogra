@@ -33,6 +33,7 @@ public class AuthController {
     private final LogoutUseCase logout;
     private final ForgotPasswordUseCase forgotPassword;
     private final ResetPasswordUseCase resetPassword;
+    private final UpdateUserInfoUseCase updateUserInfo;
     private final TraceContext traceContext;
 
     public AuthController(RegisterUserUseCase registerUser,
@@ -43,6 +44,7 @@ public class AuthController {
                           LogoutUseCase logout,
                           ForgotPasswordUseCase forgotPassword,
                           ResetPasswordUseCase resetPassword,
+                          UpdateUserInfoUseCase updateUserInfo,
                           TraceContext traceContext) {
         this.registerUser = registerUser;
         this.verifyEmail = verifyEmail;
@@ -52,6 +54,7 @@ public class AuthController {
         this.logout = logout;
         this.forgotPassword = forgotPassword;
         this.resetPassword = resetPassword;
+        this.updateUserInfo = updateUserInfo;
         this.traceContext = traceContext;
     }
 
@@ -158,12 +161,33 @@ public class AuthController {
         UserInfoResponse info = new UserInfoResponse(
             principal.getClaims().userId(),
             principal.getClaims().email(),
+            principal.getClaims().name(),
+            principal.getClaims().authProvider(),
             principal.getClaims().tenantId(),
             principal.getClaims().roles()
         );
         return ResponseEntity.ok()
             .header("X-Trace-Id", traceId)
             .body(new ApiResponse<>(info, traceId));
+    }
+
+    @PutMapping("/userinfo")
+    public ResponseEntity<ApiResponse<UserInfoResponse>> updateUserinfo(
+            @Valid @RequestBody UpdateUserInfoRequest request,
+            HttpServletResponse response) {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (!(auth instanceof JwtAuthentication principal)) {
+            throw new UnauthorizedException("Authentication required");
+        }
+        String traceId = traceContext.currentTraceId();
+        UpdateUserInfoResult result = updateUserInfo.execute(principal.getClaims().userId(), request.name(), request.email());
+        response.addHeader(HttpHeaders.SET_COOKIE,
+            ResponseCookie.from(COOKIE_JWT, result.accessToken())
+                .httpOnly(true).secure(true).sameSite("Lax").path("/")
+                .maxAge(result.expiresIn()).build().toString());
+        return ResponseEntity.ok()
+            .header("X-Trace-Id", traceId)
+            .body(new ApiResponse<>(result.userInfo(), traceId));
     }
 
     private void setAuthCookies(HttpServletResponse response, TokenResponse tokens) {

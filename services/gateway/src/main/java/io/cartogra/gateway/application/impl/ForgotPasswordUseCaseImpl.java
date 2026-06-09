@@ -39,9 +39,9 @@ public class ForgotPasswordUseCaseImpl implements ForgotPasswordUseCase {
             String token = generateToken();
             Instant exp = Instant.now().plusSeconds(900);
 
-            User updated = new User(user.id(), user.tenantId(), user.email(), user.authProvider(),
-                user.authSubject(), user.passwordHash(), user.emailVerified(), user.roles(),
-                user.emailVerificationToken(), user.emailVerificationTokenExp(),
+            User updated = new User(user.id(), user.tenantId(), user.email(), user.name(),
+                user.authProvider(), user.authSubject(), user.passwordHash(), user.emailVerified(),
+                user.roles(), user.emailVerificationToken(), user.emailVerificationTokenExp(),
                 token, exp,
                 user.createdAt(), user.updatedAt(), user.deletedAt());
             userRepository.save(updated);

@@ -8,6 +8,7 @@ public record User(
     UUID id,
     UUID tenantId,
     String email,
+    String name,
     String authProvider,
     String authSubject,
     String passwordHash,

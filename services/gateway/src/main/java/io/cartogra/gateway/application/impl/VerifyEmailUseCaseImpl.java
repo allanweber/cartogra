@@ -30,8 +30,8 @@ public class VerifyEmailUseCaseImpl implements VerifyEmailUseCase {
             throw new InvalidOtpException("Verification token has expired");
         }
 
-        User verified = new User(user.id(), user.tenantId(), user.email(), user.authProvider(),
-            user.authSubject(), user.passwordHash(), true, user.roles(),
+        User verified = new User(user.id(), user.tenantId(), user.email(), user.name(),
+            user.authProvider(), user.authSubject(), user.passwordHash(), true, user.roles(),
             null, null, user.passwordResetToken(), user.passwordResetTokenExp(),
             user.createdAt(), user.updatedAt(), user.deletedAt());
         userRepository.save(verified);

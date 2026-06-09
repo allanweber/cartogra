@@ -59,7 +59,8 @@ public class LoginUseCaseImpl implements LoginUseCase {
         }
 
         JwtClaims claims = new JwtClaims(user.id(), user.tenantId(), user.email(),
-            user.roles(), Instant.now().plusSeconds(jwtConfig.accessTokenExpirySeconds()));
+            user.name(), user.authProvider(), user.roles(),
+            Instant.now().plusSeconds(jwtConfig.accessTokenExpirySeconds()));
         String accessToken = jwtTokenProvider.issueAccessToken(claims);
         String rawRefresh = jwtTokenProvider.issueRefreshToken();
         String refreshHash = sha256(rawRefresh);

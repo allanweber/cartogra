@@ -5,6 +5,8 @@ import type { AuthUser } from '#/stores/useAuthStore'
 const testUser: AuthUser = {
   id: 'user-1',
   email: 'test@example.com',
+  name: null,
+  authProvider: 'local',
   tenantId: 'tenant-1',
   roles: ['user'],
 }

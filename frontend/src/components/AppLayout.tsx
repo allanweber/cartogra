@@ -15,6 +15,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  UserRound,
   Moon,
   Search,
   Settings,
@@ -424,7 +425,14 @@ function UserMenu({ collapsed }: { collapsed: boolean }) {
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="right" align="end" className="w-44">
-          <DropdownMenuLabel className="truncate text-xs text-muted-foreground">{user?.email}</DropdownMenuLabel>
+          <DropdownMenuLabel className="truncate text-xs text-muted-foreground">{user?.name ?? user?.email }</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem asChild>
+            <Link to="/settings/profile" className="flex cursor-pointer items-center gap-2">
+              <UserRound className="size-4" />
+              Profile
+            </Link>
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive">
             <LogOut className="size-4" />
@@ -441,14 +449,21 @@ function UserMenu({ collapsed }: { collapsed: boolean }) {
         <button className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-sidebar-accent">
           {avatar}
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">{user?.email ?? '—'}</p>
+            <p className="truncate text-sm font-medium">{user?.name ?? user?.email ?? '—'}</p>
             <p className="truncate text-xs text-muted-foreground capitalize">{user?.roles[0] ?? 'user'}</p>
           </div>
           <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-52">
-        <DropdownMenuLabel className="truncate text-xs text-muted-foreground">{user?.email}</DropdownMenuLabel>
+        <DropdownMenuLabel className="truncate text-xs text-muted-foreground">{user?.name ?? user?.email}</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link to="/settings/profile" className="flex cursor-pointer items-center gap-2">
+            <UserRound className="size-4" />
+            Profile
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive">
           <LogOut className="size-4" />

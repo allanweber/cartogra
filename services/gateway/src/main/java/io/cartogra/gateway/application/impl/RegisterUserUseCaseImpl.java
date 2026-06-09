@@ -60,7 +60,7 @@ public class RegisterUserUseCaseImpl implements RegisterUserUseCase {
         Instant otpExp = Instant.now().plusSeconds(900);
         String hash = passwordEncoder.encode(request.password());
 
-        User user = new User(null, tenant.id(), request.email(), "local", null, hash,
+        User user = new User(null, tenant.id(), request.email(), null, "local", null, hash,
             false, List.of("ADMIN"), otp, otpExp, null, null, null, null, null);
         userRepository.save(user);
 

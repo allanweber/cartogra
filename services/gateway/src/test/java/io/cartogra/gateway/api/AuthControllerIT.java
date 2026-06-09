@@ -11,9 +11,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.UUID;
 
+import jakarta.servlet.http.Cookie;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 class AuthControllerIT extends AbstractGatewayIT {
@@ -121,6 +124,31 @@ class AuthControllerIT extends AbstractGatewayIT {
     }
 
     @Test
+    void getUserinfo_localAuthUser_returnsNullNameAndLocalProvider() throws Exception {
+        UUID tenantId = insertTenant();
+        String email = "userinfo-" + UUID.randomUUID() + "@test.com";
+        insertVerifiedUser(tenantId, email, "Pass1!");
+
+        String loginBody = mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"%s","password":"Pass1!","tenantId":"%s"}
+                    """.formatted(email, tenantId)))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+
+        String accessToken = JsonPath.read(loginBody, "$.data.accessToken");
+
+        mockMvc.perform(get("/api/auth/userinfo")
+                .cookie(new Cookie("jwt", accessToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.authProvider").value("local"))
+            .andExpect(jsonPath("$.data.name").value(org.hamcrest.Matchers.nullValue()))
+            .andExpect(jsonPath("$.data.email").value(email))
+            .andExpect(jsonPath("$.traceId").isNotEmpty());
+    }
+
+    @Test
     void passwordResetHappyPath() throws Exception {
         UUID tenantId = insertTenant();
         String email = "reset-happy-" + UUID.randomUUID() + "@test.com";
@@ -202,6 +230,167 @@ class AuthControllerIT extends AbstractGatewayIT {
             .andExpect(result -> assertThat(result.getResponse().getStatus()).isEqualTo(429))
             .andExpect(header().exists("Retry-After"))
             .andExpect(jsonPath("$.error.code").value("RATE_LIMITED"))
+            .andExpect(jsonPath("$.traceId").isNotEmpty());
+    }
+
+    @Test
+    void updateUserInfo_emailChange_setsUnverifiedAndSendsVerificationEmail() throws Exception {
+        UUID tenantId = insertTenant();
+        String email = "email-change-" + UUID.randomUUID() + "@test.com";
+        String newEmail = "new-" + UUID.randomUUID() + "@test.com";
+        insertVerifiedUser(tenantId, email, "Pass1!");
+
+        String loginBody = mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"%s","password":"Pass1!","tenantId":"%s"}
+                    """.formatted(email, tenantId)))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+        String accessToken = JsonPath.read(loginBody, "$.data.accessToken");
+
+        mockMvc.perform(put("/api/auth/userinfo")
+                .contentType(MediaType.APPLICATION_JSON)
+                .cookie(new Cookie("jwt", accessToken))
+                .content("""
+                    {"name":"Alice","email":"%s"}
+                    """.formatted(newEmail)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.email").value(newEmail))
+            .andExpect(jsonPath("$.traceId").isNotEmpty())
+            .andExpect(header().exists("Set-Cookie"));
+
+        Boolean verified = jdbcTemplate.queryForObject(
+            "SELECT email_verified FROM users WHERE email = :email AND deleted_at IS NULL",
+            new MapSqlParameterSource("email", newEmail), Boolean.class);
+        assertThat(verified).isFalse();
+    }
+
+    @Test
+    void updateUserInfo_sameEmail_doesNotTriggerReverification() throws Exception {
+        UUID tenantId = insertTenant();
+        String email = "same-email-" + UUID.randomUUID() + "@test.com";
+        insertVerifiedUser(tenantId, email, "Pass1!");
+
+        String loginBody = mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"%s","password":"Pass1!","tenantId":"%s"}
+                    """.formatted(email, tenantId)))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+        String accessToken = JsonPath.read(loginBody, "$.data.accessToken");
+
+        mockMvc.perform(put("/api/auth/userinfo")
+                .contentType(MediaType.APPLICATION_JSON)
+                .cookie(new Cookie("jwt", accessToken))
+                .content("""
+                    {"name":"Bob","email":"%s"}
+                    """.formatted(email)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.email").value(email));
+
+        Boolean verified = jdbcTemplate.queryForObject(
+            "SELECT email_verified FROM users WHERE email = :email AND deleted_at IS NULL",
+            new MapSqlParameterSource("email", email), Boolean.class);
+        assertThat(verified).isTrue();
+    }
+
+    @Test
+    void updateUserInfo_emailConflict_returns409() throws Exception {
+        UUID tenantId = insertTenant();
+        String emailA = "conflict-a-" + UUID.randomUUID() + "@test.com";
+        String emailB = "conflict-b-" + UUID.randomUUID() + "@test.com";
+        insertVerifiedUser(tenantId, emailA, "Pass1!");
+        insertVerifiedUser(tenantId, emailB, "Pass1!");
+
+        String loginBody = mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"%s","password":"Pass1!","tenantId":"%s"}
+                    """.formatted(emailA, tenantId)))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+        String accessToken = JsonPath.read(loginBody, "$.data.accessToken");
+
+        mockMvc.perform(put("/api/auth/userinfo")
+                .contentType(MediaType.APPLICATION_JSON)
+                .cookie(new Cookie("jwt", accessToken))
+                .content("""
+                    {"email":"%s"}
+                    """.formatted(emailB)))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.error.code").value("CONFLICT"))
+            .andExpect(jsonPath("$.traceId").isNotEmpty());
+    }
+
+    @Test
+    void updateUserInfo_nameOnly_returnsUpdatedUserAndFreshToken() throws Exception {
+        UUID tenantId = insertTenant();
+        String email = "update-name-" + UUID.randomUUID() + "@test.com";
+        insertVerifiedUser(tenantId, email, "Pass1!");
+
+        String loginBody = mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"%s","password":"Pass1!","tenantId":"%s"}
+                    """.formatted(email, tenantId)))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+
+        String accessToken = JsonPath.read(loginBody, "$.data.accessToken");
+
+        var result = mockMvc.perform(put("/api/auth/userinfo")
+                .contentType(MediaType.APPLICATION_JSON)
+                .cookie(new Cookie("jwt", accessToken))
+                .content("""
+                    {"name":"Alice Smith"}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.name").value("Alice Smith"))
+            .andExpect(jsonPath("$.data.email").value(email))
+            .andExpect(jsonPath("$.traceId").isNotEmpty())
+            .andExpect(header().exists("Set-Cookie"))
+            .andReturn();
+
+        assertThat(result.getResponse().getHeader("Set-Cookie")).contains("jwt=");
+    }
+
+    @Test
+    void updateUserInfo_emptyNameCoercedToNull() throws Exception {
+        UUID tenantId = insertTenant();
+        String email = "update-null-" + UUID.randomUUID() + "@test.com";
+        insertVerifiedUser(tenantId, email, "Pass1!");
+
+        String loginBody = mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"%s","password":"Pass1!","tenantId":"%s"}
+                    """.formatted(email, tenantId)))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+
+        String accessToken = JsonPath.read(loginBody, "$.data.accessToken");
+
+        mockMvc.perform(put("/api/auth/userinfo")
+                .contentType(MediaType.APPLICATION_JSON)
+                .cookie(new Cookie("jwt", accessToken))
+                .content("""
+                    {"name":"  "}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.name").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    void updateUserInfo_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(put("/api/auth/userinfo")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"name":"Alice"}
+                    """))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"))
             .andExpect(jsonPath("$.traceId").isNotEmpty());
     }
 

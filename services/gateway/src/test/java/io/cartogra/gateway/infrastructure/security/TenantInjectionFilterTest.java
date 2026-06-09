@@ -39,7 +39,7 @@ class TenantInjectionFilterTest {
 
     @Test
     void authenticatedRequestInjectsHeadersFromJwt() throws Exception {
-        JwtClaims claims = new JwtClaims(userId, tenantId, "user@test.com", List.of("VIEWER"), null);
+        JwtClaims claims = new JwtClaims(userId, tenantId, "user@test.com", null, "local", List.of("VIEWER"), null);
         JwtAuthentication auth = new JwtAuthentication(claims);
         var context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(auth);
@@ -98,7 +98,7 @@ class TenantInjectionFilterTest {
     @Test
     void authenticatedRequestStripsForgedHeadersAndInjectsJwtValues() throws Exception {
         UUID attackerTenantId = UUID.randomUUID();
-        JwtClaims claims = new JwtClaims(userId, tenantId, "user@test.com", List.of("VIEWER"), null);
+        JwtClaims claims = new JwtClaims(userId, tenantId, "user@test.com", null, "local", List.of("VIEWER"), null);
         JwtAuthentication auth = new JwtAuthentication(claims);
         var context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(auth);

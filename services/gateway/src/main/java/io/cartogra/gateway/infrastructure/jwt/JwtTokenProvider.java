@@ -31,15 +31,18 @@ public class JwtTokenProvider {
     public String issueAccessToken(JwtClaims claims) {
         Instant now = Instant.now();
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
-        JwtClaimsSet claimsSet = JwtClaimsSet.builder()
+        var builder = JwtClaimsSet.builder()
             .subject(claims.userId().toString())
             .claim("tid", claims.tenantId().toString())
             .claim("email", claims.email())
+            .claim("auth_provider", claims.authProvider())
             .claim("roles", claims.roles())
             .issuedAt(now)
-            .expiresAt(now.plusSeconds(config.accessTokenExpirySeconds()))
-            .build();
-        return encoder.encode(JwtEncoderParameters.from(header, claimsSet)).getTokenValue();
+            .expiresAt(now.plusSeconds(config.accessTokenExpirySeconds()));
+        if (claims.name() != null) {
+            builder.claim("name", claims.name());
+        }
+        return encoder.encode(JwtEncoderParameters.from(header, builder.build())).getTokenValue();
     }
 
     public String issueRefreshToken() {
@@ -54,6 +57,8 @@ public class JwtTokenProvider {
                 UUID.fromString(jwt.getSubject()),
                 UUID.fromString(jwt.getClaimAsString("tid")),
                 jwt.getClaimAsString("email"),
+                jwt.getClaimAsString("name"),
+                jwt.getClaimAsString("auth_provider"),
                 jwt.getClaimAsStringList("roles"),
                 jwt.getExpiresAt()
             );

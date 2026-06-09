@@ -1,12 +1,12 @@
 CREATE TABLE refresh_tokens (
-    id          UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-    tenant_id   UUID        NOT NULL,
-    user_id     UUID        NOT NULL REFERENCES users(id),
-    token_hash  TEXT        NOT NULL UNIQUE,
-    issued_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-    expires_at  TIMESTAMPTZ NOT NULL,
+    id          UUID         NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+    tenant_id   UUID         NOT NULL,
+    user_id     UUID         NOT NULL REFERENCES users(id),
+    token_hash  VARCHAR(64)  NOT NULL UNIQUE,
+    issued_at   TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    expires_at  TIMESTAMPTZ  NOT NULL,
     revoked_at  TIMESTAMPTZ,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
     deleted_at  TIMESTAMPTZ
 );
 

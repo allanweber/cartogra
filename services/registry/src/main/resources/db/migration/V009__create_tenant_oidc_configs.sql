@@ -1,12 +1,12 @@
 CREATE TABLE tenant_oidc_configs (
-    id              UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-    tenant_id       UUID        NOT NULL UNIQUE,
-    discovery_uri   TEXT        NOT NULL,
-    client_id       TEXT        NOT NULL,
-    client_secret   TEXT        NOT NULL,
-    enabled         BOOLEAN     NOT NULL DEFAULT true,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    id              UUID          NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+    tenant_id       UUID          NOT NULL UNIQUE,
+    discovery_uri   VARCHAR(2048) NOT NULL,
+    client_id       VARCHAR(255)  NOT NULL,
+    client_secret   VARCHAR(512)  NOT NULL,
+    enabled         BOOLEAN       NOT NULL DEFAULT true,
+    created_at      TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ   NOT NULL DEFAULT now(),
     deleted_at      TIMESTAMPTZ
 );
 

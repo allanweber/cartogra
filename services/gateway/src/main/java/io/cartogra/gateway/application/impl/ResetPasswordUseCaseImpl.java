@@ -30,8 +30,8 @@ public class ResetPasswordUseCaseImpl implements ResetPasswordUseCase {
         }
 
         String newHash = passwordEncoder.encode(newPassword);
-        User updated = new User(user.id(), user.tenantId(), user.email(), user.authProvider(),
-            user.authSubject(), newHash, user.emailVerified(), user.roles(),
+        User updated = new User(user.id(), user.tenantId(), user.email(), user.name(),
+            user.authProvider(), user.authSubject(), newHash, user.emailVerified(), user.roles(),
             user.emailVerificationToken(), user.emailVerificationTokenExp(),
             null, null,
             user.createdAt(), user.updatedAt(), user.deletedAt());
