@@ -27,7 +27,9 @@ import { Route as AuthenticatedGraphRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedContractsRouteImport } from './routes/_authenticated/contracts'
 import { Route as AuthenticatedCatalogRouteImport } from './routes/_authenticated/catalog'
+import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings.index'
 import { Route as AuthenticatedCatalogIndexRouteImport } from './routes/_authenticated/catalog.index'
+import { Route as AuthenticatedSettingsProfileRouteImport } from './routes/_authenticated/settings.profile'
 import { Route as AuthenticatedCatalogServiceIdRouteImport } from './routes/_authenticated/catalog.$serviceId'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
@@ -120,11 +122,23 @@ const AuthenticatedCatalogRoute = AuthenticatedCatalogRouteImport.update({
   path: '/catalog',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedSettingsIndexRoute =
+  AuthenticatedSettingsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
 const AuthenticatedCatalogIndexRoute =
   AuthenticatedCatalogIndexRouteImport.update({
     id: '/',
     path: '/',
     getParentRoute: () => AuthenticatedCatalogRoute,
+  } as any)
+const AuthenticatedSettingsProfileRoute =
+  AuthenticatedSettingsProfileRouteImport.update({
+    id: '/profile',
+    path: '/profile',
+    getParentRoute: () => AuthenticatedSettingsRoute,
   } as any)
 const AuthenticatedCatalogServiceIdRoute =
   AuthenticatedCatalogServiceIdRouteImport.update({
@@ -148,11 +162,13 @@ export interface FileRoutesByFullPath {
   '/intelligence': typeof AuthenticatedIntelligenceRoute
   '/ops': typeof AuthenticatedOpsRoute
   '/risks': typeof AuthenticatedRisksRoute
-  '/settings': typeof AuthenticatedSettingsRoute
+  '/settings': typeof AuthenticatedSettingsRouteWithChildren
   '/teams': typeof AuthenticatedTeamsRoute
   '/timeline': typeof AuthenticatedTimelineRoute
   '/catalog/$serviceId': typeof AuthenticatedCatalogServiceIdRoute
+  '/settings/profile': typeof AuthenticatedSettingsProfileRoute
   '/catalog/': typeof AuthenticatedCatalogIndexRoute
+  '/settings/': typeof AuthenticatedSettingsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -168,11 +184,12 @@ export interface FileRoutesByTo {
   '/intelligence': typeof AuthenticatedIntelligenceRoute
   '/ops': typeof AuthenticatedOpsRoute
   '/risks': typeof AuthenticatedRisksRoute
-  '/settings': typeof AuthenticatedSettingsRoute
   '/teams': typeof AuthenticatedTeamsRoute
   '/timeline': typeof AuthenticatedTimelineRoute
   '/catalog/$serviceId': typeof AuthenticatedCatalogServiceIdRoute
+  '/settings/profile': typeof AuthenticatedSettingsProfileRoute
   '/catalog': typeof AuthenticatedCatalogIndexRoute
+  '/settings': typeof AuthenticatedSettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -191,11 +208,13 @@ export interface FileRoutesById {
   '/_authenticated/intelligence': typeof AuthenticatedIntelligenceRoute
   '/_authenticated/ops': typeof AuthenticatedOpsRoute
   '/_authenticated/risks': typeof AuthenticatedRisksRoute
-  '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/settings': typeof AuthenticatedSettingsRouteWithChildren
   '/_authenticated/teams': typeof AuthenticatedTeamsRoute
   '/_authenticated/timeline': typeof AuthenticatedTimelineRoute
   '/_authenticated/catalog/$serviceId': typeof AuthenticatedCatalogServiceIdRoute
+  '/_authenticated/settings/profile': typeof AuthenticatedSettingsProfileRoute
   '/_authenticated/catalog/': typeof AuthenticatedCatalogIndexRoute
+  '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -218,7 +237,9 @@ export interface FileRouteTypes {
     | '/teams'
     | '/timeline'
     | '/catalog/$serviceId'
+    | '/settings/profile'
     | '/catalog/'
+    | '/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -234,11 +255,12 @@ export interface FileRouteTypes {
     | '/intelligence'
     | '/ops'
     | '/risks'
-    | '/settings'
     | '/teams'
     | '/timeline'
     | '/catalog/$serviceId'
+    | '/settings/profile'
     | '/catalog'
+    | '/settings'
   id:
     | '__root__'
     | '/'
@@ -260,7 +282,9 @@ export interface FileRouteTypes {
     | '/_authenticated/teams'
     | '/_authenticated/timeline'
     | '/_authenticated/catalog/$serviceId'
+    | '/_authenticated/settings/profile'
     | '/_authenticated/catalog/'
+    | '/_authenticated/settings/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -402,12 +426,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCatalogRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/settings/': {
+      id: '/_authenticated/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
     '/_authenticated/catalog/': {
       id: '/_authenticated/catalog/'
       path: '/'
       fullPath: '/catalog/'
       preLoaderRoute: typeof AuthenticatedCatalogIndexRouteImport
       parentRoute: typeof AuthenticatedCatalogRoute
+    }
+    '/_authenticated/settings/profile': {
+      id: '/_authenticated/settings/profile'
+      path: '/profile'
+      fullPath: '/settings/profile'
+      preLoaderRoute: typeof AuthenticatedSettingsProfileRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
     }
     '/_authenticated/catalog/$serviceId': {
       id: '/_authenticated/catalog/$serviceId'
@@ -432,6 +470,21 @@ const AuthenticatedCatalogRouteChildren: AuthenticatedCatalogRouteChildren = {
 const AuthenticatedCatalogRouteWithChildren =
   AuthenticatedCatalogRoute._addFileChildren(AuthenticatedCatalogRouteChildren)
 
+interface AuthenticatedSettingsRouteChildren {
+  AuthenticatedSettingsProfileRoute: typeof AuthenticatedSettingsProfileRoute
+  AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
+}
+
+const AuthenticatedSettingsRouteChildren: AuthenticatedSettingsRouteChildren = {
+  AuthenticatedSettingsProfileRoute: AuthenticatedSettingsProfileRoute,
+  AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
+}
+
+const AuthenticatedSettingsRouteWithChildren =
+  AuthenticatedSettingsRoute._addFileChildren(
+    AuthenticatedSettingsRouteChildren,
+  )
+
 interface AuthenticatedRouteChildren {
   AuthenticatedCatalogRoute: typeof AuthenticatedCatalogRouteWithChildren
   AuthenticatedContractsRoute: typeof AuthenticatedContractsRoute
@@ -440,7 +493,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedIntelligenceRoute: typeof AuthenticatedIntelligenceRoute
   AuthenticatedOpsRoute: typeof AuthenticatedOpsRoute
   AuthenticatedRisksRoute: typeof AuthenticatedRisksRoute
-  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRouteWithChildren
   AuthenticatedTeamsRoute: typeof AuthenticatedTeamsRoute
   AuthenticatedTimelineRoute: typeof AuthenticatedTimelineRoute
 }
@@ -453,7 +506,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedIntelligenceRoute: AuthenticatedIntelligenceRoute,
   AuthenticatedOpsRoute: AuthenticatedOpsRoute,
   AuthenticatedRisksRoute: AuthenticatedRisksRoute,
-  AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedSettingsRoute: AuthenticatedSettingsRouteWithChildren,
   AuthenticatedTeamsRoute: AuthenticatedTeamsRoute,
   AuthenticatedTimelineRoute: AuthenticatedTimelineRoute,
 }

@@ -9,9 +9,10 @@ import io.cartogra.gateway.domain.exception.ConflictException;
 import io.cartogra.gateway.infrastructure.email.EmailSender;
 import io.cartogra.gateway.infrastructure.jdbc.TenantRepository;
 import io.cartogra.gateway.infrastructure.jdbc.UserRepository;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -20,20 +21,22 @@ import java.util.concurrent.Executors;
 @Service
 public class RegisterUserUseCaseImpl implements RegisterUserUseCase {
 
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final ExecutorService emailExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
     private final UserRepository userRepository;
     private final TenantRepository tenantRepository;
     private final EmailSender emailSender;
-    private final BCryptPasswordEncoder passwordEncoder;
+    private final PasswordEncoder passwordEncoder;
 
     public RegisterUserUseCaseImpl(UserRepository userRepository,
                                    TenantRepository tenantRepository,
-                                   EmailSender emailSender) {
+                                   EmailSender emailSender,
+                                   PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.tenantRepository = tenantRepository;
         this.emailSender = emailSender;
-        this.passwordEncoder = new BCryptPasswordEncoder();
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -57,7 +60,7 @@ public class RegisterUserUseCaseImpl implements RegisterUserUseCase {
         Instant otpExp = Instant.now().plusSeconds(900);
         String hash = passwordEncoder.encode(request.password());
 
-        User user = new User(null, tenant.id(), request.email(), "local", null, hash,
+        User user = new User(null, tenant.id(), request.email(), null, "local", null, hash,
             false, List.of("ADMIN"), otp, otpExp, null, null, null, null, null);
         userRepository.save(user);
 
@@ -67,6 +70,6 @@ public class RegisterUserUseCaseImpl implements RegisterUserUseCase {
     }
 
     private String generateOtp() {
-        return String.format("%06d", (int) (Math.random() * 1_000_000));
+        return String.format("%06d", SECURE_RANDOM.nextInt(1_000_000));
     }
 }

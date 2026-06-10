@@ -214,7 +214,6 @@ volumes:
   postgres-data:
   valkey-data:
   kafka-data:
-  pgadmin-data:
   tempo-data:
     driver: local
   loki-data:

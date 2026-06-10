@@ -1,9 +1,9 @@
 CREATE TABLE teams (
-    id          UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-    tenant_id   UUID        NOT NULL,
-    name        TEXT        NOT NULL,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    id          UUID         NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+    tenant_id   UUID         NOT NULL,
+    name        VARCHAR(255) NOT NULL,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
     deleted_at  TIMESTAMPTZ,
     CONSTRAINT uq_team_tenant_name UNIQUE (tenant_id, name)
 );

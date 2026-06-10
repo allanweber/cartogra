@@ -4,7 +4,7 @@ import io.cartogra.gateway.application.ResetPasswordUseCase;
 import io.cartogra.gateway.domain.User;
 import io.cartogra.gateway.domain.exception.InvalidOtpException;
 import io.cartogra.gateway.infrastructure.jdbc.UserRepository;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -13,11 +13,11 @@ import java.time.Instant;
 public class ResetPasswordUseCaseImpl implements ResetPasswordUseCase {
 
     private final UserRepository userRepository;
-    private final BCryptPasswordEncoder passwordEncoder;
+    private final PasswordEncoder passwordEncoder;
 
-    public ResetPasswordUseCaseImpl(UserRepository userRepository) {
+    public ResetPasswordUseCaseImpl(UserRepository userRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
-        this.passwordEncoder = new BCryptPasswordEncoder();
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -30,8 +30,8 @@ public class ResetPasswordUseCaseImpl implements ResetPasswordUseCase {
         }
 
         String newHash = passwordEncoder.encode(newPassword);
-        User updated = new User(user.id(), user.tenantId(), user.email(), user.authProvider(),
-            user.authSubject(), newHash, user.emailVerified(), user.roles(),
+        User updated = new User(user.id(), user.tenantId(), user.email(), user.name(),
+            user.authProvider(), user.authSubject(), newHash, user.emailVerified(), user.roles(),
             user.emailVerificationToken(), user.emailVerificationTokenExp(),
             null, null,
             user.createdAt(), user.updatedAt(), user.deletedAt());

@@ -63,7 +63,7 @@ class RefreshTokenUseCaseTest {
     }
 
     private User activeUser() {
-        return new User(userId, tenantId, "user@test.com", "local", null,
+        return new User(userId, tenantId, "user@test.com", null, "local", null,
             "hash", true, List.of("VIEWER"), null, null,
             null, null, Instant.now(), Instant.now(), null);
     }

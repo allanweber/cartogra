@@ -46,7 +46,7 @@ class JwtTokenProviderTest {
     void issueAndDecodeRoundTrip() {
         UUID userId = UUID.randomUUID();
         UUID tenantId = UUID.randomUUID();
-        JwtClaims claims = new JwtClaims(userId, tenantId, "user@example.com", List.of("VIEWER"), null);
+        JwtClaims claims = new JwtClaims(userId, tenantId, "user@example.com", null, "local", List.of("VIEWER"), null);
 
         String token = provider.issueAccessToken(claims);
         JwtClaims decoded = provider.decode(token);
@@ -78,7 +78,7 @@ class JwtTokenProviderTest {
     void decodeTamperedTokenThrows() {
         UUID userId = UUID.randomUUID();
         UUID tenantId = UUID.randomUUID();
-        JwtClaims claims = new JwtClaims(userId, tenantId, "user@example.com", List.of("VIEWER"), null);
+        JwtClaims claims = new JwtClaims(userId, tenantId, "user@example.com", null, "local", List.of("VIEWER"), null);
         String token = provider.issueAccessToken(claims);
 
         String tampered = token.substring(0, token.length() - 5) + "XXXXX";

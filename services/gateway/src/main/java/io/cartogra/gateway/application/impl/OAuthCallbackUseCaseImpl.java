@@ -24,15 +24,12 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @Service
 public class OAuthCallbackUseCaseImpl implements OAuthCallbackUseCase {
 
-    private final Map<String, OAuthProvider> providers;
+    private final List<OAuthProvider> providers;
     private final OAuthConfig oauthConfig;
     private final UserRepository userRepository;
     private final TenantRepository tenantRepository;
@@ -49,8 +46,7 @@ public class OAuthCallbackUseCaseImpl implements OAuthCallbackUseCase {
                                     JwtTokenProvider jwtTokenProvider,
                                     JwtConfig jwtConfig,
                                     StringRedisTemplate redis) {
-        this.providers = providers.stream()
-            .collect(Collectors.toMap(OAuthProvider::providerName, Function.identity()));
+        this.providers = List.copyOf(providers);
         this.oauthConfig = oauthConfig;
         this.userRepository = userRepository;
         this.tenantRepository = tenantRepository;
@@ -68,10 +64,10 @@ public class OAuthCallbackUseCaseImpl implements OAuthCallbackUseCase {
             throw new InvalidOAuthStateException("Invalid or expired OAuth state");
         }
 
-        OAuthProvider oauthProvider = providers.get(provider);
-        if (oauthProvider == null) {
-            throw new IllegalArgumentException("Unknown OAuth provider: " + provider);
-        }
+        OAuthProvider oauthProvider = providers.stream()
+            .filter(p -> p.providerName().equals(provider))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("Unknown OAuth provider: " + provider));
 
         String redirectUri = redirectUriFor(provider);
         String accessToken = oauthProvider.exchangeCodeForAccessToken(code, redirectUri);
@@ -85,7 +81,7 @@ public class OAuthCallbackUseCaseImpl implements OAuthCallbackUseCase {
             } else {
                 Tenant tenant = tenantRepository.save(
                     new Tenant(null, null, profile.email(), null, "free", null, null, null));
-                User newUser = new User(null, tenant.id(), profile.email(), provider,
+                User newUser = new User(null, tenant.id(), profile.email(), profile.name(), provider,
                     profile.subject(), null, true, List.of("ADMIN"),
                     null, null, null, null, null, null, null);
                 user = userRepository.save(newUser);
@@ -96,7 +92,7 @@ public class OAuthCallbackUseCaseImpl implements OAuthCallbackUseCase {
                 .map(existing -> {
                     if (provider.equals(existing.authProvider()) && !profile.subject().equals(existing.authSubject())) {
                         return new User(existing.id(), existing.tenantId(), existing.email(),
-                            provider, profile.subject(), existing.passwordHash(),
+                            existing.name(), provider, profile.subject(), existing.passwordHash(),
                             true, existing.roles(), null, null,
                             existing.passwordResetToken(), existing.passwordResetTokenExp(),
                             existing.createdAt(), existing.updatedAt(), existing.deletedAt());
@@ -105,7 +101,7 @@ public class OAuthCallbackUseCaseImpl implements OAuthCallbackUseCase {
                 })
                 .map(userRepository::save)
                 .orElseGet(() -> {
-                    User newUser = new User(null, tenantId, profile.email(), provider,
+                    User newUser = new User(null, tenantId, profile.email(), profile.name(), provider,
                         profile.subject(), null, true, List.of("VIEWER"),
                         null, null, null, null, null, null, null);
                     return userRepository.save(newUser);
@@ -113,7 +109,8 @@ public class OAuthCallbackUseCaseImpl implements OAuthCallbackUseCase {
         }
 
         JwtClaims claims = new JwtClaims(user.id(), user.tenantId(), user.email(),
-            user.roles(), Instant.now().plusSeconds(jwtConfig.accessTokenExpirySeconds()));
+            user.name(), user.authProvider(), user.roles(),
+            Instant.now().plusSeconds(jwtConfig.accessTokenExpirySeconds()));
         String newAccessToken = jwtTokenProvider.issueAccessToken(claims);
         String rawRefresh = jwtTokenProvider.issueRefreshToken();
         String refreshHash = sha256(rawRefresh);

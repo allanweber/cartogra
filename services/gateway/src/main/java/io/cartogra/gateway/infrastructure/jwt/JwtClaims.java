@@ -8,6 +8,8 @@ public record JwtClaims(
     UUID userId,
     UUID tenantId,
     String email,
+    String name,
+    String authProvider,
     List<String> roles,
     Instant exp
 ) {}

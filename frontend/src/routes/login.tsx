@@ -23,6 +23,8 @@ interface TokenPayload {
   sub: string
   tid: string
   email: string
+  name?: string | null
+  auth_provider: string
   roles: string[]
 }
 
@@ -62,7 +64,7 @@ function LoginPage() {
         { email, password },
       )
       const claims = decodeJwtPayload(result.accessToken)
-      const user = { id: claims.sub, email: claims.email, tenantId: claims.tid, roles: claims.roles }
+      const user = { id: claims.sub, email: claims.email, name: claims.name ?? null, authProvider: claims.auth_provider, tenantId: claims.tid, roles: claims.roles }
       writeSessionCookie(user, result.expiresIn)
       hydrateWith(user)
       queryClient.removeQueries({ queryKey: ['session'] })
@@ -80,6 +82,9 @@ function LoginPage() {
   }
 
   function handleOAuth(provider: 'github' | 'google') {
+    if (redirectTo) {
+      sessionStorage.setItem('pendingRedirect', redirectTo)
+    }
     const apiBase = import.meta.env.VITE_API_BASE_URL ?? ''
     window.location.href = `${apiBase}/api/auth/oauth/${provider}/start`
   }

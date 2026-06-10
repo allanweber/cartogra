@@ -1,10 +1,10 @@
 CREATE TABLE scm_connections (
-    id          UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-    tenant_id   UUID        NOT NULL,
-    provider    TEXT        NOT NULL,
-    config      JSONB       NOT NULL DEFAULT '{}',
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    id          UUID         NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+    tenant_id   UUID         NOT NULL,
+    provider    VARCHAR(50)  NOT NULL,
+    config      JSONB        NOT NULL DEFAULT '{}',
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
     deleted_at  TIMESTAMPTZ
 );
 

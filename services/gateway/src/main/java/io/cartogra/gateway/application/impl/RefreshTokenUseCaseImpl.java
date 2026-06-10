@@ -48,7 +48,8 @@ public class RefreshTokenUseCaseImpl implements RefreshTokenUseCase {
             .orElseThrow(() -> new UnauthorizedException("User not found"));
 
         JwtClaims claims = new JwtClaims(user.id(), user.tenantId(), user.email(),
-            user.roles(), Instant.now().plusSeconds(jwtConfig.accessTokenExpirySeconds()));
+            user.name(), user.authProvider(), user.roles(),
+            Instant.now().plusSeconds(jwtConfig.accessTokenExpirySeconds()));
         String newAccessToken = jwtTokenProvider.issueAccessToken(claims);
         String newRawRefresh = jwtTokenProvider.issueRefreshToken();
         String newHash = sha256(newRawRefresh);

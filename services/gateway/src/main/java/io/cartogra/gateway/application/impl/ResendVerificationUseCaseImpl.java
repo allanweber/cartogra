@@ -36,9 +36,9 @@ public class ResendVerificationUseCaseImpl implements ResendVerificationUseCase 
             String otp = generateOtp();
             Instant exp = Instant.now().plusSeconds(900);
 
-            User updated = new User(user.id(), user.tenantId(), user.email(), user.authProvider(),
-                user.authSubject(), user.passwordHash(), user.emailVerified(), user.roles(),
-                otp, exp,
+            User updated = new User(user.id(), user.tenantId(), user.email(), user.name(),
+                user.authProvider(), user.authSubject(), user.passwordHash(), user.emailVerified(),
+                user.roles(), otp, exp,
                 user.passwordResetToken(), user.passwordResetTokenExp(),
                 user.createdAt(), user.updatedAt(), user.deletedAt());
             userRepository.save(updated);

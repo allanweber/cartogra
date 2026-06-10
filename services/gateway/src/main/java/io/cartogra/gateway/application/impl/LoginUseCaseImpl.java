@@ -11,7 +11,7 @@ import io.cartogra.gateway.infrastructure.jdbc.RefreshTokenRepository;
 import io.cartogra.gateway.infrastructure.jdbc.UserRepository;
 import io.cartogra.gateway.infrastructure.jwt.JwtClaims;
 import io.cartogra.gateway.infrastructure.jwt.JwtTokenProvider;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -27,17 +27,18 @@ public class LoginUseCaseImpl implements LoginUseCase {
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final JwtConfig jwtConfig;
-    private final BCryptPasswordEncoder passwordEncoder;
+    private final PasswordEncoder passwordEncoder;
 
     public LoginUseCaseImpl(UserRepository userRepository,
                             RefreshTokenRepository refreshTokenRepository,
                             JwtTokenProvider jwtTokenProvider,
-                            JwtConfig jwtConfig) {
+                            JwtConfig jwtConfig,
+                            PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.jwtTokenProvider = jwtTokenProvider;
         this.jwtConfig = jwtConfig;
-        this.passwordEncoder = new BCryptPasswordEncoder();
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -58,7 +59,8 @@ public class LoginUseCaseImpl implements LoginUseCase {
         }
 
         JwtClaims claims = new JwtClaims(user.id(), user.tenantId(), user.email(),
-            user.roles(), Instant.now().plusSeconds(jwtConfig.accessTokenExpirySeconds()));
+            user.name(), user.authProvider(), user.roles(),
+            Instant.now().plusSeconds(jwtConfig.accessTokenExpirySeconds()));
         String accessToken = jwtTokenProvider.issueAccessToken(claims);
         String rawRefresh = jwtTokenProvider.issueRefreshToken();
         String refreshHash = sha256(rawRefresh);

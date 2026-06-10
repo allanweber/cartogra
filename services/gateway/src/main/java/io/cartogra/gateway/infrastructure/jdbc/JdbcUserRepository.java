@@ -87,11 +87,11 @@ public class JdbcUserRepository implements UserRepository {
     private User insert(User user) {
         UUID id = UUID.randomUUID();
         String sql = """
-            INSERT INTO users (id, tenant_id, email, auth_provider, auth_subject, password_hash,
+            INSERT INTO users (id, tenant_id, email, name, auth_provider, auth_subject, password_hash,
                 email_verified, email_verification_token, email_verification_token_exp,
                 password_reset_token, password_reset_token_exp,
                 roles, created_at, updated_at)
-            VALUES (:id, :tenantId, :email, :authProvider, :authSubject, :passwordHash,
+            VALUES (:id, :tenantId, :email, :name, :authProvider, :authSubject, :passwordHash,
                 :emailVerified, :emailVerificationToken, :emailVerificationTokenExp,
                 :passwordResetToken, :passwordResetTokenExp,
                 :roles::text[], :createdAt, :updatedAt)
@@ -101,6 +101,7 @@ public class JdbcUserRepository implements UserRepository {
             .addValue("id", id)
             .addValue("tenantId", user.tenantId())
             .addValue("email", user.email())
+            .addValue("name", user.name())
             .addValue("authProvider", user.authProvider())
             .addValue("authSubject", user.authSubject())
             .addValue("passwordHash", user.passwordHash())
@@ -115,7 +116,7 @@ public class JdbcUserRepository implements UserRepository {
             .addValue("createdAt", Timestamp.from(now))
             .addValue("updatedAt", Timestamp.from(now));
         jdbc.update(sql, params);
-        return new User(id, user.tenantId(), user.email(), user.authProvider(),
+        return new User(id, user.tenantId(), user.email(), user.name(), user.authProvider(),
             user.authSubject(), user.passwordHash(), user.emailVerified(),
             user.roles(), user.emailVerificationToken(), user.emailVerificationTokenExp(),
             user.passwordResetToken(), user.passwordResetTokenExp(),
@@ -124,7 +125,7 @@ public class JdbcUserRepository implements UserRepository {
 
     private User update(User user) {
         String sql = """
-            UPDATE users SET auth_provider = :authProvider, auth_subject = :authSubject,
+            UPDATE users SET email = :email, name = :name, auth_provider = :authProvider, auth_subject = :authSubject,
                 password_hash = :passwordHash, email_verified = :emailVerified,
                 email_verification_token = :emailVerificationToken,
                 email_verification_token_exp = :emailVerificationTokenExp,
@@ -135,6 +136,8 @@ public class JdbcUserRepository implements UserRepository {
             """;
         var params = new MapSqlParameterSource()
             .addValue("id", user.id())
+            .addValue("email", user.email())
+            .addValue("name", user.name())
             .addValue("authProvider", user.authProvider())
             .addValue("authSubject", user.authSubject())
             .addValue("passwordHash", user.passwordHash())
@@ -157,6 +160,7 @@ public class JdbcUserRepository implements UserRepository {
             UUID.fromString(rs.getString("id")),
             UUID.fromString(rs.getString("tenant_id")),
             rs.getString("email"),
+            rs.getString("name"),
             rs.getString("auth_provider"),
             rs.getString("auth_subject"),
             rs.getString("password_hash"),

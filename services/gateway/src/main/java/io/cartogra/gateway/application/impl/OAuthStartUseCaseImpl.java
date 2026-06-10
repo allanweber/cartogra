@@ -9,33 +9,29 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @Service
 public class OAuthStartUseCaseImpl implements OAuthStartUseCase {
 
-    private final Map<String, OAuthProvider> providers;
+    private final List<OAuthProvider> providers;
     private final OAuthConfig oauthConfig;
     private final StringRedisTemplate redis;
 
     public OAuthStartUseCaseImpl(List<OAuthProvider> providers,
                                  OAuthConfig oauthConfig,
                                  StringRedisTemplate redis) {
-        this.providers = providers.stream()
-            .collect(Collectors.toMap(OAuthProvider::providerName, Function.identity()));
+        this.providers = List.copyOf(providers);
         this.oauthConfig = oauthConfig;
         this.redis = redis;
     }
 
     @Override
     public String buildAuthorizationUri(String provider, @Nullable UUID tenantId, String state) {
-        OAuthProvider oauthProvider = providers.get(provider);
-        if (oauthProvider == null) {
-            throw new IllegalArgumentException("Unknown OAuth provider: " + provider);
-        }
+        OAuthProvider oauthProvider = providers.stream()
+            .filter(p -> p.providerName().equals(provider))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("Unknown OAuth provider: " + provider));
         String redirectUri = redirectUriFor(provider);
         String stateValue = tenantId != null ? tenantId.toString() : "new";
         redis.opsForValue().set("oauth:state:" + state, stateValue, Duration.ofMinutes(10));
