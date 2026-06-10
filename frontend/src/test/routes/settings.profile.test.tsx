@@ -76,24 +76,22 @@ describe('ProfilePage', () => {
     expect(screen.getByText('User')).toBeInTheDocument()
   })
 
-  it('shows Change password link for local-auth users', () => {
+  it('shows Change password button for local-auth users', () => {
     mockUser.mockReturnValue({ name: 'Alice', email: 'alice@example.com', authProvider: 'local', roles: ['ADMIN'] })
     renderPage()
-    const link = screen.getByRole('link', { name: /change password/i })
-    expect(link).toBeInTheDocument()
-    expect(link).toHaveAttribute('href', '/forgot-password')
+    expect(screen.getByRole('button', { name: /change password/i })).toBeInTheDocument()
   })
 
-  it('hides Change password link for GitHub OAuth users', () => {
+  it('hides Change password button for GitHub OAuth users', () => {
     mockUser.mockReturnValue({ name: 'Bob', email: 'bob@example.com', authProvider: 'github', roles: ['user'] })
     renderPage()
-    expect(screen.queryByRole('link', { name: /change password/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /change password/i })).not.toBeInTheDocument()
   })
 
-  it('hides Change password link for Google OAuth users', () => {
+  it('hides Change password button for Google OAuth users', () => {
     mockUser.mockReturnValue({ name: 'Carol', email: 'carol@example.com', authProvider: 'google', roles: ['user'] })
     renderPage()
-    expect(screen.queryByRole('link', { name: /change password/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /change password/i })).not.toBeInTheDocument()
   })
 
   it('saves name-only change without navigating', async () => {
