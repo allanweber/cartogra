@@ -2,8 +2,8 @@ package io.cartogra.gateway.api;
 
 import io.cartogra.gateway.api.dto.ApiResponse;
 import io.cartogra.gateway.api.dto.TenantOidcConfigRequest;
+import io.cartogra.gateway.domain.TenantOidcConfigService;
 import io.cartogra.gateway.domain.TenantOidcConfig;
-import io.cartogra.gateway.infrastructure.jdbc.TenantOidcConfigRepository;
 import io.cartogra.gateway.infrastructure.security.JwtAuthentication;
 import io.cartogra.gateway.infrastructure.tracing.TraceContext;
 import jakarta.validation.Valid;
@@ -12,7 +12,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.Instant;
 import java.util.UUID;
 
 @RestController
@@ -20,11 +19,11 @@ import java.util.UUID;
 @PreAuthorize("hasRole('ADMIN')")
 public class TenantOidcAdminController {
 
-    private final TenantOidcConfigRepository repository;
+    private final TenantOidcConfigService service;
     private final TraceContext traceContext;
 
-    public TenantOidcAdminController(TenantOidcConfigRepository repository, TraceContext traceContext) {
-        this.repository = repository;
+    public TenantOidcAdminController(TenantOidcConfigService service, TraceContext traceContext) {
+        this.service = service;
         this.traceContext = traceContext;
     }
 
@@ -33,10 +32,7 @@ public class TenantOidcAdminController {
             @Valid @RequestBody TenantOidcConfigRequest request,
             @AuthenticationPrincipal JwtAuthentication principal) {
         String traceId = traceContext.currentTraceId();
-        TenantOidcConfig config = new TenantOidcConfig(null, principal.getTenantId(),
-            request.discoveryUri(), request.clientId(), request.clientSecret(),
-            true, Instant.now(), Instant.now(), null);
-        TenantOidcConfig saved = repository.save(config);
+        TenantOidcConfig saved = service.create(principal.getTenantId(), request);
         return ResponseEntity.status(201)
             .header("X-Trace-Id", traceId)
             .body(new ApiResponse<>(saved, traceId));
@@ -47,7 +43,7 @@ public class TenantOidcAdminController {
             @PathVariable UUID id,
             @AuthenticationPrincipal JwtAuthentication principal) {
         String traceId = traceContext.currentTraceId();
-        return repository.findByIdAndTenantId(id, principal.getTenantId())
+        return service.get(id, principal.getTenantId())
             .map(config -> ResponseEntity.ok()
                 .header("X-Trace-Id", traceId)
                 .<ApiResponse<TenantOidcConfig>>body(new ApiResponse<>(config, traceId)))
@@ -61,13 +57,7 @@ public class TenantOidcAdminController {
             @Valid @RequestBody TenantOidcConfigRequest request,
             @AuthenticationPrincipal JwtAuthentication principal) {
         String traceId = traceContext.currentTraceId();
-        return repository.findByIdAndTenantId(id, principal.getTenantId())
-            .map(existing -> {
-                TenantOidcConfig updated = new TenantOidcConfig(existing.id(), existing.tenantId(),
-                    request.discoveryUri(), request.clientId(), request.clientSecret(),
-                    existing.enabled(), existing.createdAt(), Instant.now(), existing.deletedAt());
-                return repository.save(updated);
-            })
+        return service.update(id, principal.getTenantId(), request)
             .map(saved -> ResponseEntity.ok()
                 .header("X-Trace-Id", traceId)
                 .<ApiResponse<TenantOidcConfig>>body(new ApiResponse<>(saved, traceId)))
@@ -79,7 +69,7 @@ public class TenantOidcAdminController {
     public ResponseEntity<Void> delete(
             @PathVariable UUID id,
             @AuthenticationPrincipal JwtAuthentication principal) {
-        repository.softDeleteByIdAndTenantId(id, principal.getTenantId());
+        service.delete(id, principal.getTenantId());
         return ResponseEntity.noContent().build();
     }
 }

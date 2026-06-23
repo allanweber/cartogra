@@ -1,0 +1,213 @@
+openapi: "3.1.0"
+info:
+  title: Cartogra Ingestion API
+  version: "0.1.0"
+  description: |
+    SCM connection management, on-demand and scheduled repository sync, and inbound
+    SCM webhook receivers.
+
+    **Authentication:** `/scm-connections/*` require a valid JWT (cookie or Bearer issued by
+    the Gateway). The Gateway injects `X-Tenant-Id` — clients must not set it.
+
+    **Webhooks** (`/webhooks/*`) are PUBLIC (no JWT). They authenticate per-provider:
+    GitHub via `X-Hub-Signature-256` (HMAC-SHA256 over the raw body), Azure DevOps via HTTP
+    Basic auth. Webhook responses are NOT wrapped in the response envelope.
+
+    **Response envelope** (everything except webhooks):
+    - Success: `{ "data": <T>, "traceId": "<32-hex>" }`
+    - Error: `{ "error": { "code", "message", "details" }, "traceId": "<32-hex>" }`
+    - Header: `X-Trace-Id: <same 32-hex traceId>`
+
+    **Pagination:** `limit` (default 20) and `offset` (default 0); `data` shape
+    `{ "items": [...], "total": N, "limit": 20, "offset": 0 }`.
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: |
+      Local development (via Gateway). Paths below are gateway-rooted. The gateway strips the
+      prefix before forwarding: `/api/v1/scm-connections` → `/scm-connections` and
+      `/api/v1/ingestion/webhooks/...` → `/webhooks/...`. Direct to the ingestion service
+      (http://localhost:8085) use those stripped paths with no `/api/v1` prefix.
+
+tags:
+  - name: scm-connections
+    description: SCM connection CRUD and on-demand sync
+  - name: webhooks
+    description: Inbound SCM webhook receivers (public, per-provider auth)
+
+paths:
+  /scm-connections:
+    get:
+      tags: [scm-connections]
+      summary: List SCM connections (paginated)
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 20 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        "200":
+          description: Page of connections
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScmConnectionPage" }
+    post:
+      tags: [scm-connections]
+      summary: Create an SCM connection (triggers an immediate sync)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ScmConnectionRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScmConnectionEnvelope" }
+        "400": { $ref: "#/components/responses/Error" }
+
+  /scm-connections/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [scm-connections]
+      summary: Get an SCM connection
+      responses:
+        "200":
+          description: Connection
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScmConnectionEnvelope" }
+        "404": { $ref: "#/components/responses/Error" }
+    put:
+      tags: [scm-connections]
+      summary: Update an SCM connection (null fields unchanged)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ScmConnectionRequest" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScmConnectionEnvelope" }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [scm-connections]
+      summary: Soft-delete an SCM connection
+      responses:
+        "204": { description: Deleted }
+
+  /scm-connections/{id}/sync:
+    post:
+      tags: [scm-connections]
+      summary: Trigger an on-demand sync
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "202": { description: Sync command published }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /ingestion/webhooks/{providerType}/{connectionId}:
+    post:
+      tags: [webhooks]
+      summary: Receive an SCM webhook (public; per-provider auth)
+      description: |
+        Verifies the provider signature/auth against the secret stored in `scm_webhooks`,
+        filters to actionable events (e.g. GitHub `push`, Azure DevOps `git.push`), and
+        publishes a sync command. Always responds `202` for accepted-but-ignored events.
+      security: []
+      parameters:
+        - { name: providerType, in: path, required: true, schema: { type: string, enum: [github, azuredevops] } }
+        - { name: connectionId, in: path, required: true, schema: { type: string, format: uuid } }
+        - name: X-Hub-Signature-256
+          in: header
+          required: false
+          schema: { type: string }
+          description: GitHub HMAC-SHA256 signature (`sha256=...`)
+        - name: X-GitHub-Event
+          in: header
+          required: false
+          schema: { type: string }
+        - name: Authorization
+          in: header
+          required: false
+          schema: { type: string }
+          description: Azure DevOps HTTP Basic auth
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "202": { description: Accepted (sync published, or event ignored) }
+        "401":
+          description: Signature/auth verification failed (not enveloped)
+        "404":
+          description: No webhook registration / unknown provider (not enveloped)
+
+components:
+  responses:
+    Error:
+      description: Error envelope
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  schemas:
+    ScmConnectionRequest:
+      type: object
+      properties:
+        provider: { type: string, example: github, description: "Required on create" }
+        config: { type: string, description: "JSON string of provider config (token, org, ...)" }
+        syncScheduler: { type: boolean, default: false }
+        pollIntervalMinutes: { type: integer, minimum: 1, default: 15 }
+        webhookEnabled: { type: boolean, default: false }
+
+    ScmConnection:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        tenantId: { type: string, format: uuid }
+        provider: { type: string }
+        config: { type: string }
+        syncScheduler: { type: boolean }
+        pollIntervalMinutes: { type: integer }
+        nextSyncAt: { type: string, format: date-time, nullable: true }
+        lastSyncAt: { type: string, format: date-time, nullable: true }
+        lastSyncStatus: { type: string, nullable: true, enum: [SUCCESS, FAILED, null] }
+        webhookEnabled: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ScmConnectionEnvelope:
+      type: object
+      properties:
+        data: { $ref: "#/components/schemas/ScmConnection" }
+        traceId: { type: string }
+
+    ScmConnectionPage:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/ScmConnection" }
+            total: { type: integer }
+            limit: { type: integer }
+            offset: { type: integer }
+        traceId: { type: string }
+
+    ErrorEnvelope:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: object }
+        traceId: { type: string }

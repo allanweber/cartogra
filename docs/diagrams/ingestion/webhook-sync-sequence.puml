@@ -1,0 +1,55 @@
+@startuml
+title Ingestion — Inbound Webhook → Sync
+
+actor "SCM Provider\n(GitHub / Azure DevOps)" as SCM
+participant "Gateway\n(permitAll webhooks)" as GW
+participant "WebhookController\nPOST /webhooks/{type}/{connId}" as C
+participant "WebhookService" as S
+participant "ScmWebhookRepository" as WR
+participant "ScmConnectionRepository" as CR
+participant "ScmProvider" as P
+participant "SyncCommandProducer" as PR
+database PostgreSQL as DB
+queue "cartogra.registry.sync.command" as K
+
+SCM -> GW: POST /api/v1/ingestion/webhooks/{type}/{connId}\n(raw body + signature/auth headers)
+GW -> C: StripPrefix=3 → /webhooks/{type}/{connId}
+C -> S: process(type, connId, rawBody, headers)
+activate S
+
+S -> WR: findByConnectionId(connId)
+WR -> DB: SELECT * FROM scm_webhooks
+DB --> WR: webhook (secret, tenant_id)
+WR --> S: ScmWebhook
+
+S -> CR: findById(tenantId, connId).filter(webhookEnabled)
+CR -> DB: SELECT * FROM scm_connections
+DB --> CR: connection
+CR --> S: ScmConnection
+
+S -> P: verifyWebhookSignature(rawBody, headers, secret)
+alt signature invalid
+  P --> S: false
+  S --> C: throw WebhookSignatureInvalidException
+  C --> GW: 401 WEBHOOK_SIGNATURE_INVALID
+else signature valid
+  P --> S: true
+  S -> P: isRelevantWebhookEvent(headers, body)
+  alt not relevant (e.g. GitHub ping)
+    P --> S: false
+    S --> C: return (no publish)
+    C --> GW: 202 Accepted
+  else relevant (push)
+    P --> S: true
+    S -> PR: publish(connection)
+    PR -> K: sync.command (+ traceparent)
+    S --> C: return
+    C --> GW: 202 Accepted
+  end
+end
+deactivate S
+
+note over C
+  Webhook receivers are NOT wrapped in the response envelope.
+end note
+@enduml

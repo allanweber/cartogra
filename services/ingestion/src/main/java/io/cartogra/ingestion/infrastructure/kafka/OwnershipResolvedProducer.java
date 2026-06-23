@@ -1,9 +1,9 @@
 package io.cartogra.ingestion.infrastructure.kafka;
 
 import io.cartogra.common.event.EventEnvelope;
-import io.cartogra.ingestion.application.port.out.OwnershipMap;
-import io.cartogra.ingestion.application.port.out.OwnershipResolvedPayload;
-import io.cartogra.ingestion.application.port.out.ScmRepository;
+import io.cartogra.ingestion.domain.OwnershipMap;
+import io.cartogra.ingestion.domain.OwnershipResolvedPayload;
+import io.cartogra.ingestion.domain.ScmRepository;
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
 import io.opentelemetry.context.Context;
 import org.apache.kafka.clients.producer.ProducerRecord;

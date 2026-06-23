@@ -2,7 +2,7 @@ package io.cartogra.registry.infrastructure.scheduled;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
-import io.cartogra.registry.application.usecase.ProbeServiceHealthUseCase;
+import io.cartogra.registry.domain.ServiceHealthService;
 import io.cartogra.test.PostgresTestSupport;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,7 +50,7 @@ class HealthProbeSchedulerIT {
     }
 
     @Autowired
-    ProbeServiceHealthUseCase probeServiceHealthUseCase;
+    ServiceHealthService serviceHealthService;
 
     @Autowired
     NamedParameterJdbcTemplate jdbc;
@@ -73,7 +73,7 @@ class HealthProbeSchedulerIT {
         wireMock.stubFor(get(urlEqualTo("/health")).willReturn(aResponse().withStatus(200)));
         UUID serviceId = seedService("unknown");
 
-        probeServiceHealthUseCase.probeAll();
+        serviceHealthService.probeAll();
 
         assertThat(healthStatus(serviceId)).isEqualTo("healthy");
         assertThat(healthCheckedAt(serviceId)).isNotNull();
@@ -85,7 +85,7 @@ class HealthProbeSchedulerIT {
         wireMock.stubFor(get(urlEqualTo("/health")).willReturn(aResponse().withStatus(503)));
         UUID serviceId = seedService("unknown");
 
-        probeServiceHealthUseCase.probeAll();
+        serviceHealthService.probeAll();
 
         assertThat(healthStatus(serviceId)).isEqualTo("degraded");
         assertThat(historyCount(serviceId)).isEqualTo(1);
@@ -96,7 +96,7 @@ class HealthProbeSchedulerIT {
         wireMock.stubFor(get(urlEqualTo("/health")).willReturn(aResponse().withStatus(401)));
         UUID serviceId = seedService("unknown");
 
-        probeServiceHealthUseCase.probeAll();
+        serviceHealthService.probeAll();
 
         assertThat(healthStatus(serviceId)).isEqualTo("probe_auth_failed");
         assertThat(historyCount(serviceId)).isEqualTo(1);
@@ -107,7 +107,7 @@ class HealthProbeSchedulerIT {
         wireMock.stubFor(get(urlEqualTo("/health")).willReturn(aResponse().withStatus(403)));
         UUID serviceId = seedService("unknown");
 
-        probeServiceHealthUseCase.probeAll();
+        serviceHealthService.probeAll();
 
         assertThat(healthStatus(serviceId)).isEqualTo("probe_auth_failed");
     }
@@ -119,7 +119,7 @@ class HealthProbeSchedulerIT {
                 .willReturn(aResponse().withStatus(200).withFixedDelay(1000)));
         UUID serviceId = seedService("unknown");
 
-        probeServiceHealthUseCase.probeAll();
+        serviceHealthService.probeAll();
 
         assertThat(healthStatus(serviceId)).isEqualTo("unhealthy");
         assertThat(historyCount(serviceId)).isEqualTo(1);
@@ -130,7 +130,7 @@ class HealthProbeSchedulerIT {
         wireMock.stubFor(get(urlEqualTo("/health")).willReturn(aResponse().withStatus(200)));
         UUID serviceId = seedService("healthy");
 
-        probeServiceHealthUseCase.probeAll();
+        serviceHealthService.probeAll();
 
         assertThat(healthStatus(serviceId)).isEqualTo("healthy");
         assertThat(historyCount(serviceId)).isEqualTo(0);
@@ -141,11 +141,11 @@ class HealthProbeSchedulerIT {
         wireMock.stubFor(get(urlEqualTo("/health")).willReturn(aResponse().withStatus(200)));
         UUID serviceId = seedService("healthy");
 
-        probeServiceHealthUseCase.probeAll();
+        serviceHealthService.probeAll();
         Instant first = healthCheckedAt(serviceId);
 
         Thread.sleep(50);
-        probeServiceHealthUseCase.probeAll();
+        serviceHealthService.probeAll();
         Instant second = healthCheckedAt(serviceId);
 
         assertThat(second).isAfterOrEqualTo(first);
@@ -156,7 +156,7 @@ class HealthProbeSchedulerIT {
         wireMock.stubFor(get(urlEqualTo("/health")).willReturn(aResponse().withStatus(200)));
         UUID serviceId = seedService("unknown", "kubernetes");
 
-        probeServiceHealthUseCase.probeAll();
+        serviceHealthService.probeAll();
 
         assertThat(healthStatus(serviceId)).isEqualTo("unknown");
     }

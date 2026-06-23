@@ -2,7 +2,7 @@ package io.cartogra.ingestion;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import io.cartogra.common.event.SyncCommandPayload;
-import io.cartogra.ingestion.application.usecase.ExecuteSyncUseCase;
+import io.cartogra.ingestion.domain.SyncExecutionService;
 import io.cartogra.test.PostgresTestSupport;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -64,7 +64,7 @@ class ServiceDiscoveryFlowIT {
     String bootstrapServers;
 
     @Autowired
-    ExecuteSyncUseCase executeSyncUseCase;
+    SyncExecutionService syncExecutionService;
 
     @Autowired
     ObjectMapper objectMapper;
@@ -118,7 +118,7 @@ class ServiceDiscoveryFlowIT {
                 Map.of("token", "test-token", "org", "test-org",
                         "apiBaseUrl", wireMock.baseUrl()));
 
-        executeSyncUseCase.execute(payload);
+        syncExecutionService.execute(payload);
 
         List<ConsumerRecord<String, String>> messages = pollTopic(
                 "cartogra.ingestion.service.discovered", bootstrapServers);

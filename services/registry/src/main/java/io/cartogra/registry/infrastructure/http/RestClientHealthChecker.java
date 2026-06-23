@@ -1,6 +1,5 @@
 package io.cartogra.registry.infrastructure.http;
 
-import io.cartogra.registry.application.port.ServiceHealthChecker;
 import io.cartogra.registry.domain.ServiceHealthStatus;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;

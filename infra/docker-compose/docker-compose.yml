@@ -119,9 +119,9 @@ services:
     ports:
       - "8081:8081"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/cartogra
-      SPRING_DATASOURCE_USERNAME: cartogra
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-cartogra}
+      DB_URL: jdbc:postgresql://postgres:5432/cartogra?currentSchema=registry
+      DB_USERNAME: cartogra
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-cartogra}
       SPRING_FLYWAY_TABLE: flyway_schema_history_registry
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info
@@ -148,9 +148,9 @@ services:
     ports:
       - "8085:8085"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/cartogra
-      SPRING_DATASOURCE_USERNAME: cartogra
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-cartogra}
+      DB_URL: jdbc:postgresql://postgres:5432/cartogra?currentSchema=ingestion
+      DB_USERNAME: cartogra
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-cartogra}
       SPRING_FLYWAY_TABLE: flyway_schema_history_ingestion
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info

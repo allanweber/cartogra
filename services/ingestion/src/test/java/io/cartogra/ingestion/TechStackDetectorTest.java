@@ -1,11 +1,11 @@
 package io.cartogra.ingestion;
 
-import io.cartogra.ingestion.application.port.out.CommitInfo;
-import io.cartogra.ingestion.application.port.out.OwnershipMap;
-import io.cartogra.ingestion.application.port.out.ScmConnectionConfig;
-import io.cartogra.ingestion.application.port.out.ScmProvider;
-import io.cartogra.ingestion.application.port.out.ScmRepository;
-import io.cartogra.ingestion.application.usecase.TechStackDetector;
+import io.cartogra.ingestion.domain.CommitInfo;
+import io.cartogra.ingestion.domain.OwnershipMap;
+import io.cartogra.ingestion.domain.ScmConnectionConfig;
+import io.cartogra.ingestion.infrastructure.scm.ScmProvider;
+import io.cartogra.ingestion.domain.ScmRepository;
+import io.cartogra.ingestion.domain.TechStackDetector;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

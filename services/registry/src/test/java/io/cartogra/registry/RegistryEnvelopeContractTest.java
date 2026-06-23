@@ -137,46 +137,6 @@ class RegistryEnvelopeContractTest {
         assertConformsToSpec("GET", "/api/v1/teams", response);
     }
 
-    // ── SCM Connections ───────────────────────────────────────────────────
-
-    @Test
-    void scmPost201ConformsToSpec() throws Exception {
-        HttpResponse<String> response = HTTP.send(
-                post("/api/v1/scm-connections", """
-                        {"provider":"github","config":"{}"}"""),
-                HttpResponse.BodyHandlers.ofString());
-        assertThat(response.statusCode()).isEqualTo(201);
-        assertConformsToSpec("POST", "/api/v1/scm-connections", response);
-    }
-
-    @Test
-    void scmGet200ConformsToSpec() throws Exception {
-        HTTP.send(post("/api/v1/scm-connections", """
-                        {"provider":"github","config":"{}"}"""),
-                HttpResponse.BodyHandlers.ofString());
-
-        HttpResponse<String> response = HTTP.send(
-                get("/api/v1/scm-connections"),
-                HttpResponse.BodyHandlers.ofString());
-        assertThat(response.statusCode()).isEqualTo(200);
-        assertConformsToSpec("GET", "/api/v1/scm-connections", response);
-    }
-
-    @Test
-    void scmDelete204ConformsToSpec() throws Exception {
-        HttpResponse<String> created = HTTP.send(
-                post("/api/v1/scm-connections", """
-                        {"provider":"github","config":"{}"}"""),
-                HttpResponse.BodyHandlers.ofString());
-        String connectionId = objectMapper.readValue(created.body(), CreatedResponse.class).data().id();
-
-        HttpResponse<String> response = HTTP.send(
-                delete("/api/v1/scm-connections/" + connectionId),
-                HttpResponse.BodyHandlers.ofString());
-        assertThat(response.statusCode()).isEqualTo(204);
-        assertConformsToSpec("DELETE", "/api/v1/scm-connections/" + connectionId, response);
-    }
-
     // ── Helpers ───────────────────────────────────────────────────────────
 
     private void assertConformsToSpec(String method, String path,
@@ -210,14 +170,6 @@ class RegistryEnvelopeContractTest {
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("X-Tenant-Id", TENANT.toString())
                 .GET()
-                .build();
-    }
-
-    private HttpRequest delete(String path) {
-        return HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:" + port + path))
-                .header("X-Tenant-Id", TENANT.toString())
-                .DELETE()
                 .build();
     }
 

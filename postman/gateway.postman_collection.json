@@ -1302,6 +1302,704 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Registry (via Gateway)",
+      "item": [
+        {
+          "name": "Services",
+          "item": [
+            {
+              "name": "Create Service",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"smoke-test-service\",\n  \"description\": \"Created by Postman smoke test\",\n  \"repositoryUrl\": \"https://github.com/acme/smoke-test-service\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{gateway-url}}/api/v1/services",
+                  "host": ["{{gateway-url}}"],
+                  "path": ["api", "v1", "services"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"status is 201\", () => pm.expect(pm.response.code).to.equal(201));",
+                      "pm.test(\"response envelope present\", () => { pm.expect(pm.response.json()).to.have.property(\"data\"); pm.expect(pm.response.json()).to.have.property(\"traceId\"); });",
+                      "pm.test(\"traceId is 32 lowercase hex\", () => pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/));",
+                      "pm.test(\"X-Trace-Id header matches body traceId\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId));",
+                      "if (pm.response.code === 201) { pm.environment.set(\"serviceId\", pm.response.json().data.id); }"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "List Services",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
+                ],
+                "url": {
+                  "raw": "{{gateway-url}}/api/v1/services",
+                  "host": ["{{gateway-url}}"],
+                  "path": ["api", "v1", "services"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"status is 200\", () => pm.expect(pm.response.code).to.equal(200));",
+                      "pm.test(\"response envelope present\", () => { pm.expect(pm.response.json()).to.have.property(\"data\"); pm.expect(pm.response.json()).to.have.property(\"traceId\"); });",
+                      "pm.test(\"traceId is 32 lowercase hex\", () => pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/));",
+                      "pm.test(\"X-Trace-Id header matches body traceId\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId));",
+                      "pm.test(\"returns array\", () => pm.expect(pm.response.json().data).to.be.an(\"array\"));"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get Service",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
+                ],
+                "url": {
+                  "raw": "{{gateway-url}}/api/v1/services/{{serviceId}}",
+                  "host": ["{{gateway-url}}"],
+                  "path": ["api", "v1", "services", "{{serviceId}}"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"status is 200\", () => pm.expect(pm.response.code).to.equal(200));",
+                      "pm.test(\"response envelope present\", () => { pm.expect(pm.response.json()).to.have.property(\"data\"); pm.expect(pm.response.json()).to.have.property(\"traceId\"); });",
+                      "pm.test(\"traceId is 32 lowercase hex\", () => pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/));",
+                      "pm.test(\"X-Trace-Id header matches body traceId\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId));"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update Service",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"updated-service-name\",\n  \"description\": \"Updated description\",\n  \"repositoryUrl\": \"https://github.com/acme/updated-service\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{gateway-url}}/api/v1/services/{{serviceId}}",
+                  "host": ["{{gateway-url}}"],
+                  "path": ["api", "v1", "services", "{{serviceId}}"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"status is 200\", () => pm.expect(pm.response.code).to.equal(200));",
+                      "pm.test(\"response envelope present\", () => { pm.expect(pm.response.json()).to.have.property(\"data\"); pm.expect(pm.response.json()).to.have.property(\"traceId\"); });",
+                      "pm.test(\"traceId is 32 lowercase hex\", () => pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/));",
+                      "pm.test(\"X-Trace-Id header matches body traceId\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId));"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get Service History",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
+                ],
+                "url": {
+                  "raw": "{{gateway-url}}/api/v1/services/{{serviceId}}/history",
+                  "host": ["{{gateway-url}}"],
+                  "path": ["api", "v1", "services", "{{serviceId}}", "history"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"status is 200\", () => pm.expect(pm.response.code).to.equal(200));",
+                      "pm.test(\"response envelope present\", () => { pm.expect(pm.response.json()).to.have.property(\"data\"); pm.expect(pm.response.json()).to.have.property(\"traceId\"); });",
+                      "pm.test(\"returns array\", () => pm.expect(pm.response.json().data).to.be.an(\"array\"));"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "List Orphaned Services",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
+                ],
+                "url": {
+                  "raw": "{{gateway-url}}/api/v1/services/orphaned",
+                  "host": ["{{gateway-url}}"],
+                  "path": ["api", "v1", "services", "orphaned"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"status is 200\", () => pm.expect(pm.response.code).to.equal(200));",
+                      "pm.test(\"response envelope present\", () => { pm.expect(pm.response.json()).to.have.property(\"data\"); pm.expect(pm.response.json()).to.have.property(\"traceId\"); });",
+                      "pm.test(\"returns array\", () => pm.expect(pm.response.json().data).to.be.an(\"array\"));"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Assign Owner",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"teamId\": \"{{teamId}}\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{gateway-url}}/api/v1/services/{{serviceId}}/owner",
+                  "host": ["{{gateway-url}}"],
+                  "path": ["api", "v1", "services", "{{serviceId}}", "owner"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"status is 200\", () => pm.expect(pm.response.code).to.equal(200));",
+                      "pm.test(\"response envelope present\", () => { pm.expect(pm.response.json()).to.have.property(\"data\"); pm.expect(pm.response.json()).to.have.property(\"traceId\"); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Delete Service",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
+                ],
+                "url": {
+                  "raw": "{{gateway-url}}/api/v1/services/{{serviceId}}",
+                  "host": ["{{gateway-url}}"],
+                  "path": ["api", "v1", "services", "{{serviceId}}"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"status is 204\", () => pm.expect(pm.response.code).to.equal(204));"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Teams",
+          "item": [
+            {
+              "name": "Create Team",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"smoke-test-team\",\n  \"slackChannel\": \"#smoke-tests\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{gateway-url}}/api/v1/teams",
+                  "host": ["{{gateway-url}}"],
+                  "path": ["api", "v1", "teams"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"status is 201\", () => pm.expect(pm.response.code).to.equal(201));",
+                      "pm.test(\"response envelope present\", () => { pm.expect(pm.response.json()).to.have.property(\"data\"); pm.expect(pm.response.json()).to.have.property(\"traceId\"); });",
+                      "pm.test(\"traceId is 32 lowercase hex\", () => pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/));",
+                      "pm.test(\"X-Trace-Id header matches body traceId\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId));",
+                      "if (pm.response.code === 201) { pm.environment.set(\"teamId\", pm.response.json().data.id); }"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "List Teams",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
+                ],
+                "url": {
+                  "raw": "{{gateway-url}}/api/v1/teams",
+                  "host": ["{{gateway-url}}"],
+                  "path": ["api", "v1", "teams"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"status is 200\", () => pm.expect(pm.response.code).to.equal(200));",
+                      "pm.test(\"response envelope present\", () => { pm.expect(pm.response.json()).to.have.property(\"data\"); pm.expect(pm.response.json()).to.have.property(\"traceId\"); });",
+                      "pm.test(\"returns array\", () => pm.expect(pm.response.json().data).to.be.an(\"array\"));"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get Team",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
+                ],
+                "url": {
+                  "raw": "{{gateway-url}}/api/v1/teams/{{teamId}}",
+                  "host": ["{{gateway-url}}"],
+                  "path": ["api", "v1", "teams", "{{teamId}}"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"status is 200\", () => pm.expect(pm.response.code).to.equal(200));",
+                      "pm.test(\"response envelope present\", () => { pm.expect(pm.response.json()).to.have.property(\"data\"); pm.expect(pm.response.json()).to.have.property(\"traceId\"); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update Team",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"updated-team-name\",\n  \"slackChannel\": \"#updated-channel\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{gateway-url}}/api/v1/teams/{{teamId}}",
+                  "host": ["{{gateway-url}}"],
+                  "path": ["api", "v1", "teams", "{{teamId}}"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"status is 200\", () => pm.expect(pm.response.code).to.equal(200));",
+                      "pm.test(\"response envelope present\", () => { pm.expect(pm.response.json()).to.have.property(\"data\"); pm.expect(pm.response.json()).to.have.property(\"traceId\"); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Delete Team",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
+                ],
+                "url": {
+                  "raw": "{{gateway-url}}/api/v1/teams/{{teamId}}",
+                  "host": ["{{gateway-url}}"],
+                  "path": ["api", "v1", "teams", "{{teamId}}"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"status is 204\", () => pm.expect(pm.response.code).to.equal(204));"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Ingestion (via Gateway)",
+      "item": [
+        {
+          "name": "SCM Connections",
+          "item": [
+            {
+              "name": "Create Connection",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"provider\": \"github\",\n  \"config\": \"{\\\"token\\\":\\\"ghp_xxx\\\",\\\"org\\\":\\\"acme\\\"}\",\n  \"syncScheduler\": true,\n  \"pollIntervalMinutes\": 15,\n  \"webhookEnabled\": true\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{gateway-url}}/api/v1/scm-connections",
+                  "host": ["{{gateway-url}}"],
+                  "path": ["api", "v1", "scm-connections"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"status is 201\", () => pm.expect(pm.response.code).to.equal(201));",
+                      "pm.test(\"response envelope present\", () => { pm.expect(pm.response.json()).to.have.property(\"data\"); pm.expect(pm.response.json()).to.have.property(\"traceId\"); });",
+                      "pm.test(\"traceId is 32 lowercase hex\", () => pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/));",
+                      "pm.test(\"X-Trace-Id header matches body traceId\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId));",
+                      "if (pm.response.code === 201) { pm.environment.set(\"connectionId\", pm.response.json().data.id); }"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "List Connections",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
+                ],
+                "url": {
+                  "raw": "{{gateway-url}}/api/v1/scm-connections?limit=20&offset=0",
+                  "host": ["{{gateway-url}}"],
+                  "path": ["api", "v1", "scm-connections"],
+                  "query": [
+                    { "key": "limit", "value": "20" },
+                    { "key": "offset", "value": "0" }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"status is 200\", () => pm.expect(pm.response.code).to.equal(200));",
+                      "pm.test(\"response envelope present\", () => { pm.expect(pm.response.json()).to.have.property(\"data\"); pm.expect(pm.response.json()).to.have.property(\"traceId\"); });",
+                      "pm.test(\"returns array\", () => pm.expect(pm.response.json().data).to.be.an(\"array\"));"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get Connection",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
+                ],
+                "url": {
+                  "raw": "{{gateway-url}}/api/v1/scm-connections/{{connectionId}}",
+                  "host": ["{{gateway-url}}"],
+                  "path": ["api", "v1", "scm-connections", "{{connectionId}}"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"status is 200\", () => pm.expect(pm.response.code).to.equal(200));",
+                      "pm.test(\"response envelope present\", () => { pm.expect(pm.response.json()).to.have.property(\"data\"); pm.expect(pm.response.json()).to.have.property(\"traceId\"); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update Connection",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"pollIntervalMinutes\": 30,\n  \"syncScheduler\": false\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{gateway-url}}/api/v1/scm-connections/{{connectionId}}",
+                  "host": ["{{gateway-url}}"],
+                  "path": ["api", "v1", "scm-connections", "{{connectionId}}"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"status is 200\", () => pm.expect(pm.response.code).to.equal(200));",
+                      "pm.test(\"response envelope present\", () => { pm.expect(pm.response.json()).to.have.property(\"data\"); pm.expect(pm.response.json()).to.have.property(\"traceId\"); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Trigger Sync",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
+                ],
+                "url": {
+                  "raw": "{{gateway-url}}/api/v1/scm-connections/{{connectionId}}/sync",
+                  "host": ["{{gateway-url}}"],
+                  "path": ["api", "v1", "scm-connections", "{{connectionId}}", "sync"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"status is 202\", () => pm.expect(pm.response.code).to.equal(202));"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Delete Connection",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+                  { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
+                ],
+                "url": {
+                  "raw": "{{gateway-url}}/api/v1/scm-connections/{{connectionId}}",
+                  "host": ["{{gateway-url}}"],
+                  "path": ["api", "v1", "scm-connections", "{{connectionId}}"]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"status is 204\", () => pm.expect(pm.response.code).to.equal(204));"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Webhooks",
+          "item": [
+            {
+              "name": "GitHub push (valid HMAC)",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const body = JSON.stringify({ ref: 'refs/heads/main', repository: { full_name: 'acme/payments' } });",
+                      "pm.variables.set('webhookBody', body);",
+                      "const secret = pm.environment.get('webhookSecret');",
+                      "const sig = 'sha256=' + CryptoJS.HmacSHA256(body, secret).toString(CryptoJS.enc.Hex);",
+                      "pm.variables.set('ghSignature', sig);"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": ["pm.test(\"status is 202\", () => pm.response.to.have.status(202));"]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json", "type": "text" },
+                  { "key": "X-GitHub-Event", "value": "push", "type": "text" },
+                  { "key": "X-Hub-Signature-256", "value": "{{ghSignature}}", "type": "text" }
+                ],
+                "body": { "mode": "raw", "raw": "{{webhookBody}}", "options": { "raw": { "language": "json" } } },
+                "url": {
+                  "raw": "{{gateway-url}}/api/v1/ingestion/webhooks/github/{{connectionId}}",
+                  "host": ["{{gateway-url}}"],
+                  "path": ["api", "v1", "ingestion", "webhooks", "github", "{{connectionId}}"]
+                }
+              }
+            },
+            {
+              "name": "GitHub ping (ignored, 202)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json", "type": "text" },
+                  { "key": "X-GitHub-Event", "value": "ping", "type": "text" }
+                ],
+                "body": { "mode": "raw", "raw": "{\"zen\":\"Keep it simple.\"}", "options": { "raw": { "language": "json" } } },
+                "url": {
+                  "raw": "{{gateway-url}}/api/v1/ingestion/webhooks/github/{{connectionId}}",
+                  "host": ["{{gateway-url}}"],
+                  "path": ["api", "v1", "ingestion", "webhooks", "github", "{{connectionId}}"]
+                }
+              }
+            },
+            {
+              "name": "GitHub push (tampered -> 401)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json", "type": "text" },
+                  { "key": "X-GitHub-Event", "value": "push", "type": "text" },
+                  { "key": "X-Hub-Signature-256", "value": "sha256=deadbeef", "type": "text" }
+                ],
+                "body": { "mode": "raw", "raw": "{\"ref\":\"refs/heads/main\"}", "options": { "raw": { "language": "json" } } },
+                "url": {
+                  "raw": "{{gateway-url}}/api/v1/ingestion/webhooks/github/{{connectionId}}",
+                  "host": ["{{gateway-url}}"],
+                  "path": ["api", "v1", "ingestion", "webhooks", "github", "{{connectionId}}"]
+                }
+              }
+            },
+            {
+              "name": "Azure DevOps git.push (Basic auth)",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const auth = 'Basic ' + btoa(pm.environment.get('webhookSecret'));",
+                      "pm.variables.set('azdoAuth', auth);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json", "type": "text" },
+                  { "key": "Authorization", "value": "{{azdoAuth}}", "type": "text" }
+                ],
+                "body": { "mode": "raw", "raw": "{\"eventType\":\"git.push\",\"resource\":{}}", "options": { "raw": { "language": "json" } } },
+                "url": {
+                  "raw": "{{gateway-url}}/api/v1/ingestion/webhooks/azuredevops/{{connectionId}}",
+                  "host": ["{{gateway-url}}"],
+                  "path": ["api", "v1", "ingestion", "webhooks", "azuredevops", "{{connectionId}}"]
+                }
+              }
+            }
+          ]
+        }
+      ]
     }
   ]
 }

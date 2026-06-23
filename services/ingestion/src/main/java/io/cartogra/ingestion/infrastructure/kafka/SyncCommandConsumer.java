@@ -4,7 +4,7 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import io.cartogra.common.event.EventEnvelope;
 import io.cartogra.common.event.SyncCommandPayload;
-import io.cartogra.ingestion.application.usecase.ExecuteSyncUseCase;
+import io.cartogra.ingestion.domain.SyncExecutionService;
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
@@ -25,11 +25,11 @@ public class SyncCommandConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(SyncCommandConsumer.class);
 
-    private final ExecuteSyncUseCase executeSyncUseCase;
+    private final SyncExecutionService syncExecutionService;
     private final ObjectMapper objectMapper;
 
-    public SyncCommandConsumer(ExecuteSyncUseCase executeSyncUseCase, ObjectMapper objectMapper) {
-        this.executeSyncUseCase = executeSyncUseCase;
+    public SyncCommandConsumer(SyncExecutionService syncExecutionService, ObjectMapper objectMapper) {
+        this.syncExecutionService = syncExecutionService;
         this.objectMapper = objectMapper;
     }
 
@@ -57,7 +57,7 @@ public class SyncCommandConsumer {
             EventEnvelope<SyncCommandPayload> envelope = objectMapper.readValue(
                     record.value(),
                     new TypeReference<>() {});
-            executeSyncUseCase.execute(envelope.payload());
+            syncExecutionService.execute(envelope.payload());
         } catch (Exception ex) {
             log.error("Failed to process sync command key={}: {}", record.key(), ex.getMessage(), ex);
         }

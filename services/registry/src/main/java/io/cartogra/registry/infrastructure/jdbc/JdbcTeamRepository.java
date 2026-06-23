@@ -1,6 +1,6 @@
 package io.cartogra.registry.infrastructure.jdbc;
 
-import io.cartogra.registry.application.repository.TeamRepository;
+import io.cartogra.registry.repository.TeamRepository;
 import io.cartogra.registry.domain.Team;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;

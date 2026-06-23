@@ -1,6 +1,6 @@
 package io.cartogra.ingestion.infrastructure.k8s;
 
-import io.cartogra.ingestion.application.port.out.ServiceDiscoveredPayload;
+import io.cartogra.ingestion.domain.ServiceDiscoveredPayload;
 import io.cartogra.ingestion.infrastructure.kafka.ServiceDiscoveredProducer;
 import io.fabric8.kubernetes.api.model.Endpoints;
 import io.fabric8.kubernetes.api.model.EndpointSubset;

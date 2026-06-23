@@ -1,5 +1,7 @@
 package io.cartogra.gateway.infrastructure.jdbc;
 
+import io.cartogra.gateway.repository.UserRepository;
+
 import io.cartogra.gateway.domain.User;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;

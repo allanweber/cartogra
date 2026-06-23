@@ -1,8 +1,8 @@
 package io.cartogra.registry;
 
 import io.cartogra.common.event.EventEnvelope;
-import io.cartogra.registry.application.repository.ServiceHistoryRepository;
-import io.cartogra.registry.application.repository.ServiceRepository;
+import io.cartogra.registry.repository.ServiceHistoryRepository;
+import io.cartogra.registry.repository.ServiceRepository;
 import io.cartogra.registry.domain.Service;
 import io.cartogra.registry.domain.event.ServiceDiscoveredPayload;
 import io.cartogra.test.PostgresTestSupport;

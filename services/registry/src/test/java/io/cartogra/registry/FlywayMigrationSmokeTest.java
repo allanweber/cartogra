@@ -48,11 +48,6 @@ class FlywayMigrationSmokeTest {
     }
 
     @Test
-    void scmConnectionsTableExists() {
-        assertTableExists("scm_connections");
-    }
-
-    @Test
     void servicesTableExists() {
         assertTableExists("services");
     }
@@ -60,11 +55,6 @@ class FlywayMigrationSmokeTest {
     @Test
     void servicesHistoryTableExists() {
         assertTableExists("services_history");
-    }
-
-    @Test
-    void scmWebhooksTableExists() {
-        assertTableExists("scm_webhooks");
     }
 
     private void assertTableExists(String tableName) {

@@ -4,27 +4,47 @@ Copy-ready skeletons. Apply the rules in `backend.md`, `frontend.md`, and `infra
 
 ---
 
+## Layering (keep it flat)
+
+Five top-level packages, no ceremony, NO `application` package:
+
+```
+api/          controllers + GlobalExceptionHandler    -> domain/      records + @Service classes (+ event, exception)
+api/dto/      request/response records
+                                                       -> repository/  repo interfaces + repo-input VOs
+                                                       -> infrastructure/  jdbc impls, Kafka, schedulers, SCM/HTTP clients + their provider-port interfaces
+config/       @Configuration, @ConfigurationProperties, filters
+```
+
+- **One service class per domain concept** (`ScmConnectionService`, `WebhookService`, …) living in `domain` next to the records it operates on. It holds the operations directly — NO interface-per-use-case, NO `*UseCase` + `*UseCaseImpl` pairs, NO command DTOs, NO mapper classes.
+- Controllers talk ONLY to a service — NEVER inject a repository, producer, or other infrastructure into a controller.
+- Interfaces (ports) exist ONLY where a field genuinely needs a seam: repositories (interface in `repository`, Jdbc impl in `infrastructure/jdbc`), SCM/health providers + email senders (in `infrastructure` beside their adapter), advisory locks. A service implemented exactly once does NOT get an interface.
+- Map domain → response with a `static from(Domain)` factory ON the response record (in `api/dto`) — NOT a separate `*Mapper` class.
+- Use ONE request record per entity (nullable fields); the service enforces create-time required fields. NO separate create/update command DTOs.
+
+---
+
 ## REST Endpoint
 
 ```java
-// api/controller/ServiceController.java
+// api/ServiceController.java — controller talks only to the service
 @RestController
 @RequestMapping("/services")
 public class ServiceController {
 
-    private final RegisterServiceUseCase registerService;
+    private final ServiceService service;
 
-    public ServiceController(RegisterServiceUseCase registerService) {
-        this.registerService = registerService;
+    public ServiceController(ServiceService service) {
+        this.service = service;
     }
 
     @PostMapping
-    public ResponseEntity<ApiResponse<ServiceDto>> register(
+    public ResponseEntity<ApiResponse<ServiceResponse>> register(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
-            @Valid @RequestBody RegisterServiceRequest request) {
+            @Valid @RequestBody ServiceRequest request) {
 
         String traceId = Span.current().getSpanContext().getTraceId();
-        ServiceDto result = registerService.execute(tenantId, request);
+        ServiceResponse result = ServiceResponse.from(service.create(tenantId, request));
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .header("X-Trace-Id", traceId)
@@ -35,9 +55,25 @@ public class ServiceController {
 // api/dto/ApiResponse.java
 public record ApiResponse<T>(T data, String traceId) {}
 
-// application/usecase/RegisterServiceUseCase.java
-public interface RegisterServiceUseCase {
-    ServiceDto execute(UUID tenantId, RegisterServiceRequest request);
+// domain/ServiceService.java — concrete, no interface
+@Service
+public class ServiceService {
+
+    private final ServiceRepository repository; // port interface — needs the seam
+
+    public ServiceService(ServiceRepository repository) {
+        this.repository = repository;
+    }
+
+    @Transactional
+    public ServiceModel create(UUID tenantId, ServiceRequest request) { /* ... */ }
+}
+
+// api/dto/ServiceResponse.java — mapping lives here, not in a mapper class
+public record ServiceResponse(UUID id, String name) {
+    public static ServiceResponse from(ServiceModel m) {
+        return new ServiceResponse(m.id(), m.name());
+    }
 }
 ```
 

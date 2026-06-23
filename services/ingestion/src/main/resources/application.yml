@@ -5,9 +5,9 @@ spring:
     virtual:
       enabled: true
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5436/cartogra?currentSchema=ingestion}
-    username: ${SPRING_DATASOURCE_USERNAME:cartogra}
-    password: ${SPRING_DATASOURCE_PASSWORD:cartogra}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/cartogra?currentSchema=ingestion}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
@@ -30,6 +30,7 @@ ingestion:
   sync:
     stale-timeout: PT30M
     reaper-interval: PT1M
+    poll-interval: ${INGESTION_SYNC_POLL_INTERVAL:PT15M}
   workers:
     k8s:
       enabled: true

@@ -1,8 +1,7 @@
 package io.cartogra.gateway.api;
 
 import io.cartogra.gateway.api.dto.TokenResponse;
-import io.cartogra.gateway.application.OAuthCallbackUseCase;
-import io.cartogra.gateway.application.OAuthStartUseCase;
+import io.cartogra.gateway.domain.OAuthService;
 import io.cartogra.gateway.config.FrontendProperties;
 import io.cartogra.gateway.infrastructure.tracing.TraceContext;
 import org.slf4j.Logger;
@@ -23,15 +22,12 @@ public class OAuthController {
     private static final String COOKIE_JWT = "jwt";
     private static final String COOKIE_REFRESH = "jwt_refresh";
 
-    private final OAuthStartUseCase oauthStart;
-    private final OAuthCallbackUseCase oauthCallback;
+    private final OAuthService oauth;
     private final FrontendProperties frontend;
     private final TraceContext traceContext;
 
-    public OAuthController(OAuthStartUseCase oauthStart, OAuthCallbackUseCase oauthCallback,
-                           FrontendProperties frontend, TraceContext traceContext) {
-        this.oauthStart = oauthStart;
-        this.oauthCallback = oauthCallback;
+    public OAuthController(OAuthService oauth, FrontendProperties frontend, TraceContext traceContext) {
+        this.oauth = oauth;
         this.frontend = frontend;
         this.traceContext = traceContext;
     }
@@ -41,7 +37,7 @@ public class OAuthController {
             @PathVariable String provider,
             @RequestParam(required = false) UUID tenantId) {
         String state = UUID.randomUUID().toString().replace("-", "");
-        String redirectUri = oauthStart.buildAuthorizationUri(provider, tenantId, state);
+        String redirectUri = oauth.buildAuthorizationUri(provider, tenantId, state);
         return ResponseEntity.status(HttpStatus.FOUND)
             .header(HttpHeaders.LOCATION, redirectUri)
             .build();
@@ -54,7 +50,7 @@ public class OAuthController {
             @RequestParam String state) {
         String traceId = traceContext.currentTraceId();
         try {
-            TokenResponse result = oauthCallback.execute(provider, code, state);
+            TokenResponse result = oauth.handleCallback(provider, code, state);
             HttpHeaders headers = new HttpHeaders();
             headers.add(HttpHeaders.LOCATION, frontend.baseUrl() + "/dashboard");
             headers.add("X-Trace-Id", traceId);

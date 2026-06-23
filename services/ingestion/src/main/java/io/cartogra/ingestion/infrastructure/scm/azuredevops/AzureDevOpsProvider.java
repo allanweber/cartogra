@@ -1,13 +1,17 @@
 package io.cartogra.ingestion.infrastructure.scm.azuredevops;
 
-import io.cartogra.ingestion.application.port.out.CommitInfo;
-import io.cartogra.ingestion.application.port.out.OwnershipMap;
-import io.cartogra.ingestion.application.port.out.ScmConnectionConfig;
-import io.cartogra.ingestion.application.port.out.ScmProvider;
-import io.cartogra.ingestion.application.port.out.ScmRepository;
+import io.cartogra.ingestion.domain.CommitInfo;
+import io.cartogra.ingestion.domain.OwnershipMap;
+import io.cartogra.ingestion.domain.ScmConnectionConfig;
+import io.cartogra.ingestion.infrastructure.scm.ScmProvider;
+import io.cartogra.ingestion.domain.ScmRepository;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +23,29 @@ public class AzureDevOpsProvider implements ScmProvider {
     @Override
     public String providerType() {
         return "azuredevops";
+    }
+
+    @Override
+    public boolean verifyWebhookSignature(byte[] rawBody, Map<String, String> headers, @Nullable String secret) {
+        // Azure DevOps service hooks authenticate with HTTP Basic auth; the configured
+        // secret is the "user:password" pair the hook was registered with.
+        if (secret == null || secret.isBlank()) {
+            return true;
+        }
+        String auth = headers.get("Authorization");
+        if (auth == null || !auth.startsWith("Basic ")) {
+            return false;
+        }
+        String expected = "Basic " + Base64.getEncoder().encodeToString(secret.getBytes(StandardCharsets.UTF_8));
+        return MessageDigest.isEqual(
+                expected.getBytes(StandardCharsets.UTF_8),
+                auth.getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Override
+    public boolean isRelevantWebhookEvent(Map<String, String> headers, String body) {
+        // Azure DevOps puts the event type in the JSON payload's "eventType" field.
+        return body.contains("git.push");
     }
 
     @Override

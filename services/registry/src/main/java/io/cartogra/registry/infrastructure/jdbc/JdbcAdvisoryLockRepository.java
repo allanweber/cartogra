@@ -1,6 +1,6 @@
 package io.cartogra.registry.infrastructure.jdbc;
 
-import io.cartogra.registry.application.repository.AdvisoryLockRepository;
+import io.cartogra.registry.repository.AdvisoryLockRepository;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;

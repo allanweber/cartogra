@@ -1,6 +1,5 @@
 package io.cartogra.registry.infrastructure.validation;
 
-import io.cartogra.registry.application.port.HealthEndpointValidator;
 import io.cartogra.registry.domain.exception.InvalidHealthEndpointException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

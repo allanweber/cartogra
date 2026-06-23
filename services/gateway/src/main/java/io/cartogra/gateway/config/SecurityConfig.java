@@ -75,6 +75,7 @@ public class SecurityConfig {
                                  "/api/auth/logout", "/api/auth/oauth/**",
                                  "/api/auth/forgot-password", "/api/auth/reset-password").permitAll()
                 .requestMatchers("/actuator/health/**").permitAll()
+                .requestMatchers("/api/v1/ingestion/webhooks/**").permitAll()
                 .requestMatchers("/api/auth/userinfo").authenticated()
                 .requestMatchers("/api/auth/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")

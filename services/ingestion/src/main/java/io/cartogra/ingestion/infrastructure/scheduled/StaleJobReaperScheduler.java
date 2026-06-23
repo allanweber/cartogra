@@ -1,6 +1,6 @@
 package io.cartogra.ingestion.infrastructure.scheduled;
 
-import io.cartogra.ingestion.application.port.out.SyncJobRepository;
+import io.cartogra.ingestion.repository.SyncJobRepository;
 import io.cartogra.ingestion.infrastructure.kafka.SyncResultProducer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

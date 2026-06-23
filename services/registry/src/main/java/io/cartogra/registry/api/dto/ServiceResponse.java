@@ -1,5 +1,6 @@
 package io.cartogra.registry.api.dto;
 
+import io.cartogra.registry.domain.Service;
 import org.jspecify.annotations.Nullable;
 
 import java.time.Instant;
@@ -29,4 +30,14 @@ public record ServiceResponse(
         @Nullable Instant lastCommitAt,
         @Nullable String lastCommitSha,
         @Nullable Instant healthCheckedAt
-) {}
+) {
+    public static ServiceResponse from(Service s) {
+        return new ServiceResponse(
+                s.id(), s.tenantId(), s.name(), s.description(), s.teamId(), s.repositoryUrl(),
+                s.techStack(), s.metadata(), s.healthStatus().toDbValue(), s.lastDeployedAt(),
+                s.createdAt(), s.updatedAt(), s.externalId(), s.connectionId(), s.source(),
+                s.repositoryRef(), s.k8sCluster(), s.k8sNamespace(), s.k8sDeployment(),
+                s.healthEndpoint(), s.lastCommitAt(), s.lastCommitSha(), s.healthCheckedAt()
+        );
+    }
+}
