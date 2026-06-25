@@ -5,18 +5,34 @@ spring:
     virtual:
       enabled: true
   datasource:
-    url: ${DB_URL}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/cartogra?currentSchema=registry}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
   data:
     redis:
-      host: ${REDIS_HOST}
-      port: ${REDIS_PORT}
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6380}
   cloud:
     gateway:
       server:
         webmvc:
           routes:
+            # Public webhook receiver (no JWT) — must be matched before the registry catch-all.
+            - id: ingestion-webhooks
+              uri: ${INGESTION_URI:http://localhost:8085}
+              predicates:
+                - Path=/api/v1/ingestion/webhooks/**
+              filters:
+                - StripPrefix=3
+              order: -20
+            # SCM connection CRUD lives in the ingestion service.
+            - id: ingestion-scm-connections
+              uri: ${INGESTION_URI:http://localhost:8085}
+              predicates:
+                - Path=/api/v1/scm-connections/**
+              filters:
+                - StripPrefix=2
+              order: -10
             - id: registry
               uri: ${REGISTRY_URI:http://localhost:8081}
               predicates:
@@ -72,19 +88,19 @@ app:
     refresh-token-expiry-seconds: ${JWT_REFRESH_EXPIRY_SECONDS:2592000}
   resend:
     api-key: ${RESEND_API_KEY}
-    from-address: ${RESEND_FROM}
+    from-address: ${RESEND_FROM:noreply@cartogra.dev}
     test-mode: ${RESEND_TEST_MODE:false}
   oauth:
     google:
       client-id: ${GOOGLE_CLIENT_ID}
       client-secret: ${GOOGLE_CLIENT_SECRET}
-      redirect-uri: ${APP_BASE_URL}/api/auth/oauth/google/callback
+      redirect-uri: ${APP_BASE_URL:http://localhost:8080}/api/auth/oauth/google/callback
       token-uri: https://oauth2.googleapis.com/token
       userinfo-uri: https://openidconnect.googleapis.com/v1/userinfo
     github:
       client-id: ${GITHUB_CLIENT_ID}
       client-secret: ${GITHUB_CLIENT_SECRET}
-      redirect-uri: ${APP_BASE_URL}/api/auth/oauth/github/callback
+      redirect-uri: ${APP_BASE_URL:http://localhost:8080}/api/auth/oauth/github/callback
       token-uri: https://github.com/login/oauth/access_token
       userinfo-uri: https://api.github.com/user
   rate-limit:

@@ -1,20 +1,20 @@
 package io.cartogra.registry.infrastructure.scheduled;
 
-import io.cartogra.registry.application.usecase.ProbeServiceHealthUseCase;
+import io.cartogra.registry.domain.ServiceHealthService;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 @Component
 public class HealthProbeScheduler {
 
-    private final ProbeServiceHealthUseCase probeServiceHealthUseCase;
+    private final ServiceHealthService serviceHealthService;
 
-    public HealthProbeScheduler(ProbeServiceHealthUseCase probeServiceHealthUseCase) {
-        this.probeServiceHealthUseCase = probeServiceHealthUseCase;
+    public HealthProbeScheduler(ServiceHealthService serviceHealthService) {
+        this.serviceHealthService = serviceHealthService;
     }
 
     @Scheduled(fixedDelayString = "${registry.health.probe-interval:PT60S}")
     public void probe() {
-        probeServiceHealthUseCase.probeAll();
+        serviceHealthService.probeAll();
     }
 }

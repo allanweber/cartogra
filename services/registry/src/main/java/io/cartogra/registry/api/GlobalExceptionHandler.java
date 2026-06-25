@@ -6,7 +6,6 @@ import io.cartogra.common.api.ErrorCodes;
 import io.cartogra.registry.domain.exception.DuplicateServiceNameException;
 import io.cartogra.registry.domain.exception.DuplicateTeamNameException;
 import io.cartogra.registry.domain.exception.InvalidHealthEndpointException;
-import io.cartogra.registry.domain.exception.ScmConnectionNotFoundException;
 import io.cartogra.registry.domain.exception.ServiceNotFoundException;
 import io.cartogra.registry.domain.exception.TeamNotFoundException;
 import io.opentelemetry.api.trace.Span;
@@ -43,14 +42,6 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(TeamNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleTeamNotFound(TeamNotFoundException ex) {
-        String traceId = Span.current().getSpanContext().getTraceId();
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .header("X-Trace-Id", traceId)
-                .body(new ApiErrorResponse(ApiError.of(ErrorCodes.NOT_FOUND, ex.getMessage()), traceId));
-    }
-
-    @ExceptionHandler(ScmConnectionNotFoundException.class)
-    public ResponseEntity<ApiErrorResponse> handleScmConnectionNotFound(ScmConnectionNotFoundException ex) {
         String traceId = Span.current().getSpanContext().getTraceId();
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .header("X-Trace-Id", traceId)

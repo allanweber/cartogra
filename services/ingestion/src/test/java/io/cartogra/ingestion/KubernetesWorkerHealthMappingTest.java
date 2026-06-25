@@ -1,6 +1,6 @@
 package io.cartogra.ingestion;
 
-import io.cartogra.ingestion.application.port.out.ServiceDiscoveredPayload;
+import io.cartogra.ingestion.domain.ServiceDiscoveredPayload;
 import io.cartogra.ingestion.infrastructure.k8s.KubernetesWorker;
 import io.cartogra.ingestion.infrastructure.kafka.ServiceDiscoveredProducer;
 import io.fabric8.kubernetes.api.model.EndpointAddress;
@@ -25,8 +25,6 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 

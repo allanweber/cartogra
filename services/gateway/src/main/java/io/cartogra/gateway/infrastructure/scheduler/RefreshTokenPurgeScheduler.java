@@ -1,6 +1,6 @@
 package io.cartogra.gateway.infrastructure.scheduler;
 
-import io.cartogra.gateway.infrastructure.jdbc.RefreshTokenRepository;
+import io.cartogra.gateway.repository.RefreshTokenRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;

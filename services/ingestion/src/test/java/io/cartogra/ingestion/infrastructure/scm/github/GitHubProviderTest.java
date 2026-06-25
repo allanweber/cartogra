@@ -1,9 +1,9 @@
 package io.cartogra.ingestion.infrastructure.scm.github;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
-import io.cartogra.ingestion.application.port.out.OwnershipMap;
-import io.cartogra.ingestion.application.port.out.ScmConnectionConfig;
-import io.cartogra.ingestion.application.port.out.ScmRepository;
+import io.cartogra.ingestion.domain.OwnershipMap;
+import io.cartogra.ingestion.domain.ScmConnectionConfig;
+import io.cartogra.ingestion.domain.ScmRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 

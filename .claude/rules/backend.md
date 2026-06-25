@@ -69,6 +69,25 @@
 
 - `spring-boot-starter-aop` → use `spring-boot-starter-aspectj`
 
+## Application Layering (flat — no over-engineering)
+
+Five top-level packages per service — NEVER an `application` package, NEVER `api/controller`+`api/dto` or `application/port/out` nesting:
+
+| Package | Holds |
+|---------|-------|
+| `api` | controllers + `GlobalExceptionHandler`; request/response records in `api/dto` |
+| `domain` | domain records, the `@Service` classes that operate on them, `domain/event`, `domain/exception`, value/payload records |
+| `config` | `@Configuration`, `@ConfigurationProperties`, filters |
+| `repository` | repository interfaces + repo-input value objects (e.g. `ServiceFilter`) |
+| `infrastructure` | Kafka, schedulers, SCM/HTTP clients, security, `infrastructure/jdbc` Jdbc repository implementations — and each outbound provider-port interface (SCM provider, health checker, email sender) lives here beside its adapter |
+
+- Flow: `api` → `domain` (services) → `repository` + `infrastructure`
+- ONE `@Service` class per domain concept, in `domain` next to the records it operates on — NEVER `*UseCase`/`*UseCaseImpl` interface+impl pairs, NEVER command DTOs, NEVER a `*Mapper` class
+- Controllers inject ONLY services — NEVER a repository/producer/client directly in a controller
+- Interfaces (ports) ONLY where a field needs a real seam (repositories, providers, locks); a once-implemented service gets NO interface. Repository ports go in `repository` (their Jdbc impls in `infrastructure/jdbc`); other provider ports go in `infrastructure` beside their adapter
+- Domain → response via `static from(domain)` on the response record (in `api/dto`); ONE nullable request record per entity (service enforces create-time requireds)
+- See `patterns.md` → "Layering" + "REST Endpoint" for the skeleton
+
 ## Spring Data JDBC
 
 - One `Repository` per aggregate root — route child entity saves through root (NEVER save children directly)

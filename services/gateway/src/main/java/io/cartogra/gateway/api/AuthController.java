@@ -1,7 +1,19 @@
 package io.cartogra.gateway.api;
 
-import io.cartogra.gateway.api.dto.*;
-import io.cartogra.gateway.application.*;
+import io.cartogra.gateway.api.dto.ApiResponse;
+import io.cartogra.gateway.api.dto.ForgotPasswordRequest;
+import io.cartogra.gateway.api.dto.LoginRequest;
+import io.cartogra.gateway.api.dto.RegisterRequest;
+import io.cartogra.gateway.api.dto.RegisterResponse;
+import io.cartogra.gateway.api.dto.ResendVerificationRequest;
+import io.cartogra.gateway.api.dto.ResetPasswordRequest;
+import io.cartogra.gateway.api.dto.TokenResponse;
+import io.cartogra.gateway.api.dto.UpdateUserInfoRequest;
+import io.cartogra.gateway.api.dto.UserInfoResponse;
+import io.cartogra.gateway.api.dto.VerifyEmailRequest;
+
+import io.cartogra.gateway.domain.AuthService;
+import io.cartogra.gateway.domain.UpdateUserInfoResult;
 import io.cartogra.gateway.domain.exception.UnauthorizedException;
 import io.cartogra.gateway.infrastructure.security.JwtAuthentication;
 import io.cartogra.gateway.infrastructure.tracing.TraceContext;
@@ -25,36 +37,11 @@ public class AuthController {
     private static final String COOKIE_JWT = "jwt";
     private static final String COOKIE_REFRESH = "jwt_refresh";
 
-    private final RegisterUserUseCase registerUser;
-    private final VerifyEmailUseCase verifyEmail;
-    private final ResendVerificationUseCase resendVerification;
-    private final LoginUseCase login;
-    private final RefreshTokenUseCase refreshToken;
-    private final LogoutUseCase logout;
-    private final ForgotPasswordUseCase forgotPassword;
-    private final ResetPasswordUseCase resetPassword;
-    private final UpdateUserInfoUseCase updateUserInfo;
+    private final AuthService auth;
     private final TraceContext traceContext;
 
-    public AuthController(RegisterUserUseCase registerUser,
-                          VerifyEmailUseCase verifyEmail,
-                          ResendVerificationUseCase resendVerification,
-                          LoginUseCase login,
-                          RefreshTokenUseCase refreshToken,
-                          LogoutUseCase logout,
-                          ForgotPasswordUseCase forgotPassword,
-                          ResetPasswordUseCase resetPassword,
-                          UpdateUserInfoUseCase updateUserInfo,
-                          TraceContext traceContext) {
-        this.registerUser = registerUser;
-        this.verifyEmail = verifyEmail;
-        this.resendVerification = resendVerification;
-        this.login = login;
-        this.refreshToken = refreshToken;
-        this.logout = logout;
-        this.forgotPassword = forgotPassword;
-        this.resetPassword = resetPassword;
-        this.updateUserInfo = updateUserInfo;
+    public AuthController(AuthService auth, TraceContext traceContext) {
+        this.auth = auth;
         this.traceContext = traceContext;
     }
 
@@ -62,7 +49,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse<RegisterResponse>> register(
             @Valid @RequestBody RegisterRequest request) {
         String traceId = traceContext.currentTraceId();
-        RegisterResponse result = registerUser.execute(request);
+        RegisterResponse result = auth.register(request);
         return ResponseEntity.status(201)
             .header("X-Trace-Id", traceId)
             .body(new ApiResponse<>(result, traceId));
@@ -72,7 +59,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> verify(
             @Valid @RequestBody VerifyEmailRequest request) {
         String traceId = traceContext.currentTraceId();
-        verifyEmail.execute(request.email(), request.token());
+        auth.verifyEmail(request.email(), request.token());
         return ResponseEntity.ok()
             .header("X-Trace-Id", traceId)
             .body(new ApiResponse<>(null, traceId));
@@ -82,7 +69,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> resendVerification(
             @Valid @RequestBody ResendVerificationRequest request) {
         String traceId = traceContext.currentTraceId();
-        resendVerification.execute(request.email());
+        auth.resendVerification(request.email());
         return ResponseEntity.ok()
             .header("X-Trace-Id", traceId)
             .body(new ApiResponse<>(null, traceId));
@@ -93,7 +80,7 @@ public class AuthController {
             @Valid @RequestBody LoginRequest request,
             HttpServletResponse response) {
         String traceId = traceContext.currentTraceId();
-        TokenResponse result = login.execute(request.email(), request.password());
+        TokenResponse result = auth.login(request.email(), request.password());
         setAuthCookies(response, result);
         return ResponseEntity.ok()
             .header("X-Trace-Id", traceId)
@@ -109,7 +96,7 @@ public class AuthController {
         if (rawToken == null) {
             throw new UnauthorizedException("Refresh token required");
         }
-        TokenResponse result = refreshToken.execute(rawToken);
+        TokenResponse result = auth.refreshToken(rawToken);
         setAuthCookies(response, result);
         return ResponseEntity.ok()
             .header("X-Trace-Id", traceId)
@@ -123,7 +110,7 @@ public class AuthController {
         String traceId = traceContext.currentTraceId();
         String rawToken = extractRefreshToken(request);
         if (rawToken != null) {
-            CompletableFuture.runAsync(() -> logout.execute(rawToken));
+            CompletableFuture.runAsync(() -> auth.logout(rawToken));
         }
         clearAuthCookies(response);
         return ResponseEntity.ok()
@@ -135,7 +122,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> forgotPassword(
             @Valid @RequestBody ForgotPasswordRequest request) {
         String traceId = traceContext.currentTraceId();
-        forgotPassword.execute(request.email());
+        auth.forgotPassword(request.email());
         return ResponseEntity.ok()
             .header("X-Trace-Id", traceId)
             .body(new ApiResponse<>(null, traceId));
@@ -145,7 +132,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> resetPassword(
             @Valid @RequestBody ResetPasswordRequest request) {
         String traceId = traceContext.currentTraceId();
-        resetPassword.execute(request.token(), request.newPassword());
+        auth.resetPassword(request.token(), request.newPassword());
         return ResponseEntity.ok()
             .header("X-Trace-Id", traceId)
             .body(new ApiResponse<>(null, traceId));
@@ -153,8 +140,8 @@ public class AuthController {
 
     @GetMapping("/userinfo")
     public ResponseEntity<ApiResponse<UserInfoResponse>> userinfo() {
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-        if (!(auth instanceof JwtAuthentication principal)) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (!(authentication instanceof JwtAuthentication principal)) {
             throw new UnauthorizedException("Authentication required");
         }
         String traceId = traceContext.currentTraceId();
@@ -175,12 +162,12 @@ public class AuthController {
     public ResponseEntity<ApiResponse<UserInfoResponse>> updateUserinfo(
             @Valid @RequestBody UpdateUserInfoRequest request,
             HttpServletResponse response) {
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-        if (!(auth instanceof JwtAuthentication principal)) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (!(authentication instanceof JwtAuthentication principal)) {
             throw new UnauthorizedException("Authentication required");
         }
         String traceId = traceContext.currentTraceId();
-        UpdateUserInfoResult result = updateUserInfo.execute(principal.getClaims().userId(), request.name(), request.email());
+        UpdateUserInfoResult result = auth.updateUserInfo(principal.getClaims().userId(), request.name(), request.email());
         response.addHeader(HttpHeaders.SET_COOKIE,
             ResponseCookie.from(COOKIE_JWT, result.accessToken())
                 .httpOnly(true).secure(true).sameSite("Lax").path("/")

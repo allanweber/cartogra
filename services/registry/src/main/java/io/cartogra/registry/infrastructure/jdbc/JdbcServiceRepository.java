@@ -1,8 +1,8 @@
 package io.cartogra.registry.infrastructure.jdbc;
 
-import io.cartogra.registry.application.dto.ServiceDiscoveryCommand;
-import io.cartogra.registry.application.dto.ServiceFilter;
-import io.cartogra.registry.application.repository.ServiceRepository;
+import io.cartogra.registry.repository.ServiceDiscoveryCommand;
+import io.cartogra.registry.repository.ServiceFilter;
+import io.cartogra.registry.repository.ServiceRepository;
 import io.cartogra.registry.domain.Service;
 import io.cartogra.registry.domain.ServiceHealthStatus;
 import org.springframework.jdbc.core.RowMapper;

@@ -197,25 +197,25 @@ State is stored in S3 (`cartogra-tf-state-prod`) with DynamoDB locking.
 
 ## 8. SCM provider credential setup
 
-SCM provider credentials are stored in the `registry.scm_connections` table as JSONB. They are **never** stored in environment variables on the ingestion service.
+SCM provider credentials are stored in the `ingestion.scm_connections` table as JSONB (`config` column). They are **never** stored in environment variables on the ingestion service. SCM connection management lives in the **ingestion** service (gateway route `/api/v1/scm-connections`), not registry.
 
 ### GitHub — Personal Access Token
 
 1. Create a PAT at **GitHub → Settings → Developer settings → Personal access tokens** with scopes: `repo` (read), `read:org`.
-2. Insert a connection record via the Registry API (requires `ADMIN` role):
+2. Insert a connection record via the Ingestion API (gateway-authenticated):
 
 ```http
-POST /connections
+POST /api/v1/scm-connections
 Authorization: Bearer <token>
 X-Tenant-Id: <tenantId>
 Content-Type: application/json
 
 {
-  "providerType": "github",
-  "config": {
-    "token": "<PAT value>",
-    "org": "your-github-org"
-  }
+  "provider": "github",
+  "config": "{\"token\":\"<PAT value>\",\"org\":\"your-github-org\"}",
+  "syncScheduler": true,
+  "pollIntervalMinutes": 15,
+  "webhookEnabled": true
 }
 ```
 
@@ -227,17 +227,14 @@ Content-Type: application/json
 2. Insert a connection record:
 
 ```http
-POST /connections
+POST /api/v1/scm-connections
 Authorization: Bearer <token>
 X-Tenant-Id: <tenantId>
 Content-Type: application/json
 
 {
-  "providerType": "azuredevops",
-  "config": {
-    "pat": "<PAT value>",
-    "organization": "your-ado-org"
-  }
+  "provider": "azuredevops",
+  "config": "{\"pat\":\"<PAT value>\",\"organization\":\"your-ado-org\"}"
 }
 ```
 
@@ -275,3 +272,63 @@ FROM ingestion.sync_jobs
 ORDER BY created_at DESC
 LIMIT 5;
 ```
+
+The completed sync writes its outcome back onto the connection (`last_sync_status`, `last_sync_at`):
+
+```sql
+SELECT id, provider, last_sync_status, last_sync_at, next_sync_at
+FROM ingestion.scm_connections
+ORDER BY updated_at DESC
+LIMIT 5;
+```
+
+## 9. Scheduled sync
+
+When `scm_connections.sync_scheduler = true`, the ingestion `SyncScheduler` polls for due connections and publishes a `sync.command` for each.
+
+- **Cadence:** the scheduler tick runs every `INGESTION_SYNC_POLL_INTERVAL` (ISO-8601 duration, default `PT15M`). Per-connection cadence is `poll_interval_minutes`, tracked via `next_sync_at`.
+- **Multi-instance safety:** each connection is published inside a `REQUIRES_NEW` transaction guarded by a PostgreSQL transaction-scoped advisory lock (`pg_try_advisory_xact_lock`). With N ingestion replicas, only the replica that wins the lock publishes — no duplicate commands.
+- **Delivery semantics:** at-least-once. `next_sync_at` is advanced outside the lock transaction, so a crash between publish and timestamp-advance results in a retry on the next tick (deduplicated downstream by the RUNNING-job guard in `SyncExecutionService`).
+
+Inspect due connections:
+
+```sql
+SELECT id, provider, poll_interval_minutes, next_sync_at
+FROM ingestion.scm_connections
+WHERE sync_scheduler = true AND deleted_at IS NULL
+  AND (next_sync_at IS NULL OR next_sync_at <= now());
+```
+
+To pause scheduling for a connection: `PUT /api/v1/scm-connections/{id}` with `{"syncScheduler": false}` (clears `next_sync_at`).
+
+## 10. Webhook setup
+
+Real-time sync is driven by SCM webhooks. The gateway exposes the receiver publicly at `/api/v1/ingestion/webhooks/{providerType}/{connectionId}` (no JWT). Per-provider authentication is verified against the secret stored in `ingestion.scm_webhooks.webhook_secret`.
+
+**Register a webhook secret** (one row per connection in `scm_webhooks`) and set `scm_connections.webhook_enabled = true`.
+
+### GitHub
+
+1. Repo/org **Settings → Webhooks → Add webhook**.
+2. **Payload URL:** `https://<gateway-host>/api/v1/ingestion/webhooks/github/<connectionId>`
+3. **Content type:** `application/json`
+4. **Secret:** the value stored in `scm_webhooks.webhook_secret`. Ingestion verifies `X-Hub-Signature-256` (HMAC-SHA256 over the raw body).
+5. **Events:** at least `push`. (`ping` is accepted with `202` but does not trigger a sync.)
+
+### Azure DevOps
+
+1. **Project Settings → Service hooks → Create subscription → Web Hooks**.
+2. **Trigger:** *Code pushed* (`git.push`).
+3. **URL:** `https://<gateway-host>/api/v1/ingestion/webhooks/azuredevops/<connectionId>`
+4. **Basic auth:** set username/password; store the same `user:password` string in `scm_webhooks.webhook_secret`. Ingestion verifies the `Authorization: Basic` header.
+
+### Responses
+
+| Outcome | Status |
+|---------|--------|
+| Valid signature, actionable event | `202` + `sync.command` published |
+| Valid signature, non-actionable (e.g. GitHub `ping`) | `202`, no publish |
+| Invalid signature / Basic auth | `401` (`WEBHOOK_SIGNATURE_INVALID`) |
+| No webhook registration / unknown provider | `404` (`WEBHOOK_CONNECTION_NOT_FOUND`) |
+
+Webhook responses are **not** wrapped in the standard response envelope.

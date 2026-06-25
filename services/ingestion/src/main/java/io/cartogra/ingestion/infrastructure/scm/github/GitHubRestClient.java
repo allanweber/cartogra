@@ -1,8 +1,8 @@
 package io.cartogra.ingestion.infrastructure.scm.github;
 
-import io.cartogra.ingestion.application.port.out.CommitInfo;
-import io.cartogra.ingestion.application.port.out.ScmConnectionConfig;
-import io.cartogra.ingestion.application.port.out.ScmProviderException;
+import io.cartogra.ingestion.domain.CommitInfo;
+import io.cartogra.ingestion.domain.ScmConnectionConfig;
+import io.cartogra.ingestion.domain.exception.ScmProviderException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.web.client.RestClient;

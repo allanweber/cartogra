@@ -1,14 +1,8 @@
 package io.cartogra.registry.infrastructure.kafka;
 
 import io.cartogra.common.event.EventEnvelope;
-import io.cartogra.registry.application.dto.AssignOwnerCommand;
-import io.cartogra.registry.application.repository.ServiceRepository;
-import io.cartogra.registry.application.repository.TeamRepository;
-import io.cartogra.registry.application.usecase.AssignOwnerUseCase;
-import io.cartogra.registry.domain.Service;
-import io.cartogra.registry.domain.Team;
+import io.cartogra.registry.domain.ServiceService;
 import io.cartogra.registry.domain.event.OwnershipResolvedPayload;
-import io.cartogra.common.identity.SystemActors;
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
@@ -24,7 +18,6 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Optional;
 import java.util.stream.StreamSupport;
 
 @Component
@@ -47,19 +40,11 @@ public class OwnershipResolvedConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(OwnershipResolvedConsumer.class);
 
-    private final ServiceRepository serviceRepository;
-    private final TeamRepository teamRepository;
-    private final AssignOwnerUseCase assignOwnerUseCase;
+    private final ServiceService serviceService;
     private final ObjectMapper objectMapper;
 
-    public OwnershipResolvedConsumer(
-            ServiceRepository serviceRepository,
-            TeamRepository teamRepository,
-            AssignOwnerUseCase assignOwnerUseCase,
-            ObjectMapper objectMapper) {
-        this.serviceRepository = serviceRepository;
-        this.teamRepository = teamRepository;
-        this.assignOwnerUseCase = assignOwnerUseCase;
+    public OwnershipResolvedConsumer(ServiceService serviceService, ObjectMapper objectMapper) {
+        this.serviceService = serviceService;
         this.objectMapper = objectMapper;
     }
 
@@ -72,54 +57,9 @@ public class OwnershipResolvedConsumer {
             EventEnvelope<OwnershipResolvedPayload> envelope = objectMapper.readValue(
                     record.value(),
                     new TypeReference<EventEnvelope<OwnershipResolvedPayload>>() {});
-            processOwnership(envelope.payload());
+            serviceService.resolveOwnership(envelope.payload());
         } catch (Exception e) {
             log.error("Failed to process ownership.resolved event key={}: {}", record.key(), e.getMessage(), e);
         }
-    }
-
-    private void processOwnership(OwnershipResolvedPayload payload) {
-        Optional<Service> serviceOpt = serviceRepository.findByRepositoryPath(
-                payload.tenantId(), payload.repositoryFullName());
-
-        if (serviceOpt.isEmpty()) {
-            log.warn("ownership.resolved: no service found for repository={} tenant={}",
-                    payload.repositoryFullName(), payload.tenantId());
-            return;
-        }
-
-        Service service = serviceOpt.get();
-
-        if (service.teamId() != null) {
-            log.warn("ownership.resolved: service={} already has team={}, skipping (idempotent)", service.id(), service.teamId());
-            return;
-        }
-
-        if (payload.ownerTeams().isEmpty()) {
-            log.warn("ownership.resolved: no ownerTeams for repository={} tenant={}",
-                    payload.repositoryFullName(), payload.tenantId());
-            return;
-        }
-
-        if (payload.ownerTeams().size() > 1) {
-            log.warn("ownership.resolved: ambiguous ownerTeams={} for repository={} tenant={}, skipping auto-assign",
-                    payload.ownerTeams(), payload.repositoryFullName(), payload.tenantId());
-            return;
-        }
-
-        String teamName = payload.ownerTeams().get(0);
-        Optional<Team> teamOpt = teamRepository.findByTenantAndName(payload.tenantId(), teamName);
-
-        if (teamOpt.isEmpty()) {
-            log.warn("ownership.resolved: team='{}' not found in registry for tenant={}, repository={}",
-                    teamName, payload.tenantId(), payload.repositoryFullName());
-            return;
-        }
-
-        assignOwnerUseCase.execute(new AssignOwnerCommand(
-                payload.tenantId(), service.id(), teamOpt.get().id(), SystemActors.SYSTEM));
-
-        log.info("ownership.resolved: assigned team={} to service={} via CODEOWNERS",
-                teamOpt.get().id(), service.id());
     }
 }

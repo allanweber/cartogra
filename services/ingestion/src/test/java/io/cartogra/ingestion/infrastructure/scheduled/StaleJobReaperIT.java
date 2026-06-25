@@ -1,8 +1,8 @@
 package io.cartogra.ingestion.infrastructure.scheduled;
 
 import io.cartogra.common.event.EventEnvelope;
-import io.cartogra.ingestion.application.port.out.SyncJobRepository;
-import io.cartogra.ingestion.application.port.out.SyncResultPayload;
+import io.cartogra.ingestion.repository.SyncJobRepository;
+import io.cartogra.ingestion.domain.SyncResultPayload;
 import io.cartogra.ingestion.domain.SyncJob;
 import io.cartogra.ingestion.infrastructure.kafka.SyncCommandConsumer;
 import io.cartogra.test.PostgresTestSupport;

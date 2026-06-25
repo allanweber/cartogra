@@ -1,7 +1,7 @@
 package io.cartogra.ingestion.infrastructure.kafka;
 
 import io.cartogra.common.event.EventEnvelope;
-import io.cartogra.ingestion.application.port.out.SyncResultPayload;
+import io.cartogra.ingestion.domain.SyncResultPayload;
 import io.cartogra.ingestion.domain.SyncJob;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;

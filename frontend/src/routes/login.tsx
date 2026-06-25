@@ -81,12 +81,33 @@ function LoginPage() {
     }
   }
 
-  function handleOAuth(provider: 'github' | 'google') {
+  async function handleOAuth(provider: 'github' | 'google') {
+    setError(null)
+    setTraceId(null)
+    setLoading(true)
+
+    const apiBase = import.meta.env.VITE_API_BASE_URL ?? ''
+    const target = `${apiBase}/api/auth/oauth/${provider}/start`
+
+    try {
+      // redirect:'manual' turns a 3xx into an opaqueredirect (status 0).
+      // A 502 from the Vite proxy (backend down) is NOT opaqueredirect, so we catch it too.
+      const probe = await fetch(target, { redirect: 'manual', credentials: 'include', signal: AbortSignal.timeout(5000) })
+      if (probe.type !== 'opaqueredirect') {
+        setError('Unable to reach the server. Check your connection or try again later.')
+        setLoading(false)
+        return
+      }
+    } catch {
+      setError('Unable to reach the server. Check your connection or try again later.')
+      setLoading(false)
+      return
+    }
+
     if (redirectTo) {
       sessionStorage.setItem('pendingRedirect', redirectTo)
     }
-    const apiBase = import.meta.env.VITE_API_BASE_URL ?? ''
-    window.location.href = `${apiBase}/api/auth/oauth/${provider}/start`
+    window.location.href = target
   }
 
   return (
@@ -100,6 +121,7 @@ function LoginPage() {
           type="button"
           variant="outline"
           className="h-10 w-full text-sm"
+          disabled={loading}
           onClick={() => handleOAuth('github')}
         >
           <svg role="img" aria-label="GitHub" className="mr-2 size-4" viewBox="0 0 24 24" fill="currentColor">
@@ -111,6 +133,7 @@ function LoginPage() {
           type="button"
           variant="outline"
           className="h-10 w-full text-sm"
+          disabled={loading}
           onClick={() => handleOAuth('google')}
         >
           <svg role="img" aria-label="Google" className="mr-2 size-4" viewBox="0 0 24 24" fill="currentColor">

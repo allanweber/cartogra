@@ -1,7 +1,7 @@
 package io.cartogra.ingestion.infrastructure.scm.azuredevops;
 
-import io.cartogra.ingestion.application.port.out.ScmConnectionConfig;
-import io.cartogra.ingestion.application.port.out.ScmProviderException;
+import io.cartogra.ingestion.domain.ScmConnectionConfig;
+import io.cartogra.ingestion.domain.exception.ScmProviderException;
 
 import java.util.Base64;
 

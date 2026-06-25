@@ -11,6 +11,7 @@ import io.spring.gradle.dependencymanagement.dsl.DependencyManagementExtension
 plugins {
     id("org.springframework.boot") apply false
     id("io.spring.dependency-management") version "1.1.7" apply false
+    id("com.diffplug.spotless") version "7.0.2" apply false
     java
 }
 
@@ -22,6 +23,17 @@ val javaVersion: String by project
 subprojects {
     apply(plugin = "java")
     apply(plugin = "io.spring.dependency-management")
+    apply(plugin = "com.diffplug.spotless")
+
+    // Import hygiene only — no full reformat. `check`/`build` run spotlessCheck automatically.
+    configure<com.diffplug.gradle.spotless.SpotlessExtension> {
+        java {
+            target("src/main/java/**/*.java", "src/test/java/**/*.java")
+            removeUnusedImports()
+            trimTrailingWhitespace()
+            endWithNewline()
+        }
+    }
 
     group = "io.cartogra"
     version = "0.1.0-SNAPSHOT"

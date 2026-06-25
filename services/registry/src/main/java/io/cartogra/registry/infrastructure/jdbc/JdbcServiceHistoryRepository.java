@@ -1,6 +1,6 @@
 package io.cartogra.registry.infrastructure.jdbc;
 
-import io.cartogra.registry.application.repository.ServiceHistoryRepository;
+import io.cartogra.registry.repository.ServiceHistoryRepository;
 import io.cartogra.registry.domain.ServiceSnapshot;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;

@@ -1,8 +1,8 @@
 package io.cartogra.registry.infrastructure.kafka;
 
 import io.cartogra.common.event.EventEnvelope;
-import io.cartogra.registry.application.dto.ServiceDiscoveryCommand;
-import io.cartogra.registry.application.usecase.UpsertDiscoveredServiceUseCase;
+import io.cartogra.registry.repository.ServiceDiscoveryCommand;
+import io.cartogra.registry.domain.ServiceService;
 import io.cartogra.registry.domain.event.ServiceDiscoveredPayload;
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
 import io.opentelemetry.context.Context;
@@ -41,12 +41,12 @@ public class RegistryServiceDiscoveryConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(RegistryServiceDiscoveryConsumer.class);
 
-    private final UpsertDiscoveredServiceUseCase upsertDiscoveredServiceUseCase;
+    private final ServiceService serviceService;
     private final ObjectMapper objectMapper;
 
-    public RegistryServiceDiscoveryConsumer(UpsertDiscoveredServiceUseCase upsertDiscoveredServiceUseCase,
+    public RegistryServiceDiscoveryConsumer(ServiceService serviceService,
                                              ObjectMapper objectMapper) {
-        this.upsertDiscoveredServiceUseCase = upsertDiscoveredServiceUseCase;
+        this.serviceService = serviceService;
         this.objectMapper = objectMapper;
     }
 
@@ -84,7 +84,7 @@ public class RegistryServiceDiscoveryConsumer {
                     payload.lastCommitAt(),
                     payload.lastCommitSha()
             );
-            upsertDiscoveredServiceUseCase.execute(command);
+            serviceService.upsertDiscovered(command);
             log.info("Upserted discovered service externalId={} source={} health={} tenant={}",
                     payload.externalId(), payload.source(), payload.healthStatus(), payload.tenantId());
         } catch (Exception e) {
