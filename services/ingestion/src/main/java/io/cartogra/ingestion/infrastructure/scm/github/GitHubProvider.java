@@ -25,8 +25,15 @@ import java.util.Set;
 public class GitHubProvider implements ScmProvider {
 
     /** Events that warrant a re-sync; everything else (e.g. {@code ping}) is ignored. */
-    private static final Set<String> RELEVANT_EVENTS =
-            Set.of("push", "pull_request", "repository", "create", "delete");
+    private static final Set<String> RELEVANT_EVENTS = Set.of(
+            "push",           // branch pushed
+            "pull_request",   // PR opened / merged / closed
+            "repository",     // repo renamed, archived, transferred
+            "create",         // branch or tag created
+            "delete",         // branch or tag deleted
+            "member",         // collaborator added / removed (affects ownership resolution)
+            "team"            // org team membership changed (affects @org/team in CODEOWNERS)
+    );
 
     @Override
     public String providerType() {

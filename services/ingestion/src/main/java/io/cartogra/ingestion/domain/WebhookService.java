@@ -1,46 +1,42 @@
 package io.cartogra.ingestion.domain;
 
-import io.cartogra.ingestion.repository.ScmConnectionRepository;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
+import io.cartogra.ingestion.infrastructure.kafka.SyncCommandProducer;
 import io.cartogra.ingestion.infrastructure.scm.ScmProvider;
-import io.cartogra.ingestion.repository.ScmWebhookRepository;
+import io.cartogra.ingestion.repository.ScmConnectionRepository;
 import io.cartogra.ingestion.domain.exception.WebhookConnectionNotFoundException;
 import io.cartogra.ingestion.domain.exception.WebhookSignatureInvalidException;
-import io.cartogra.ingestion.infrastructure.kafka.SyncCommandProducer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/**
- * Validates an inbound SCM webhook and, when relevant, publishes a sync command.
- * Secret and tenant come straight from {@code scm_webhooks} — no cross-service call.
- */
 @Service
 public class WebhookService {
 
     private static final Logger log = LoggerFactory.getLogger(WebhookService.class);
 
     private final Map<String, ScmProvider> providers;
-    private final ScmWebhookRepository webhookRepository;
     private final ScmConnectionRepository connectionRepository;
     private final SyncCommandProducer syncCommandProducer;
+    private final ObjectMapper objectMapper;
 
     public WebhookService(
             List<ScmProvider> providers,
-            ScmWebhookRepository webhookRepository,
             ScmConnectionRepository connectionRepository,
-            SyncCommandProducer syncCommandProducer) {
+            SyncCommandProducer syncCommandProducer,
+            ObjectMapper objectMapper) {
         this.providers = providers.stream()
                 .collect(Collectors.toMap(ScmProvider::providerType, Function.identity()));
-        this.webhookRepository = webhookRepository;
         this.connectionRepository = connectionRepository;
         this.syncCommandProducer = syncCommandProducer;
+        this.objectMapper = objectMapper;
     }
 
     public void process(String providerType, UUID connectionId, byte[] rawBody, Map<String, String> headers) {
@@ -49,22 +45,30 @@ public class WebhookService {
             throw new WebhookConnectionNotFoundException(providerType);
         }
 
-        ScmWebhook webhook = webhookRepository.findByConnectionId(connectionId)
+        ScmConnection connection = connectionRepository.findByIdForWebhook(connectionId)
                 .orElseThrow(() -> new WebhookConnectionNotFoundException(connectionId.toString()));
 
-        ScmConnection connection = connectionRepository.findById(webhook.tenantId(), connectionId)
-                .filter(ScmConnection::webhookEnabled)
-                .orElseThrow(() -> new WebhookConnectionNotFoundException(connectionId.toString()));
+        String webhookSecret = extractWebhookSecret(connection.config());
 
-        if (!provider.verifyWebhookSignature(rawBody, headers, webhook.webhookSecret())) {
+        if (!provider.verifyWebhookSignature(rawBody, headers, webhookSecret)) {
             throw new WebhookSignatureInvalidException(connectionId);
         }
 
-        if (!provider.isRelevantWebhookEvent(headers, new String(rawBody, StandardCharsets.UTF_8))) {
+        if (!provider.isRelevantWebhookEvent(headers, new String(rawBody))) {
             log.debug("Ignoring non-actionable webhook event for connection={}", connectionId);
             return;
         }
 
         syncCommandProducer.publish(connection);
+    }
+
+    private String extractWebhookSecret(String configJson) {
+        try {
+            Map<String, Object> config = objectMapper.readValue(configJson, new TypeReference<>() {});
+            Object secret = config.get("webhookSecret");
+            return secret instanceof String s ? s : null;
+        } catch (Exception _) {
+            return null;
+        }
     }
 }

@@ -27,4 +27,7 @@ public interface ScmConnectionRepository {
 
     /** Sync feedback: record the outcome of a completed sync job. */
     void updateSyncResult(UUID id, String status, Instant lastSyncAt);
+
+    /** Webhook path: find a connection by id alone — tenant is derived from the record itself. */
+    Optional<ScmConnection> findByIdForWebhook(UUID id);
 }

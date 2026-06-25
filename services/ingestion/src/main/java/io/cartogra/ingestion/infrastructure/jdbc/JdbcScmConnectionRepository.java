@@ -118,6 +118,15 @@ public class JdbcScmConnectionRepository implements ScmConnectionRepository {
     }
 
     @Override
+    public Optional<ScmConnection> findByIdForWebhook(UUID id) {
+        String sql = """
+                SELECT * FROM scm_connections
+                WHERE id = :id AND webhook_enabled = true AND deleted_at IS NULL
+                """;
+        return jdbc.query(sql, new MapSqlParameterSource("id", id), SCM_MAPPER).stream().findFirst();
+    }
+
+    @Override
     public void updateSyncResult(UUID id, String status, Instant lastSyncAt) {
         String sql = """
                 UPDATE scm_connections

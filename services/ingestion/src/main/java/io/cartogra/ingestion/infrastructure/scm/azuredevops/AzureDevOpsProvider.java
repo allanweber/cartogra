@@ -16,9 +16,20 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 @Component
 public class AzureDevOpsProvider implements ScmProvider {
+
+    /** Azure DevOps service hook eventType values that warrant a re-sync. */
+    private static final Set<String> RELEVANT_EVENTS = Set.of(
+            "git.push",
+            "git.pullrequest.created",
+            "git.pullrequest.updated",
+            "git.pullrequest.merged",
+            "git.ref.created",
+            "git.ref.deleted"
+    );
 
     @Override
     public String providerType() {
@@ -44,8 +55,8 @@ public class AzureDevOpsProvider implements ScmProvider {
 
     @Override
     public boolean isRelevantWebhookEvent(Map<String, String> headers, String body) {
-        // Azure DevOps puts the event type in the JSON payload's "eventType" field.
-        return body.contains("git.push");
+        // eventType is a top-level string field in the Azure DevOps service hook payload.
+        return RELEVANT_EVENTS.stream().anyMatch(body::contains);
     }
 
     @Override

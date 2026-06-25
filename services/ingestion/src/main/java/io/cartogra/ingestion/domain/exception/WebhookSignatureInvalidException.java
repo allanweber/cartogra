@@ -4,6 +4,6 @@ import java.util.UUID;
 
 public class WebhookSignatureInvalidException extends RuntimeException {
     public WebhookSignatureInvalidException(UUID connectionId) {
-        super("Webhook signature verification failed for connection: " + connectionId);
+        super("Invalid webhook signature for connection: " + connectionId);
     }
 }

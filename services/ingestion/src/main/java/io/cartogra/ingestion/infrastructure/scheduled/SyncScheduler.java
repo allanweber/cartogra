@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 /**
  * Periodic tick that finds due scheduled connections and triggers a sync for each.
@@ -32,12 +33,21 @@ public class SyncScheduler {
 
     @Scheduled(fixedDelayString = "${ingestion.sync.poll-interval:PT15M}")
     public void tick() {
-        for (ScmConnection conn : connectionRepository.findDue()) {
+        List<ScmConnection> due;
+        try {
+            due = connectionRepository.findDue();
+        } catch (Exception ex) {
+            log.error("Scheduler: failed to query due connections — skipping tick: {}", ex.getMessage());
+            return;
+        }
+        log.debug("Scheduler tick: {} connection(s) due", due.size());
+        for (ScmConnection conn : due) {
             try {
                 scheduledSyncService.attemptForConnection(conn);
                 Instant now = Instant.now();
                 Instant next = now.plus(conn.pollIntervalMinutes(), ChronoUnit.MINUTES);
                 connectionRepository.updateSyncTimestamps(conn.id(), now, next);
+                log.info("Scheduler: triggered sync for connection={} next={}", conn.id(), next);
             } catch (Exception ex) {
                 log.warn("Scheduler: failed for connection={}: {}", conn.id(), ex.getMessage());
             }
