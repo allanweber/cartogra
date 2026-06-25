@@ -48,7 +48,7 @@ class AzureDevOpsProviderWebhookTest {
 
     @Test
     void isRelevantWebhookEvent_otherEventIsIgnored() {
-        String body = "{\"eventType\":\"git.pullrequest.created\"}";
+        String body = "{\"eventType\":\"build.complete\"}";
         assertThat(provider.isRelevantWebhookEvent(Map.of(), body)).isFalse();
     }
 }

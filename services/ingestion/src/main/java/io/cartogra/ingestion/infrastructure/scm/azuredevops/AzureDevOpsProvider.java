@@ -21,7 +21,6 @@ import java.util.Set;
 @Component
 public class AzureDevOpsProvider implements ScmProvider {
 
-    /** Azure DevOps service hook eventType values that warrant a re-sync. */
     private static final Set<String> RELEVANT_EVENTS = Set.of(
             "git.push",
             "git.pullrequest.created",
