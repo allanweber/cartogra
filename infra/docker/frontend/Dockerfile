@@ -23,8 +23,8 @@ FROM node:22-slim AS runtime
 # Phase 0 stub image for the frontend SSR runtime.
 WORKDIR /app
 
-COPY --from=builder --chown=node:node /app/frontend/.output ./.output
+COPY --from=builder --chown=node:node /app/frontend/dist ./dist
 
 USER node
 EXPOSE 3000
-CMD ["node", ".output/server/index.mjs"]
+CMD ["node", "dist/server/server.js"]
