@@ -5,6 +5,7 @@ import io.cartogra.ingestion.repository.SyncJobRepository;
 import io.cartogra.ingestion.domain.SyncResultPayload;
 import io.cartogra.ingestion.domain.SyncJob;
 import io.cartogra.ingestion.infrastructure.kafka.SyncCommandConsumer;
+import io.cartogra.test.KafkaTestSupport;
 import io.cartogra.test.PostgresTestSupport;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -17,7 +18,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -35,11 +35,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(properties = "ingestion.workers.k8s.enabled=false")
-@EmbeddedKafka(
-        partitions = 1,
-        bootstrapServersProperty = "spring.kafka.bootstrap-servers",
-        topics = {"cartogra.ingestion.sync.completed"}
-)
 class StaleJobReaperIT {
 
     @MockitoBean
@@ -52,6 +47,7 @@ class StaleJobReaperIT {
                 () -> PostgresTestSupport.POSTGRES.getJdbcUrl() + "&currentSchema=ingestion");
         registry.add("spring.datasource.username", PostgresTestSupport.POSTGRES::getUsername);
         registry.add("spring.datasource.password", PostgresTestSupport.POSTGRES::getPassword);
+        registry.add("spring.kafka.bootstrap-servers", KafkaTestSupport.KAFKA::getBootstrapServers);
     }
 
     @Autowired

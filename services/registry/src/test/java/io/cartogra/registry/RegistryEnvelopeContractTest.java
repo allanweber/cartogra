@@ -1,12 +1,12 @@
 package io.cartogra.registry;
 
 import io.cartogra.test.OpenApiContractValidator;
+import io.cartogra.test.KafkaTestSupport;
 import io.cartogra.test.PostgresTestSupport;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import tools.jackson.databind.ObjectMapper;
@@ -22,15 +22,6 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@EmbeddedKafka(
-        partitions = 1,
-        bootstrapServersProperty = "spring.kafka.bootstrap-servers",
-        topics = {
-                "cartogra.registry.service.registered",
-                "cartogra.registry.service.updated",
-                "cartogra.registry.service.deleted"
-        }
-)
 class RegistryEnvelopeContractTest {
 
     private static final HttpClient HTTP = HttpClient.newHttpClient();
@@ -48,6 +39,7 @@ class RegistryEnvelopeContractTest {
                 () -> PostgresTestSupport.POSTGRES.getJdbcUrl() + "&currentSchema=registry");
         registry.add("spring.datasource.username", PostgresTestSupport.POSTGRES::getUsername);
         registry.add("spring.datasource.password", PostgresTestSupport.POSTGRES::getPassword);
+        registry.add("spring.kafka.bootstrap-servers", KafkaTestSupport.KAFKA::getBootstrapServers);
     }
 
     private final OpenApiContractValidator contractValidator =

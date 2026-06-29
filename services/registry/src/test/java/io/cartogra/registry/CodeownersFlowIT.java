@@ -2,6 +2,7 @@ package io.cartogra.registry;
 
 import io.cartogra.common.event.EventEnvelope;
 import io.cartogra.registry.domain.event.OwnershipResolvedPayload;
+import io.cartogra.test.KafkaTestSupport;
 import io.cartogra.test.PostgresTestSupport;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -17,7 +18,6 @@ import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.MessageListenerContainer;
-import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.kafka.test.utils.ContainerTestUtils;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -36,16 +36,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@EmbeddedKafka(
-        partitions = 1,
-        bootstrapServersProperty = "spring.kafka.bootstrap-servers",
-        topics = {
-                "cartogra.ingestion.ownership.resolved",
-                "cartogra.registry.service.registered",
-                "cartogra.registry.service.updated",
-                "cartogra.registry.service.deleted"
-        }
-)
 class CodeownersFlowIT {
 
     private static final HttpClient HTTP = HttpClient.newHttpClient();
@@ -75,6 +65,7 @@ class CodeownersFlowIT {
                 () -> PostgresTestSupport.POSTGRES.getJdbcUrl() + "&currentSchema=registry");
         registry.add("spring.datasource.username", PostgresTestSupport.POSTGRES::getUsername);
         registry.add("spring.datasource.password", PostgresTestSupport.POSTGRES::getPassword);
+        registry.add("spring.kafka.bootstrap-servers", KafkaTestSupport.KAFKA::getBootstrapServers);
     }
 
     @Test

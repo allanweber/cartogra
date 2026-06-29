@@ -2,6 +2,7 @@ package io.cartogra.registry;
 
 import io.cartogra.common.event.EventEnvelope;
 import io.cartogra.registry.domain.Service;
+import io.cartogra.test.KafkaTestSupport;
 import io.cartogra.test.PostgresTestSupport;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -13,7 +14,6 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import tools.jackson.core.type.TypeReference;
@@ -32,15 +32,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@EmbeddedKafka(
-        partitions = 1,
-        bootstrapServersProperty = "spring.kafka.bootstrap-servers",
-        topics = {
-                "cartogra.registry.service.registered",
-                "cartogra.registry.service.updated",
-                "cartogra.registry.service.deleted"
-        }
-)
 class ServiceCrudIT {
 
     private static final HttpClient HTTP = HttpClient.newHttpClient();
@@ -55,6 +46,7 @@ class ServiceCrudIT {
                 () -> PostgresTestSupport.POSTGRES.getJdbcUrl() + "&currentSchema=registry");
         registry.add("spring.datasource.username", PostgresTestSupport.POSTGRES::getUsername);
         registry.add("spring.datasource.password", PostgresTestSupport.POSTGRES::getPassword);
+        registry.add("spring.kafka.bootstrap-servers", KafkaTestSupport.KAFKA::getBootstrapServers);
     }
 
     @LocalServerPort

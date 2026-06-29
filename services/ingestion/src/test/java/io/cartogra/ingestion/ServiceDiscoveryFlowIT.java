@@ -3,6 +3,7 @@ package io.cartogra.ingestion;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import io.cartogra.common.event.SyncCommandPayload;
 import io.cartogra.ingestion.domain.SyncExecutionService;
+import io.cartogra.test.KafkaTestSupport;
 import io.cartogra.test.PostgresTestSupport;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -13,7 +14,6 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import tools.jackson.databind.JsonNode;
@@ -31,16 +31,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 @SpringBootTest
-@EmbeddedKafka(
-        partitions = 1,
-        bootstrapServersProperty = "spring.kafka.bootstrap-servers",
-        topics = {
-                "cartogra.registry.sync.command",
-                "cartogra.ingestion.sync.completed",
-                "cartogra.ingestion.service.discovered",
-                "cartogra.ingestion.ownership.resolved"
-        }
-)
 class ServiceDiscoveryFlowIT {
 
     @RegisterExtension
@@ -58,6 +48,7 @@ class ServiceDiscoveryFlowIT {
         registry.add("spring.flyway.schemas", () -> "ingestion");
         registry.add("spring.flyway.default-schema", () -> "ingestion");
         registry.add("ingestion.workers.k8s.enabled", () -> "false");
+        registry.add("spring.kafka.bootstrap-servers", KafkaTestSupport.KAFKA::getBootstrapServers);
     }
 
     @Value("${spring.kafka.bootstrap-servers}")
@@ -121,7 +112,7 @@ class ServiceDiscoveryFlowIT {
         syncExecutionService.execute(payload);
 
         List<ConsumerRecord<String, String>> messages = pollTopic(
-                "cartogra.ingestion.service.discovered", bootstrapServers);
+                "cartogra.ingestion.service.discovered", bootstrapServers, "test-org/payments-service");
 
         await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
                 assertThat(messages).isNotEmpty()
@@ -140,7 +131,7 @@ class ServiceDiscoveryFlowIT {
         assertThat(techStackList).contains("java", "spring-boot");
     }
 
-    private List<ConsumerRecord<String, String>> pollTopic(String topic, String bootstrapServers) {
+    private List<ConsumerRecord<String, String>> pollTopic(String topic, String bootstrapServers, String key) {
         List<ConsumerRecord<String, String>> records = new ArrayList<>();
         try (var consumer = new KafkaConsumer<String, String>(Map.of(
                 ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers,
@@ -152,7 +143,9 @@ class ServiceDiscoveryFlowIT {
             consumer.subscribe(List.of(topic));
             long deadline = System.currentTimeMillis() + 10_000;
             while (System.currentTimeMillis() < deadline) {
-                consumer.poll(Duration.ofMillis(500)).forEach(records::add);
+                consumer.poll(Duration.ofMillis(500)).forEach(r -> {
+                    if (key.equals(r.key())) records.add(r);
+                });
                 if (!records.isEmpty()) break;
             }
         }
