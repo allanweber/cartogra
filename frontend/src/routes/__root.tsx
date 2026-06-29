@@ -71,20 +71,18 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         </a>
         <TooltipProvider>
           {children}
-          {import.meta.env.DEV && (
-            <TanStackDevtools
-              config={{
-                position: 'bottom-right',
-              }}
-              plugins={[
-                {
-                  name: 'Tanstack Router',
-                  render: <TanStackRouterDevtoolsPanel />,
-                },
-                TanStackQueryDevtools,
-              ]}
-            />
-          )}
+          <TanStackDevtools
+            config={{
+              position: 'bottom-right',
+            }}
+            plugins={[
+              {
+                name: 'Tanstack Router',
+                render: <TanStackRouterDevtoolsPanel />,
+              },
+              TanStackQueryDevtools,
+            ]}
+          />
         </TooltipProvider>
         <Scripts />
       </body>
