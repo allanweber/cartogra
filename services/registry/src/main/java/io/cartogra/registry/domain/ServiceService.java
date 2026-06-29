@@ -24,6 +24,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -97,20 +98,34 @@ public class ServiceService {
             healthEndpointValidator.validate(req.healthEndpoint());
         }
 
+        String name           = req.name()          != null ? req.name()          : existing.name();
+        String description    = req.description()   != null ? req.description()   : existing.description();
+        String repositoryUrl  = req.repositoryUrl() != null ? req.repositoryUrl() : existing.repositoryUrl();
+        String techStack      = req.techStack()     != null ? req.techStack()     : existing.techStack();
+        String metadata       = req.metadata()      != null ? req.metadata()      : existing.metadata();
+        ServiceHealthStatus healthStatus = req.healthStatus() != null
+                ? ServiceHealthStatus.fromString(req.healthStatus()) : existing.healthStatus();
+        String healthEndpoint = req.healthEndpoint() != null ? req.healthEndpoint() : existing.healthEndpoint();
+
+        boolean changed = !Objects.equals(existing.name(), name)
+                || !Objects.equals(existing.description(), description)
+                || !Objects.equals(existing.repositoryUrl(), repositoryUrl)
+                || !Objects.equals(existing.techStack(), techStack)
+                || !Objects.equals(existing.metadata(), metadata)
+                || existing.healthStatus() != healthStatus
+                || !Objects.equals(existing.healthEndpoint(), healthEndpoint);
+
+        if (!changed) {
+            return existing;
+        }
+
         var updated = new Service(
                 existing.id(), existing.tenantId(),
-                req.name() != null ? req.name() : existing.name(),
-                req.description() != null ? req.description() : existing.description(),
-                existing.teamId(),
-                req.repositoryUrl() != null ? req.repositoryUrl() : existing.repositoryUrl(),
-                req.techStack() != null ? req.techStack() : existing.techStack(),
-                req.metadata() != null ? req.metadata() : existing.metadata(),
-                req.healthStatus() != null ? ServiceHealthStatus.fromString(req.healthStatus()) : existing.healthStatus(),
-                existing.lastDeployedAt(), existing.createdAt(), Instant.now(), null,
+                name, description, existing.teamId(), repositoryUrl, techStack, metadata,
+                healthStatus, existing.lastDeployedAt(), existing.createdAt(), Instant.now(), null,
                 existing.externalId(), existing.connectionId(), existing.source(), existing.repositoryRef(),
                 existing.k8sCluster(), existing.k8sNamespace(), existing.k8sDeployment(),
-                req.healthEndpoint() != null ? req.healthEndpoint() : existing.healthEndpoint(),
-                existing.lastCommitAt(), existing.lastCommitSha(), existing.healthCheckedAt()
+                healthEndpoint, existing.lastCommitAt(), existing.lastCommitSha(), existing.healthCheckedAt()
         );
 
         Service saved = serviceRepository.save(updated);

@@ -31,9 +31,17 @@ public class TenantOidcConfigService {
 
     public Optional<TenantOidcConfig> update(UUID id, UUID tenantId, TenantOidcConfigRequest request) {
         return repository.findByIdAndTenantId(id, tenantId)
-            .map(existing -> repository.save(new TenantOidcConfig(existing.id(), existing.tenantId(),
-                request.discoveryUri(), request.clientId(), request.clientSecret(),
-                existing.enabled(), existing.createdAt(), Instant.now(), existing.deletedAt())));
+            .map(existing -> {
+                boolean changed = !request.discoveryUri().equals(existing.discoveryUri())
+                        || !request.clientId().equals(existing.clientId())
+                        || !request.clientSecret().equals(existing.clientSecret());
+                if (!changed) {
+                    return existing;
+                }
+                return repository.save(new TenantOidcConfig(existing.id(), existing.tenantId(),
+                    request.discoveryUri(), request.clientId(), request.clientSecret(),
+                    existing.enabled(), existing.createdAt(), Instant.now(), existing.deletedAt()));
+            });
     }
 
     public void delete(UUID id, UUID tenantId) {

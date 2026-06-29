@@ -64,6 +64,18 @@ public class ScmConnectionService {
         boolean scheduler = req.syncScheduler() != null ? req.syncScheduler() : existing.syncScheduler();
         int interval = req.pollIntervalMinutes() != null ? req.pollIntervalMinutes() : existing.pollIntervalMinutes();
         boolean webhook = req.webhookEnabled() != null ? req.webhookEnabled() : existing.webhookEnabled();
+        String provider = req.provider() != null ? req.provider() : existing.provider();
+        String config = req.config() != null ? req.config() : existing.config();
+
+        boolean changed = !provider.equals(existing.provider())
+                || !config.equals(existing.config())
+                || scheduler != existing.syncScheduler()
+                || interval != existing.pollIntervalMinutes()
+                || webhook != existing.webhookEnabled();
+
+        if (!changed) {
+            return existing;
+        }
 
         // Schedule the first tick when scheduling is newly enabled; clear it when disabled.
         Instant nextSyncAt = existing.nextSyncAt();
@@ -76,8 +88,8 @@ public class ScmConnectionService {
         return repository.save(new ScmConnection(
                 existing.id(),
                 existing.tenantId(),
-                req.provider() != null ? req.provider() : existing.provider(),
-                req.config() != null ? req.config() : existing.config(),
+                provider,
+                config,
                 scheduler,
                 interval,
                 nextSyncAt,

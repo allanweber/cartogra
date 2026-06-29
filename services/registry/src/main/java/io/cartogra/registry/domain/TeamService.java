@@ -40,6 +40,10 @@ public class TeamService {
         Team existing = teamRepository.findById(tenantId, teamId)
                 .orElseThrow(() -> new TeamNotFoundException(teamId));
 
+        if (existing.name().equals(name)) {
+            return existing;
+        }
+
         if (!existing.name().equalsIgnoreCase(name)
                 && teamRepository.existsByName(tenantId, name, teamId)) {
             throw new DuplicateTeamNameException(name);
