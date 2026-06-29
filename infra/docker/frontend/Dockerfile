@@ -5,7 +5,7 @@ ENV PNPM_CONFIG_STRICT_DEP_BUILDS=false
 
 RUN corepack enable && corepack prepare pnpm@10.33.4 --activate
 
-COPY frontend/package.json frontend/pnpm-lock.yaml ./
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 # Copy only files needed to build the app and avoid host artifacts like node_modules.
