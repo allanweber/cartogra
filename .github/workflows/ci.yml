@@ -77,9 +77,37 @@ jobs:
         if: steps.changes.outputs.registry == 'true'
         run: gradle :services:registry:build --no-daemon
 
+      - name: Upload registry test reports
+        if: steps.changes.outputs.registry == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-registry
+          path: |
+            services/registry/build/reports/tests/
+            services/registry/build/test-results/
+          retention-days: 14
+
+      - name: Upload registry coverage report
+        if: steps.changes.outputs.registry == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-registry
+          path: services/registry/build/reports/jacoco/test/html/
+          retention-days: 14
+
       - name: Build & test gateway
         if: steps.changes.outputs.gateway == 'true'
         run: gradle :services:gateway:build --no-daemon
+
+      - name: Upload gateway test reports
+        if: steps.changes.outputs.gateway == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-gateway
+          path: |
+            services/gateway/build/reports/tests/
+            services/gateway/build/test-results/
+          retention-days: 14
 
       # - name: Build & test topology
       #   if: steps.changes.outputs.topology == 'true'
@@ -97,6 +125,24 @@ jobs:
         if: steps.changes.outputs.ingestion == 'true'
         run: gradle :services:ingestion:build --no-daemon
 
+      - name: Upload ingestion test reports
+        if: steps.changes.outputs.ingestion == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-ingestion
+          path: |
+            services/ingestion/build/reports/tests/
+            services/ingestion/build/test-results/
+          retention-days: 14
+
+      - name: Upload ingestion coverage report
+        if: steps.changes.outputs.ingestion == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-ingestion
+          path: services/ingestion/build/reports/jacoco/test/html/
+          retention-days: 14
+
       - name: Trivy vulnerability scan — fail on CRITICAL or HIGH (unfixed suppressed)
         if: steps.changes.outputs.any == 'true'
         uses: aquasecurity/trivy-action@v0.36.0
@@ -106,30 +152,52 @@ jobs:
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
           ignore-unfixed: true
+          format: 'table'
+          output: 'trivy-report.txt'
+
+      - name: Upload Trivy report
+        if: steps.changes.outputs.any == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: trivy-report.txt
+          retention-days: 14
 
       - name: Write job summary
         if: always()
         run: |
           echo "## Backend — Build & Test" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Service | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Status | Coverage |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|----------|" >> $GITHUB_STEP_SUMMARY
 
           row() {
-            local service=$1 ran=$2
+            local service=$1 ran=$2 report=$3
             if [ "$ran" = "true" ]; then
-              echo "| $service | ✅ Built & tested |" >> $GITHUB_STEP_SUMMARY
+              echo "| $service | ✅ Built & tested | [HTML report]($report) |" >> $GITHUB_STEP_SUMMARY
             else
-              echo "| $service | ⏭️ Skipped |" >> $GITHUB_STEP_SUMMARY
+              echo "| $service | ⏭️ Skipped | — |" >> $GITHUB_STEP_SUMMARY
             fi
           }
 
-          row registry    "${{ steps.changes.outputs.registry }}"
-          row gateway     "${{ steps.changes.outputs.gateway }}"
-          row topology    "${{ steps.changes.outputs.topology }}"
-          row contract    "${{ steps.changes.outputs.contract }}"
-          row intelligence "${{ steps.changes.outputs.intelligence }}"
-          row ingestion   "${{ steps.changes.outputs.ingestion }}"
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          row registry     "${{ steps.changes.outputs.registry }}"     "$RUN_URL#artifacts"
+          row gateway      "${{ steps.changes.outputs.gateway }}"      "—"
+          row topology     "${{ steps.changes.outputs.topology }}"     "—"
+          row contract     "${{ steps.changes.outputs.contract }}"     "—"
+          row intelligence "${{ steps.changes.outputs.intelligence }}" "—"
+          row ingestion    "${{ steps.changes.outputs.ingestion }}"    "$RUN_URL#artifacts"
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> Coverage artifacts (JaCoCo HTML) are uploaded for **registry** and **ingestion** when their tests run. Download from the run's Artifacts section." >> $GITHUB_STEP_SUMMARY
+
+          if [ -f trivy-report.txt ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "## Trivy Vulnerability Scan" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat trivy-report.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
 
   frontend:
     name: Frontend — Lint & Test

@@ -1,7 +1,8 @@
 package io.cartogra.registry;
 
 import io.cartogra.common.event.EventEnvelope;
-import io.cartogra.registry.domain.event.ServiceRegisteredPayload;
+import io.cartogra.registry.domain.Service;
+import io.cartogra.test.KafkaTestSupport;
 import io.cartogra.test.PostgresTestSupport;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -13,7 +14,6 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import tools.jackson.core.type.TypeReference;
@@ -32,15 +32,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@EmbeddedKafka(
-        partitions = 1,
-        bootstrapServersProperty = "spring.kafka.bootstrap-servers",
-        topics = {
-                "cartogra.registry.service.registered",
-                "cartogra.registry.service.updated",
-                "cartogra.registry.service.deleted"
-        }
-)
 class ServiceCrudIT {
 
     private static final HttpClient HTTP = HttpClient.newHttpClient();
@@ -55,6 +46,7 @@ class ServiceCrudIT {
                 () -> PostgresTestSupport.POSTGRES.getJdbcUrl() + "&currentSchema=registry");
         registry.add("spring.datasource.username", PostgresTestSupport.POSTGRES::getUsername);
         registry.add("spring.datasource.password", PostgresTestSupport.POSTGRES::getPassword);
+        registry.add("spring.kafka.bootstrap-servers", KafkaTestSupport.KAFKA::getBootstrapServers);
     }
 
     @LocalServerPort
@@ -103,12 +95,14 @@ class ServiceCrudIT {
         ConsumerRecord<String, String> registeredRecord = pollForRecord("cartogra.registry.service.registered", serviceId);
         assertThat(registeredRecord).isNotNull();
         assertTraceparent(registeredRecord);
-        EventEnvelope<ServiceRegisteredPayload> registeredEnvelope = objectMapper.readValue(
+        EventEnvelope<Service> registeredEnvelope = objectMapper.readValue(
                 registeredRecord.value(),
-                new TypeReference<EventEnvelope<ServiceRegisteredPayload>>() {});
+                new TypeReference<EventEnvelope<Service>>() {});
         assertThat(registeredEnvelope.eventType()).isEqualTo("service.registered");
         assertThat(registeredEnvelope.entityId()).isEqualTo(UUID.fromString(serviceId));
         assertThat(registeredEnvelope.tenantId()).isEqualTo(TENANT);
+        assertThat(registeredEnvelope.payload().name()).isEqualTo("payments-svc");
+        assertThat(registeredEnvelope.payload().deletedAt()).isNull();
 
         // READ
         HttpResponse<String> got = HTTP.send(
@@ -128,11 +122,12 @@ class ServiceCrudIT {
         ConsumerRecord<String, String> updatedRecord = pollForRecord("cartogra.registry.service.updated", serviceId);
         assertThat(updatedRecord).isNotNull();
         assertTraceparent(updatedRecord);
-        EventEnvelope<ServiceRegisteredPayload> updatedEnvelope = objectMapper.readValue(
+        EventEnvelope<Service> updatedEnvelope = objectMapper.readValue(
                 updatedRecord.value(),
-                new TypeReference<EventEnvelope<ServiceRegisteredPayload>>() {});
+                new TypeReference<EventEnvelope<Service>>() {});
         assertThat(updatedEnvelope.eventType()).isEqualTo("service.updated");
         assertThat(updatedEnvelope.entityId()).isEqualTo(UUID.fromString(serviceId));
+        assertThat(updatedEnvelope.payload().name()).isEqualTo("payments-service");
 
         // DELETE
         HttpResponse<String> deleted = HTTP.send(
@@ -142,10 +137,11 @@ class ServiceCrudIT {
         ConsumerRecord<String, String> deletedRecord = pollForRecord("cartogra.registry.service.deleted", serviceId);
         assertThat(deletedRecord).isNotNull();
         assertTraceparent(deletedRecord);
-        EventEnvelope<ServiceRegisteredPayload> deletedEnvelope = objectMapper.readValue(
+        EventEnvelope<Service> deletedEnvelope = objectMapper.readValue(
                 deletedRecord.value(),
-                new TypeReference<EventEnvelope<ServiceRegisteredPayload>>() {});
+                new TypeReference<EventEnvelope<Service>>() {});
         assertThat(deletedEnvelope.eventType()).isEqualTo("service.deleted");
+        assertThat(deletedEnvelope.payload().deletedAt()).isNotNull();
 
         // 404 after delete
         HttpResponse<String> gone = HTTP.send(

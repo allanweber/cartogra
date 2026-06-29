@@ -3,6 +3,7 @@ package io.cartogra.ingestion.infrastructure.kafka;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import io.cartogra.common.event.EventEnvelope;
 import io.cartogra.common.event.SyncCommandPayload;
+import io.cartogra.test.KafkaTestSupport;
 import io.cartogra.test.PostgresTestSupport;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -14,7 +15,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import tools.jackson.databind.ObjectMapper;
@@ -28,11 +28,6 @@ import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMoc
 import static org.awaitility.Awaitility.await;
 
 @SpringBootTest
-@EmbeddedKafka(
-        partitions = 1,
-        bootstrapServersProperty = "spring.kafka.bootstrap-servers",
-        topics = {"cartogra.registry.sync.command", "cartogra.ingestion.sync.completed"}
-)
 class SyncWorkerIT {
 
     @RegisterExtension
@@ -50,6 +45,7 @@ class SyncWorkerIT {
         registry.add("spring.flyway.schemas", () -> "ingestion");
         registry.add("spring.flyway.default-schema", () -> "ingestion");
         registry.add("ingestion.workers.k8s.enabled", () -> "false");
+        registry.add("spring.kafka.bootstrap-servers", KafkaTestSupport.KAFKA::getBootstrapServers);
     }
 
     @Value("${spring.kafka.bootstrap-servers}")

@@ -2,6 +2,7 @@ package io.cartogra.ingestion;
 
 import io.cartogra.ingestion.infrastructure.k8s.KubernetesWorker;
 import io.cartogra.ingestion.infrastructure.kafka.ServiceDiscoveredProducer;
+import io.cartogra.test.KafkaTestSupport;
 import io.cartogra.test.PostgresTestSupport;
 import io.fabric8.kubernetes.api.model.EndpointAddress;
 import io.fabric8.kubernetes.api.model.EndpointSubset;
@@ -22,7 +23,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import tools.jackson.databind.JsonNode;
@@ -39,16 +39,6 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 
 @SpringBootTest
-@EmbeddedKafka(
-        partitions = 1,
-        bootstrapServersProperty = "spring.kafka.bootstrap-servers",
-        topics = {
-                "cartogra.registry.sync.command",
-                "cartogra.ingestion.sync.completed",
-                "cartogra.ingestion.service.discovered",
-                "cartogra.ingestion.ownership.resolved"
-        }
-)
 class KubernetesWorkerIT {
 
     private static final UUID TENANT_ID = UUID.fromString("00000000-0000-0000-0000-000000000099");
@@ -65,6 +55,7 @@ class KubernetesWorkerIT {
         registry.add("spring.flyway.schemas", () -> "ingestion");
         registry.add("spring.flyway.default-schema", () -> "ingestion");
         registry.add("ingestion.workers.k8s.enabled", () -> "false");
+        registry.add("spring.kafka.bootstrap-servers", KafkaTestSupport.KAFKA::getBootstrapServers);
     }
 
     @Value("${spring.kafka.bootstrap-servers}")
@@ -114,8 +105,9 @@ class KubernetesWorkerIT {
         KubernetesWorker worker = new KubernetesWorker(kubernetesClient, serviceDiscoveredProducer);
         worker.handleServiceEvent(NS, SVC_NAME);
 
+        String expectedKey = NS + "/" + SVC_NAME;
         List<ConsumerRecord<String, String>> messages = pollTopic(
-                "cartogra.ingestion.service.discovered", bootstrapServers);
+                "cartogra.ingestion.service.discovered", bootstrapServers, expectedKey);
 
         assertThat(messages).isNotEmpty();
         JsonNode envelope = objectMapper.readTree(messages.get(0).value());
@@ -126,7 +118,7 @@ class KubernetesWorkerIT {
         assertThat(objectMapper.treeToValue(payload.get("tenantId"), String.class)).isEqualTo(TENANT_ID.toString());
     }
 
-    private List<ConsumerRecord<String, String>> pollTopic(String topic, String servers) {
+    private List<ConsumerRecord<String, String>> pollTopic(String topic, String servers, String key) {
         List<ConsumerRecord<String, String>> records = new ArrayList<>();
         try (var consumer = new KafkaConsumer<String, String>(Map.of(
                 ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, servers,
@@ -138,7 +130,9 @@ class KubernetesWorkerIT {
             consumer.subscribe(List.of(topic));
             long deadline = System.currentTimeMillis() + 10_000;
             while (System.currentTimeMillis() < deadline) {
-                consumer.poll(Duration.ofMillis(500)).forEach(records::add);
+                consumer.poll(Duration.ofMillis(500)).forEach(r -> {
+                    if (key.equals(r.key())) records.add(r);
+                });
                 if (!records.isEmpty()) break;
             }
         }

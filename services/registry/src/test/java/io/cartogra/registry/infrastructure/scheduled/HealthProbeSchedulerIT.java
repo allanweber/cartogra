@@ -3,6 +3,7 @@ package io.cartogra.registry.infrastructure.scheduled;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import io.cartogra.registry.domain.ServiceHealthService;
+import io.cartogra.test.KafkaTestSupport;
 import io.cartogra.test.PostgresTestSupport;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -11,7 +12,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -30,15 +30,6 @@ import static org.assertj.core.api.Assertions.assertThat;
                 "registry.health.probe-interval=PT999H"
         }
 )
-@EmbeddedKafka(
-        partitions = 1,
-        bootstrapServersProperty = "spring.kafka.bootstrap-servers",
-        topics = {
-                "cartogra.registry.service.registered",
-                "cartogra.registry.service.updated",
-                "cartogra.registry.service.deleted"
-        }
-)
 class HealthProbeSchedulerIT {
 
     @DynamicPropertySource
@@ -47,6 +38,7 @@ class HealthProbeSchedulerIT {
                 () -> PostgresTestSupport.POSTGRES.getJdbcUrl() + "&currentSchema=registry");
         registry.add("spring.datasource.username", PostgresTestSupport.POSTGRES::getUsername);
         registry.add("spring.datasource.password", PostgresTestSupport.POSTGRES::getPassword);
+        registry.add("spring.kafka.bootstrap-servers", KafkaTestSupport.KAFKA::getBootstrapServers);
     }
 
     @Autowired

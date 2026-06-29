@@ -1,5 +1,6 @@
 package io.cartogra.ingestion.infrastructure.scheduled;
 
+import io.cartogra.test.KafkaTestSupport;
 import io.cartogra.test.PostgresTestSupport;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -10,7 +11,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -32,11 +32,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * (PT999H) so the test drives {@code tick()} explicitly.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@EmbeddedKafka(
-        partitions = 1,
-        bootstrapServersProperty = "spring.kafka.bootstrap-servers",
-        topics = {"cartogra.registry.sync.command"}
-)
 class SyncSchedulerIT {
 
     @DynamicPropertySource
@@ -50,6 +45,7 @@ class SyncSchedulerIT {
         registry.add("spring.flyway.default-schema", () -> "ingestion");
         registry.add("ingestion.workers.k8s.enabled", () -> "false");
         registry.add("ingestion.sync.poll-interval", () -> "PT999H");
+        registry.add("spring.kafka.bootstrap-servers", KafkaTestSupport.KAFKA::getBootstrapServers);
     }
 
     @Value("${spring.kafka.bootstrap-servers}")
