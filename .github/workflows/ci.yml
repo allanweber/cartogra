@@ -77,6 +77,14 @@ jobs:
         if: steps.changes.outputs.registry == 'true'
         run: gradle :services:registry:build --no-daemon
 
+      - name: Upload registry coverage report
+        if: steps.changes.outputs.registry == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-registry
+          path: services/registry/build/reports/jacoco/test/html/
+          retention-days: 14
+
       - name: Build & test gateway
         if: steps.changes.outputs.gateway == 'true'
         run: gradle :services:gateway:build --no-daemon
@@ -97,6 +105,14 @@ jobs:
         if: steps.changes.outputs.ingestion == 'true'
         run: gradle :services:ingestion:build --no-daemon
 
+      - name: Upload ingestion coverage report
+        if: steps.changes.outputs.ingestion == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-ingestion
+          path: services/ingestion/build/reports/jacoco/test/html/
+          retention-days: 14
+
       - name: Trivy vulnerability scan — fail on CRITICAL or HIGH (unfixed suppressed)
         if: steps.changes.outputs.any == 'true'
         uses: aquasecurity/trivy-action@v0.36.0
@@ -112,24 +128,28 @@ jobs:
         run: |
           echo "## Backend — Build & Test" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Service | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Status | Coverage |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|----------|" >> $GITHUB_STEP_SUMMARY
 
           row() {
-            local service=$1 ran=$2
+            local service=$1 ran=$2 report=$3
             if [ "$ran" = "true" ]; then
-              echo "| $service | ✅ Built & tested |" >> $GITHUB_STEP_SUMMARY
+              echo "| $service | ✅ Built & tested | [HTML report]($report) |" >> $GITHUB_STEP_SUMMARY
             else
-              echo "| $service | ⏭️ Skipped |" >> $GITHUB_STEP_SUMMARY
+              echo "| $service | ⏭️ Skipped | — |" >> $GITHUB_STEP_SUMMARY
             fi
           }
 
-          row registry    "${{ steps.changes.outputs.registry }}"
-          row gateway     "${{ steps.changes.outputs.gateway }}"
-          row topology    "${{ steps.changes.outputs.topology }}"
-          row contract    "${{ steps.changes.outputs.contract }}"
-          row intelligence "${{ steps.changes.outputs.intelligence }}"
-          row ingestion   "${{ steps.changes.outputs.ingestion }}"
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          row registry     "${{ steps.changes.outputs.registry }}"     "$RUN_URL#artifacts"
+          row gateway      "${{ steps.changes.outputs.gateway }}"      "—"
+          row topology     "${{ steps.changes.outputs.topology }}"     "—"
+          row contract     "${{ steps.changes.outputs.contract }}"     "—"
+          row intelligence "${{ steps.changes.outputs.intelligence }}" "—"
+          row ingestion    "${{ steps.changes.outputs.ingestion }}"    "$RUN_URL#artifacts"
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> Coverage artifacts (JaCoCo HTML) are uploaded for **registry** and **ingestion** when their tests run. Download from the run's Artifacts section." >> $GITHUB_STEP_SUMMARY
 
   frontend:
     name: Frontend — Lint & Test

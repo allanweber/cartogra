@@ -1,6 +1,7 @@
 package io.cartogra.registry.domain;
 
 import io.cartogra.common.api.PageResult;
+import io.cartogra.registry.infrastructure.kafka.TeamLifecycleEventProducer;
 import io.cartogra.registry.repository.TeamRepository;
 import io.cartogra.registry.domain.exception.DuplicateTeamNameException;
 import io.cartogra.registry.domain.exception.TeamNotFoundException;
@@ -16,9 +17,11 @@ import java.util.UUID;
 public class TeamService {
 
     private final TeamRepository teamRepository;
+    private final TeamLifecycleEventProducer eventProducer;
 
-    public TeamService(TeamRepository teamRepository) {
+    public TeamService(TeamRepository teamRepository, TeamLifecycleEventProducer eventProducer) {
         this.teamRepository = teamRepository;
+        this.eventProducer = eventProducer;
     }
 
     @Transactional
@@ -27,7 +30,9 @@ public class TeamService {
             throw new DuplicateTeamNameException(name);
         }
         Instant now = Instant.now();
-        return teamRepository.save(new Team(UUID.randomUUID(), tenantId, name, now, now, null));
+        Team saved = teamRepository.save(new Team(UUID.randomUUID(), tenantId, name, now, now, null));
+        eventProducer.publishCreated(saved);
+        return saved;
     }
 
     @Transactional
@@ -39,16 +44,22 @@ public class TeamService {
                 && teamRepository.existsByName(tenantId, name, teamId)) {
             throw new DuplicateTeamNameException(name);
         }
-        return teamRepository.save(new Team(
+        Team saved = teamRepository.save(new Team(
                 existing.id(), existing.tenantId(), name,
                 existing.createdAt(), Instant.now(), null));
+        eventProducer.publishUpdated(saved);
+        return saved;
     }
 
     @Transactional
     public void delete(UUID tenantId, UUID teamId) {
-        teamRepository.findById(tenantId, teamId)
+        Team existing = teamRepository.findById(tenantId, teamId)
                 .orElseThrow(() -> new TeamNotFoundException(teamId));
+        Instant deletedAt = Instant.now();
         teamRepository.softDelete(tenantId, teamId);
+        eventProducer.publishDeleted(new Team(
+                existing.id(), existing.tenantId(), existing.name(),
+                existing.createdAt(), existing.updatedAt(), deletedAt));
     }
 
     public Team get(UUID tenantId, UUID teamId) {
