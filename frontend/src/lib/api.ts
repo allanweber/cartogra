@@ -22,8 +22,14 @@ async function tryRefresh(baseUrl: string): Promise<boolean> {
       method: 'POST',
       credentials: 'include',
     })
-      .then((r) => r.ok)
-      .catch(() => false)
+      .then((r) => {
+        if (!r.ok) console.warn('[auth] token refresh failed with status', r.status)
+        return r.ok
+      })
+      .catch((err) => {
+        console.warn('[auth] token refresh error', err)
+        return false
+      })
       .finally(() => {
         refreshPromise = null
       })

@@ -6,7 +6,6 @@
 
 ### Catalog UI wired to real APIs
 
-- [ ] 1.64 [UI] Catalog list + detail wired to registry. Replace `MOCK_SERVICES` with a TanStack Query on `GET /api/registry/v1/services` (passes `team`, `health`, `q` from filter state — client-side `q` until Phase 2 server FTS); detail route loader hits `GET /api/registry/v1/services/{id}`. Render `Skeleton` while loading and `Alert` with `traceId` on error. Remove all `MOCK_SERVICES` imports.
 - [ ] 1.65 [CODE] Service profile editing. Registry: `PATCH /v1/services/{id}` accepts `description`, `documentation_url`, `runbook_url`, `sla_target`, `tier`, `tags`, `owner_team_id` (admin role or owning-team member). Validates `tier ∈ {critical, standard, experimental}`. Snapshots `services_history` on every change. UI: edit drawer in Catalog detail with TanStack Forms (tier select, tags chip input, owner team dropdown, free-text URLs). Optimistic update via TanStack Query mutation; rollback on error; surface `traceId`. ITs assert the patch + history snapshot + envelope.
 - [ ] 1.66 [UI] Teams page wired to `GET /api/registry/v1/teams`. Replace `MOCK_TEAMS`, add `Skeleton` and `Alert`-with-`traceId` states.
 - [ ] 1.67 [UI] SCM Connections management at `/settings/scm-connections`. List via `GET /api/registry/v1/scm-connections`; create connection via drawer form (provider selector, name, PAT/token); delete with confirmation dialog (`DELETE /api/registry/v1/scm-connections/{id}`). Last-synced status + health badge fed by 1.57. TanStack Query mutations for create/delete.
