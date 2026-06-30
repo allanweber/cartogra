@@ -72,8 +72,8 @@ function renderPage() {
 
 function mockApiFetch(services: PageResult<RegistryService> = EMPTY_SERVICES) {
   vi.mocked(apiFetch).mockImplementation((path: string) => {
-    if ((path as string).includes('/v1/teams')) return Promise.resolve(EMPTY_TEAMS)
-    if ((path as string).includes('/v1/services/tech-stacks')) return Promise.resolve([])
+    if (path.includes('/v1/teams')) return Promise.resolve(EMPTY_TEAMS)
+    if (path.includes('/v1/services/tech-stacks')) return Promise.resolve([])
     return Promise.resolve(services)
   })
 }
@@ -114,8 +114,8 @@ describe('CatalogPage', () => {
 
   it('shows error alert with message on fetch failure', async () => {
     vi.mocked(apiFetch).mockImplementation((path: string) => {
-      if ((path as string).includes('/v1/teams')) return Promise.resolve(EMPTY_TEAMS)
-      if ((path as string).includes('/v1/services/tech-stacks')) return Promise.resolve([])
+      if (path.includes('/v1/teams')) return Promise.resolve(EMPTY_TEAMS)
+      if (path.includes('/v1/services/tech-stacks')) return Promise.resolve([])
       return Promise.reject(new ApiError('SERVER_ERROR', 'registry unavailable', 'trace-xyz'))
     })
     renderPage()
@@ -124,8 +124,8 @@ describe('CatalogPage', () => {
 
   it('shows traceId in error alert', async () => {
     vi.mocked(apiFetch).mockImplementation((path: string) => {
-      if ((path as string).includes('/v1/teams')) return Promise.resolve(EMPTY_TEAMS)
-      if ((path as string).includes('/v1/services/tech-stacks')) return Promise.resolve([])
+      if (path.includes('/v1/teams')) return Promise.resolve(EMPTY_TEAMS)
+      if (path.includes('/v1/services/tech-stacks')) return Promise.resolve([])
       return Promise.reject(new ApiError('SERVER_ERROR', 'oops', 'trace-abc'))
     })
     renderPage()

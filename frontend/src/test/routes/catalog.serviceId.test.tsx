@@ -76,7 +76,7 @@ function renderPage() {
 
 function mockSuccess(service = MOCK_SERVICE) {
   vi.mocked(apiFetch).mockImplementation((path: string) => {
-    if ((path as string).includes('/v1/teams')) return Promise.resolve(EMPTY_TEAMS)
+    if (path.includes('/v1/teams')) return Promise.resolve(EMPTY_TEAMS)
     return Promise.resolve(service)
   })
 }
@@ -156,7 +156,7 @@ describe('ServiceDetailPage', () => {
 
   it('shows error alert on fetch failure', async () => {
     vi.mocked(apiFetch).mockImplementation((path: string) => {
-      if ((path as string).includes('/v1/teams')) return Promise.resolve(EMPTY_TEAMS)
+      if (path.includes('/v1/teams')) return Promise.resolve(EMPTY_TEAMS)
       return Promise.reject(new ApiError('NOT_FOUND', 'Service not found', 'trace-err'))
     })
     renderPage()
