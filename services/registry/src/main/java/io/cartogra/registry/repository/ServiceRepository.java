@@ -28,10 +28,12 @@ public interface ServiceRepository {
 
     Optional<Service> findByExternalId(UUID tenantId, String externalId);
 
-    Service upsertDiscovered(ServiceDiscoveryCommand command);
+    Optional<Service> upsertDiscovered(ServiceDiscoveryCommand command);
 
     /** Cross-tenant query; excludes K8s-sourced services and deleted rows. */
     List<Service> findAllWithHealthEndpoint();
 
     void updateHealth(UUID tenantId, UUID id, ServiceHealthStatus status, Instant checkedAt);
+
+    List<String> findDistinctTechStacks(UUID tenantId);
 }

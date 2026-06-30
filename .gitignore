@@ -63,3 +63,4 @@ build
 .mcp.json
 .claude/plans
 .scratch/
+frontend/test-results/

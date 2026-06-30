@@ -9,13 +9,12 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
-import tools.jackson.databind.ObjectMapper;
-
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -23,11 +22,9 @@ import java.util.UUID;
 public class JdbcServiceRepository implements ServiceRepository {
 
     private final NamedParameterJdbcTemplate jdbc;
-    private final ObjectMapper objectMapper;
 
-    public JdbcServiceRepository(NamedParameterJdbcTemplate jdbc, ObjectMapper objectMapper) {
+    public JdbcServiceRepository(NamedParameterJdbcTemplate jdbc) {
         this.jdbc = jdbc;
-        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -185,8 +182,7 @@ public class JdbcServiceRepository implements ServiceRepository {
     }
 
     @Override
-    public Service upsertDiscovered(ServiceDiscoveryCommand command) {
-        String techStackJson = serializeTechStack(command.techStack());
+    public Optional<Service> upsertDiscovered(ServiceDiscoveryCommand command) {
         Instant now = Instant.now();
 
         // First try by externalId (the discovery key). If that misses, fall back to name so a
@@ -197,33 +193,45 @@ public class JdbcServiceRepository implements ServiceRepository {
         }
         if (existing.isPresent()) {
             Service current = existing.get();
+            String description   = command.description()   != null ? command.description()   : current.description();
+            String repositoryUrl = command.repositoryUrl() != null ? command.repositoryUrl() : current.repositoryUrl();
+            List<String> techStack = !command.techStack().isEmpty() ? command.techStack()    : current.techStack();
+            ServiceHealthStatus healthStatus = ServiceHealthStatus.fromString(command.healthStatus());
+            String repositoryRef = command.repositoryRef() != null ? command.repositoryRef() : current.repositoryRef();
+            String k8sCluster    = command.k8sCluster()    != null ? command.k8sCluster()    : current.k8sCluster();
+            String k8sNamespace  = command.k8sNamespace()  != null ? command.k8sNamespace()  : current.k8sNamespace();
+            String k8sDeployment = command.k8sDeployment() != null ? command.k8sDeployment() : current.k8sDeployment();
+            String healthEndpoint = command.healthEndpoint() != null ? command.healthEndpoint() : current.healthEndpoint();
+            Instant lastCommitAt  = command.lastCommitAt()  != null ? command.lastCommitAt()  : current.lastCommitAt();
+            String lastCommitSha  = command.lastCommitSha() != null ? command.lastCommitSha() : current.lastCommitSha();
+
+            boolean changed = !Objects.equals(current.description(), description)
+                    || !Objects.equals(current.repositoryUrl(), repositoryUrl)
+                    || !Objects.equals(current.techStack(), techStack)
+                    || current.healthStatus() != healthStatus
+                    || !Objects.equals(current.connectionId(), command.connectionId())
+                    || !Objects.equals(current.source(), command.source())
+                    || !Objects.equals(current.repositoryRef(), repositoryRef)
+                    || !Objects.equals(current.k8sCluster(), k8sCluster)
+                    || !Objects.equals(current.k8sNamespace(), k8sNamespace)
+                    || !Objects.equals(current.k8sDeployment(), k8sDeployment)
+                    || !Objects.equals(current.healthEndpoint(), healthEndpoint)
+                    || !Objects.equals(current.lastCommitAt(), lastCommitAt)
+                    || !Objects.equals(current.lastCommitSha(), lastCommitSha);
+
+            if (!changed) {
+                return Optional.empty();
+            }
+
             var updated = new Service(
-                    current.id(),
-                    current.tenantId(),
-                    current.name(),
-                    command.description() != null ? command.description() : current.description(),
-                    current.teamId(),
-                    command.repositoryUrl() != null ? command.repositoryUrl() : current.repositoryUrl(),
-                    !command.techStack().isEmpty() ? techStackJson : current.techStack(),
-                    current.metadata(),
-                    ServiceHealthStatus.fromString(command.healthStatus()),
-                    current.lastDeployedAt(),
-                    current.createdAt(),
-                    now,
-                    null,
-                    current.externalId(),
-                    command.connectionId(),
-                    command.source(),
-                    command.repositoryRef() != null ? command.repositoryRef() : current.repositoryRef(),
-                    command.k8sCluster() != null ? command.k8sCluster() : current.k8sCluster(),
-                    command.k8sNamespace() != null ? command.k8sNamespace() : current.k8sNamespace(),
-                    command.k8sDeployment() != null ? command.k8sDeployment() : current.k8sDeployment(),
-                    command.healthEndpoint() != null ? command.healthEndpoint() : current.healthEndpoint(),
-                    command.lastCommitAt() != null ? command.lastCommitAt() : current.lastCommitAt(),
-                    command.lastCommitSha() != null ? command.lastCommitSha() : current.lastCommitSha(),
-                    current.healthCheckedAt()
+                    current.id(), current.tenantId(), current.name(),
+                    description, current.teamId(), repositoryUrl, techStack, current.metadata(),
+                    healthStatus, current.lastDeployedAt(), current.createdAt(), now, null,
+                    current.externalId(), command.connectionId(), command.source(),
+                    repositoryRef, k8sCluster, k8sNamespace, k8sDeployment,
+                    healthEndpoint, lastCommitAt, lastCommitSha, current.healthCheckedAt()
             );
-            return save(updated);
+            return Optional.of(save(updated));
         }
 
         var newService = new Service(
@@ -233,7 +241,7 @@ public class JdbcServiceRepository implements ServiceRepository {
                 command.description(),
                 null,
                 command.repositoryUrl(),
-                techStackJson,
+                command.techStack().isEmpty() ? null : command.techStack(),
                 null,
                 ServiceHealthStatus.fromString(command.healthStatus()),
                 null,
@@ -252,7 +260,7 @@ public class JdbcServiceRepository implements ServiceRepository {
                 command.lastCommitSha(),
                 null
         );
-        return save(newService);
+        return Optional.of(save(newService));
     }
 
     @Override
@@ -294,13 +302,15 @@ public class JdbcServiceRepository implements ServiceRepository {
         return jdbc.query(sql, params, SERVICE_MAPPER).stream().findFirst();
     }
 
-    private String serializeTechStack(List<String> techStack) {
-        if (techStack == null || techStack.isEmpty()) return null;
-        try {
-            return objectMapper.writeValueAsString(techStack);
-        } catch (Exception e) {
-            return null;
-        }
+    @Override
+    public List<String> findDistinctTechStacks(UUID tenantId) {
+        String sql = """
+                SELECT DISTINCT unnest(tech_stack) AS tech
+                FROM services
+                WHERE tenant_id = :tenantId AND tech_stack IS NOT NULL AND deleted_at IS NULL
+                ORDER BY tech ASC
+                """;
+        return jdbc.queryForList(sql, new MapSqlParameterSource("tenantId", tenantId), String.class);
     }
 
     private void applyFilter(StringBuilder sql, MapSqlParameterSource params, ServiceFilter filter) {
@@ -309,12 +319,22 @@ public class JdbcServiceRepository implements ServiceRepository {
             params.addValue("teamId", filter.teamId());
         }
         if (filter.healthStatus() != null) {
-            sql.append(" AND health_status = :healthStatus");
-            params.addValue("healthStatus", filter.healthStatus());
+            ServiceHealthStatus requested = ServiceHealthStatus.fromString(filter.healthStatus());
+            if (requested == ServiceHealthStatus.DEGRADED) {
+                sql.append(" AND health_status IN (:healthStatuses)");
+                params.addValue("healthStatuses", List.of("degraded", "unknown", "probe_auth_failed"));
+            } else {
+                sql.append(" AND health_status = :healthStatus");
+                params.addValue("healthStatus", requested.toDbValue());
+            }
         }
-        if (filter.techStackQuery() != null) {
-            sql.append(" AND tech_stack::text ILIKE :techStackQuery");
-            params.addValue("techStackQuery", "%" + filter.techStackQuery() + "%");
+        if (filter.techStackQuery() != null && !filter.techStackQuery().isEmpty()) {
+            sql.append(" AND tech_stack && ARRAY[:techStackQuery]::TEXT[]");
+            params.addValue("techStackQuery", filter.techStackQuery().toArray(String[]::new));
+        }
+        if (filter.source() != null) {
+            sql.append(" AND source = :source");
+            params.addValue("source", filter.source());
         }
         if (filter.search() != null && !filter.search().isBlank()) {
             sql.append(" AND to_tsvector('english', coalesce(name,'') || ' ' || coalesce(description,'')) @@ plainto_tsquery('english', :search)");
@@ -330,7 +350,7 @@ public class JdbcServiceRepository implements ServiceRepository {
                 .addValue("description", s.description())
                 .addValue("teamId", s.teamId())
                 .addValue("repositoryUrl", s.repositoryUrl())
-                .addValue("techStack", s.techStack())
+                .addValue("techStack", s.techStack() != null ? s.techStack().toArray(String[]::new) : null)
                 .addValue("metadata", s.metadata())
                 .addValue("healthStatus", s.healthStatus().toDbValue())
                 .addValue("lastDeployedAt", s.lastDeployedAt() != null ? java.sql.Timestamp.from(s.lastDeployedAt()) : null)
@@ -353,6 +373,8 @@ public class JdbcServiceRepository implements ServiceRepository {
     private static final RowMapper<Service> SERVICE_MAPPER = (rs, _) -> mapService(rs);
 
     private static Service mapService(ResultSet rs) throws SQLException {
+        java.sql.Array techStackArr = rs.getArray("tech_stack");
+        List<String> techStack = techStackArr != null ? List.of((String[]) techStackArr.getArray()) : null;
         return new Service(
                 UUID.fromString(rs.getString("id")),
                 UUID.fromString(rs.getString("tenant_id")),
@@ -360,7 +382,7 @@ public class JdbcServiceRepository implements ServiceRepository {
                 rs.getString("description"),
                 rs.getString("team_id") != null ? UUID.fromString(rs.getString("team_id")) : null,
                 rs.getString("repository_url"),
-                rs.getString("tech_stack"),
+                techStack,
                 rs.getString("metadata"),
                 ServiceHealthStatus.fromString(rs.getString("health_status")),
                 rs.getTimestamp("last_deployed_at") != null ? rs.getTimestamp("last_deployed_at").toInstant() : null,

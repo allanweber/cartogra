@@ -3,6 +3,7 @@ package io.cartogra.registry.domain;
 import org.jspecify.annotations.Nullable;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 public record Service(
@@ -12,7 +13,7 @@ public record Service(
         @Nullable String description,
         @Nullable UUID teamId,
         @Nullable String repositoryUrl,
-        @Nullable String techStack,
+        @Nullable List<String> techStack,
         @Nullable String metadata,
         ServiceHealthStatus healthStatus,
         @Nullable Instant lastDeployedAt,

@@ -4,6 +4,7 @@ import io.cartogra.registry.domain.Service;
 import org.jspecify.annotations.Nullable;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 public record ServiceResponse(
@@ -13,7 +14,7 @@ public record ServiceResponse(
         @Nullable String description,
         @Nullable UUID teamId,
         @Nullable String repositoryUrl,
-        @Nullable String techStack,
+        @Nullable List<String> techStack,
         @Nullable String metadata,
         String healthStatus,
         @Nullable Instant lastDeployedAt,

@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -23,8 +24,13 @@ import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.kafka.test.utils.ContainerTestUtils;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -36,6 +42,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class RegistryServiceDiscoveryConsumerIT {
+
+    private static final HttpClient HTTP = HttpClient.newHttpClient();
+
+    @LocalServerPort
+    int port;
 
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry registry) {
@@ -150,6 +161,52 @@ class RegistryServiceDiscoveryConsumerIT {
                     Optional<Service> found = serviceRepository.findByExternalId(tenantId, externalId);
                     assertThat(found).isPresent();
                     assertThat(found.get().lastCommitSha()).isEqualTo("sha-1");
+                });
+    }
+
+    @Test
+    void filterBySourceAfterDiscovery() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        UUID connectionId = UUID.randomUUID();
+        String externalId = "test-org/azdo-source-filter-svc";
+
+        var payload = new ServiceDiscoveredPayload(
+                tenantId, connectionId, "azuredevops", externalId,
+                "azdo-source-filter-svc", null, null, "main",
+                null, null, null, List.of(), "UNKNOWN", null, null, null);
+        var envelope = EventEnvelope.of("service.discovered", connectionId, tenantId, 1, payload);
+
+        var producerFactory = new DefaultKafkaProducerFactory<String, String>(Map.of(
+                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers,
+                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
+                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class));
+        var template = new KafkaTemplate<>(producerFactory);
+        template.send(new ProducerRecord<>("cartogra.ingestion.service.discovered",
+                externalId, objectMapper.writeValueAsString(envelope)));
+        template.flush();
+
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(15))
+                .pollInterval(Duration.ofMillis(300))
+                .untilAsserted(() -> {
+                    HttpResponse<String> resp = HTTP.send(
+                            HttpRequest.newBuilder()
+                                    .uri(URI.create("http://localhost:" + port + "/api/v1/services?source=azuredevops&limit=50"))
+                                    .header("X-Tenant-Id", tenantId.toString())
+                                    .GET()
+                                    .build(),
+                            HttpResponse.BodyHandlers.ofString());
+                    assertThat(resp.statusCode()).isEqualTo(200);
+                    JsonNode items = objectMapper.readTree(resp.body()).get("data").get("items");
+                    assertThat(items.isArray()).isTrue();
+                    boolean found = false;
+                    for (JsonNode item : items) {
+                        if (externalId.equals(item.get("externalId").textValue())) {
+                            assertThat(item.get("source").textValue()).isEqualTo("azuredevops");
+                            found = true;
+                        }
+                    }
+                    assertThat(found).as("discovered azuredevops service should appear in source=azuredevops results").isTrue();
                 });
     }
 }

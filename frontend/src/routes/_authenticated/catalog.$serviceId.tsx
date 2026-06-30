@@ -1,30 +1,71 @@
-import { createFileRoute, Link, notFound } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
 import { Activity, ArrowLeft, Clock, Code2, GitBranch, Shield, Users } from 'lucide-react'
 import { useState } from 'react'
 
 import { AppLayout } from '#/components/AppLayout'
+import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Badge } from '#/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
-import { MOCK_CONTRACTS, MOCK_SERVICES, MOCK_TIMELINE } from '#/lib/mock-data'
+import { Skeleton } from '#/components/ui/skeleton'
+import { ApiError, apiFetch } from '#/lib/api'
+import { SCM_LABEL, normalizeHealth } from '#/lib/registry-types'
 import { cn } from '#/lib/utils'
 
-import type { ScmProvider, ServiceHealth } from '#/lib/mock-data'
+import type { PageResult, RegistryService, RegistryTeam, ServiceHealth } from '#/lib/registry-types'
 
 export const Route = createFileRoute('/_authenticated/catalog/$serviceId')({
   component: ServiceDetailPage,
-  loader: ({ params }) => {
-    const service = MOCK_SERVICES.find((s) => s.id === params.serviceId)
-    if (!service) throw notFound()
-    return { service }
-  },
 })
 
 function ServiceDetailPage() {
-  const { service } = Route.useLoaderData()
+  const { serviceId } = Route.useParams()
   const [tab, setTab] = useState<'overview' | 'contracts' | 'activity'>('overview')
 
-  const contracts = MOCK_CONTRACTS.filter((c) => c.service === service.name)
-  const activity = MOCK_TIMELINE.filter((e) => e.service === service.name)
+  const { data: service, isLoading, error } = useQuery({
+    queryKey: ['service', serviceId],
+    queryFn: () => apiFetch<RegistryService>(`/v1/services/${serviceId}`),
+  })
+
+  const { data: teamsPage } = useQuery({
+    queryKey: ['teams'],
+    queryFn: () => apiFetch<PageResult<RegistryTeam>>('/v1/teams?limit=200'),
+  })
+
+  const teamMap = new Map((teamsPage?.items ?? []).map((t) => [t.id, t.name]))
+
+  if (isLoading) {
+    return (
+      <AppLayout title="Loading..." eyebrow="Service Catalog">
+        <div className="space-y-5">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-32 w-full rounded-xl" />
+          <div className="flex gap-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-16 w-32 rounded-lg" />
+            ))}
+          </div>
+        </div>
+      </AppLayout>
+    )
+  }
+
+  if (error || !service) {
+    return (
+      <AppLayout title="Error" eyebrow="Service Catalog">
+        <Alert variant="destructive">
+          <AlertDescription>
+            {error?.message ?? 'Service not found.'}
+            {error instanceof ApiError && ` (trace: ${error.traceId})`}
+          </AlertDescription>
+        </Alert>
+      </AppLayout>
+    )
+  }
+
+  const health = normalizeHealth(service.healthStatus)
+  const teamName = teamMap.get(service.teamId ?? '') ?? null
+  const tech = service.techStack ?? []
 
   return (
     <AppLayout title={service.name} eyebrow="Service Catalog">
@@ -44,42 +85,55 @@ function ServiceDetailPage() {
             <div className="flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-xl font-bold">{service.name}</h2>
-                <HealthBadge health={service.health} />
-                <Badge variant="secondary" className="capitalize">
-                  {service.tier}
-                </Badge>
+                <HealthBadge health={health} />
               </div>
-              <p className="mt-1 text-sm text-muted-foreground">{service.description}</p>
+              {service.description && (
+                <p className="mt-1 text-sm text-muted-foreground">{service.description}</p>
+              )}
             </div>
 
             <div className="flex flex-wrap gap-6 text-sm">
-              <MetaItem icon={<Users className="size-3.5" />} label="Owner" value={service.owner ?? 'Unowned'} />
-              <MetaItem icon={<Clock className="size-3.5" />} label="Last deploy" value={service.lastDeploy} />
-              <MetaItem icon={<GitBranch className="size-3.5" />} label="Dependencies" value={String(service.deps)} />
-              <div className="flex items-center gap-1.5">
-                <span className="text-muted-foreground">
-                  <Code2 className="size-3.5" aria-hidden="true" />
-                </span>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">SCM</p>
-                  <ScmBadge provider={service.scmProvider} />
+              <MetaItem
+                icon={<Users className="size-3.5" />}
+                label="Owner"
+                value={teamName ?? 'Unowned'}
+              />
+              {service.lastDeployedAt && (
+                <MetaItem
+                  icon={<Clock className="size-3.5" />}
+                  label="Last deploy"
+                  value={new Date(service.lastDeployedAt).toLocaleDateString()}
+                />
+              )}
+              {service.repositoryUrl && (
+                <MetaItem
+                  icon={<GitBranch className="size-3.5" />}
+                  label="Repository"
+                  value={service.repositoryRef ?? service.repositoryUrl}
+                />
+              )}
+              {service.source && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground">
+                    <Code2 className="size-3.5" aria-hidden="true" />
+                  </span>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">SCM</p>
+                    <p className="text-sm font-medium">{SCM_LABEL[service.source] ?? service.source}</p>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </CardContent>
         </Card>
 
         {/* Insight chips */}
         <div className="flex flex-wrap gap-3">
-          <InsightChip
-            label="Risk Score"
-            value={String(service.riskScore)}
-            variant={service.riskScore >= 70 ? 'critical' : service.riskScore >= 40 ? 'warning' : 'ok'}
-          />
-          <InsightChip label="Tech Stack" value={service.tech.join(' · ')} />
-          {service.warnings.map((w) => (
-            <InsightChip key={w} label="Warning" value={w} variant="warning" />
-          ))}
+          <InsightChip label="Health" value={service.healthStatus} />
+          {tech.length > 0 && <InsightChip label="Tech Stack" value={tech.join(' · ')} />}
+          {service.teamId === null && <InsightChip label="Warning" value="orphan" variant="warning" />}
+          {service.k8sCluster && <InsightChip label="K8s Cluster" value={service.k8sCluster} />}
+          {service.k8sNamespace && <InsightChip label="Namespace" value={service.k8sNamespace} />}
         </div>
 
         {/* Tab bar */}
@@ -104,106 +158,78 @@ function ServiceDetailPage() {
           ))}
         </div>
 
-        {/* Tab panels */}
+        {/* Overview */}
         {tab === 'overview' && (
           <div id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" className="grid gap-4 md:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm">Tech Stack</CardTitle>
               </CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
-                {service.tech.map((t) => (
-                  <Badge key={t} variant="secondary">
-                    {t}
-                  </Badge>
-                ))}
+              <CardContent>
+                {tech.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No tech stack defined.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {tech.map((t) => (
+                      <Badge key={t} variant="secondary">{t}</Badge>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">Warnings</CardTitle>
+                <CardTitle className="text-sm">Infrastructure</CardTitle>
               </CardHeader>
-              <CardContent>
-                {service.warnings.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No warnings.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {service.warnings.map((w) => (
-                      <div
-                        key={w}
-                        className="flex items-center gap-2 rounded-lg border-l-2 border-l-[oklch(0.65_0.18_60)] bg-[oklch(0.97_0.06_80)] px-3 py-2 text-sm text-[oklch(0.50_0.15_60)] dark:bg-[oklch(0.27_0.06_80)] dark:text-[oklch(0.78_0.14_60)]"
-                      >
-                        {w}
-                      </div>
-                    ))}
+              <CardContent className="space-y-2 text-sm">
+                {service.k8sCluster && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Cluster</span>
+                    <span className="font-medium">{service.k8sCluster}</span>
                   </div>
+                )}
+                {service.k8sNamespace && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Namespace</span>
+                    <span className="font-medium">{service.k8sNamespace}</span>
+                  </div>
+                )}
+                {service.k8sDeployment && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Deployment</span>
+                    <span className="font-medium">{service.k8sDeployment}</span>
+                  </div>
+                )}
+                {service.healthEndpoint && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Health endpoint</span>
+                    <span className="font-mono text-xs">{service.healthEndpoint}</span>
+                  </div>
+                )}
+                {!service.k8sCluster && !service.k8sNamespace && !service.k8sDeployment && !service.healthEndpoint && (
+                  <p className="text-muted-foreground">No infrastructure details.</p>
                 )}
               </CardContent>
             </Card>
           </div>
         )}
 
+        {/* Contracts — not yet available */}
         {tab === 'contracts' && (
-          <div id="panel-contracts" role="tabpanel" aria-labelledby="tab-contracts" className="space-y-2">
-            {contracts.length === 0 ? (
-              <EmptyTab icon={<Shield className="size-8" />} message="No contracts for this service." />
-            ) : (
-              contracts.map((c) => (
-                <Card key={c.id}>
-                  <CardContent className="flex items-center gap-4 p-4">
-                    <div className="flex-1">
-                      <p className="font-medium">{c.name}</p>
-                      <p className="text-xs text-muted-foreground">{c.version}</p>
-                    </div>
-                    <ContractStatusBadge status={c.status} />
-                    <p className="text-xs text-muted-foreground">{c.consumers} consumers</p>
-                    <p className="text-xs text-muted-foreground">{c.lastChanged}</p>
-                  </CardContent>
-                </Card>
-              ))
-            )}
+          <div id="panel-contracts" role="tabpanel" aria-labelledby="tab-contracts">
+            <EmptyTab icon={<Shield className="size-8" />} message="Contract data not yet available." />
           </div>
         )}
 
+        {/* Activity — not yet available */}
         {tab === 'activity' && (
-          <div id="panel-activity" role="tabpanel" aria-labelledby="tab-activity" className="space-y-2">
-            {activity.length === 0 ? (
-              <EmptyTab icon={<Activity className="size-8" />} message="No recent activity." />
-            ) : (
-              activity.map((event) => (
-                <div
-                  key={event.id}
-                  className="flex items-start gap-3 rounded-lg border border-border bg-card p-3"
-                >
-                  <div className={cn('mt-1.5 size-2 rounded-full', typeColor(event.type))} aria-hidden="true" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm">{event.msg}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {event.actor} · {event.time}
-                    </p>
-                  </div>
-                  <Badge variant="outline" className="shrink-0 text-[10px] capitalize">
-                    {event.type}
-                  </Badge>
-                </div>
-              ))
-            )}
+          <div id="panel-activity" role="tabpanel" aria-labelledby="tab-activity">
+            <EmptyTab icon={<Activity className="size-8" />} message="Activity feed not yet available." />
           </div>
         )}
       </div>
     </AppLayout>
   )
-}
-
-function typeColor(type: string) {
-  const map: Record<string, string> = {
-    deploy: 'bg-[oklch(0.55_0.18_145)]',
-    contract: 'bg-[oklch(0.55_0.18_260)]',
-    risk: 'bg-[oklch(0.58_0.23_28)]',
-    ownership: 'bg-[oklch(0.65_0.18_60)]',
-    dependency: 'bg-[oklch(0.60_0.18_240)]',
-  }
-  return map[type] ?? 'bg-muted-foreground'
 }
 
 function HealthBadge({ health }: { health: ServiceHealth }) {
@@ -213,23 +239,6 @@ function HealthBadge({ health }: { health: ServiceHealth }) {
       className={cn('gap-1.5 capitalize border-current', `bg-health-${health}`)}
     >
       {health}
-    </Badge>
-  )
-}
-
-function ContractStatusBadge({ status }: { status: string }) {
-  return (
-    <Badge
-      variant="outline"
-      className={cn(
-        'capitalize',
-        status === 'compatible' && 'border-[oklch(0.70_0.15_145)] bg-[oklch(0.96_0.05_145)] text-[oklch(0.38_0.14_145)] dark:border-[oklch(0.45_0.12_145)] dark:bg-[oklch(0.25_0.06_145)] dark:text-[oklch(0.72_0.16_145)]',
-        status === 'breaking' && 'border-[oklch(0.70_0.15_28)] bg-[oklch(0.97_0.05_28)] text-[oklch(0.50_0.20_28)] dark:border-[oklch(0.55_0.15_28)] dark:bg-[oklch(0.27_0.05_28)] dark:text-[oklch(0.72_0.18_28)]',
-        status === 'warning' && 'border-[oklch(0.72_0.14_60)] bg-[oklch(0.97_0.06_80)] text-[oklch(0.50_0.15_60)] dark:border-[oklch(0.60_0.15_60)] dark:bg-[oklch(0.27_0.06_80)] dark:text-[oklch(0.78_0.14_60)]',
-        status === 'stale' && 'text-muted-foreground',
-      )}
-    >
-      {status}
     </Badge>
   )
 }
@@ -253,7 +262,7 @@ function InsightChip({
 }: {
   label: string
   value: string
-  variant?: 'ok' | 'warning' | 'critical'
+  variant?: 'warning' | 'critical'
 }) {
   return (
     <div
@@ -284,18 +293,5 @@ function EmptyTab({ icon, message }: { icon: React.ReactNode; message: string })
       <div className="mb-3 text-muted-foreground/50">{icon}</div>
       <p className="text-sm text-muted-foreground">{message}</p>
     </div>
-  )
-}
-
-const SCM_LABELS: Record<ScmProvider, string> = {
-  github: 'GitHub',
-  gitlab: 'GitLab',
-  'azure-devops': 'Azure DevOps',
-  bitbucket: 'Bitbucket',
-}
-
-function ScmBadge({ provider }: { provider: ScmProvider }) {
-  return (
-    <span className="text-sm font-medium">{SCM_LABELS[provider]}</span>
   )
 }

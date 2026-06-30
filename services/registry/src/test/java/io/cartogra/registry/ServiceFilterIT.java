@@ -16,6 +16,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -99,10 +101,30 @@ class ServiceFilterIT {
     }
 
     @Test
+    void filterByDegradedIncludesUnknown() throws Exception {
+        // New services start with UNKNOWN health — they must appear under health=degraded
+        HttpResponse<String> created = HTTP.send(
+                post("/api/v1/services", """
+                        {"name":"filter-degraded-unknown-svc"}"""), HttpResponse.BodyHandlers.ofString());
+        assertThat(created.statusCode()).isEqualTo(201);
+        String svcId = MAPPER.readTree(created.body()).get("data").get("id").asText();
+
+        HttpResponse<String> filtered = HTTP.send(
+                get("/api/v1/services?health=degraded&limit=50"), HttpResponse.BodyHandlers.ofString());
+        assertThat(filtered.statusCode()).isEqualTo(200);
+        JsonNode items = MAPPER.readTree(filtered.body()).get("data").get("items");
+        boolean found = false;
+        for (JsonNode item : items) {
+            if (svcId.equals(item.get("id").asText())) { found = true; break; }
+        }
+        assertThat(found).as("new service with UNKNOWN health must appear under health=degraded filter").isTrue();
+    }
+
+    @Test
     void filterByTechStack() throws Exception {
         HttpResponse<String> created = HTTP.send(
                 post("/api/v1/services", """
-                        {"name":"filter-techstack-svc","techStack":"golang"}"""),
+                        {"name":"filter-techstack-svc","techStack":["golang"]}"""),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(created.statusCode()).isEqualTo(201);
         String svcId = MAPPER.readTree(created.body()).get("data").get("id").asText();
@@ -119,6 +141,22 @@ class ServiceFilterIT {
             }
         }
         assertThat(found).as("service with golang tech stack should appear in techStack=golang results").isTrue();
+    }
+
+    @Test
+    void techStacksEndpoint() throws Exception {
+        HTTP.send(post("/api/v1/services", """
+                {"name":"ts-endpoint-svc","techStack":["rust","wasm"]}"""),
+                HttpResponse.BodyHandlers.ofString());
+
+        HttpResponse<String> resp = HTTP.send(
+                get("/api/v1/services/tech-stacks"), HttpResponse.BodyHandlers.ofString());
+        assertThat(resp.statusCode()).isEqualTo(200);
+        JsonNode items = MAPPER.readTree(resp.body()).get("data");
+        assertThat(items.isArray()).isTrue();
+        List<String> stacks = new ArrayList<>();
+        items.forEach(n -> stacks.add(n.asText()));
+        assertThat(stacks).contains("rust", "wasm");
     }
 
     @Test

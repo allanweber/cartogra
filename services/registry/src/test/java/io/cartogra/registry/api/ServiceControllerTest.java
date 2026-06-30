@@ -150,7 +150,7 @@ class ServiceControllerTest {
                 .andExpect(status().isOk());
 
         verify(serviceService).list(eq(TENANT),
-                eq(new ServiceFilter(teamId, "healthy", null, null)), eq(10), eq(5));
+                eq(new ServiceFilter(teamId, "healthy", null, null, null)), eq(10), eq(5));
     }
 
     @Test

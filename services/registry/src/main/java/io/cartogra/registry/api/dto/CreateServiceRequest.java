@@ -3,6 +3,7 @@ package io.cartogra.registry.api.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+import java.util.List;
 import java.util.UUID;
 
 public record CreateServiceRequest(
@@ -10,7 +11,7 @@ public record CreateServiceRequest(
         String description,
         UUID teamId,
         String repositoryUrl,
-        String techStack,
+        List<String> techStack,
         String metadata,
         String healthEndpoint
 ) {}

@@ -25,6 +25,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -162,6 +163,32 @@ class ServiceCrudIT {
         JsonNode result = objectMapper.readTree(list.body()).get("data");
         assertThat(result.get("total").asLong()).isGreaterThanOrEqualTo(2);
         assertThat(result.get("items").isArray()).isTrue();
+    }
+
+    @Test
+    void techStackRoundTrip() throws Exception {
+        HttpResponse<String> created = HTTP.send(
+                post("/api/v1/services", """
+                        {"name":"ts-roundtrip-svc","techStack":["java","kotlin"]}"""),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(created.statusCode()).isEqualTo(201);
+        JsonNode createData = objectMapper.readTree(created.body()).get("data");
+        String svcId = createData.get("id").asText();
+
+        JsonNode createTs = createData.get("techStack");
+        assertThat(createTs.isArray()).isTrue();
+        List<String> createdStacks = new ArrayList<>();
+        createTs.forEach(n -> createdStacks.add(n.textValue()));
+        assertThat(createdStacks).containsExactlyInAnyOrder("java", "kotlin");
+
+        HttpResponse<String> got = HTTP.send(
+                get("/api/v1/services/" + svcId), HttpResponse.BodyHandlers.ofString());
+        assertThat(got.statusCode()).isEqualTo(200);
+        JsonNode readTs = objectMapper.readTree(got.body()).get("data").get("techStack");
+        assertThat(readTs.isArray()).isTrue();
+        List<String> readStacks = new ArrayList<>();
+        readTs.forEach(n -> readStacks.add(n.textValue()));
+        assertThat(readStacks).containsExactlyInAnyOrder("java", "kotlin");
     }
 
     @Test

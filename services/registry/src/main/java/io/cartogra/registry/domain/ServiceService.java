@@ -101,7 +101,7 @@ public class ServiceService {
         String name           = req.name()          != null ? req.name()          : existing.name();
         String description    = req.description()   != null ? req.description()   : existing.description();
         String repositoryUrl  = req.repositoryUrl() != null ? req.repositoryUrl() : existing.repositoryUrl();
-        String techStack      = req.techStack()     != null ? req.techStack()     : existing.techStack();
+        List<String> techStack = req.techStack()    != null ? req.techStack()     : existing.techStack();
         String metadata       = req.metadata()      != null ? req.metadata()      : existing.metadata();
         ServiceHealthStatus healthStatus = req.healthStatus() != null
                 ? ServiceHealthStatus.fromString(req.healthStatus()) : existing.healthStatus();
@@ -182,6 +182,10 @@ public class ServiceService {
                     .orElseThrow(() -> new TeamNotFoundException(teamId));
         }
 
+        if (Objects.equals(existing.teamId(), teamId)) {
+            return existing;
+        }
+
         var updated = new Service(
                 existing.id(), existing.tenantId(), existing.name(), existing.description(),
                 teamId,
@@ -207,6 +211,10 @@ public class ServiceService {
         return PageResult.of(items, items.size(), limit, offset);
     }
 
+    public List<String> listTechStacks(UUID tenantId) {
+        return serviceRepository.findDistinctTechStacks(tenantId);
+    }
+
     public Optional<ServiceSnapshot> historyAt(UUID tenantId, UUID serviceId, Instant at) {
         serviceRepository.findById(tenantId, serviceId)
                 .orElseThrow(() -> new ServiceNotFoundException(serviceId));
@@ -214,13 +222,12 @@ public class ServiceService {
     }
 
     @Transactional
-    public Service upsertDiscovered(ServiceDiscoveryCommand command) {
+    public void upsertDiscovered(ServiceDiscoveryCommand command) {
         if (command.healthEndpoint() != null) {
             healthEndpointValidator.validate(command.healthEndpoint());
         }
-        Service saved = serviceRepository.upsertDiscovered(command);
-        historyRepository.save(snapshot(saved, SystemActors.SYSTEM));
-        return saved;
+        serviceRepository.upsertDiscovered(command)
+                .ifPresent(saved -> historyRepository.save(snapshot(saved, SystemActors.SYSTEM)));
     }
 
     /**

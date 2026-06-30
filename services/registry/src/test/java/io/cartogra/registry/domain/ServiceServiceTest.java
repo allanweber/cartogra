@@ -337,13 +337,13 @@ class ServiceServiceTest {
     // ── upsertDiscovered ──────────────────────────────────────────────────────
 
     @Test
-    void upsertDiscoveredSavesAndRecordsHistory() {
+    void upsertDiscoveredSavesAndRecordsHistoryWhenChanged() {
         UUID tenantId = UUID.randomUUID();
         var command = new ServiceDiscoveryCommand(tenantId, null, "k8s", "ext-123",
                 "payments", null, null, null, null, null, null,
                 List.of(), "healthy", null, null, null);
         Service saved = service(tenantId, "payments");
-        when(serviceRepository.upsertDiscovered(command)).thenReturn(saved);
+        when(serviceRepository.upsertDiscovered(command)).thenReturn(Optional.of(saved));
 
         serviceService.upsertDiscovered(command);
 
@@ -353,12 +353,27 @@ class ServiceServiceTest {
     }
 
     @Test
+    void upsertDiscoveredSkipsHistoryWhenUnchanged() {
+        UUID tenantId = UUID.randomUUID();
+        var command = new ServiceDiscoveryCommand(tenantId, null, "k8s", "ext-123",
+                "payments", null, null, null, null, null, null,
+                List.of(), "healthy", null, null, null);
+        when(serviceRepository.upsertDiscovered(command)).thenReturn(Optional.empty());
+
+        serviceService.upsertDiscovered(command);
+
+        verify(serviceRepository).upsertDiscovered(command);
+        verifyNoInteractions(historyRepository);
+        verifyNoInteractions(eventProducer);
+    }
+
+    @Test
     void upsertDiscoveredValidatesHealthEndpoint() {
         UUID tenantId = UUID.randomUUID();
         var command = new ServiceDiscoveryCommand(tenantId, null, "k8s", "ext-123",
                 "payments", null, null, null, null, null, null,
                 List.of(), "healthy", "http://example.com/health", null, null);
-        when(serviceRepository.upsertDiscovered(command)).thenReturn(service(tenantId, "payments"));
+        when(serviceRepository.upsertDiscovered(command)).thenReturn(Optional.of(service(tenantId, "payments")));
 
         serviceService.upsertDiscovered(command);
 

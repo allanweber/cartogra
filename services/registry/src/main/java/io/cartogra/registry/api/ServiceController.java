@@ -48,18 +48,28 @@ public class ServiceController {
             @RequestHeader("X-Tenant-Id") UUID tenantId,
             @RequestParam(required = false) UUID teamId,
             @RequestParam(required = false) String health,
-            @RequestParam(required = false) String techStack,
+            @RequestParam(required = false) List<String> techStack,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) String source,
             @RequestParam(defaultValue = "20") int limit,
             @RequestParam(defaultValue = "0") int offset) {
         String traceId = traceId();
-        var filter = new ServiceFilter(teamId, health, techStack, search);
+        var filter = new ServiceFilter(teamId, health, techStack, search, source);
         var page = service.list(tenantId, filter, limit, offset);
         var mapped = PageResult.of(page.items().stream().map(ServiceResponse::from).toList(),
                 page.total(), page.limit(), page.offset());
         return ResponseEntity.ok()
                 .header("X-Trace-Id", traceId)
                 .body(new ApiResponse<>(mapped, traceId));
+    }
+
+    @GetMapping("/tech-stacks")
+    public ResponseEntity<ApiResponse<List<String>>> techStacks(
+            @RequestHeader("X-Tenant-Id") UUID tenantId) {
+        String traceId = traceId();
+        return ResponseEntity.ok()
+                .header("X-Trace-Id", traceId)
+                .body(new ApiResponse<>(service.listTechStacks(tenantId), traceId));
     }
 
     @GetMapping("/orphaned")
