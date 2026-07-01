@@ -297,3 +297,13 @@ Cartogra probes each non-archived repository via the SCM API for these files:
 | `Dockerfile` FROM `rust:*`                    | rust                |
 
 Detection is additive: multiple signals result in a list (e.g., `["java","spring-boot"]`).
+
+## To remove the database container + volume and recreate it
+
+```bash
+# Run from repo root
+docker compose -f infra/docker-compose/docker-compose.dev.yml stop postgres
+docker compose -f infra/docker-compose/docker-compose.dev.yml rm -f postgres
+docker volume rm cartogra-dev_postgres-data
+docker compose -f infra/docker-compose/docker-compose.dev.yml up -d postgres
+```

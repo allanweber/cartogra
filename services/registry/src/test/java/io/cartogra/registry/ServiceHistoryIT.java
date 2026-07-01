@@ -51,7 +51,7 @@ class ServiceHistoryIT {
 
         // update (generates second history row)
         HTTP.send(put("/api/v1/services/" + serviceId, """
-                {"name":"history-test-svc","description":"updated","healthStatus":"healthy"}"""),
+                {"name":"history-test-svc","description":"updated","healthStatus":"HEALTHY"}"""),
                 HttpResponse.BodyHandlers.ofString());
 
         // history should have at least 2 entries
@@ -105,6 +105,7 @@ class ServiceHistoryIT {
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", TENANT.toString())
+                .header("X-User-Roles", "ADMIN")
                 .PUT(HttpRequest.BodyPublishers.ofString(body))
                 .build();
     }

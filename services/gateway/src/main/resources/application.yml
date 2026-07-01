@@ -86,6 +86,7 @@ app:
     secret: ${JWT_SECRET}
     access-token-expiry-seconds: ${JWT_ACCESS_EXPIRY_SECONDS:900}
     refresh-token-expiry-seconds: ${JWT_REFRESH_EXPIRY_SECONDS:2592000}
+    cookie-secure: true
   resend:
     api-key: ${RESEND_API_KEY}
     from-address: ${RESEND_FROM:noreply@cartogra.dev}

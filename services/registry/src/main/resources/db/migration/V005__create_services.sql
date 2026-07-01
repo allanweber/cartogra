@@ -20,6 +20,11 @@ CREATE TABLE services (
     last_commit_at   TIMESTAMPTZ,
     last_commit_sha  VARCHAR(64),
     health_checked_at TIMESTAMPTZ,
+    tier             TEXT,
+    tags             TEXT[],
+    sla_target       NUMERIC(6, 4),
+    documentation_url VARCHAR(2048),
+    runbook_url      VARCHAR(2048),
     created_at       TIMESTAMPTZ   NOT NULL DEFAULT now(),
     updated_at       TIMESTAMPTZ   NOT NULL DEFAULT now(),
     deleted_at       TIMESTAMPTZ
@@ -30,6 +35,7 @@ CREATE UNIQUE INDEX ON services (tenant_id, external_id)
     WHERE external_id IS NOT NULL AND deleted_at IS NULL;
 CREATE INDEX ON services (tenant_id, team_id) WHERE deleted_at IS NULL;
 CREATE INDEX ON services USING GIN (tech_stack) WHERE tech_stack IS NOT NULL;
+CREATE INDEX ON services USING GIN (tags) WHERE tags IS NOT NULL;
 CREATE INDEX ON services USING GIN (metadata) WHERE metadata IS NOT NULL;
 CREATE INDEX ON services USING GIN (to_tsvector('english', coalesce(name, '') || ' ' || coalesce(description, '')));
 CREATE INDEX ON services (tenant_id)

@@ -85,7 +85,10 @@ export async function apiFetch<T>(
     throw new ApiError('NETWORK_ERROR', 'Unable to reach the server. Check your connection.', 'unknown')
   }
 
-  if (response.status === 401) {
+  // Auth endpoints return 401 for bad credentials — don't treat them as expired sessions.
+  const isAuthEndpoint = path.startsWith('/auth/')
+
+  if (response.status === 401 && !isAuthEndpoint) {
     const refreshed = await tryRefresh(baseUrl)
     if (!refreshed) {
       redirectToLogin()

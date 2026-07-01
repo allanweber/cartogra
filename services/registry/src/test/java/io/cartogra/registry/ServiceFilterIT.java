@@ -83,7 +83,7 @@ class ServiceFilterIT {
         String svcId = MAPPER.readTree(created.body()).get("data").get("id").asText();
 
         HTTP.send(put("/api/v1/services/" + svcId, """
-                        {"name":"filter-health-svc","healthStatus":"healthy"}"""),
+                        {"name":"filter-health-svc","healthStatus":"HEALTHY"}"""),
                 HttpResponse.BodyHandlers.ofString());
 
         HttpResponse<String> filtered = HTTP.send(
@@ -204,6 +204,7 @@ class ServiceFilterIT {
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", TENANT.toString())
+                .header("X-User-Roles", "ADMIN")
                 .PUT(HttpRequest.BodyPublishers.ofString(body))
                 .build();
     }

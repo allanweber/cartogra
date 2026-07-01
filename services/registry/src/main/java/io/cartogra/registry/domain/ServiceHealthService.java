@@ -84,7 +84,9 @@ public class ServiceHealthService {
                 service.deletedAt(), service.externalId(), service.connectionId(), service.source(),
                 service.repositoryRef(), service.k8sCluster(), service.k8sNamespace(),
                 service.k8sDeployment(), service.healthEndpoint(), service.lastCommitAt(),
-                service.lastCommitSha(), checkedAt
+                service.lastCommitSha(), checkedAt,
+                service.tier(), service.tags(), service.slaTarget(),
+                service.documentationUrl(), service.runbookUrl()
         );
         try {
             String json = objectMapper.writeValueAsString(withNewStatus);

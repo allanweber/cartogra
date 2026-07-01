@@ -1,18 +1,18 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, List, Search } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, List, Plus, Search } from 'lucide-react'
 import { useState } from 'react'
 
 import { useDebounce } from '#/hooks/useDebounce'
 import { AppLayout } from '#/components/AppLayout'
+import { RegisterServiceDrawer } from '#/components/RegisterServiceDrawer'
 import { Alert, AlertDescription } from '#/components/ui/alert'
-import { Badge } from '#/components/ui/badge'
-import { Card, CardContent } from '#/components/ui/card'
+import { Button } from '#/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '#/components/ui/dropdown-menu'
 import { Input } from '#/components/ui/input'
 import { Skeleton } from '#/components/ui/skeleton'
 import { ApiError, apiFetch } from '#/lib/api'
-import { SCM_LABEL, normalizeHealth } from '#/lib/registry-types'
+import { normalizeHealth } from '#/lib/registry-types'
 import { cn } from '#/lib/utils'
 
 import type { PageResult, RegistryService, RegistryTeam, ServiceHealth } from '#/lib/registry-types'
@@ -23,48 +23,76 @@ export const Route = createFileRoute('/_authenticated/catalog/')({
 
 const LIMIT = 100
 
-const HEALTH_FILTERS: Array<{ label: string; value: ServiceHealth | 'all'; dbValue?: string }> = [
-  { label: 'All', value: 'all' },
-  { label: 'Healthy', value: 'healthy', dbValue: 'healthy' },
-  { label: 'Degraded', value: 'degraded', dbValue: 'degraded' },
-  { label: 'Down', value: 'down', dbValue: 'unhealthy' },
+const HEALTH_OPTIONS: Array<{ label: string; value: ServiceHealth | 'all'; dbValue?: string }> = [
+  { label: 'All health', value: 'all' },
+  { label: 'Healthy', value: 'healthy', dbValue: 'HEALTHY' },
+  { label: 'Degraded', value: 'degraded', dbValue: 'DEGRADED' },
+  { label: 'Down', value: 'down', dbValue: 'UNHEALTHY' },
 ]
 
-const SCM_SOURCES: Array<{ label: string; value: string }> = [
-  { label: 'All SCM', value: '' },
-  { label: 'GitHub', value: 'github' },
-  { label: 'GitLab', value: 'gitlab' },
-  { label: 'Azure DevOps', value: 'azuredevops' },
-  { label: 'Bitbucket', value: 'bitbucket' },
-]
+function relativeTime(dateStr: string | null): string | null {
+  if (!dateStr) return null
+  const secs = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
+  if (secs < 3600) return `${Math.max(1, Math.floor(secs / 60))}m ago`
+  if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`
+  return `${Math.floor(secs / 86400)}d ago`
+}
+
+function isStale(dateStr: string | null): boolean {
+  if (!dateStr) return false
+  return Date.now() - new Date(dateStr).getTime() > 14 * 86400 * 1000
+}
+
+function computeRiskScore(service: RegistryService): number {
+  const health = normalizeHealth(service.healthStatus)
+  let score = health === 'down' ? 60 : health === 'degraded' ? 35 : 5
+  if (service.lastDeployedAt) {
+    const days = (Date.now() - new Date(service.lastDeployedAt).getTime()) / 86400000
+    score += Math.min(30, Math.floor(days * 1.5))
+  } else {
+    score += 18
+  }
+  if (!service.teamId) score += 8
+  return Math.min(99, Math.max(1, score))
+}
+
+function riskColorClass(score: number): string {
+  if (score >= 70) return 'text-[oklch(0.50_0.23_28)]'
+  if (score >= 35) return 'text-[oklch(0.52_0.18_60)]'
+  return 'text-[oklch(0.42_0.18_145)]'
+}
+
+function riskBarClass(score: number): string {
+  if (score >= 70) return 'bg-[oklch(0.58_0.23_28)]'
+  if (score >= 35) return 'bg-[oklch(0.65_0.18_60)]'
+  return 'bg-[oklch(0.55_0.18_145)]'
+}
 
 function CatalogPage() {
   const [query, setQuery] = useState('')
   const [teamFilter, setTeamFilter] = useState('')
   const [healthFilter, setHealthFilter] = useState<ServiceHealth | 'all'>('all')
-  const [scmFilter, setScmFilter] = useState('')
   const [techFilter, setTechFilter] = useState<Set<string>>(new Set())
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [page, setPage] = useState(0)
+  const [registerOpen, setRegisterOpen] = useState(false)
 
-  const dQuery      = useDebounce(query,       500)
-  const dTeam       = useDebounce(teamFilter,  500)
-  const dHealth     = useDebounce(healthFilter, 500)
-  const dTech       = useDebounce(techFilter,   500)
-  const dScm        = useDebounce(scmFilter,    500)
-  const dPage       = useDebounce(page,         500)
+  const dQuery  = useDebounce(query, 500)
+  const dTeam   = useDebounce(teamFilter, 500)
+  const dHealth = useDebounce(healthFilter, 500)
+  const dTech   = useDebounce(techFilter, 500)
+  const dPage   = useDebounce(page, 500)
 
-  const healthDbValue = HEALTH_FILTERS.find((f) => f.value === dHealth)?.dbValue
+  const healthDbValue = HEALTH_OPTIONS.find((f) => f.value === dHealth)?.dbValue
 
   const { data: pageResult, isLoading, error } = useQuery({
-    queryKey: ['services', dTeam, dHealth, [...dTech].sort(), dQuery, dScm, dPage],
+    queryKey: ['services', dTeam, dHealth, [...dTech].sort(), dQuery, dPage],
     queryFn: () => {
       const params = new URLSearchParams()
       if (dTeam) params.set('teamId', dTeam)
       if (healthDbValue) params.set('health', healthDbValue)
       dTech.forEach((t) => params.append('techStack', t))
       if (dQuery.trim()) params.set('search', dQuery.trim())
-      if (dScm) params.set('source', dScm)
       params.set('limit', String(LIMIT))
       params.set('offset', String(dPage * LIMIT))
       return apiFetch<PageResult<RegistryService>>(`/v1/services?${params}`)
@@ -87,62 +115,45 @@ function CatalogPage() {
   const total = pageResult?.total ?? 0
   const totalPages = Math.ceil(total / LIMIT)
 
-  function resetPage() {
-    setPage(0)
-  }
+  function resetPage() { setPage(0) }
 
-  const hasActiveFilters = query !== '' || teamFilter !== '' || healthFilter !== 'all' || scmFilter !== '' || techFilter.size > 0
+  const hasActiveFilters = query !== '' || teamFilter !== '' || healthFilter !== 'all' || techFilter.size > 0
 
   function clearAllFilters() {
     setQuery('')
     setTeamFilter('')
     setHealthFilter('all')
-    setScmFilter('')
     setTechFilter(new Set())
     setPage(0)
   }
 
-  return (
-    <AppLayout title="Service Catalog" description="Search and inspect your services">
-      <div className="space-y-4">
-        {/* Health filter chips */}
-        <div className="flex flex-wrap gap-2">
-          {HEALTH_FILTERS.map((f) => (
-            <button
-              key={f.value}
-              onClick={() => { setHealthFilter(f.value); resetPage() }}
-              className={cn(
-                'flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
-                healthFilter === f.value
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground',
-              )}
-            >
-              {f.value !== 'all' && (
-                <span
-                  role="img"
-                  aria-label={`${f.label} health`}
-                  className={cn(
-                    'size-1.5 rounded-full',
-                    f.value === 'healthy' && 'bg-[oklch(0.55_0.18_145)]',
-                    f.value === 'degraded' && 'bg-[oklch(0.65_0.18_60)]',
-                    f.value === 'down' && 'bg-[oklch(0.58_0.23_28)]',
-                  )}
-                />
-              )}
-              {f.label}
-              {healthFilter === f.value && dHealth === f.value && !isLoading && (
-                <span className="rounded-full bg-primary-foreground/20 px-1.5 py-0.5 text-[10px] text-primary-foreground">
-                  {total}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
+  const healthCounts = {
+    healthy: services.filter((s) => normalizeHealth(s.healthStatus) === 'healthy').length,
+    degraded: services.filter((s) => normalizeHealth(s.healthStatus) === 'degraded').length,
+    down: services.filter((s) => normalizeHealth(s.healthStatus) === 'down').length,
+  }
 
-        {/* Search + filters bar */}
+  const selectedTeamName = teams.find((t) => t.id === teamFilter)?.name ?? 'All teams'
+  const selectedHealthLabel = HEALTH_OPTIONS.find((f) => f.value === healthFilter)?.label ?? 'All health'
+  const selectedTechLabel = techFilter.size > 0 ? `All tech (${techFilter.size})` : 'All tech'
+
+  const pageDescription = isLoading ? undefined : `${total} service${total !== 1 ? 's' : ''}`
+
+  return (
+    <AppLayout
+      title="Service Catalog"
+      description={pageDescription}
+      actions={
+        <Button onClick={() => setRegisterOpen(true)} size="sm" className="gap-1.5">
+          <Plus className="size-3.5" aria-hidden="true" />
+          Register service
+        </Button>
+      }
+    >
+      <div className="space-y-4">
+        {/* Search + filter bar */}
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-45 flex-1">
+          <div className="relative min-w-44 max-w-64 flex-1">
             <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <Input
               placeholder="Search services..."
@@ -153,53 +164,72 @@ function CatalogPage() {
             />
           </div>
 
-          {/* Team filter */}
-          <select
-            value={teamFilter}
-            onChange={(e) => { setTeamFilter(e.target.value); resetPage() }}
-            aria-label="Filter by team"
-            className="rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            <option value="">All Teams</option>
-            {teams.map((t) => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
-
-          {/* SCM filter */}
-          <select
-            value={scmFilter}
-            onChange={(e) => { setScmFilter(e.target.value); resetPage() }}
-            aria-label="Filter by SCM provider"
-            className="rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            {SCM_SOURCES.map((s) => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
-          </select>
-
-          {/* Tech filter */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 className={cn(
                   'flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-                  techFilter.size > 0
-                    ? 'border-primary bg-primary/5 text-foreground'
-                    : 'border-input bg-background text-foreground',
+                  teamFilter ? 'border-primary bg-primary/5 text-foreground' : 'border-input bg-background text-foreground',
+                )}
+                aria-label="Filter by team"
+              >
+                {selectedTeamName}
+                <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden="true" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
+              <DropdownMenuItem onSelect={() => { setTeamFilter(''); resetPage() }} className="flex items-center gap-2">
+                <CheckMark checked={!teamFilter} />
+                All teams
+              </DropdownMenuItem>
+              {teams.map((t) => (
+                <DropdownMenuItem key={t.id} onSelect={() => { setTeamFilter(t.id); resetPage() }} className="flex items-center gap-2">
+                  <CheckMark checked={teamFilter === t.id} />
+                  {t.name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className={cn(
+                  'flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                  healthFilter !== 'all' ? 'border-primary bg-primary/5 text-foreground' : 'border-input bg-background text-foreground',
+                )}
+                aria-label="Filter by health"
+              >
+                {selectedHealthLabel}
+                <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden="true" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {HEALTH_OPTIONS.map((opt) => (
+                <DropdownMenuItem key={opt.value} onSelect={() => { setHealthFilter(opt.value); resetPage() }} className="flex items-center gap-2">
+                  <CheckMark checked={healthFilter === opt.value} />
+                  {opt.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className={cn(
+                  'flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                  techFilter.size > 0 ? 'border-primary bg-primary/5 text-foreground' : 'border-input bg-background text-foreground',
                 )}
                 aria-label="Filter by tech stack"
               >
-                {techFilter.size > 0 ? `Tech Stack (${techFilter.size})` : 'Tech Stack'}
+                {selectedTechLabel}
                 <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden="true" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
               {techFilter.size > 0 && (
-                <DropdownMenuItem
-                  onSelect={() => { setTechFilter(new Set()); resetPage() }}
-                  className="text-muted-foreground"
-                >
+                <DropdownMenuItem onSelect={() => { setTechFilter(new Set()); resetPage() }} className="text-muted-foreground">
                   Clear filter
                 </DropdownMenuItem>
               )}
@@ -217,23 +247,14 @@ function CatalogPage() {
                   }}
                   className="flex items-center gap-2"
                 >
-                  <span
-                    className={cn(
-                      'flex size-4 items-center justify-center rounded border',
-                      techFilter.has(tech) ? 'border-primary bg-primary text-primary-foreground' : 'border-border',
-                    )}
-                    aria-hidden="true"
-                  >
-                    {techFilter.has(tech) && <Check className="size-2.5" />}
-                  </span>
+                  <CheckMark checked={techFilter.has(tech)} />
                   {tech}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* View toggle */}
-          <div className="flex overflow-hidden rounded-md border border-border">
+          <div className="ml-auto flex overflow-hidden rounded-md border border-border">
             <button
               onClick={() => setView('grid')}
               className={cn(
@@ -268,16 +289,37 @@ function CatalogPage() {
           )}
         </div>
 
-        {/* Results count */}
-        <p className="text-xs text-muted-foreground" aria-live="polite">
-          {isLoading ? 'Loading...' : `${total} service${total !== 1 ? 's' : ''}`}
-        </p>
+        {/* Health quick-filter chips */}
+        <div className="flex flex-wrap gap-2">
+          {(['healthy', 'degraded', 'down'] as ServiceHealth[]).map((value) => (
+            <button
+              key={value}
+              onClick={() => { setHealthFilter(healthFilter === value ? 'all' : value); resetPage() }}
+              className={cn(
+                'flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                healthFilter === value
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground',
+              )}
+            >
+              <span
+                className={cn(
+                  'size-1.5 rounded-full',
+                  value === 'healthy' && 'bg-[oklch(0.55_0.18_145)]',
+                  value === 'degraded' && 'bg-[oklch(0.65_0.18_60)]',
+                  value === 'down' && 'bg-[oklch(0.58_0.23_28)]',
+                )}
+              />
+              {value.charAt(0).toUpperCase() + value.slice(1)} ({healthCounts[value]})
+            </button>
+          ))}
+        </div>
 
         {/* Content */}
         {isLoading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-40 w-full rounded-xl" />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Skeleton key={i} className="h-44 w-full rounded-xl" />
             ))}
           </div>
         ) : error ? (
@@ -294,17 +336,13 @@ function CatalogPage() {
             <p className="mt-1 text-xs text-muted-foreground">Try adjusting the search or filters</p>
           </div>
         ) : view === 'grid' ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {services.map((svc) => (
               <ServiceCard key={svc.id} service={svc} teamName={teamMap.get(svc.teamId ?? '') ?? null} />
             ))}
           </div>
         ) : (
-          <div className="space-y-4">
-            {services.map((svc) => (
-              <ServiceListRow key={svc.id} service={svc} teamName={teamMap.get(svc.teamId ?? '') ?? null} />
-            ))}
-          </div>
+          <ServiceListTable services={services} teamMap={teamMap} />
         )}
 
         {/* Pagination */}
@@ -334,7 +372,159 @@ function CatalogPage() {
           </div>
         )}
       </div>
+
+      <RegisterServiceDrawer open={registerOpen} onOpenChange={setRegisterOpen} />
     </AppLayout>
+  )
+}
+
+function ServiceCard({ service, teamName }: { service: RegistryService; teamName: string | null }) {
+  const health = normalizeHealth(service.healthStatus)
+  const tech = service.techStack ?? []
+  const tags = service.tags ?? []
+  const deploy = relativeTime(service.lastDeployedAt)
+  const stale = isStale(service.lastDeployedAt)
+  const isOrphan = service.teamId === null
+  const hasBreakingChange = tags.includes('breaking-change')
+  const risk = computeRiskScore(service)
+
+  return (
+    <Link to="/catalog/$serviceId" params={{ serviceId: service.id }}>
+      <div className="group flex h-full cursor-pointer flex-col gap-3 rounded-xl border border-border bg-card p-4 transition-all hover:shadow-md">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="font-semibold leading-tight group-hover:text-primary">{service.name}</span>
+              {service.tier === 'CRITICAL' && (
+                <span className="text-[10px] font-bold uppercase tracking-wide text-[oklch(0.55_0.20_28)]">CRITICAL</span>
+              )}
+            </div>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Team:{' '}
+              {isOrphan ? (
+                <span className="inline-flex items-center gap-0.5 text-[oklch(0.55_0.18_60)] dark:text-[oklch(0.78_0.14_60)]">
+                  <AlertTriangle className="size-3" aria-hidden="true" />
+                  No owner
+                </span>
+              ) : (
+                teamName
+              )}
+            </p>
+          </div>
+          <HealthLabel health={health} />
+        </div>
+
+        {/* Tech */}
+        {tech.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {tech.map((t) => (
+              <span key={t} className="rounded-md border border-border bg-background px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                {t}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="mt-auto flex items-center justify-between border-t border-border pt-2">
+          <span className="text-xs text-muted-foreground">
+            {deploy ? `Deploy: ${deploy}` : 'Never deployed'}
+          </span>
+          <span className={cn('text-sm font-semibold tabular-nums', riskColorClass(risk))}>
+            {risk}
+          </span>
+        </div>
+
+        {/* Warning tags */}
+        {(stale || isOrphan || hasBreakingChange) && (
+          <div className="flex flex-wrap gap-1">
+            {stale && <WarningTag label="stale" />}
+            {hasBreakingChange && <WarningTag label="breaking-change" />}
+            {isOrphan && <WarningTag label="orphan" />}
+          </div>
+        )}
+      </div>
+    </Link>
+  )
+}
+
+const LIST_COLS = 'grid-cols-[minmax(0,2.5fr)_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,0.65fr)]'
+
+function ServiceListTable({ services, teamMap }: { services: RegistryService[]; teamMap: Map<string, string> }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
+      <div className={cn('grid gap-x-4 border-b border-border bg-muted/50 px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground', LIST_COLS)}>
+        <span>Service</span>
+        <span>Health</span>
+        <span>Owner</span>
+        <span>Tech</span>
+        <span>Last deploy</span>
+        <span>Risk</span>
+      </div>
+      <div className="divide-y divide-border">
+        {services.map((svc) => (
+          <ServiceListRow key={svc.id} service={svc} teamName={teamMap.get(svc.teamId ?? '') ?? null} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ServiceListRow({ service, teamName }: { service: RegistryService; teamName: string | null }) {
+  const health = normalizeHealth(service.healthStatus)
+  const tech = service.techStack ?? []
+  const deploy = relativeTime(service.lastDeployedAt)
+  const isOrphan = service.teamId === null
+  const risk = computeRiskScore(service)
+
+  return (
+    <Link to="/catalog/$serviceId" params={{ serviceId: service.id }} className="block">
+      <div className={cn('group grid gap-x-4 px-5 py-3 transition-colors hover:bg-muted/30', LIST_COLS)}>
+        <div className="min-w-0">
+          <p className="truncate font-medium group-hover:text-primary">{service.name}</p>
+          {service.tier === 'CRITICAL' && (
+            <span className="text-[10px] font-bold uppercase tracking-wide text-[oklch(0.55_0.20_28)]">CRITICAL</span>
+          )}
+        </div>
+        <div className="flex items-center">
+          <HealthCell health={health} />
+        </div>
+        <div className="flex items-center">
+          {isOrphan ? (
+            <span className="inline-flex items-center gap-0.5 text-sm text-[oklch(0.55_0.18_60)] dark:text-[oklch(0.78_0.14_60)]">
+              No owner
+            </span>
+          ) : (
+            <span className="truncate text-sm">{teamName}</span>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-1">
+          {tech.slice(0, 2).map((t) => (
+            <span key={t} className="rounded-md border border-border bg-background px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+              {t}
+            </span>
+          ))}
+          {tech.length > 2 && (
+            <span className="text-[11px] text-muted-foreground">+{tech.length - 2}</span>
+          )}
+        </div>
+        <div className="flex items-center">
+          <span className="text-sm text-muted-foreground">{deploy ?? '—'}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className={cn('min-w-[2ch] text-sm font-semibold tabular-nums', riskColorClass(risk))}>
+            {risk}
+          </span>
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+            <div
+              className={cn('h-full rounded-full transition-all', riskBarClass(risk))}
+              style={{ width: `${risk}%` }}
+            />
+          </div>
+        </div>
+      </div>
+    </Link>
   )
 }
 
@@ -344,7 +534,7 @@ function HealthDot({ health }: { health: ServiceHealth }) {
       role="img"
       aria-label={`${health} health`}
       className={cn(
-        'inline-block size-2 rounded-full',
+        'inline-block size-2 shrink-0 rounded-full',
         health === 'healthy' && 'bg-[oklch(0.55_0.18_145)]',
         health === 'degraded' && 'bg-[oklch(0.65_0.18_60)]',
         health === 'down' && 'bg-[oklch(0.58_0.23_28)]',
@@ -353,114 +543,57 @@ function HealthDot({ health }: { health: ServiceHealth }) {
   )
 }
 
-function HealthBadge({ health }: { health: ServiceHealth }) {
+function HealthLabel({ health }: { health: ServiceHealth }) {
   return (
-    <Badge
-      variant="outline"
-      className={cn('gap-1.5 text-xs capitalize border-current', `bg-health-${health}`)}
+    <span
+      className={cn(
+        'flex shrink-0 items-center gap-1 text-xs font-medium',
+        health === 'healthy' && 'text-[oklch(0.45_0.18_145)]',
+        health === 'degraded' && 'text-[oklch(0.52_0.18_60)]',
+        health === 'down' && 'text-[oklch(0.45_0.23_28)]',
+      )}
     >
       <HealthDot health={health} />
-      {health}
-    </Badge>
+      {health.charAt(0).toUpperCase() + health.slice(1)}
+    </span>
   )
 }
 
-function ServiceCard({ service, teamName }: { service: RegistryService; teamName: string | null }) {
-  const health = normalizeHealth(service.healthStatus)
-  const isOrphan = service.teamId === null
-  const tech = service.techStack ?? []
-
+function HealthCell({ health }: { health: ServiceHealth }) {
   return (
-    <Link to="/catalog/$serviceId" params={{ serviceId: service.id }}>
-      <Card
-        className={cn(
-          'group h-full cursor-pointer transition-all hover:shadow-md',
-          health === 'healthy' && 'ring-[oklch(0.55_0.18_145)]',
-          health === 'degraded' && 'ring-[oklch(0.65_0.18_60)]',
-          health === 'down' && 'ring-[oklch(0.58_0.23_28)]',
-          isOrphan && health === 'healthy' && 'ring-[oklch(0.65_0.18_60)]',
-        )}
-      >
-        <CardContent className="flex h-full flex-col gap-3 p-4">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="font-semibold leading-tight group-hover:text-primary">{service.name}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {teamName ?? (
-                  <span className="text-[oklch(0.55_0.18_60)] dark:text-[oklch(0.78_0.14_60)]">No owner</span>
-                )}
-              </p>
-            </div>
-            <HealthBadge health={health} />
-          </div>
-
-          {service.description && (
-            <p className="line-clamp-2 flex-1 text-xs text-muted-foreground">{service.description}</p>
-          )}
-
-          {tech.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {tech.map((t) => (
-                <span key={t} className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-                  {t}
-                </span>
-              ))}
-            </div>
-          )}
-
-          <div className="flex items-center justify-between border-t border-border pt-2">
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              {service.source && (
-                <span>{SCM_LABEL[service.source] ?? service.source}</span>
-              )}
-              {service.lastDeployedAt && (
-                <span>{new Date(service.lastDeployedAt).toLocaleDateString()}</span>
-              )}
-            </div>
-            {isOrphan && (
-              <span className="flex items-center gap-0.5 rounded-md border border-[oklch(0.72_0.14_60)] bg-[oklch(0.97_0.06_80)] px-1.5 py-0.5 text-[10px] font-medium text-[oklch(0.50_0.15_60)] dark:border-[oklch(0.60_0.15_60)] dark:bg-[oklch(0.27_0.06_80)] dark:text-[oklch(0.78_0.14_60)]">
-                <AlertTriangle className="size-2.5" aria-hidden="true" />
-                orphan
-              </span>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    </Link>
+    <div
+      className={cn(
+        'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium',
+        health === 'healthy' && 'text-[oklch(0.40_0.18_145)]',
+        health === 'degraded' && 'text-[oklch(0.45_0.18_60)]',
+        health === 'down' && 'text-[oklch(0.42_0.23_28)]',
+      )}
+    >
+      <HealthDot health={health} />
+      {health.charAt(0).toUpperCase() + health.slice(1)}
+    </div>
   )
 }
 
-function ServiceListRow({ service, teamName }: { service: RegistryService; teamName: string | null }) {
-  const health = normalizeHealth(service.healthStatus)
-  const isOrphan = service.teamId === null
-  const tech = service.techStack ?? []
-
+function WarningTag({ label }: { label: string }) {
   return (
-    <Link to="/catalog/$serviceId" params={{ serviceId: service.id }} className="block">
-      <div
-        className={cn(
-          'group flex items-center gap-4 rounded-lg border bg-card p-4 transition-all hover:shadow-sm',
-          isOrphan ? 'border-[oklch(0.65_0.18_60)] hover:border-[oklch(0.55_0.18_60)]' : 'border-border hover:border-primary/50',
-        )}
-      >
-        <HealthDot health={health} />
-        <div className="min-w-0 flex-1">
-          <p className="font-medium group-hover:text-primary">{service.name}</p>
-          <p className="text-xs text-muted-foreground">{teamName ?? 'No owner'}</p>
-        </div>
-        <div className="hidden flex-wrap gap-1 sm:flex">
-          {tech.slice(0, 2).map((t) => (
-            <span key={t} className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-              {t}
-            </span>
-          ))}
-        </div>
-        {service.lastDeployedAt && (
-          <span className="hidden text-xs text-muted-foreground sm:block">
-            {new Date(service.lastDeployedAt).toLocaleDateString()}
-          </span>
-        )}
-      </div>
-    </Link>
+    <span className="flex items-center gap-0.5 rounded border border-[oklch(0.72_0.14_60)] bg-[oklch(0.97_0.06_80)] px-1.5 py-0.5 text-[10px] font-medium text-[oklch(0.50_0.15_60)] dark:border-[oklch(0.60_0.15_60)] dark:bg-[oklch(0.27_0.06_80)] dark:text-[oklch(0.78_0.14_60)]">
+      <AlertTriangle className="size-2.5" aria-hidden="true" />
+      {label}
+    </span>
+  )
+}
+
+function CheckMark({ checked }: { checked: boolean }) {
+  return (
+    <span
+      className={cn(
+        'flex size-4 shrink-0 items-center justify-center rounded border',
+        checked ? 'border-primary bg-primary text-primary-foreground' : 'border-border',
+      )}
+      aria-hidden="true"
+    >
+      {checked && <Check className="size-2.5" />}
+    </span>
   )
 }

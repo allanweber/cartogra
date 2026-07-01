@@ -56,7 +56,7 @@ class RefreshTokenUseCaseTest {
 
     @BeforeEach
     void setUp() {
-        JwtConfig config = new JwtConfig("secret", 900L, 2592000L);
+        JwtConfig config = new JwtConfig("secret", 900L, 2592000L, false);
         auth = new AuthService(userRepository, tenantRepository, refreshTokenRepository,
             emailSender, encoder, jwtTokenProvider, config);
     }

@@ -2,6 +2,7 @@ package io.cartogra.registry.domain;
 
 import org.jspecify.annotations.Nullable;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -31,7 +32,13 @@ public record Service(
         @Nullable String healthEndpoint,
         @Nullable Instant lastCommitAt,
         @Nullable String lastCommitSha,
-        @Nullable Instant healthCheckedAt
+        @Nullable Instant healthCheckedAt,
+        // profile fields
+        @Nullable ServiceTier tier,
+        @Nullable List<String> tags,
+        @Nullable BigDecimal slaTarget,
+        @Nullable String documentationUrl,
+        @Nullable String runbookUrl
 ) {
     public boolean isOrphaned() {
         return teamId == null;

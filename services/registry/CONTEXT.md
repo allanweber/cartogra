@@ -20,11 +20,15 @@ The Registry is Cartogra's source of truth for the service estate. It owns every
 | **SCM Connection** | A configured link to a source-code provider (GitHub or Azure DevOps) belonging to a Tenant |
 | **History / Snapshot** | An append-only record of every state a Service has been in; supports point-in-time queries |
 | **Health Status** | Current runtime health of a Service: `HEALTHY`, `DEGRADED`, `UNHEALTHY`, `UNKNOWN` |
+| **Tier** | Criticality classification of a Service: `CRITICAL`, `STANDARD`, or `EXPERIMENTAL`. Governs incident response priority and change-management strictness |
+| **Tags** | Operational or business labels on a Service (e.g. `pci-scope`, `payment`). Free-form; distinct from `techStack` which identifies technologies used |
+| **SLA Target** | Numeric uptime percentage a Service commits to (e.g. `99.9`). Human-declared; not yet computed by the platform |
 | **Discovery** | Automatic creation or update of a Service record from an external signal (SCM scan, K8s watch) |
 | **External ID** | The provider-scoped stable key used for upsert deduplication (`tenant_id + external_id` UNIQUE) |
 | **Source** | How a Service was discovered: `scm`, `k8s`, or `manual` |
 | **Sync Command** | A Kafka message requesting Ingestion to start a sync job for a given SCM Connection |
 | **Ownership Resolution** | Assigning a Team to a Service based on CODEOWNERS or K8s namespace labels |
+| **TEAM_OWNER** | A tenant-level role permitted to mutate Service profile fields. Semantically scoped to services the user's team owns; enforced tenant-wide until team membership is introduced (see ADR-0022) |
 
 ---
 

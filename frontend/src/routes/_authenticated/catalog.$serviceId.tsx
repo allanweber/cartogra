@@ -1,15 +1,16 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Activity, ArrowLeft, Clock, Code2, GitBranch, Shield, Users } from 'lucide-react'
+import { Activity, AlertTriangle, Clock, Pencil, Shield, Zap } from 'lucide-react'
 import { useState } from 'react'
 
 import { AppLayout } from '#/components/AppLayout'
+import { EditServiceDrawer } from '#/components/EditServiceDrawer'
 import { Alert, AlertDescription } from '#/components/ui/alert'
-import { Badge } from '#/components/ui/badge'
+import { Button } from '#/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
 import { Skeleton } from '#/components/ui/skeleton'
 import { ApiError, apiFetch } from '#/lib/api'
-import { SCM_LABEL, normalizeHealth } from '#/lib/registry-types'
+import { normalizeHealth } from '#/lib/registry-types'
 import { cn } from '#/lib/utils'
 
 import type { PageResult, RegistryService, RegistryTeam, ServiceHealth } from '#/lib/registry-types'
@@ -18,9 +19,111 @@ export const Route = createFileRoute('/_authenticated/catalog/$serviceId')({
   component: ServiceDetailPage,
 })
 
+type TabId = 'overview' | 'dependencies' | 'contracts' | 'activity'
+
+const TABS: { id: TabId; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'dependencies', label: 'Dependencies' },
+  { id: 'contracts', label: 'Contracts' },
+  { id: 'activity', label: 'Activity' },
+]
+
+function relativeTime(dateStr: string): string {
+  const ms = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(ms / 60000)
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return `${Math.floor(hrs / 24)}d ago`
+}
+
+function computeRiskScore(service: RegistryService): number {
+  const health = normalizeHealth(service.healthStatus)
+  let score = health === 'down' ? 60 : health === 'degraded' ? 35 : 5
+  if (service.lastDeployedAt) {
+    const days = (Date.now() - new Date(service.lastDeployedAt).getTime()) / 86400000
+    score += Math.min(30, Math.floor(days * 1.5))
+  } else {
+    score += 18
+  }
+  if (!service.teamId) score += 8
+  return Math.min(99, Math.max(1, score))
+}
+
+function riskRingClass(score: number): string {
+  if (score >= 70)
+    return 'border-[oklch(0.70_0.15_28)] text-[oklch(0.50_0.20_28)] dark:border-[oklch(0.55_0.15_28)] dark:text-[oklch(0.72_0.18_28)]'
+  if (score >= 35)
+    return 'border-[oklch(0.72_0.14_60)] text-[oklch(0.60_0.14_60)] dark:border-[oklch(0.60_0.15_60)] dark:text-[oklch(0.78_0.14_60)]'
+  return 'border-[oklch(0.55_0.15_145)] text-[oklch(0.45_0.15_145)] dark:border-[oklch(0.50_0.14_145)] dark:text-[oklch(0.70_0.14_145)]'
+}
+
+function healthDotClass(health: ServiceHealth): string {
+  if (health === 'down') return 'bg-[oklch(0.55_0.22_28)]'
+  if (health === 'degraded') return 'bg-[oklch(0.65_0.18_60)]'
+  return 'bg-[oklch(0.55_0.18_145)]'
+}
+
+function healthTextClass(health: ServiceHealth): string {
+  if (health === 'down') return 'text-[oklch(0.50_0.20_28)] dark:text-[oklch(0.72_0.18_28)]'
+  if (health === 'degraded') return 'text-[oklch(0.60_0.14_60)] dark:text-[oklch(0.78_0.14_60)]'
+  return 'text-[oklch(0.45_0.15_145)] dark:text-[oklch(0.70_0.14_145)]'
+}
+
+function tierBadgeClass(tier: string): string {
+  if (tier === 'CRITICAL')
+    return 'border-[oklch(0.70_0.15_28)] text-[oklch(0.50_0.20_28)] bg-[oklch(0.97_0.05_28)] dark:border-[oklch(0.55_0.15_28)] dark:text-[oklch(0.72_0.18_28)] dark:bg-[oklch(0.27_0.05_28)]'
+  return 'border-border text-muted-foreground bg-transparent'
+}
+
+interface Insight {
+  icon: React.ReactNode
+  label: string
+  description: string
+  severity: 'critical' | 'warning' | 'info'
+}
+
+function buildInsights(service: RegistryService, riskScore: number): Insight[] {
+  const insights: Insight[] = []
+  const health = normalizeHealth(service.healthStatus)
+
+  if (health === 'down') {
+    insights.push({
+      icon: <Zap className="size-4" />,
+      label: 'Service Down',
+      description: 'Health checks are failing',
+      severity: 'critical',
+    })
+  }
+
+  if (service.lastDeployedAt) {
+    const days = (Date.now() - new Date(service.lastDeployedAt).getTime()) / 86400000
+    if (days > 7) {
+      insights.push({
+        icon: <Clock className="size-4" />,
+        label: 'Stale',
+        description: `Last deploy ${Math.floor(days)}d ago — deps may drift`,
+        severity: 'warning',
+      })
+    }
+  }
+
+  if (riskScore >= 70) {
+    insights.push({
+      icon: <AlertTriangle className="size-4" />,
+      label: 'High Risk',
+      description: `Risk score ${riskScore}/100`,
+      severity: 'warning',
+    })
+  }
+
+  return insights
+}
+
 function ServiceDetailPage() {
   const { serviceId } = Route.useParams()
-  const [tab, setTab] = useState<'overview' | 'contracts' | 'activity'>('overview')
+  const [tab, setTab] = useState<TabId>('overview')
+  const [editOpen, setEditOpen] = useState(false)
 
   const { data: service, isLoading, error } = useQuery({
     queryKey: ['service', serviceId],
@@ -38,11 +141,11 @@ function ServiceDetailPage() {
     return (
       <AppLayout title="Loading..." eyebrow="Service Catalog">
         <div className="space-y-5">
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-32 w-full rounded-xl" />
+          <Skeleton className="h-4 w-48" />
+          <Skeleton className="h-28 w-full rounded-xl" />
           <div className="flex gap-3">
             {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-16 w-32 rounded-lg" />
+              <Skeleton key={i} className="h-20 flex-1 rounded-lg" />
             ))}
           </div>
         </div>
@@ -66,223 +169,339 @@ function ServiceDetailPage() {
   const health = normalizeHealth(service.healthStatus)
   const teamName = teamMap.get(service.teamId ?? '') ?? null
   const tech = service.techStack ?? []
+  const riskScore = computeRiskScore(service)
+  const insights = buildInsights(service, riskScore)
+  const lastDeploy = service.lastDeployedAt ? relativeTime(service.lastDeployedAt) : null
 
   return (
-    <AppLayout title={service.name} eyebrow="Service Catalog">
-      <div className="space-y-5">
+    <AppLayout
+      title={service.name}
+      eyebrow="Service Catalog"
+      actions={
+        <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} className="gap-1.5">
+          <Pencil className="size-3.5" />
+          Edit
+        </Button>
+      }
+    >
+      <div className="space-y-4">
         {/* Breadcrumb */}
-        <Link
-          to="/catalog"
-          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-3" />
-          Service Catalog
-        </Link>
+        <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <Link to="/catalog" className="hover:text-foreground">
+            Service Catalog
+          </Link>
+          <span>/</span>
+          <span className="text-foreground">{service.name}</span>
+        </nav>
 
         {/* Header card */}
         <Card>
-          <CardContent className="flex flex-wrap items-start gap-4 p-5">
-            <div className="flex-1">
+          <CardContent className="flex items-start justify-between gap-4 px-6 py-5">
+            <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-bold">{service.name}</h2>
-                <HealthBadge health={health} />
-              </div>
-              {service.description && (
-                <p className="mt-1 text-sm text-muted-foreground">{service.description}</p>
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-6 text-sm">
-              <MetaItem
-                icon={<Users className="size-3.5" />}
-                label="Owner"
-                value={teamName ?? 'Unowned'}
-              />
-              {service.lastDeployedAt && (
-                <MetaItem
-                  icon={<Clock className="size-3.5" />}
-                  label="Last deploy"
-                  value={new Date(service.lastDeployedAt).toLocaleDateString()}
-                />
-              )}
-              {service.repositoryUrl && (
-                <MetaItem
-                  icon={<GitBranch className="size-3.5" />}
-                  label="Repository"
-                  value={service.repositoryRef ?? service.repositoryUrl}
-                />
-              )}
-              {service.source && (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-muted-foreground">
-                    <Code2 className="size-3.5" aria-hidden="true" />
+                <h1 className="text-2xl font-bold">{service.name}</h1>
+                {service.tier && (
+                  <span
+                    className={cn(
+                      'rounded border px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide',
+                      tierBadgeClass(service.tier),
+                    )}
+                  >
+                    {service.tier}
                   </span>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">SCM</p>
-                    <p className="text-sm font-medium">{SCM_LABEL[service.source] ?? service.source}</p>
-                  </div>
-                </div>
-              )}
+                )}
+                <span className={cn('inline-flex items-center gap-1.5', healthTextClass(health))}>
+                  <span className={cn('size-2 rounded-full', healthDotClass(health))} aria-hidden="true" />
+                  <span className="capitalize">{health}</span>
+                </span>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                {teamName && (
+                  <span>
+                    Owner:{' '}
+                    <span className="font-medium text-foreground">{teamName}</span>
+                  </span>
+                )}
+                {lastDeploy && (
+                  <span>
+                    Last deploy:{' '}
+                    <span className="font-medium text-foreground">{lastDeploy}</span>
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-col items-center gap-1">
+              <span className="text-xs text-muted-foreground">Risk Score</span>
+              <div
+                className={cn(
+                  'flex h-14 w-14 items-center justify-center rounded-full border-2 text-xl font-bold tabular-nums',
+                  riskRingClass(riskScore),
+                )}
+              >
+                {riskScore}
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Insight chips */}
-        <div className="flex flex-wrap gap-3">
-          <InsightChip label="Health" value={service.healthStatus} />
-          {tech.length > 0 && <InsightChip label="Tech Stack" value={tech.join(' · ')} />}
-          {service.teamId === null && <InsightChip label="Warning" value="orphan" variant="warning" />}
-          {service.k8sCluster && <InsightChip label="K8s Cluster" value={service.k8sCluster} />}
-          {service.k8sNamespace && <InsightChip label="Namespace" value={service.k8sNamespace} />}
-        </div>
+        {/* Active Insights */}
+        {insights.length > 0 && (
+          <section aria-label="Active Insights">
+            <p className="mb-2 text-sm font-medium">Active Insights</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {insights.map((insight) => (
+                <InsightCard key={insight.label} insight={insight} />
+              ))}
+            </div>
+          </section>
+        )}
 
-        {/* Tab bar */}
-        <div role="tablist" className="flex gap-0 overflow-hidden rounded-lg border border-border">
-          {(['overview', 'contracts', 'activity'] as const).map((t) => (
-            <button
-              key={t}
-              id={`tab-${t}`}
-              role="tab"
-              aria-selected={tab === t}
-              aria-controls={`panel-${t}`}
-              onClick={() => setTab(t)}
-              className={cn(
-                'flex-1 px-4 py-2.5 text-sm font-medium capitalize transition-colors focus-visible:outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-ring',
-                tab === t
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
-              )}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
+        {/* Two-column: left (tabs+content) + right sidebar */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
+          {/* Left column */}
+          <div className="min-w-0 space-y-4">
+            {/* Tab bar */}
+            <div role="tablist" className="flex border-b border-border">
+              {TABS.map((t) => (
+                <button
+                  key={t.id}
+                  id={`tab-${t.id}`}
+                  role="tab"
+                  aria-selected={tab === t.id}
+                  aria-controls={`panel-${t.id}`}
+                  onClick={() => setTab(t.id)}
+                  className={cn(
+                    'px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                    tab === t.id
+                      ? '-mb-px border-b-2 border-primary text-foreground'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
 
-        {/* Overview */}
-        {tab === 'overview' && (
-          <div id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Tech Stack</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {tech.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No tech stack defined.</p>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {tech.map((t) => (
-                      <Badge key={t} variant="secondary">{t}</Badge>
-                    ))}
-                  </div>
+            {/* Overview */}
+            {tab === 'overview' && (
+              <div id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" className="space-y-4">
+                {service.description && (
+                  <Card>
+                    <CardHeader className="pb-2 pt-5">
+                      <CardTitle className="text-sm font-semibold">Description</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pb-5 pt-0 text-sm text-foreground">
+                      {service.description}
+                    </CardContent>
+                  </Card>
                 )}
+
+                <Card>
+                  <CardHeader className="pb-2 pt-5">
+                    <CardTitle className="text-sm font-semibold">Tech Stack</CardTitle>
+                  </CardHeader>
+                  <CardContent className="pb-5 pt-0">
+                    {tech.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No tech stack defined.</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {tech.map((t) => (
+                          <span
+                            key={t}
+                            className="rounded-md border border-border bg-background px-2 py-0.5 text-xs font-medium text-foreground"
+                          >
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2 pt-5">
+                    <CardTitle className="text-sm font-semibold">Metadata</CardTitle>
+                  </CardHeader>
+                  <CardContent className="pb-5 pt-0">
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                      <MetaField label="Service ID" value={service.id} mono />
+                      {service.tier && <MetaField label="Tier" value={service.tier} capitalize />}
+                      <MetaField label="Health" value={health} capitalize />
+                      <MetaField label="Risk Score" value={String(riskScore)} />
+                      {teamName && <MetaField label="Owner Team" value={teamName} />}
+                      {service.k8sCluster && <MetaField label="K8s Cluster" value={service.k8sCluster} />}
+                      {service.k8sNamespace && <MetaField label="Namespace" value={service.k8sNamespace} />}
+                      {service.k8sDeployment && <MetaField label="Deployment" value={service.k8sDeployment} />}
+                      {service.slaTarget != null && (
+                        <MetaField label="SLA Target" value={`${service.slaTarget}%`} />
+                      )}
+                      {service.documentationUrl && (
+                        <div className="space-y-0.5">
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Documentation</p>
+                          <a
+                            href={service.documentationUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block truncate text-xs text-primary hover:underline"
+                          >
+                            {service.documentationUrl}
+                          </a>
+                        </div>
+                      )}
+                      {service.runbookUrl && (
+                        <div className="space-y-0.5">
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Runbook</p>
+                          <a
+                            href={service.runbookUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block truncate text-xs text-primary hover:underline"
+                          >
+                            {service.runbookUrl}
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Dependencies */}
+            {tab === 'dependencies' && (
+              <div id="panel-dependencies" role="tabpanel" aria-labelledby="tab-dependencies">
+                <EmptyTab icon={<Shield className="size-8" />} message="Dependency graph not yet available." />
+              </div>
+            )}
+
+            {/* Contracts */}
+            {tab === 'contracts' && (
+              <div id="panel-contracts" role="tabpanel" aria-labelledby="tab-contracts">
+                <EmptyTab icon={<Shield className="size-8" />} message="Contract data not yet available." />
+              </div>
+            )}
+
+            {/* Activity */}
+            {tab === 'activity' && (
+              <div id="panel-activity" role="tabpanel" aria-labelledby="tab-activity">
+                <EmptyTab icon={<Activity className="size-8" />} message="Activity feed not yet available." />
+              </div>
+            )}
+          </div>
+
+          {/* Right sidebar */}
+          <div className="space-y-4">
+            <Card>
+              <CardHeader className="pb-2 pt-5">
+                <CardTitle className="text-sm font-semibold">Active Risks (0)</CardTitle>
+              </CardHeader>
+              <CardContent className="pb-5 pt-0">
+                <p className="text-sm text-muted-foreground">No active risks detected.</p>
               </CardContent>
             </Card>
+
             <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Infrastructure</CardTitle>
+              <CardHeader className="pb-2 pt-5">
+                <CardTitle className="text-sm font-semibold">Contract Impact</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                {service.k8sCluster && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Cluster</span>
-                    <span className="font-medium">{service.k8sCluster}</span>
-                  </div>
-                )}
-                {service.k8sNamespace && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Namespace</span>
-                    <span className="font-medium">{service.k8sNamespace}</span>
-                  </div>
-                )}
-                {service.k8sDeployment && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Deployment</span>
-                    <span className="font-medium">{service.k8sDeployment}</span>
-                  </div>
-                )}
-                {service.healthEndpoint && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Health endpoint</span>
-                    <span className="font-mono text-xs">{service.healthEndpoint}</span>
-                  </div>
-                )}
-                {!service.k8sCluster && !service.k8sNamespace && !service.k8sDeployment && !service.healthEndpoint && (
-                  <p className="text-muted-foreground">No infrastructure details.</p>
-                )}
+              <CardContent className="pb-5 pt-0">
+                <p className="text-sm text-muted-foreground">No contract data available.</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2 pt-5">
+                <CardTitle className="text-sm font-semibold">Health History (7d)</CardTitle>
+              </CardHeader>
+              <CardContent className="pb-5 pt-0">
+                <HealthHistoryBar health={health} />
               </CardContent>
             </Card>
           </div>
-        )}
-
-        {/* Contracts — not yet available */}
-        {tab === 'contracts' && (
-          <div id="panel-contracts" role="tabpanel" aria-labelledby="tab-contracts">
-            <EmptyTab icon={<Shield className="size-8" />} message="Contract data not yet available." />
-          </div>
-        )}
-
-        {/* Activity — not yet available */}
-        {tab === 'activity' && (
-          <div id="panel-activity" role="tabpanel" aria-labelledby="tab-activity">
-            <EmptyTab icon={<Activity className="size-8" />} message="Activity feed not yet available." />
-          </div>
-        )}
+        </div>
       </div>
+
+      <EditServiceDrawer service={service} open={editOpen} onOpenChange={setEditOpen} />
     </AppLayout>
   )
 }
 
-function HealthBadge({ health }: { health: ServiceHealth }) {
+function InsightCard({ insight }: { insight: Insight }) {
+  const isCritical = insight.severity === 'critical'
+  const isWarning = insight.severity === 'warning'
   return (
-    <Badge
-      variant="outline"
-      className={cn('gap-1.5 capitalize border-current', `bg-health-${health}`)}
+    <div
+      className={cn(
+        'rounded-lg border p-4',
+        isCritical &&
+          'border-[oklch(0.70_0.15_28)] bg-[oklch(0.97_0.05_28)] dark:border-[oklch(0.55_0.15_28)] dark:bg-[oklch(0.22_0.05_28)]',
+        isWarning &&
+          'border-[oklch(0.72_0.14_60)] bg-[oklch(0.97_0.06_80)] dark:border-[oklch(0.60_0.15_60)] dark:bg-[oklch(0.22_0.06_80)]',
+        !isCritical && !isWarning && 'border-border bg-muted/40',
+      )}
     >
-      {health}
-    </Badge>
-  )
-}
-
-function MetaItem({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-muted-foreground">{icon}</span>
-      <div>
-        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</p>
-        <p className="font-medium">{value}</p>
+      <div
+        className={cn(
+          'mb-1',
+          isCritical && 'text-[oklch(0.50_0.20_28)] dark:text-[oklch(0.72_0.18_28)]',
+          isWarning && 'text-[oklch(0.60_0.14_60)] dark:text-[oklch(0.78_0.14_60)]',
+          !isCritical && !isWarning && 'text-muted-foreground',
+        )}
+      >
+        {insight.icon}
       </div>
+      <p
+        className={cn(
+          'text-sm font-semibold',
+          isCritical && 'text-[oklch(0.50_0.20_28)] dark:text-[oklch(0.72_0.18_28)]',
+          isWarning && 'text-[oklch(0.60_0.14_60)] dark:text-[oklch(0.78_0.14_60)]',
+        )}
+      >
+        {insight.label}
+      </p>
+      <p className="mt-0.5 text-xs text-muted-foreground">{insight.description}</p>
     </div>
   )
 }
 
-function InsightChip({
+function MetaField({
   label,
   value,
-  variant,
+  mono,
+  capitalize,
 }: {
   label: string
   value: string
-  variant?: 'warning' | 'critical'
+  mono?: boolean
+  capitalize?: boolean
 }) {
   return (
-    <div
-      className={cn(
-        'rounded-lg border px-3 py-2',
-        variant === 'critical' && 'border-[oklch(0.70_0.15_28)] bg-[oklch(0.97_0.05_28)] dark:border-[oklch(0.55_0.15_28)] dark:bg-[oklch(0.27_0.05_28)]',
-        variant === 'warning' && 'border-[oklch(0.72_0.14_60)] bg-[oklch(0.97_0.06_80)] dark:border-[oklch(0.60_0.15_60)] dark:bg-[oklch(0.27_0.06_80)]',
-        !variant && 'border-border bg-muted/50',
-      )}
-    >
-      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p
-        className={cn(
-          'text-sm font-semibold',
-          variant === 'critical' && 'text-[oklch(0.50_0.20_28)] dark:text-[oklch(0.72_0.18_28)]',
-          variant === 'warning' && 'text-[oklch(0.50_0.15_60)] dark:text-[oklch(0.78_0.14_60)]',
-        )}
-      >
-        {value}
-      </p>
+    <div className="space-y-0.5">
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className={cn('font-medium', mono && 'font-mono text-xs', capitalize && 'capitalize')}>{value}</p>
+    </div>
+  )
+}
+
+function HealthHistoryBar({ health }: { health: ServiceHealth }) {
+  const colorClass =
+    health === 'down'
+      ? 'bg-[oklch(0.70_0.15_28)]'
+      : health === 'degraded'
+        ? 'bg-[oklch(0.72_0.14_60)]'
+        : 'bg-[oklch(0.55_0.18_145)]'
+
+  return (
+    <div>
+      <div className="flex gap-1">
+        {Array.from({ length: 7 }).map((_, i) => (
+          <div key={i} className={cn('h-7 flex-1 rounded-sm', colorClass, 'opacity-80')} />
+        ))}
+      </div>
+      <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+        <span>7d ago</span>
+        <span>Today</span>
+      </div>
     </div>
   )
 }

@@ -78,6 +78,25 @@ class ServiceValidationIT {
     }
 
     @Test
+    void invalidEnumTierValueReturns400() throws Exception {
+        HttpResponse<String> created = HTTP.send(
+                post("/api/v1/services", """
+                        {"name":"enum-validation-svc"}"""), HttpResponse.BodyHandlers.ofString());
+        String id = MAPPER.readTree(created.body()).get("data").get("id").asText();
+
+        HttpResponse<String> resp = HTTP.send(
+                put("/api/v1/services/" + id, """
+                        {"name":"enum-validation-svc","tier":"critical"}"""),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(resp.statusCode()).isEqualTo(400);
+        var error = MAPPER.readTree(resp.body()).get("error");
+        assertThat(error.get("code").asText()).isEqualTo("VALIDATION_ERROR");
+        assertThat(error.get("message").asText()).contains("critical");
+        assertThat(error.get("message").asText()).contains("CRITICAL");
+    }
+
+    @Test
     void missingTenantIdHeaderReturns400() throws Exception {
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + "/api/v1/services"))
@@ -113,6 +132,7 @@ class ServiceValidationIT {
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", TENANT.toString())
+                .header("X-User-Roles", "ADMIN")
                 .PUT(HttpRequest.BodyPublishers.ofString(body))
                 .build();
     }

@@ -5,10 +5,12 @@ import io.cartogra.registry.repository.ServiceFilter;
 import io.cartogra.registry.repository.ServiceRepository;
 import io.cartogra.registry.domain.Service;
 import io.cartogra.registry.domain.ServiceHealthStatus;
+import io.cartogra.registry.domain.ServiceTier;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
+import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -92,14 +94,16 @@ public class JdbcServiceRepository implements ServiceRepository {
                     created_at, updated_at, deleted_at,
                     external_id, connection_id, source, repository_ref,
                     k8s_cluster, k8s_namespace, k8s_deployment, health_endpoint,
-                    last_commit_at, last_commit_sha, health_checked_at
+                    last_commit_at, last_commit_sha, health_checked_at,
+                    tier, tags, sla_target, documentation_url, runbook_url
                 ) VALUES (
                     :id, :tenantId, :name, :description, :teamId, :repositoryUrl,
                     :techStack, CAST(:metadata AS JSONB), :healthStatus, :lastDeployedAt,
                     :createdAt, :updatedAt, :deletedAt,
                     :externalId, :connectionId, :source, :repositoryRef,
                     :k8sCluster, :k8sNamespace, :k8sDeployment, :healthEndpoint,
-                    :lastCommitAt, :lastCommitSha, :healthCheckedAt
+                    :lastCommitAt, :lastCommitSha, :healthCheckedAt,
+                    :tier, :tags, :slaTarget, :documentationUrl, :runbookUrl
                 )
                 ON CONFLICT (id) DO UPDATE SET
                     name               = EXCLUDED.name,
@@ -122,7 +126,12 @@ public class JdbcServiceRepository implements ServiceRepository {
                     health_endpoint    = EXCLUDED.health_endpoint,
                     last_commit_at     = EXCLUDED.last_commit_at,
                     last_commit_sha    = EXCLUDED.last_commit_sha,
-                    health_checked_at  = EXCLUDED.health_checked_at
+                    health_checked_at  = EXCLUDED.health_checked_at,
+                    tier               = EXCLUDED.tier,
+                    tags               = EXCLUDED.tags,
+                    sla_target         = EXCLUDED.sla_target,
+                    documentation_url  = EXCLUDED.documentation_url,
+                    runbook_url        = EXCLUDED.runbook_url
                 RETURNING *
                 """;
         return jdbc.queryForObject(sql, toParams(service), SERVICE_MAPPER);
@@ -229,7 +238,9 @@ public class JdbcServiceRepository implements ServiceRepository {
                     healthStatus, current.lastDeployedAt(), current.createdAt(), now, null,
                     current.externalId(), command.connectionId(), command.source(),
                     repositoryRef, k8sCluster, k8sNamespace, k8sDeployment,
-                    healthEndpoint, lastCommitAt, lastCommitSha, current.healthCheckedAt()
+                    healthEndpoint, lastCommitAt, lastCommitSha, current.healthCheckedAt(),
+                    current.tier(), current.tags(), current.slaTarget(),
+                    current.documentationUrl(), current.runbookUrl()
             );
             return Optional.of(save(updated));
         }
@@ -258,7 +269,8 @@ public class JdbcServiceRepository implements ServiceRepository {
                 command.healthEndpoint(),
                 command.lastCommitAt(),
                 command.lastCommitSha(),
-                null
+                null,
+                null, null, null, null, null
         );
         return Optional.of(save(newService));
     }
@@ -367,7 +379,12 @@ public class JdbcServiceRepository implements ServiceRepository {
                 .addValue("healthEndpoint", s.healthEndpoint())
                 .addValue("lastCommitAt", s.lastCommitAt() != null ? java.sql.Timestamp.from(s.lastCommitAt()) : null)
                 .addValue("lastCommitSha", s.lastCommitSha())
-                .addValue("healthCheckedAt", s.healthCheckedAt() != null ? java.sql.Timestamp.from(s.healthCheckedAt()) : null);
+                .addValue("healthCheckedAt", s.healthCheckedAt() != null ? java.sql.Timestamp.from(s.healthCheckedAt()) : null)
+                .addValue("tier", s.tier() != null ? s.tier().toDbValue() : null)
+                .addValue("tags", s.tags() != null ? s.tags().toArray(String[]::new) : null)
+                .addValue("slaTarget", s.slaTarget())
+                .addValue("documentationUrl", s.documentationUrl())
+                .addValue("runbookUrl", s.runbookUrl());
     }
 
     private static final RowMapper<Service> SERVICE_MAPPER = (rs, _) -> mapService(rs);
@@ -375,6 +392,11 @@ public class JdbcServiceRepository implements ServiceRepository {
     private static Service mapService(ResultSet rs) throws SQLException {
         java.sql.Array techStackArr = rs.getArray("tech_stack");
         List<String> techStack = techStackArr != null ? List.of((String[]) techStackArr.getArray()) : null;
+        java.sql.Array tagsArr = rs.getArray("tags");
+        List<String> tags = tagsArr != null ? List.of((String[]) tagsArr.getArray()) : null;
+        String tierStr = rs.getString("tier");
+        ServiceTier tier = tierStr != null ? ServiceTier.valueOf(tierStr.toUpperCase()) : null;
+        BigDecimal slaTarget = rs.getBigDecimal("sla_target");
         return new Service(
                 UUID.fromString(rs.getString("id")),
                 UUID.fromString(rs.getString("tenant_id")),
@@ -399,7 +421,12 @@ public class JdbcServiceRepository implements ServiceRepository {
                 rs.getString("health_endpoint"),
                 rs.getTimestamp("last_commit_at") != null ? rs.getTimestamp("last_commit_at").toInstant() : null,
                 rs.getString("last_commit_sha"),
-                rs.getTimestamp("health_checked_at") != null ? rs.getTimestamp("health_checked_at").toInstant() : null
+                rs.getTimestamp("health_checked_at") != null ? rs.getTimestamp("health_checked_at").toInstant() : null,
+                tier,
+                tags,
+                slaTarget,
+                rs.getString("documentation_url"),
+                rs.getString("runbook_url")
         );
     }
 }

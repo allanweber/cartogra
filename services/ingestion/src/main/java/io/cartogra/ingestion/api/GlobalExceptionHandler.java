@@ -11,12 +11,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import tools.jackson.databind.exc.InvalidFormatException;
 
+import java.util.Arrays;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -49,6 +52,15 @@ public class GlobalExceptionHandler {
                 .body(new ApiErrorResponse(ApiError.of(ErrorCodes.WEBHOOK_SIGNATURE_INVALID, ex.getMessage()), traceId));
     }
 
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiErrorResponse> handleMessageNotReadable(HttpMessageNotReadableException ex) {
+        String traceId = Span.current().getSpanContext().getTraceId();
+        String message = enumFormatMessage(ex);
+        return ResponseEntity.badRequest()
+                .header("X-Trace-Id", traceId)
+                .body(new ApiErrorResponse(ApiError.of(ErrorCodes.VALIDATION_ERROR, message), traceId));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
         String traceId = Span.current().getSpanContext().getTraceId();
@@ -73,6 +85,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .header("X-Trace-Id", traceId)
                 .body(new ApiErrorResponse(ApiError.of(ErrorCodes.BAD_REQUEST, ex.getMessage()), traceId));
+    }
+
+    private static String enumFormatMessage(HttpMessageNotReadableException ex) {
+        if (ex.getCause() instanceof InvalidFormatException ife
+                && ife.getTargetType() != null
+                && ife.getTargetType().isEnum()) {
+            String accepted = Arrays.stream(ife.getTargetType().getEnumConstants())
+                    .map(e -> ((Enum<?>) e).name().toLowerCase())
+                    .collect(Collectors.joining(", "));
+            return "Invalid value '%s'. Accepted values: %s".formatted(ife.getValue(), accepted);
+        }
+        return "Malformed or unreadable request body";
     }
 
     @ExceptionHandler(Exception.class)

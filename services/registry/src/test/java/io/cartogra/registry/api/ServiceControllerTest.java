@@ -235,7 +235,8 @@ class ServiceControllerTest {
         Instant now = Instant.now();
         return new Service(UUID.randomUUID(), TENANT, name, null, null, null, null, null,
                 ServiceHealthStatus.UNKNOWN, null, now, now, null,
-                null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null);
     }
 
     private ServiceSnapshot snapshot(UUID serviceId) {

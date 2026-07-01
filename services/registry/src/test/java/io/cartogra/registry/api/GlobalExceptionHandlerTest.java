@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.servlet.NoHandlerFoundException;
@@ -116,6 +117,16 @@ class GlobalExceptionHandlerTest {
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(error(resp)).isEqualTo(ErrorCodes.BAD_REQUEST);
         assertThat(resp.getBody().error().message()).contains("X-Tenant-Id");
+    }
+
+    @Test
+    void malformedBodyReturns400() {
+        var ex = new HttpMessageNotReadableException("unreadable", (org.springframework.http.HttpInputMessage) null);
+        var resp = handler.handleMessageNotReadable(ex);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(error(resp)).isEqualTo(ErrorCodes.VALIDATION_ERROR);
+        assertThat(resp.getBody().error().message()).isEqualTo("Malformed or unreadable request body");
     }
 
     @Test

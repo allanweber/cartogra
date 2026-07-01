@@ -41,7 +41,9 @@ public class ServiceLifecycleEventProducer {
                 service.externalId(), service.connectionId(), service.source(), service.repositoryRef(),
                 service.k8sCluster(), service.k8sNamespace(), service.k8sDeployment(),
                 service.healthEndpoint(), service.lastCommitAt(), service.lastCommitSha(),
-                service.healthCheckedAt());
+                service.healthCheckedAt(),
+                service.tier(), service.tags(), service.slaTarget(),
+                service.documentationUrl(), service.runbookUrl());
         publish(TOPIC_DELETED, "service.deleted", deleted);
     }
 

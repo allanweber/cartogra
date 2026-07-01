@@ -113,7 +113,7 @@ class ServiceCrudIT {
 
         // UPDATE
         String updateBody = """
-                {"name":"payments-service","description":"handles payments v2","healthStatus":"healthy"}
+                {"name":"payments-service","description":"handles payments v2","healthStatus":"HEALTHY"}
                 """;
         HttpResponse<String> updated = HTTP.send(
                 put("/api/v1/services/" + serviceId, updateBody), HttpResponse.BodyHandlers.ofString());
@@ -241,6 +241,7 @@ class ServiceCrudIT {
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", TENANT.toString())
+                .header("X-User-Roles", "ADMIN")
                 .PUT(HttpRequest.BodyPublishers.ofString(body))
                 .build();
     }
@@ -249,6 +250,7 @@ class ServiceCrudIT {
         return HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("X-Tenant-Id", TENANT.toString())
+                .header("X-User-Roles", "ADMIN")
                 .DELETE()
                 .build();
     }

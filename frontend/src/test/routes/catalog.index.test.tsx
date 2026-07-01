@@ -28,7 +28,16 @@ vi.mock('#/lib/api', () => ({
 }))
 
 vi.mock('#/components/AppLayout', () => ({
-  AppLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  AppLayout: ({ children, description }: { children: React.ReactNode; description?: string }) => (
+    <div>
+      {description && <p>{description}</p>}
+      {children}
+    </div>
+  ),
+}))
+
+vi.mock('#/components/RegisterServiceDrawer', () => ({
+  RegisterServiceDrawer: () => null,
 }))
 
 const EMPTY_TEAMS: PageResult<RegistryTeam> = { items: [], total: 0, limit: 200, offset: 0 }
@@ -43,7 +52,7 @@ const MOCK_SERVICE: RegistryService = {
   repositoryUrl: null,
   techStack: ['go', 'grpc'],
   metadata: null,
-  healthStatus: 'healthy',
+  healthStatus: 'HEALTHY',
   lastDeployedAt: null,
   createdAt: '2024-01-01T00:00:00Z',
   updatedAt: '2024-01-01T00:00:00Z',
@@ -58,6 +67,11 @@ const MOCK_SERVICE: RegistryService = {
   lastCommitAt: null,
   lastCommitSha: null,
   healthCheckedAt: null,
+  tier: null,
+  tags: null,
+  slaTarget: null,
+  documentationUrl: null,
+  runbookUrl: null,
 }
 
 function renderPage() {
@@ -139,14 +153,14 @@ describe('CatalogPage', () => {
     expect(screen.getByRole('textbox', { name: /search services/i })).toBeInTheDocument()
   })
 
-  it('renders health filter chips', async () => {
+  it('renders health filter controls', async () => {
     mockApiFetch()
     renderPage()
     await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
-    expect(screen.getByRole('button', { name: /^all/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /healthy/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /degraded/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /down/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Filter by health' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Healthy/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Degraded/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Down/i })).toBeInTheDocument()
   })
 
   it('grid view button is pressed by default', async () => {

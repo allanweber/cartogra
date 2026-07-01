@@ -118,7 +118,7 @@ class ServiceServiceTest {
         UUID serviceId = UUID.randomUUID();
         Service existing = service(tenantId, serviceId, "old");
         Service saved = service(tenantId, serviceId, "new");
-        var req = new UpdateServiceRequest("new", null, null, null, null, null, null);
+        var req = new UpdateServiceRequest("new", null, null, null, null, null, null, null, null, null, null, null);
         when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.of(existing));
         when(serviceRepository.existsByName(tenantId, "new", serviceId)).thenReturn(false);
         when(serviceRepository.save(any())).thenReturn(saved);
@@ -134,7 +134,7 @@ class ServiceServiceTest {
     void updateNotFoundThrowsWithoutPublishing() {
         UUID tenantId = UUID.randomUUID();
         UUID serviceId = UUID.randomUUID();
-        var req = new UpdateServiceRequest("new", null, null, null, null, null, null);
+        var req = new UpdateServiceRequest("new", null, null, null, null, null, null, null, null, null, null, null);
         when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> serviceService.update(tenantId, serviceId, req, null))
@@ -148,7 +148,7 @@ class ServiceServiceTest {
         UUID tenantId = UUID.randomUUID();
         UUID serviceId = UUID.randomUUID();
         Service existing = service(tenantId, serviceId, "old");
-        var req = new UpdateServiceRequest("taken", null, null, null, null, null, null);
+        var req = new UpdateServiceRequest("taken", null, null, null, null, null, null, null, null, null, null, null);
         when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.of(existing));
         when(serviceRepository.existsByName(tenantId, "taken", serviceId)).thenReturn(true);
 
@@ -390,14 +390,16 @@ class ServiceServiceTest {
         Instant now = Instant.now();
         return new Service(id, tenantId, name, null, null, null, null, null,
                 ServiceHealthStatus.UNKNOWN, null, now, now, null,
-                null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null);
     }
 
     private Service serviceWithTeam(UUID tenantId, UUID id, String name, UUID teamId) {
         Instant now = Instant.now();
         return new Service(id, tenantId, name, null, teamId, null, null, null,
                 ServiceHealthStatus.UNKNOWN, null, now, now, null,
-                null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null);
     }
 
     private Team team(UUID tenantId, UUID teamId) {

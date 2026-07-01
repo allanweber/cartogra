@@ -11,7 +11,7 @@ import io.cartogra.gateway.api.dto.TokenResponse;
 import io.cartogra.gateway.api.dto.UpdateUserInfoRequest;
 import io.cartogra.gateway.api.dto.UserInfoResponse;
 import io.cartogra.gateway.api.dto.VerifyEmailRequest;
-
+import io.cartogra.gateway.config.JwtConfig;
 import io.cartogra.gateway.domain.AuthService;
 import io.cartogra.gateway.domain.UpdateUserInfoResult;
 import io.cartogra.gateway.domain.exception.UnauthorizedException;
@@ -39,10 +39,12 @@ public class AuthController {
 
     private final AuthService auth;
     private final TraceContext traceContext;
+    private final boolean cookieSecure;
 
-    public AuthController(AuthService auth, TraceContext traceContext) {
+    public AuthController(AuthService auth, TraceContext traceContext, JwtConfig jwtConfig) {
         this.auth = auth;
         this.traceContext = traceContext;
+        this.cookieSecure = jwtConfig.cookieSecure();
     }
 
     @PostMapping("/register")
@@ -170,7 +172,7 @@ public class AuthController {
         UpdateUserInfoResult result = auth.updateUserInfo(principal.getClaims().userId(), request.name(), request.email());
         response.addHeader(HttpHeaders.SET_COOKIE,
             ResponseCookie.from(COOKIE_JWT, result.accessToken())
-                .httpOnly(true).secure(true).sameSite("Lax").path("/")
+                .httpOnly(true).secure(cookieSecure).sameSite("Lax").path("/")
                 .maxAge(result.expiresIn()).build().toString());
         return ResponseEntity.ok()
             .header("X-Trace-Id", traceId)
@@ -181,13 +183,13 @@ public class AuthController {
         if (tokens.accessToken() != null) {
             response.addHeader(HttpHeaders.SET_COOKIE,
                 ResponseCookie.from(COOKIE_JWT, tokens.accessToken())
-                    .httpOnly(true).secure(true).sameSite("Lax").path("/")
+                    .httpOnly(true).secure(cookieSecure).sameSite("Lax").path("/")
                     .maxAge(tokens.expiresIn()).build().toString());
         }
         if (tokens.refreshToken() != null) {
             response.addHeader(HttpHeaders.SET_COOKIE,
                 ResponseCookie.from(COOKIE_REFRESH, tokens.refreshToken())
-                    .httpOnly(true).secure(true).sameSite("Lax").path("/api/auth/refresh")
+                    .httpOnly(true).secure(cookieSecure).sameSite("Lax").path("/api/auth/refresh")
                     .maxAge(30L * 24 * 3600).build().toString());
         }
     }
@@ -195,10 +197,10 @@ public class AuthController {
     private void clearAuthCookies(HttpServletResponse response) {
         response.addHeader(HttpHeaders.SET_COOKIE,
             ResponseCookie.from(COOKIE_JWT, "")
-                .httpOnly(true).secure(true).path("/").maxAge(0).build().toString());
+                .httpOnly(true).secure(cookieSecure).path("/").maxAge(0).build().toString());
         response.addHeader(HttpHeaders.SET_COOKIE,
             ResponseCookie.from(COOKIE_REFRESH, "")
-                .httpOnly(true).secure(true).path("/api/auth/refresh").maxAge(0).build().toString());
+                .httpOnly(true).secure(cookieSecure).path("/api/auth/refresh").maxAge(0).build().toString());
     }
 
     private String extractRefreshToken(HttpServletRequest request) {

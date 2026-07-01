@@ -18,10 +18,12 @@ import io.cartogra.registry.infrastructure.kafka.ServiceLifecycleEventProducer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -76,7 +78,8 @@ public class ServiceService {
                 UUID.randomUUID(), tenantId, req.name(), req.description(),
                 req.teamId(), req.repositoryUrl(), req.techStack(), req.metadata(),
                 ServiceHealthStatus.UNKNOWN, null, now, now, null,
-                null, null, null, null, null, null, null, req.healthEndpoint(), null, null, null
+                null, null, null, null, null, null, null, req.healthEndpoint(), null, null, null,
+                null, null, null, null, null
         );
 
         Service saved = serviceRepository.save(service);
@@ -86,6 +89,7 @@ public class ServiceService {
     }
 
     @Transactional
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEAM_OWNER')")
     public Service update(UUID tenantId, UUID serviceId, UpdateServiceRequest req, @Nullable UUID requestedBy) {
         Service existing = serviceRepository.findById(tenantId, serviceId)
                 .orElseThrow(() -> new ServiceNotFoundException(serviceId));
@@ -98,14 +102,19 @@ public class ServiceService {
             healthEndpointValidator.validate(req.healthEndpoint());
         }
 
-        String name           = req.name()          != null ? req.name()          : existing.name();
-        String description    = req.description()   != null ? req.description()   : existing.description();
-        String repositoryUrl  = req.repositoryUrl() != null ? req.repositoryUrl() : existing.repositoryUrl();
-        List<String> techStack = req.techStack()    != null ? req.techStack()     : existing.techStack();
-        String metadata       = req.metadata()      != null ? req.metadata()      : existing.metadata();
+        String name              = req.name()             != null ? req.name()             : existing.name();
+        String description       = req.description()      != null ? req.description()      : existing.description();
+        String repositoryUrl     = req.repositoryUrl()    != null ? req.repositoryUrl()    : existing.repositoryUrl();
+        List<String> techStack   = req.techStack()        != null ? req.techStack()        : existing.techStack();
+        String metadata          = req.metadata()         != null ? req.metadata()         : existing.metadata();
         ServiceHealthStatus healthStatus = req.healthStatus() != null
                 ? ServiceHealthStatus.fromString(req.healthStatus()) : existing.healthStatus();
-        String healthEndpoint = req.healthEndpoint() != null ? req.healthEndpoint() : existing.healthEndpoint();
+        String healthEndpoint    = req.healthEndpoint()   != null ? req.healthEndpoint()   : existing.healthEndpoint();
+        ServiceTier tier         = req.tier()             != null ? req.tier()             : existing.tier();
+        List<String> tags        = req.tags()             != null ? req.tags()             : existing.tags();
+        BigDecimal slaTarget     = req.slaTarget()        != null ? req.slaTarget()        : existing.slaTarget();
+        String documentationUrl  = req.documentationUrl() != null ? req.documentationUrl() : existing.documentationUrl();
+        String runbookUrl        = req.runbookUrl()       != null ? req.runbookUrl()       : existing.runbookUrl();
 
         boolean changed = !Objects.equals(existing.name(), name)
                 || !Objects.equals(existing.description(), description)
@@ -113,7 +122,12 @@ public class ServiceService {
                 || !Objects.equals(existing.techStack(), techStack)
                 || !Objects.equals(existing.metadata(), metadata)
                 || existing.healthStatus() != healthStatus
-                || !Objects.equals(existing.healthEndpoint(), healthEndpoint);
+                || !Objects.equals(existing.healthEndpoint(), healthEndpoint)
+                || existing.tier() != tier
+                || !Objects.equals(existing.tags(), tags)
+                || !Objects.equals(existing.slaTarget(), slaTarget)
+                || !Objects.equals(existing.documentationUrl(), documentationUrl)
+                || !Objects.equals(existing.runbookUrl(), runbookUrl);
 
         if (!changed) {
             return existing;
@@ -125,7 +139,8 @@ public class ServiceService {
                 healthStatus, existing.lastDeployedAt(), existing.createdAt(), Instant.now(), null,
                 existing.externalId(), existing.connectionId(), existing.source(), existing.repositoryRef(),
                 existing.k8sCluster(), existing.k8sNamespace(), existing.k8sDeployment(),
-                healthEndpoint, existing.lastCommitAt(), existing.lastCommitSha(), existing.healthCheckedAt()
+                healthEndpoint, existing.lastCommitAt(), existing.lastCommitSha(), existing.healthCheckedAt(),
+                tier, tags, slaTarget, documentationUrl, runbookUrl
         );
 
         Service saved = serviceRepository.save(updated);
@@ -150,7 +165,9 @@ public class ServiceService {
                 existing.externalId(), existing.connectionId(), existing.source(), existing.repositoryRef(),
                 existing.k8sCluster(), existing.k8sNamespace(), existing.k8sDeployment(),
                 existing.healthEndpoint(), existing.lastCommitAt(), existing.lastCommitSha(),
-                existing.healthCheckedAt()
+                existing.healthCheckedAt(),
+                existing.tier(), existing.tags(), existing.slaTarget(),
+                existing.documentationUrl(), existing.runbookUrl()
         );
         historyRepository.save(snapshot(deleted, requestedBy));
         eventProducer.publishDeleted(existing, deletedAt);
@@ -195,7 +212,9 @@ public class ServiceService {
                 existing.externalId(), existing.connectionId(), existing.source(), existing.repositoryRef(),
                 existing.k8sCluster(), existing.k8sNamespace(), existing.k8sDeployment(),
                 existing.healthEndpoint(), existing.lastCommitAt(), existing.lastCommitSha(),
-                existing.healthCheckedAt()
+                existing.healthCheckedAt(),
+                existing.tier(), existing.tags(), existing.slaTarget(),
+                existing.documentationUrl(), existing.runbookUrl()
         );
 
         Service saved = serviceRepository.save(updated);

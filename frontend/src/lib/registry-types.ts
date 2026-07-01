@@ -1,4 +1,6 @@
 export type ServiceHealth = 'healthy' | 'degraded' | 'down'
+export type ServiceTierValue = 'CRITICAL' | 'STANDARD' | 'EXPERIMENTAL'
+export type ServiceHealthStatus = 'HEALTHY' | 'DEGRADED' | 'UNHEALTHY' | 'PROBE_AUTH_FAILED' | 'UNKNOWN'
 export type ScmSource = 'github' | 'gitlab' | 'azuredevops' | 'bitbucket'
 
 export interface RegistryService {
@@ -10,7 +12,7 @@ export interface RegistryService {
   repositoryUrl: string | null
   techStack: string[] | null
   metadata: string | null
-  healthStatus: string
+  healthStatus: ServiceHealthStatus
   lastDeployedAt: string | null
   createdAt: string
   updatedAt: string
@@ -25,6 +27,11 @@ export interface RegistryService {
   lastCommitAt: string | null
   lastCommitSha: string | null
   healthCheckedAt: string | null
+  tier: ServiceTierValue | null
+  tags: string[] | null
+  slaTarget: number | null
+  documentationUrl: string | null
+  runbookUrl: string | null
 }
 
 export interface RegistryTeam {
@@ -43,10 +50,10 @@ export interface PageResult<T> {
 }
 
 export function normalizeHealth(raw: string): ServiceHealth {
-  const lower = raw.toLowerCase()
-  if (lower === 'healthy') return 'healthy'
-  if (lower === 'degraded') return 'degraded'
-  if (lower === 'unhealthy' || lower === 'down') return 'down'
+  const upper = raw.toUpperCase()
+  if (upper === 'HEALTHY') return 'healthy'
+  if (upper === 'DEGRADED') return 'degraded'
+  if (upper === 'UNHEALTHY' || upper === 'DOWN') return 'down'
   return 'degraded'
 }
 

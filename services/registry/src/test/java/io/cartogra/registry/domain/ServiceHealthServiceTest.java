@@ -119,6 +119,7 @@ class ServiceHealthServiceTest {
         Instant now = Instant.now();
         return new Service(id, tenantId, "svc-" + id, null, null, null, null, null,
                 status, null, now, now, null,
-                null, null, null, null, null, null, null, healthEndpoint, null, null, null);
+                null, null, null, null, null, null, null, healthEndpoint, null, null, null,
+                null, null, null, null, null);
     }
 }

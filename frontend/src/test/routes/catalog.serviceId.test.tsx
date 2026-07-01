@@ -47,7 +47,7 @@ const MOCK_SERVICE: RegistryService = {
   repositoryUrl: null,
   techStack: ['go', 'grpc'],
   metadata: null,
-  healthStatus: 'healthy',
+  healthStatus: 'HEALTHY',
   lastDeployedAt: null,
   createdAt: '2024-01-01T00:00:00Z',
   updatedAt: '2024-01-01T00:00:00Z',
@@ -62,6 +62,11 @@ const MOCK_SERVICE: RegistryService = {
   lastCommitAt: null,
   lastCommitSha: null,
   healthCheckedAt: null,
+  tier: null,
+  tags: null,
+  slaTarget: null,
+  documentationUrl: null,
+  runbookUrl: null,
 }
 
 function renderPage() {

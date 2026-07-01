@@ -27,11 +27,12 @@ public class ProxyRequestLoggingFilter extends OncePerRequestFilter {
                     .toString();
             log.debug("Proxying {} {} | headers={}", request.getMethod(), request.getRequestURI(), headers);
         } else {
-            log.info("Proxying {} {} | X-Tenant-Id={} X-User-Id={}",
+            log.info("Proxying {} {} | X-Tenant-Id={} X-User-Id={} X-User-Roles={}",
                     request.getMethod(),
                     request.getRequestURI(),
                     request.getHeader("X-Tenant-Id"),
-                    request.getHeader("X-User-Id"));
+                    request.getHeader("X-User-Id"),
+                    request.getHeader("X-User-Roles"));
         }
         filterChain.doFilter(request, response);
     }

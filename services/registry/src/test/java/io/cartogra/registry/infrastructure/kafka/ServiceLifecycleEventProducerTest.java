@@ -81,6 +81,7 @@ class ServiceLifecycleEventProducerTest {
         UUID tenantId = UUID.randomUUID();
         return new Service(id, tenantId, "payments", null, null, null, null, null,
                 ServiceHealthStatus.UNKNOWN, null, now, now, null,
-                null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null);
     }
 }

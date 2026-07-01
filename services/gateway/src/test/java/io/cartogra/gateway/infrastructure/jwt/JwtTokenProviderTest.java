@@ -37,7 +37,7 @@ class JwtTokenProviderTest {
             .build();
         JwtEncoder encoder = new NimbusJwtEncoder(new ImmutableJWKSet<>(new JWKSet(jwk)));
         JwtDecoder decoder = NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build();
-        JwtConfig config = new JwtConfig(secret, 900L, 2592000L);
+        JwtConfig config = new JwtConfig(secret, 900L, 2592000L, false);
 
         provider = new JwtTokenProvider(encoder, decoder, config);
     }

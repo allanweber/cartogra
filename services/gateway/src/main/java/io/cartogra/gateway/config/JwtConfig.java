@@ -10,5 +10,6 @@ import org.springframework.validation.annotation.Validated;
 public record JwtConfig(
     @NotEmpty String secret,
     @Positive long accessTokenExpirySeconds,
-    @Positive long refreshTokenExpirySeconds
+    @Positive long refreshTokenExpirySeconds,
+    boolean cookieSecure
 ) {}

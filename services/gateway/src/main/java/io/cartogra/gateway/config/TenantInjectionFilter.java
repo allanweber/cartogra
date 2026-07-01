@@ -25,33 +25,35 @@ public class TenantInjectionFilter extends OncePerRequestFilter {
             FilterChain filterChain) throws ServletException, IOException {
         var auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth instanceof JwtAuthentication jwtAuth) {
+            String roles = String.join(",", jwtAuth.getClaims().roles());
             filterChain.doFilter(new TenantInjectingRequestWrapper(request,
-                jwtAuth.getTenantId().toString(), jwtAuth.getUserId().toString()), response);
+                jwtAuth.getTenantId().toString(), jwtAuth.getUserId().toString(), roles), response);
         } else {
             filterChain.doFilter(new TenantStrippingRequestWrapper(request), response);
         }
     }
 
     private static class TenantInjectingRequestWrapper extends HttpServletRequestWrapper {
+        private static final List<String> MANAGED = List.of("X-Tenant-Id", "X-User-Id", "X-User-Roles");
         private final Map<String, String> extraHeaders;
 
-        TenantInjectingRequestWrapper(HttpServletRequest request, String tenantId, String userId) {
+        TenantInjectingRequestWrapper(HttpServletRequest request, String tenantId, String userId, String roles) {
             super(request);
-            extraHeaders = Map.of("X-Tenant-Id", tenantId, "X-User-Id", userId);
+            extraHeaders = Map.of("X-Tenant-Id", tenantId, "X-User-Id", userId, "X-User-Roles", roles);
         }
 
         @Override
         public String getHeader(String name) {
-            if ("X-Tenant-Id".equalsIgnoreCase(name) || "X-User-Id".equalsIgnoreCase(name)) {
-                return extraHeaders.get(normaliseKey(name));
-            }
+            String key = normaliseKey(name);
+            if (key != null) return extraHeaders.get(key);
             return super.getHeader(name);
         }
 
         @Override
         public Enumeration<String> getHeaders(String name) {
-            if ("X-Tenant-Id".equalsIgnoreCase(name) || "X-User-Id".equalsIgnoreCase(name)) {
-                String val = extraHeaders.get(normaliseKey(name));
+            String key = normaliseKey(name);
+            if (key != null) {
+                String val = extraHeaders.get(key);
                 return val != null ? Collections.enumeration(List.of(val)) : Collections.emptyEnumeration();
             }
             return super.getHeaders(name);
@@ -63,7 +65,7 @@ public class TenantInjectionFilter extends OncePerRequestFilter {
             Enumeration<String> orig = super.getHeaderNames();
             while (orig.hasMoreElements()) {
                 String h = orig.nextElement();
-                if (!"X-Tenant-Id".equalsIgnoreCase(h) && !"X-User-Id".equalsIgnoreCase(h)) {
+                if (MANAGED.stream().noneMatch(m -> m.equalsIgnoreCase(h))) {
                     all.put(h, h);
                 }
             }
@@ -71,26 +73,26 @@ public class TenantInjectionFilter extends OncePerRequestFilter {
         }
 
         private String normaliseKey(String name) {
-            if ("X-Tenant-Id".equalsIgnoreCase(name)) return "X-Tenant-Id";
-            if ("X-User-Id".equalsIgnoreCase(name)) return "X-User-Id";
-            return name;
+            return MANAGED.stream().filter(m -> m.equalsIgnoreCase(name)).findFirst().orElse(null);
         }
     }
 
     private static class TenantStrippingRequestWrapper extends HttpServletRequestWrapper {
+        private static final List<String> STRIP = List.of("X-Tenant-Id", "X-User-Id", "X-User-Roles");
+
         TenantStrippingRequestWrapper(HttpServletRequest request) {
             super(request);
         }
 
         @Override
         public String getHeader(String name) {
-            if ("X-Tenant-Id".equalsIgnoreCase(name) || "X-User-Id".equalsIgnoreCase(name)) return null;
+            if (STRIP.stream().anyMatch(h -> h.equalsIgnoreCase(name))) return null;
             return super.getHeader(name);
         }
 
         @Override
         public Enumeration<String> getHeaders(String name) {
-            if ("X-Tenant-Id".equalsIgnoreCase(name) || "X-User-Id".equalsIgnoreCase(name))
+            if (STRIP.stream().anyMatch(h -> h.equalsIgnoreCase(name)))
                 return Collections.emptyEnumeration();
             return super.getHeaders(name);
         }
@@ -99,7 +101,7 @@ public class TenantInjectionFilter extends OncePerRequestFilter {
         public Enumeration<String> getHeaderNames() {
             return Collections.enumeration(
                 Collections.list(super.getHeaderNames()).stream()
-                    .filter(h -> !"X-Tenant-Id".equalsIgnoreCase(h) && !"X-User-Id".equalsIgnoreCase(h))
+                    .filter(h -> STRIP.stream().noneMatch(s -> s.equalsIgnoreCase(h)))
                     .toList());
         }
     }
