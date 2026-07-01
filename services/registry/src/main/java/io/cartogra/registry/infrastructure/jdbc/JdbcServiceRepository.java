@@ -329,6 +329,8 @@ public class JdbcServiceRepository implements ServiceRepository {
         if (filter.teamId() != null) {
             sql.append(" AND team_id = :teamId");
             params.addValue("teamId", filter.teamId());
+        } else if (filter.unowned()) {
+            sql.append(" AND team_id IS NULL");
         }
         if (filter.healthStatus() != null) {
             ServiceHealthStatus requested = ServiceHealthStatus.fromString(filter.healthStatus());

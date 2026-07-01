@@ -5,6 +5,7 @@ import io.cartogra.registry.infrastructure.kafka.TeamLifecycleEventProducer;
 import io.cartogra.registry.repository.TeamRepository;
 import io.cartogra.registry.domain.exception.DuplicateTeamNameException;
 import io.cartogra.registry.domain.exception.TeamNotFoundException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -12,7 +13,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-/** All operations on the Team aggregate. */
 @Service
 public class TeamService {
 
@@ -24,6 +24,7 @@ public class TeamService {
         this.eventProducer = eventProducer;
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @Transactional
     public Team create(UUID tenantId, String name) {
         if (teamRepository.existsByName(tenantId, name, null)) {
@@ -35,6 +36,7 @@ public class TeamService {
         return saved;
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @Transactional
     public Team update(UUID tenantId, UUID teamId, String name) {
         Team existing = teamRepository.findById(tenantId, teamId)
@@ -55,6 +57,7 @@ public class TeamService {
         return saved;
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @Transactional
     public void delete(UUID tenantId, UUID teamId) {
         Team existing = teamRepository.findById(tenantId, teamId)

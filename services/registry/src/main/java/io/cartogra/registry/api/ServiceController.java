@@ -47,6 +47,7 @@ public class ServiceController {
     public ResponseEntity<ApiResponse<PageResult<ServiceResponse>>> list(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
             @RequestParam(required = false) UUID teamId,
+            @RequestParam(defaultValue = "false") boolean unowned,
             @RequestParam(required = false) String health,
             @RequestParam(required = false) List<String> techStack,
             @RequestParam(required = false) String search,
@@ -54,7 +55,7 @@ public class ServiceController {
             @RequestParam(defaultValue = "20") int limit,
             @RequestParam(defaultValue = "0") int offset) {
         String traceId = traceId();
-        var filter = new ServiceFilter(teamId, health, techStack, search, source);
+        var filter = new ServiceFilter(teamId, unowned, health, techStack, search, source);
         var page = service.list(tenantId, filter, limit, offset);
         var mapped = PageResult.of(page.items().stream().map(ServiceResponse::from).toList(),
                 page.total(), page.limit(), page.offset());
@@ -130,6 +131,18 @@ public class ServiceController {
             @RequestBody AssignOwnerRequest req) {
         String traceId = traceId();
         var result = ServiceResponse.from(service.assignOwner(tenantId, id, req.teamId(), userId));
+        return ResponseEntity.ok()
+                .header("X-Trace-Id", traceId)
+                .body(new ApiResponse<>(result, traceId));
+    }
+
+    @DeleteMapping("/{id}/owner")
+    public ResponseEntity<ApiResponse<ServiceResponse>> removeOwner(
+            @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
+            @PathVariable UUID id) {
+        String traceId = traceId();
+        var result = ServiceResponse.from(service.assignOwner(tenantId, id, null, userId));
         return ResponseEntity.ok()
                 .header("X-Trace-Id", traceId)
                 .body(new ApiResponse<>(result, traceId));

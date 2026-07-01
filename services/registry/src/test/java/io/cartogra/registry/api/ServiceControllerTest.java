@@ -150,7 +150,7 @@ class ServiceControllerTest {
                 .andExpect(status().isOk());
 
         verify(serviceService).list(eq(TENANT),
-                eq(new ServiceFilter(teamId, "healthy", null, null, null)), eq(10), eq(5));
+                eq(new ServiceFilter(teamId, false, "healthy", null, null, null)), eq(10), eq(5));
     }
 
     @Test
@@ -203,6 +203,32 @@ class ServiceControllerTest {
                                 {"teamId":"%s"}""".formatted(teamId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.name").value("payments"));
+    }
+
+    @Test
+    void removeOwnerReturns200WithNullTeamId() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(serviceService.assignOwner(eq(TENANT), eq(id), isNull(), isNull())).thenReturn(service("payments"));
+
+        mockMvc.perform(delete("/api/v1/services/{id}/owner", id)
+                        .header("X-Tenant-Id", TENANT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.name").value("payments"));
+
+        verify(serviceService).assignOwner(eq(TENANT), eq(id), isNull(), isNull());
+    }
+
+    @Test
+    void listWithUnownedFlagPassesFilterToService() throws Exception {
+        when(serviceService.list(eq(TENANT), eq(new ServiceFilter(null, true, null, null, null, null)), eq(20), eq(0)))
+                .thenReturn(PageResult.of(List.of(), 0L, 20, 0));
+
+        mockMvc.perform(get("/api/v1/services")
+                        .header("X-Tenant-Id", TENANT)
+                        .param("unowned", "true"))
+                .andExpect(status().isOk());
+
+        verify(serviceService).list(eq(TENANT), eq(new ServiceFilter(null, true, null, null, null, null)), eq(20), eq(0));
     }
 
     @Test

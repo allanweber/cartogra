@@ -85,11 +85,17 @@ function CatalogPage() {
 
   const healthDbValue = HEALTH_OPTIONS.find((f) => f.value === dHealth)?.dbValue
 
+  const UNOWNED_SENTINEL = '__unowned__'
+
   const { data: pageResult, isLoading, error } = useQuery({
     queryKey: ['services', dTeam, dHealth, [...dTech].sort(), dQuery, dPage],
     queryFn: () => {
       const params = new URLSearchParams()
-      if (dTeam) params.set('teamId', dTeam)
+      if (dTeam === UNOWNED_SENTINEL) {
+        params.set('unowned', 'true')
+      } else if (dTeam) {
+        params.set('teamId', dTeam)
+      }
       if (healthDbValue) params.set('health', healthDbValue)
       dTech.forEach((t) => params.append('techStack', t))
       if (dQuery.trim()) params.set('search', dQuery.trim())
@@ -133,7 +139,9 @@ function CatalogPage() {
     down: services.filter((s) => normalizeHealth(s.healthStatus) === 'down').length,
   }
 
-  const selectedTeamName = teams.find((t) => t.id === teamFilter)?.name ?? 'All teams'
+  const selectedTeamName = teamFilter === UNOWNED_SENTINEL
+    ? 'Unowned'
+    : (teams.find((t) => t.id === teamFilter)?.name ?? 'All teams')
   const selectedHealthLabel = HEALTH_OPTIONS.find((f) => f.value === healthFilter)?.label ?? 'All health'
   const selectedTechLabel = techFilter.size > 0 ? `All tech (${techFilter.size})` : 'All tech'
 
@@ -181,6 +189,11 @@ function CatalogPage() {
               <DropdownMenuItem onSelect={() => { setTeamFilter(''); resetPage() }} className="flex items-center gap-2">
                 <CheckMark checked={!teamFilter} />
                 All teams
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => { setTeamFilter(UNOWNED_SENTINEL); resetPage() }} className="flex items-center gap-2">
+                <CheckMark checked={teamFilter === UNOWNED_SENTINEL} />
+                <AlertTriangle className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                Unowned
               </DropdownMenuItem>
               {teams.map((t) => (
                 <DropdownMenuItem key={t.id} onSelect={() => { setTeamFilter(t.id); resetPage() }} className="flex items-center gap-2">

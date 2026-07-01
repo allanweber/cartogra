@@ -1,62 +1,220 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { X } from 'lucide-react'
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
+import { Plus, Settings2, Users, X } from 'lucide-react'
 import { useState } from 'react'
 
 import { AppLayout } from '#/components/AppLayout'
+import { TeamDialog } from '#/components/TeamDialog'
+import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Badge } from '#/components/ui/badge'
+import { Button } from '#/components/ui/button'
 import { Card, CardContent } from '#/components/ui/card'
-import { MOCK_TEAMS } from '#/lib/mock-data'
+import { Skeleton } from '#/components/ui/skeleton'
+import { ApiError, apiFetch } from '#/lib/api'
+import { normalizeHealth } from '#/lib/registry-types'
+import { useAuthStore } from '#/stores/useAuthStore'
 import { cn } from '#/lib/utils'
 
-import type { Team } from '#/lib/mock-data'
+import type { PageResult, RegistryService, RegistryTeam, ServiceHealth } from '#/lib/registry-types'
 
 export const Route = createFileRoute('/_authenticated/teams')({
   component: TeamsPage,
 })
 
-function TeamsPage() {
-  const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
+type RiskExposure = 'low' | 'medium' | 'high' | 'critical'
 
-  const totalMembers = MOCK_TEAMS.reduce((sum, t) => sum + t.members, 0)
-  const unownedServices = 2 // from mock data: Search Service, Report Service
-  const criticalRiskTeams = MOCK_TEAMS.filter((t) => t.riskExposure === 'critical').length
+function computeRiskScore(service: RegistryService): number {
+  const health = normalizeHealth(service.healthStatus)
+  let score = health === 'down' ? 60 : health === 'degraded' ? 35 : 5
+  if (service.lastDeployedAt) {
+    const days = (Date.now() - new Date(service.lastDeployedAt).getTime()) / 86400000
+    score += Math.min(30, Math.floor(days * 1.5))
+  } else {
+    score += 18
+  }
+  if (!service.teamId) score += 8
+  return Math.min(99, Math.max(1, score))
+}
+
+function deriveTeamHealth(services: RegistryService[]): ServiceHealth {
+  if (services.length === 0) return 'healthy'
+  const healths = services.map((s) => normalizeHealth(s.healthStatus))
+  if (healths.includes('down')) return 'down'
+  if (healths.includes('degraded')) return 'degraded'
+  return 'healthy'
+}
+
+function deriveRiskExposure(services: RegistryService[]): RiskExposure {
+  if (services.length === 0) return 'low'
+  const max = Math.max(...services.map(computeRiskScore))
+  if (max >= 70) return 'critical'
+  if (max >= 35) return 'high'
+  if (max >= 15) return 'medium'
+  return 'low'
+}
+
+function relativeTime(dateStr: string | null): string | null {
+  if (!dateStr) return null
+  const secs = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
+  if (secs < 3600) return `${Math.max(1, Math.floor(secs / 60))}m ago`
+  if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`
+  return `${Math.floor(secs / 86400)}d ago`
+}
+
+function teamColor(name: string): string {
+  const hues = [145, 60, 240, 28, 320]
+  const hue = hues[name.charCodeAt(0) % hues.length]
+  return `oklch(0.50 0.18 ${hue})`
+}
+
+function riskColorClass(score: number): string {
+  if (score >= 70) return 'text-[oklch(0.50_0.23_28)]'
+  if (score >= 35) return 'text-[oklch(0.52_0.18_60)]'
+  return 'text-[oklch(0.42_0.18_145)]'
+}
+
+function TeamsPage() {
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [manageTeamId, setManageTeamId] = useState<string | null>(null)
+  const isAdmin = useAuthStore((s) => s.user?.roles.includes('ADMIN') ?? false)
+
+  const { data: teamsPage, isLoading, error } = useQuery({
+    queryKey: ['teams'],
+    queryFn: () => apiFetch<PageResult<RegistryTeam>>('/v1/teams?limit=200'),
+  })
+
+  const { data: servicesPage } = useQuery({
+    queryKey: ['services', 'teams-page'],
+    queryFn: () => apiFetch<PageResult<RegistryService>>('/v1/services?limit=1000'),
+  })
+
+  const teams = teamsPage?.items ?? []
+  const totalTeams = teamsPage?.total ?? 0
+  const services = servicesPage?.items ?? []
+  const totalServices = servicesPage?.total ?? 0
+
+  const teamServiceMap = new Map<string, RegistryService[]>()
+  for (const svc of services) {
+    if (svc.teamId) {
+      const arr = teamServiceMap.get(svc.teamId) ?? []
+      arr.push(svc)
+      teamServiceMap.set(svc.teamId, arr)
+    }
+  }
+
+  const unownedCount = services.filter((s) => !s.teamId).length
+  const criticalRiskCount = teams.filter((t) => {
+    return deriveRiskExposure(teamServiceMap.get(t.id) ?? []) === 'critical'
+  }).length
+
+  const selectedTeam = selectedTeamId ? (teams.find((t) => t.id === selectedTeamId) ?? null) : null
+  const manageTeam = manageTeamId ? (teams.find((t) => t.id === manageTeamId) ?? null) : null
 
   return (
-    <AppLayout title="Teams" description="Team ownership, health, and risk exposure">
+    <AppLayout
+      title="Teams"
+      description="Team ownership, health summary, and risk exposure"
+      actions={
+        isAdmin && (
+          <Button onClick={() => setCreateOpen(true)} size="sm" className="gap-1.5">
+            <Plus className="size-3.5" aria-hidden="true" />
+            Add team
+          </Button>
+        )
+      }
+    >
       <div className="space-y-4">
-        {/* Summary stats */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard label="Teams" value={MOCK_TEAMS.length} />
-          <StatCard label="Total Members" value={totalMembers} />
-          <StatCard label="Unowned Services" value={unownedServices} variant="warning" />
-          <StatCard label="Critical Risk Teams" value={criticalRiskTeams} variant={criticalRiskTeams > 0 ? 'critical' : undefined} />
+          <StatCard label="Teams" value={totalTeams} />
+          <StatCard label="Total Services" value={totalServices} />
+          <StatCard label="Unowned Services" value={unownedCount} variant={unownedCount > 0 ? 'warning' : undefined} />
+          <StatCard label="Critical Risk Teams" value={criticalRiskCount} variant={criticalRiskCount > 0 ? 'critical' : undefined} />
         </div>
 
-        {/* Team list + detail panel */}
-        <div
-          className={cn(
-            'grid gap-4',
-            selectedTeam ? 'lg:grid-cols-[1fr_360px]' : 'grid-cols-1',
-          )}
-        >
+        {isLoading ? (
           <div className="space-y-2">
-            {MOCK_TEAMS.map((team) => (
-              <TeamRow
-                key={team.id}
-                team={team}
-                selected={selectedTeam?.id === team.id}
-                onClick={() =>
-                  setSelectedTeam((prev) => (prev?.id === team.id ? null : team))
-                }
-              />
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-20 w-full rounded-xl" />
             ))}
           </div>
+        ) : error ? (
+          <Alert variant="destructive">
+            <AlertDescription>
+              {error.message}
+              {error instanceof ApiError && ` (trace: ${error.traceId})`}
+            </AlertDescription>
+          </Alert>
+        ) : teams.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16 text-center">
+            <Users className="mb-3 size-8 text-muted-foreground/50" aria-hidden="true" />
+            <p className="text-sm font-medium">No teams yet</p>
+            <p className="mt-1 text-xs text-muted-foreground">Create a team to start assigning service ownership</p>
+            {isAdmin && (
+              <Button onClick={() => setCreateOpen(true)} size="sm" className="mt-4 gap-1.5">
+                <Plus className="size-3.5" aria-hidden="true" />
+                Add team
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className={cn('grid gap-4', selectedTeam ? 'lg:grid-cols-[1fr_360px]' : 'grid-cols-1')}>
+            <div className="space-y-2">
+              {teams.map((team) => {
+                const svcs = teamServiceMap.get(team.id) ?? []
+                return (
+                  <TeamRow
+                    key={team.id}
+                    team={team}
+                    services={svcs}
+                    health={deriveTeamHealth(svcs)}
+                    riskExposure={deriveRiskExposure(svcs)}
+                    selected={selectedTeamId === team.id}
+                    isAdmin={isAdmin}
+                    onClick={() =>
+                      setSelectedTeamId((prev) => (prev === team.id ? null : team.id))
+                    }
+                    onManage={(e) => {
+                      e.stopPropagation()
+                      setManageTeamId(team.id)
+                    }}
+                  />
+                )
+              })}
+            </div>
 
-          {selectedTeam && (
-            <TeamDetailPanel team={selectedTeam} onClose={() => setSelectedTeam(null)} />
-          )}
-        </div>
+            {selectedTeam && (
+              <TeamDetailPanel
+                team={selectedTeam}
+                services={teamServiceMap.get(selectedTeam.id) ?? []}
+                health={deriveTeamHealth(teamServiceMap.get(selectedTeam.id) ?? [])}
+                riskExposure={deriveRiskExposure(teamServiceMap.get(selectedTeam.id) ?? [])}
+                isAdmin={isAdmin}
+                onClose={() => setSelectedTeamId(null)}
+                onManage={() => setManageTeamId(selectedTeam.id)}
+              />
+            )}
+          </div>
+        )}
       </div>
+
+      {isAdmin && (
+        <>
+          <TeamDialog open={createOpen} onOpenChange={setCreateOpen} />
+
+          <TeamDialog
+            team={manageTeam ?? undefined}
+            open={!!manageTeamId}
+            onOpenChange={(open) => {
+              if (!open) setManageTeamId(null)
+            }}
+            onDeleted={() => {
+              if (selectedTeamId === manageTeamId) setSelectedTeamId(null)
+              setManageTeamId(null)
+            }}
+          />
+        </>
+      )}
     </AppLayout>
   )
 }
@@ -90,29 +248,48 @@ function StatCard({
 
 function TeamRow({
   team,
+  services,
+  health,
+  riskExposure,
   selected,
+  isAdmin,
   onClick,
+  onManage,
 }: {
-  team: Team
+  team: RegistryTeam
+  services: RegistryService[]
+  health: ServiceHealth
+  riskExposure: RiskExposure
   selected: boolean
+  isAdmin: boolean
   onClick: () => void
+  onManage: (e: React.MouseEvent) => void
 }) {
   return (
-    <button
-      onClick={onClick}
+    <div
+      role="button"
+      tabIndex={0}
       aria-pressed={selected}
+      aria-label={`${team.name} team`}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClick()
+        }
+      }}
       className={cn(
-        'w-full rounded-xl border p-4 text-left transition-all',
+        'w-full cursor-pointer rounded-xl border p-4 text-left transition-all',
         selected
           ? 'border-primary bg-primary/5'
           : 'border-border bg-card hover:border-primary/40 hover:bg-muted/50',
       )}
     >
       <div className="flex items-center gap-3">
-        {/* Team avatar */}
         <div
           className="flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
           style={{ background: teamColor(team.name) }}
+          aria-hidden="true"
         >
           {team.name.slice(0, 2).toUpperCase()}
         </div>
@@ -120,31 +297,63 @@ function TeamRow({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-semibold">{team.name}</span>
-            <span className="text-xs text-muted-foreground">{team.members} members</span>
-            <span className="text-xs text-muted-foreground">· {team.lead}</span>
+            <span className="text-xs text-muted-foreground">{services.length} services</span>
           </div>
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            {team.services.map((s) => (
-              <span
-                key={s}
-                className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"
-              >
-                {s}
-              </span>
-            ))}
-          </div>
+          {services.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {services.map((s) => (
+                <Link
+                  key={s.id}
+                  to="/catalog/$serviceId"
+                  params={{ serviceId: s.id }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+                >
+                  <HealthDot health={normalizeHealth(s.healthStatus)} />
+                  {s.name}
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="flex shrink-0 flex-col items-end gap-1.5">
-          <HealthBadge health={team.health} />
-          <RiskExposureBadge exposure={team.riskExposure} />
+          <HealthBadge health={health} />
+          <RiskExposureBadge exposure={riskExposure} />
         </div>
+
+        {isAdmin && (
+          <button
+            onClick={onManage}
+            aria-label={`Manage ${team.name}`}
+            data-testid={`manage-btn-${team.id}`}
+            className="ml-1 shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <Settings2 className="size-4" aria-hidden="true" />
+          </button>
+        )}
       </div>
-    </button>
+    </div>
   )
 }
 
-function TeamDetailPanel({ team, onClose }: { team: Team; onClose: () => void }) {
+function TeamDetailPanel({
+  team,
+  services,
+  health,
+  riskExposure,
+  isAdmin,
+  onClose,
+  onManage,
+}: {
+  team: RegistryTeam
+  services: RegistryService[]
+  health: ServiceHealth
+  riskExposure: RiskExposure
+  isAdmin: boolean
+  onClose: () => void
+  onManage: () => void
+}) {
   return (
     <Card className="sticky top-4 h-fit">
       <CardContent className="p-5">
@@ -153,12 +362,16 @@ function TeamDetailPanel({ team, onClose }: { team: Team; onClose: () => void })
             <div
               className="flex size-12 items-center justify-center rounded-full text-base font-bold text-white"
               style={{ background: teamColor(team.name) }}
+              aria-hidden="true"
             >
               {team.name.slice(0, 2).toUpperCase()}
             </div>
             <div>
-              <p className="font-bold text-lg">{team.name}</p>
-              <p className="text-xs text-muted-foreground">Lead: {team.lead}</p>
+              <p className="text-lg font-bold">{team.name} Team</p>
+              <div className="mt-1 flex gap-2">
+                <HealthBadge health={health} />
+                <RiskExposureBadge exposure={riskExposure} />
+              </div>
             </div>
           </div>
           <button
@@ -172,52 +385,98 @@ function TeamDetailPanel({ team, onClose }: { team: Team; onClose: () => void })
 
         <div className="mt-4 grid grid-cols-2 gap-3">
           <div className="rounded-lg bg-muted/50 p-3 text-center">
-            <p className="text-2xl font-bold">{team.members}</p>
-            <p className="text-xs text-muted-foreground">Members</p>
-          </div>
-          <div className="rounded-lg bg-muted/50 p-3 text-center">
-            <p className="text-2xl font-bold">{team.services.length}</p>
+            <p className="text-2xl font-bold">{services.length}</p>
             <p className="text-xs text-muted-foreground">Services</p>
           </div>
+          <div className="rounded-lg bg-muted/50 p-3 text-center">
+            <p className="text-2xl font-bold capitalize">{riskExposure}</p>
+            <p className="text-xs text-muted-foreground">Risk</p>
+          </div>
         </div>
+
+        {services.length > 0 && (
+          <div className="mt-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Owned Services
+            </p>
+            <div className="mt-2 space-y-1.5">
+              {services.map((s) => {
+                const h = normalizeHealth(s.healthStatus)
+                const risk = computeRiskScore(s)
+                const deploy = relativeTime(s.lastDeployedAt)
+                return (
+                  <Link
+                    key={s.id}
+                    to="/catalog/$serviceId"
+                    params={{ serviceId: s.id }}
+                    className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2 hover:bg-muted"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{s.name}</p>
+                      {deploy && (
+                        <p className="text-[11px] text-muted-foreground">Deploy: {deploy}</p>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2 pl-2">
+                      <HealthDot health={h} />
+                      <span className={cn('text-sm font-semibold tabular-nums', riskColorClass(risk))}>
+                        {risk}
+                      </span>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="mt-4 flex gap-2">
-          <HealthBadge health={team.health} />
-          <RiskExposureBadge exposure={team.riskExposure} />
-        </div>
-
-        <div className="mt-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Owned Services
-          </p>
-          <div className="mt-2 space-y-1.5">
-            {team.services.map((s) => (
-              <div
-                key={s}
-                className="rounded-lg bg-muted/50 px-3 py-2 text-sm font-medium"
-              >
-                {s}
-              </div>
-            ))}
-          </div>
+          {isAdmin && (
+            <Button onClick={onManage} size="sm" className="flex-1">
+              Manage team
+            </Button>
+          )}
+          <Button asChild variant="outline" size="sm" className={isAdmin ? undefined : 'flex-1'}>
+            <Link to="/graph">View graph</Link>
+          </Button>
         </div>
       </CardContent>
     </Card>
   )
 }
 
-function HealthBadge({ health }: { health: string }) {
+function HealthDot({ health }: { health: ServiceHealth }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        'inline-block size-1.5 shrink-0 rounded-full',
+        health === 'healthy' && 'bg-[oklch(0.55_0.18_145)]',
+        health === 'degraded' && 'bg-[oklch(0.65_0.18_60)]',
+        health === 'down' && 'bg-[oklch(0.58_0.23_28)]',
+      )}
+    />
+  )
+}
+
+function HealthBadge({ health }: { health: ServiceHealth }) {
   return (
     <Badge
       variant="outline"
-      className={cn('capitalize border-current', `bg-health-${health}`)}
+      className={cn(
+        'capitalize border-current gap-1',
+        health === 'healthy' && 'border-[oklch(0.55_0.15_145)] text-[oklch(0.45_0.15_145)] bg-[oklch(0.97_0.04_145)] dark:text-[oklch(0.70_0.14_145)]',
+        health === 'degraded' && 'border-[oklch(0.72_0.14_60)] text-[oklch(0.52_0.18_60)] bg-[oklch(0.97_0.06_80)] dark:text-[oklch(0.78_0.14_60)]',
+        health === 'down' && 'border-[oklch(0.70_0.15_28)] text-[oklch(0.50_0.20_28)] bg-[oklch(0.97_0.05_28)] dark:text-[oklch(0.72_0.18_28)]',
+      )}
     >
-      {health}
+      <HealthDot health={health} />
+      {health.charAt(0).toUpperCase() + health.slice(1)}
     </Badge>
   )
 }
 
-function RiskExposureBadge({ exposure }: { exposure: string }) {
+function RiskExposureBadge({ exposure }: { exposure: RiskExposure }) {
   return (
     <Badge
       variant="outline"
@@ -232,10 +491,4 @@ function RiskExposureBadge({ exposure }: { exposure: string }) {
       {exposure} risk
     </Badge>
   )
-}
-
-function teamColor(name: string): string {
-  const hues = [145, 60, 240, 28, 320]
-  const hue = hues[name.charCodeAt(0) % hues.length]
-  return `oklch(0.50 0.18 ${hue})`
 }

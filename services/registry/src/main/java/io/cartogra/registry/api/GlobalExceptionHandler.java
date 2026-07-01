@@ -8,6 +8,7 @@ import io.cartogra.registry.domain.exception.DuplicateTeamNameException;
 import io.cartogra.registry.domain.exception.InvalidHealthEndpointException;
 import io.cartogra.registry.domain.exception.ServiceNotFoundException;
 import io.cartogra.registry.domain.exception.TeamNotFoundException;
+import org.springframework.security.access.AccessDeniedException;
 import io.opentelemetry.api.trace.Span;
 import org.springframework.dao.DuplicateKeyException;
 import org.slf4j.Logger;
@@ -49,6 +50,14 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .header("X-Trace-Id", traceId)
                 .body(new ApiErrorResponse(ApiError.of(ErrorCodes.NOT_FOUND, ex.getMessage()), traceId));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiErrorResponse> handleAccessDenied(AccessDeniedException ex) {
+        String traceId = Span.current().getSpanContext().getTraceId();
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .header("X-Trace-Id", traceId)
+                .body(new ApiErrorResponse(ApiError.of(ErrorCodes.FORBIDDEN, ex.getMessage()), traceId));
     }
 
     @ExceptionHandler(InvalidHealthEndpointException.class)

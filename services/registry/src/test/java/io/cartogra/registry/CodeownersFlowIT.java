@@ -130,6 +130,7 @@ class CodeownersFlowIT {
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", tenantId.toString())
+                .header("X-User-Roles", "ADMIN")
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
     }

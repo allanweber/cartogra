@@ -11,6 +11,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.servlet.NoHandlerFoundException;
@@ -127,6 +128,14 @@ class GlobalExceptionHandlerTest {
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(error(resp)).isEqualTo(ErrorCodes.VALIDATION_ERROR);
         assertThat(resp.getBody().error().message()).isEqualTo("Malformed or unreadable request body");
+    }
+
+    @Test
+    void accessDeniedReturns403WithForbiddenCode() {
+        var resp = handler.handleAccessDenied(new AccessDeniedException("not allowed"));
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(error(resp)).isEqualTo(ErrorCodes.FORBIDDEN);
     }
 
     @Test

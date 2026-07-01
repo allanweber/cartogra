@@ -219,7 +219,12 @@ function ServiceDetailPage() {
                 {teamName && (
                   <span>
                     Owner:{' '}
-                    <span className="font-medium text-foreground">{teamName}</span>
+                    <Link
+                      to="/teams"
+                      className="font-medium text-foreground hover:text-primary hover:underline"
+                    >
+                      {teamName}
+                    </Link>
                   </span>
                 )}
                 {lastDeploy && (
@@ -328,7 +333,17 @@ function ServiceDetailPage() {
                       {service.tier && <MetaField label="Tier" value={service.tier} capitalize />}
                       <MetaField label="Health" value={health} capitalize />
                       <MetaField label="Risk Score" value={String(riskScore)} />
-                      {teamName && <MetaField label="Owner Team" value={teamName} />}
+                      {teamName && (
+                        <div className="space-y-0.5">
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Owner Team</p>
+                          <Link
+                            to="/teams"
+                            className="block font-medium hover:text-primary hover:underline"
+                          >
+                            {teamName}
+                          </Link>
+                        </div>
+                      )}
                       {service.k8sCluster && <MetaField label="K8s Cluster" value={service.k8sCluster} />}
                       {service.k8sNamespace && <MetaField label="Namespace" value={service.k8sNamespace} />}
                       {service.k8sDeployment && <MetaField label="Deployment" value={service.k8sDeployment} />}

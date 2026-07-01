@@ -40,6 +40,31 @@ vi.mock('#/components/RegisterServiceDrawer', () => ({
   RegisterServiceDrawer: () => null,
 }))
 
+vi.mock('#/components/ui/dropdown-menu', async () => {
+  const { createContext, useContext, useState } = await import('react')
+
+  type Ctx = { open: boolean; toggle: () => void }
+  const Ctx = createContext<Ctx>({ open: false, toggle: () => {} })
+
+  return {
+    DropdownMenu: ({ children }: { children: React.ReactNode }) => {
+      const [open, setOpen] = useState(false)
+      return <Ctx.Provider value={{ open, toggle: () => setOpen((o) => !o) }}><div>{children}</div></Ctx.Provider>
+    },
+    DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => {
+      const { toggle } = useContext(Ctx)
+      return <div onClick={toggle}>{children}</div>
+    },
+    DropdownMenuContent: ({ children }: { children: React.ReactNode }) => {
+      const { open } = useContext(Ctx)
+      return open ? <div>{children}</div> : null
+    },
+    DropdownMenuItem: ({ children, onSelect }: { children: React.ReactNode; onSelect?: () => void }) => (
+      <button onClick={onSelect}>{children}</button>
+    ),
+  }
+})
+
 const EMPTY_TEAMS: PageResult<RegistryTeam> = { items: [], total: 0, limit: 200, offset: 0 }
 const EMPTY_SERVICES: PageResult<RegistryService> = { items: [], total: 0, limit: 100, offset: 0 }
 
@@ -177,5 +202,26 @@ describe('CatalogPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /list view/i }))
     expect(screen.getByRole('button', { name: /list view/i })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: /grid view/i })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('team filter dropdown contains an Unowned option', async () => {
+    mockApiFetch()
+    renderPage()
+    await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /filter by team/i }))
+    expect(await screen.findByText('Unowned')).toBeInTheDocument()
+  })
+
+  it('selecting Unowned sends unowned=true to the API', async () => {
+    mockApiFetch()
+    renderPage()
+    await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /filter by team/i }))
+    const unownedItem = await screen.findByText('Unowned')
+    fireEvent.click(unownedItem)
+    await waitFor(() => {
+      const calls = vi.mocked(apiFetch).mock.calls.map(([path]) => path)
+      expect(calls.some((p) => p.includes('unowned=true'))).toBe(true)
+    })
   })
 })

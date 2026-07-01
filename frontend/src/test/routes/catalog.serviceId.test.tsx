@@ -38,6 +38,14 @@ vi.mock('#/components/AppLayout', () => ({
 
 const EMPTY_TEAMS: PageResult<RegistryTeam> = { items: [], total: 0, limit: 200, offset: 0 }
 
+const MOCK_TEAM: RegistryTeam = {
+  id: 'team-1',
+  tenantId: 't1',
+  name: 'Platform',
+  createdAt: '2024-01-01T00:00:00Z',
+  updatedAt: '2024-01-01T00:00:00Z',
+}
+
 const MOCK_SERVICE: RegistryService = {
   id: 'svc-1',
   tenantId: 't1',
@@ -176,5 +184,19 @@ describe('ServiceDetailPage', () => {
     await screen.findByRole('heading', { name: 'payments-api' })
     const link = screen.getByRole('link', { name: /service catalog/i })
     expect(link).toHaveAttribute('href', '/catalog')
+  })
+
+  it('owner team name renders as a link to /teams when service has a team', async () => {
+    const ownedService = { ...MOCK_SERVICE, teamId: 'team-1' }
+    const teams: PageResult<RegistryTeam> = { items: [MOCK_TEAM], total: 1, limit: 200, offset: 0 }
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path.includes('/v1/teams')) return Promise.resolve(teams)
+      return Promise.resolve(ownedService)
+    })
+    renderPage()
+    await screen.findByRole('heading', { name: 'payments-api' })
+    const links = screen.getAllByRole('link', { name: 'Platform' })
+    expect(links.length).toBeGreaterThan(0)
+    links.forEach((l) => expect(l).toHaveAttribute('href', '/teams'))
   })
 })

@@ -49,7 +49,7 @@ class ServiceFilterIT {
     @Test
     void filterByTeamId() throws Exception {
         HttpResponse<String> teamResp = HTTP.send(
-                post("/api/v1/teams", """
+                postAdmin("/api/v1/teams", """
                         {"name":"filter-owner-team"}"""), HttpResponse.BodyHandlers.ofString());
         String teamId = MAPPER.readTree(teamResp.body()).get("data").get("id").asText();
 
@@ -199,6 +199,40 @@ class ServiceFilterIT {
                 .build();
     }
 
+    @Test
+    void filterByUnowned() throws Exception {
+        HttpResponse<String> teamResp = HTTP.send(
+                postAdmin("/api/v1/teams", """
+                        {"name":"unowned-filter-team"}"""), HttpResponse.BodyHandlers.ofString());
+        String teamId = MAPPER.readTree(teamResp.body()).get("data").get("id").asText();
+
+        HttpResponse<String> ownedResp = HTTP.send(
+                post("/api/v1/services", String.format("""
+                        {"name":"unowned-filter-owned","teamId":"%s"}""", teamId)),
+                HttpResponse.BodyHandlers.ofString());
+        String ownedId = MAPPER.readTree(ownedResp.body()).get("data").get("id").asText();
+
+        HttpResponse<String> orphanResp = HTTP.send(
+                post("/api/v1/services", """
+                        {"name":"unowned-filter-orphan"}"""), HttpResponse.BodyHandlers.ofString());
+        String orphanId = MAPPER.readTree(orphanResp.body()).get("data").get("id").asText();
+
+        HttpResponse<String> filtered = HTTP.send(
+                get("/api/v1/services?unowned=true&limit=50"), HttpResponse.BodyHandlers.ofString());
+        assertThat(filtered.statusCode()).isEqualTo(200);
+
+        JsonNode items = MAPPER.readTree(filtered.body()).get("data").get("items");
+        boolean orphanFound = false;
+        for (JsonNode item : items) {
+            assertThat(item.get("teamId").isNull())
+                    .as("unowned filter must return only services with null teamId")
+                    .isTrue();
+            if (orphanId.equals(item.get("id").asText())) orphanFound = true;
+            assertThat(item.get("id").asText()).isNotEqualTo(ownedId);
+        }
+        assertThat(orphanFound).as("orphan service must appear in unowned=true results").isTrue();
+    }
+
     private HttpRequest put(String path, String body) {
         return HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + path))
@@ -206,6 +240,16 @@ class ServiceFilterIT {
                 .header("X-Tenant-Id", TENANT.toString())
                 .header("X-User-Roles", "ADMIN")
                 .PUT(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+    }
+
+    private HttpRequest postAdmin(String path, String body) {
+        return HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + path))
+                .header("Content-Type", "application/json")
+                .header("X-Tenant-Id", TENANT.toString())
+                .header("X-User-Roles", "ADMIN")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
     }
 }
