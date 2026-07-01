@@ -6,8 +6,8 @@
 
 ### Catalog UI wired to real APIs
 
-- [ ] 1.65 [CODE] Service profile editing. Registry: `PATCH /v1/services/{id}` accepts `description`, `documentation_url`, `runbook_url`, `sla_target`, `tier`, `tags`, `owner_team_id` (admin role or owning-team member). Validates `tier ∈ {critical, standard, experimental}`. Snapshots `services_history` on every change. UI: edit drawer in Catalog detail with TanStack Forms (tier select, tags chip input, owner team dropdown, free-text URLs). Optimistic update via TanStack Query mutation; rollback on error; surface `traceId`. ITs assert the patch + history snapshot + envelope.
 - [ ] 1.66 [UI] Teams page wired to `GET /api/registry/v1/teams`. Replace `MOCK_TEAMS`, add `Skeleton` and `Alert`-with-`traceId` states.
+- [ ] 1.65 [CODE] Service profile editing. Registry: `PATCH /v1/services/{id}` accepts `description`, `documentation_url`, `runbook_url`, `sla_target`, `tier`, `tags`, `owner_team_id` (admin role or owning-team member). Validates `tier ∈ {critical, standard, experimental}`. Snapshots `services_history` on every change. UI: edit drawer in Catalog detail with TanStack Forms (tier select, tags chip input, owner team dropdown, free-text URLs). Optimistic update via TanStack Query mutation; rollback on error; surface `traceId`. ITs assert the patch + history snapshot + envelope.
 - [ ] 1.67 [UI] SCM Connections management at `/settings/scm-connections`. List via `GET /api/registry/v1/scm-connections`; create connection via drawer form (provider selector, name, PAT/token); delete with confirmation dialog (`DELETE /api/registry/v1/scm-connections/{id}`). Last-synced status + health badge fed by 1.57. TanStack Query mutations for create/delete.
 
 ### Production hardening
@@ -16,6 +16,8 @@
 - [ ] 1.69 [INFRA] Graceful shutdown across all JVM services. Set `server.shutdown=graceful` and `spring.lifecycle.timeout-per-shutdown-phase=30s` in every `application.yml`. IT verifies in-flight Kafka consumer commits complete before pod terminates and HTTP requests in flight finish cleanly.
 - [ ] 1.70 [CODE] Resilience4j circuit breakers on every gateway `RestClient` (registry, topology, contract, intelligence). Expose breaker state in `/actuator/health`. IT proves the breaker opens on repeated downstream failures and surfaces a domain error mapped to the envelope.
 - [ ] 1.71 [UI] Verify the root error boundary claimed in 0.37. If absent, add a React class component with `componentDidCatch`, display `traceId` from the caught `ApiError`, add a Vitest snapshot test. If present, add the `traceId` rendering + test.
+- [ ] Add web hooks
+- [ ] add team members
 
 ### Phase 1 Gate
 

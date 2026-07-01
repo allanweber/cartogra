@@ -139,7 +139,7 @@ describe('EditServiceDrawer', () => {
 
     await waitFor(() => {
       const calls = vi.mocked(apiFetch).mock.calls
-      const putCall = calls.find(([path, init]) => init?.method === 'PUT')
+      const putCall = calls.find(([_, init]) => init?.method === 'PUT')
       expect(putCall).toBeDefined()
       const body = JSON.parse((putCall![1] as RequestInit).body as string)
       expect(body.techStack).toEqual(['go', 'grpc'])

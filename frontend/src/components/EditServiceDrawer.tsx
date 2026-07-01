@@ -103,7 +103,7 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
           slaTarget: payload.slaTarget,
           documentationUrl: payload.documentationUrl,
           runbookUrl: payload.runbookUrl,
-          healthStatus: payload.healthStatus ?? old.healthStatus,
+          healthStatus: (payload.healthStatus ?? old.healthStatus) as RegistryService['healthStatus'],
           repositoryUrl: payload.repositoryUrl,
         }
       })
@@ -139,7 +139,7 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
       description: service.description ?? '',
       teamId: service.teamId ?? '',
       tier: service.tier ?? '',
-      healthStatus: service.healthStatus,
+      healthStatus: `${service.healthStatus}`,
       repositoryUrl: service.repositoryUrl ?? '',
       techStack: service.techStack ?? [],
       tags: service.tags ?? [],
@@ -185,7 +185,7 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
       description: service.description ?? '',
       teamId: service.teamId ?? '',
       tier: service.tier ?? '',
-      healthStatus: service.healthStatus,
+      healthStatus: `${service.healthStatus}`,
       repositoryUrl: service.repositoryUrl ?? '',
       techStack: service.techStack ?? [],
       tags: service.tags ?? [],
