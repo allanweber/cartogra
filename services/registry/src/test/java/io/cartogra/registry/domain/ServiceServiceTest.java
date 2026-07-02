@@ -334,6 +334,30 @@ class ServiceServiceTest {
         verifyNoInteractions(eventProducer);
     }
 
+    // ── countByConnectionId ───────────────────────────────────────────────────
+
+    @Test
+    void countByConnectionIdDelegatesToRepositoryAndReturnsResult() {
+        UUID tenantId = UUID.randomUUID();
+        UUID connId = UUID.randomUUID();
+        when(serviceRepository.countByConnectionId(tenantId)).thenReturn(Map.of(connId, 5L));
+
+        var result = serviceService.countByConnectionId(tenantId);
+
+        assertThat(result).containsEntry(connId, 5L);
+        verify(serviceRepository).countByConnectionId(tenantId);
+    }
+
+    @Test
+    void countByConnectionIdReturnsEmptyMapWhenNoServices() {
+        UUID tenantId = UUID.randomUUID();
+        when(serviceRepository.countByConnectionId(tenantId)).thenReturn(Map.of());
+
+        var result = serviceService.countByConnectionId(tenantId);
+
+        assertThat(result).isEmpty();
+    }
+
     // ── upsertDiscovered ──────────────────────────────────────────────────────
 
     @Test

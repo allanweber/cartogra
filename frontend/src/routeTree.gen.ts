@@ -29,7 +29,11 @@ import { Route as AuthenticatedContractsRouteImport } from './routes/_authentica
 import { Route as AuthenticatedCatalogRouteImport } from './routes/_authenticated/catalog'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings.index'
 import { Route as AuthenticatedCatalogIndexRouteImport } from './routes/_authenticated/catalog.index'
+import { Route as AuthenticatedSettingsTenantRouteImport } from './routes/_authenticated/settings.tenant'
 import { Route as AuthenticatedSettingsProfileRouteImport } from './routes/_authenticated/settings.profile'
+import { Route as AuthenticatedSettingsNotificationsRouteImport } from './routes/_authenticated/settings.notifications'
+import { Route as AuthenticatedSettingsConnectionsRouteImport } from './routes/_authenticated/settings.connections'
+import { Route as AuthenticatedSettingsApiKeysRouteImport } from './routes/_authenticated/settings.api-keys'
 import { Route as AuthenticatedCatalogServiceIdRouteImport } from './routes/_authenticated/catalog.$serviceId'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
@@ -134,10 +138,34 @@ const AuthenticatedCatalogIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedCatalogRoute,
   } as any)
+const AuthenticatedSettingsTenantRoute =
+  AuthenticatedSettingsTenantRouteImport.update({
+    id: '/tenant',
+    path: '/tenant',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
 const AuthenticatedSettingsProfileRoute =
   AuthenticatedSettingsProfileRouteImport.update({
     id: '/profile',
     path: '/profile',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsNotificationsRoute =
+  AuthenticatedSettingsNotificationsRouteImport.update({
+    id: '/notifications',
+    path: '/notifications',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsConnectionsRoute =
+  AuthenticatedSettingsConnectionsRouteImport.update({
+    id: '/connections',
+    path: '/connections',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsApiKeysRoute =
+  AuthenticatedSettingsApiKeysRouteImport.update({
+    id: '/api-keys',
+    path: '/api-keys',
     getParentRoute: () => AuthenticatedSettingsRoute,
   } as any)
 const AuthenticatedCatalogServiceIdRoute =
@@ -166,7 +194,11 @@ export interface FileRoutesByFullPath {
   '/teams': typeof AuthenticatedTeamsRoute
   '/timeline': typeof AuthenticatedTimelineRoute
   '/catalog/$serviceId': typeof AuthenticatedCatalogServiceIdRoute
+  '/settings/api-keys': typeof AuthenticatedSettingsApiKeysRoute
+  '/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
+  '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
   '/settings/profile': typeof AuthenticatedSettingsProfileRoute
+  '/settings/tenant': typeof AuthenticatedSettingsTenantRoute
   '/catalog/': typeof AuthenticatedCatalogIndexRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
 }
@@ -187,7 +219,11 @@ export interface FileRoutesByTo {
   '/teams': typeof AuthenticatedTeamsRoute
   '/timeline': typeof AuthenticatedTimelineRoute
   '/catalog/$serviceId': typeof AuthenticatedCatalogServiceIdRoute
+  '/settings/api-keys': typeof AuthenticatedSettingsApiKeysRoute
+  '/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
+  '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
   '/settings/profile': typeof AuthenticatedSettingsProfileRoute
+  '/settings/tenant': typeof AuthenticatedSettingsTenantRoute
   '/catalog': typeof AuthenticatedCatalogIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
 }
@@ -212,7 +248,11 @@ export interface FileRoutesById {
   '/_authenticated/teams': typeof AuthenticatedTeamsRoute
   '/_authenticated/timeline': typeof AuthenticatedTimelineRoute
   '/_authenticated/catalog/$serviceId': typeof AuthenticatedCatalogServiceIdRoute
+  '/_authenticated/settings/api-keys': typeof AuthenticatedSettingsApiKeysRoute
+  '/_authenticated/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
+  '/_authenticated/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
   '/_authenticated/settings/profile': typeof AuthenticatedSettingsProfileRoute
+  '/_authenticated/settings/tenant': typeof AuthenticatedSettingsTenantRoute
   '/_authenticated/catalog/': typeof AuthenticatedCatalogIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
 }
@@ -237,7 +277,11 @@ export interface FileRouteTypes {
     | '/teams'
     | '/timeline'
     | '/catalog/$serviceId'
+    | '/settings/api-keys'
+    | '/settings/connections'
+    | '/settings/notifications'
     | '/settings/profile'
+    | '/settings/tenant'
     | '/catalog/'
     | '/settings/'
   fileRoutesByTo: FileRoutesByTo
@@ -258,7 +302,11 @@ export interface FileRouteTypes {
     | '/teams'
     | '/timeline'
     | '/catalog/$serviceId'
+    | '/settings/api-keys'
+    | '/settings/connections'
+    | '/settings/notifications'
     | '/settings/profile'
+    | '/settings/tenant'
     | '/catalog'
     | '/settings'
   id:
@@ -282,7 +330,11 @@ export interface FileRouteTypes {
     | '/_authenticated/teams'
     | '/_authenticated/timeline'
     | '/_authenticated/catalog/$serviceId'
+    | '/_authenticated/settings/api-keys'
+    | '/_authenticated/settings/connections'
+    | '/_authenticated/settings/notifications'
     | '/_authenticated/settings/profile'
+    | '/_authenticated/settings/tenant'
     | '/_authenticated/catalog/'
     | '/_authenticated/settings/'
   fileRoutesById: FileRoutesById
@@ -440,11 +492,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCatalogIndexRouteImport
       parentRoute: typeof AuthenticatedCatalogRoute
     }
+    '/_authenticated/settings/tenant': {
+      id: '/_authenticated/settings/tenant'
+      path: '/tenant'
+      fullPath: '/settings/tenant'
+      preLoaderRoute: typeof AuthenticatedSettingsTenantRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
     '/_authenticated/settings/profile': {
       id: '/_authenticated/settings/profile'
       path: '/profile'
       fullPath: '/settings/profile'
       preLoaderRoute: typeof AuthenticatedSettingsProfileRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/notifications': {
+      id: '/_authenticated/settings/notifications'
+      path: '/notifications'
+      fullPath: '/settings/notifications'
+      preLoaderRoute: typeof AuthenticatedSettingsNotificationsRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/connections': {
+      id: '/_authenticated/settings/connections'
+      path: '/connections'
+      fullPath: '/settings/connections'
+      preLoaderRoute: typeof AuthenticatedSettingsConnectionsRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/api-keys': {
+      id: '/_authenticated/settings/api-keys'
+      path: '/api-keys'
+      fullPath: '/settings/api-keys'
+      preLoaderRoute: typeof AuthenticatedSettingsApiKeysRouteImport
       parentRoute: typeof AuthenticatedSettingsRoute
     }
     '/_authenticated/catalog/$serviceId': {
@@ -471,12 +551,21 @@ const AuthenticatedCatalogRouteWithChildren =
   AuthenticatedCatalogRoute._addFileChildren(AuthenticatedCatalogRouteChildren)
 
 interface AuthenticatedSettingsRouteChildren {
+  AuthenticatedSettingsApiKeysRoute: typeof AuthenticatedSettingsApiKeysRoute
+  AuthenticatedSettingsConnectionsRoute: typeof AuthenticatedSettingsConnectionsRoute
+  AuthenticatedSettingsNotificationsRoute: typeof AuthenticatedSettingsNotificationsRoute
   AuthenticatedSettingsProfileRoute: typeof AuthenticatedSettingsProfileRoute
+  AuthenticatedSettingsTenantRoute: typeof AuthenticatedSettingsTenantRoute
   AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
 }
 
 const AuthenticatedSettingsRouteChildren: AuthenticatedSettingsRouteChildren = {
+  AuthenticatedSettingsApiKeysRoute: AuthenticatedSettingsApiKeysRoute,
+  AuthenticatedSettingsConnectionsRoute: AuthenticatedSettingsConnectionsRoute,
+  AuthenticatedSettingsNotificationsRoute:
+    AuthenticatedSettingsNotificationsRoute,
   AuthenticatedSettingsProfileRoute: AuthenticatedSettingsProfileRoute,
+  AuthenticatedSettingsTenantRoute: AuthenticatedSettingsTenantRoute,
   AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
 }
 

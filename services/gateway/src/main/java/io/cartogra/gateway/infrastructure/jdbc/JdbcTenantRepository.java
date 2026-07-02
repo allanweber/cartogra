@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -39,6 +40,26 @@ public class JdbcTenantRepository implements TenantRepository {
             .addValue("updatedAt", Timestamp.from(now));
         jdbc.update(sql, params);
         return new Tenant(id, id, tenant.name(), slug, tenant.plan(), now, now, null);
+    }
+
+    @Override
+    public Optional<Tenant> findByTenantId(UUID tenantId) {
+        String sql = """
+            SELECT id, tenant_id, name, slug, plan, created_at, updated_at
+            FROM tenants
+            WHERE tenant_id = :tenantId AND deleted_at IS NULL
+            """;
+        var params = new MapSqlParameterSource().addValue("tenantId", tenantId);
+        return jdbc.query(sql, params, (rs, _) -> new Tenant(
+            rs.getObject("id", UUID.class),
+            rs.getObject("tenant_id", UUID.class),
+            rs.getString("name"),
+            rs.getString("slug"),
+            rs.getString("plan"),
+            rs.getTimestamp("created_at").toInstant(),
+            rs.getTimestamp("updated_at").toInstant(),
+            null
+        )).stream().findFirst();
     }
 
     private static String slugify(String input) {

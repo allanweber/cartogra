@@ -6,6 +6,7 @@ import io.cartogra.common.api.ErrorCodes;
 import io.cartogra.gateway.domain.exception.ConflictException;
 import io.cartogra.gateway.domain.exception.InvalidOAuthStateException;
 import io.cartogra.gateway.domain.exception.InvalidOtpException;
+import io.cartogra.gateway.domain.exception.NotFoundException;
 import io.cartogra.gateway.domain.exception.UnauthorizedException;
 import io.cartogra.gateway.domain.exception.UnverifiedEmailException;
 import io.cartogra.gateway.infrastructure.tracing.TraceContext;
@@ -64,6 +65,12 @@ public class GlobalExceptionHandler {
             .findFirst()
             .orElse("Validation failed");
         return error(HttpStatus.BAD_REQUEST, ErrorCodes.BAD_REQUEST, message);
+    }
+
+    @ExceptionHandler(NotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleNotFound(NotFoundException ex) {
+        log.warn("Not found: {}", ex.getMessage());
+        return error(HttpStatus.NOT_FOUND, ErrorCodes.NOT_FOUND, ex.getMessage());
     }
 
     @ExceptionHandler(NoResourceFoundException.class)

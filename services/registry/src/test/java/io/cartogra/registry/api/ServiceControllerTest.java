@@ -19,6 +19,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -255,6 +256,35 @@ class ServiceControllerTest {
                         .param("at", "2024-01-01T00:00:00Z"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].serviceId").value(id.toString()));
+    }
+
+    @Test
+    void countsByConnectionReturns200WithEnvelopeAndTraceHeader() throws Exception {
+        UUID connId = UUID.randomUUID();
+        when(serviceService.countByConnectionId(TENANT)).thenReturn(Map.of(connId, 3L));
+
+        mockMvc.perform(get("/api/v1/services/counts-by-connection")
+                        .header("X-Tenant-Id", TENANT))
+                .andExpect(status().isOk())
+                .andExpect(header().exists("X-Trace-Id"))
+                .andExpect(jsonPath("$.traceId").exists())
+                .andExpect(jsonPath("$.data.counts." + connId).value(3));
+    }
+
+    @Test
+    void countsByConnectionReturnsEmptyMapWhenNoServices() throws Exception {
+        when(serviceService.countByConnectionId(TENANT)).thenReturn(Map.of());
+
+        mockMvc.perform(get("/api/v1/services/counts-by-connection")
+                        .header("X-Tenant-Id", TENANT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.counts").isMap());
+    }
+
+    @Test
+    void countsByConnectionMissingTenantHeaderReturns400() throws Exception {
+        mockMvc.perform(get("/api/v1/services/counts-by-connection"))
+                .andExpect(status().isBadRequest());
     }
 
     private Service service(String name) {

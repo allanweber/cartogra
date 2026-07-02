@@ -200,6 +200,7 @@ class ServiceCrudIT {
         assertThat(error.get("code").asText()).isEqualTo("NOT_FOUND");
     }
 
+
     private ConsumerRecord<String, String> pollForRecord(String topic, String key) {
         long deadline = System.currentTimeMillis() + Duration.ofSeconds(10).toMillis();
         while (System.currentTimeMillis() < deadline) {

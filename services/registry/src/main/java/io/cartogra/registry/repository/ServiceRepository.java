@@ -36,4 +36,7 @@ public interface ServiceRepository {
     void updateHealth(UUID tenantId, UUID id, ServiceHealthStatus status, Instant checkedAt);
 
     List<String> findDistinctTechStacks(UUID tenantId);
+
+    /** Returns a map of connection_id -> service count for all active services belonging to the tenant. */
+    java.util.Map<UUID, Long> countByConnectionId(UUID tenantId);
 }

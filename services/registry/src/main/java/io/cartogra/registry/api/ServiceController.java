@@ -17,6 +17,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import io.cartogra.registry.api.dto.ConnectionServiceCountsResponse;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -62,6 +64,15 @@ public class ServiceController {
         return ResponseEntity.ok()
                 .header("X-Trace-Id", traceId)
                 .body(new ApiResponse<>(mapped, traceId));
+    }
+
+    @GetMapping("/counts-by-connection")
+    public ResponseEntity<ApiResponse<ConnectionServiceCountsResponse>> countsByConnection(
+            @RequestHeader("X-Tenant-Id") UUID tenantId) {
+        String traceId = traceId();
+        return ResponseEntity.ok()
+                .header("X-Trace-Id", traceId)
+                .body(new ApiResponse<>(ConnectionServiceCountsResponse.from(service.countByConnectionId(tenantId)), traceId));
     }
 
     @GetMapping("/tech-stacks")

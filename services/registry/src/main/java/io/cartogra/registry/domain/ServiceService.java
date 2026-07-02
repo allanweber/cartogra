@@ -234,6 +234,10 @@ public class ServiceService {
         return serviceRepository.findDistinctTechStacks(tenantId);
     }
 
+    public java.util.Map<UUID, Long> countByConnectionId(UUID tenantId) {
+        return serviceRepository.countByConnectionId(tenantId);
+    }
+
     public Optional<ServiceSnapshot> historyAt(UUID tenantId, UUID serviceId, Instant at) {
         serviceRepository.findById(tenantId, serviceId)
                 .orElseThrow(() -> new ServiceNotFoundException(serviceId));

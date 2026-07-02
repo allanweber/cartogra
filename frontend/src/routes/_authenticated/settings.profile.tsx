@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { KeyRound } from 'lucide-react'
+import { KeyRound, Moon, Sun } from 'lucide-react'
 import { useState } from 'react'
 
 import { AppLayout } from '#/components/AppLayout'
@@ -9,8 +9,10 @@ import { Button } from '#/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
 import { Input } from '#/components/ui/input'
 import { ApiError, apiMutate } from '#/lib/api'
+import { cn } from '#/lib/utils'
 import { clearSessionCookie } from '#/lib/session'
 import { useAuthStore } from '#/stores/useAuthStore'
+import { useThemeStore } from '#/stores/useThemeStore'
 import type { AuthUser } from '#/stores/useAuthStore'
 
 export const Route = createFileRoute('/_authenticated/settings/profile')({
@@ -24,6 +26,7 @@ function resolveHighestRole(roles: string[]): string {
 }
 
 function ProfilePage() {
+  const { theme, setTheme } = useThemeStore()
   const user = useAuthStore((s) => s.user)
   const hydrateWith = useAuthStore((s) => s.hydrateWith)
   const clearAuth = useAuthStore((s) => s.clearAuth)
@@ -89,7 +92,7 @@ function ProfilePage() {
   }
 
   return (
-    <AppLayout title="Profile" description="Your identity and credentials">
+    <AppLayout title="Profile" description="Your identity and preferences">
       <div className="mx-auto max-w-2xl space-y-4">
         <Card>
           <CardHeader>
@@ -206,6 +209,40 @@ function ProfilePage() {
             )}
           </Card>
         )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Appearance</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setTheme('light')}
+                className={cn(
+                  'flex flex-col items-center gap-2 rounded-xl border p-4 text-sm font-medium transition-all',
+                  theme === 'light'
+                    ? 'border-primary bg-primary/5 text-primary'
+                    : 'border-border bg-background text-muted-foreground hover:bg-muted',
+                )}
+              >
+                <Sun className="size-4" />
+                Light
+              </button>
+              <button
+                onClick={() => setTheme('dark')}
+                className={cn(
+                  'flex flex-col items-center gap-2 rounded-xl border p-4 text-sm font-medium transition-all',
+                  theme === 'dark'
+                    ? 'border-primary bg-primary/5 text-primary'
+                    : 'border-border bg-background text-muted-foreground hover:bg-muted',
+                )}
+              >
+                <Moon className="size-4" />
+                Dark
+              </button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </AppLayout>
   )

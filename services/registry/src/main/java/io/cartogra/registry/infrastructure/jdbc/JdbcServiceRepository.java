@@ -315,6 +315,23 @@ public class JdbcServiceRepository implements ServiceRepository {
     }
 
     @Override
+    public Map<UUID, Long> countByConnectionId(UUID tenantId) {
+        String sql = """
+                SELECT connection_id, COUNT(*) AS cnt
+                FROM services
+                WHERE tenant_id = :tenantId
+                  AND connection_id IS NOT NULL
+                  AND deleted_at IS NULL
+                GROUP BY connection_id
+                """;
+        Map<UUID, Long> result = new java.util.LinkedHashMap<>();
+        jdbc.query(sql, new MapSqlParameterSource("tenantId", tenantId), rs -> {
+            result.put(rs.getObject("connection_id", UUID.class), rs.getLong("cnt"));
+        });
+        return result;
+    }
+
+    @Override
     public List<String> findDistinctTechStacks(UUID tenantId) {
         String sql = """
                 SELECT DISTINCT unnest(tech_stack) AS tech
