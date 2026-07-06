@@ -31,7 +31,7 @@ class ActuatorHealthIntegrationTest {
     @Test
     void healthEndpointReturnsUp() throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:" + port + "/actuator/health"))
+                .uri(URI.create("http://localhost:" + port + "/api/v1/registry/actuator/health"))
                 .GET()
                 .build();
         HttpResponse<String> response = HttpClient.newHttpClient()

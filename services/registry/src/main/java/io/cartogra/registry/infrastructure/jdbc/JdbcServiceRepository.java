@@ -1,6 +1,5 @@
 package io.cartogra.registry.infrastructure.jdbc;
 
-import io.cartogra.registry.repository.ServiceDiscoveryCommand;
 import io.cartogra.registry.repository.ServiceFilter;
 import io.cartogra.registry.repository.ServiceRepository;
 import io.cartogra.registry.domain.Service;
@@ -16,7 +15,6 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -191,91 +189,6 @@ public class JdbcServiceRepository implements ServiceRepository {
     }
 
     @Override
-    public Optional<Service> upsertDiscovered(ServiceDiscoveryCommand command) {
-        Instant now = Instant.now();
-
-        // First try by externalId (the discovery key). If that misses, fall back to name so a
-        // service created manually before discovery was enabled gets claimed rather than duplicated.
-        Optional<Service> existing = findByExternalId(command.tenantId(), command.externalId());
-        if (existing.isEmpty()) {
-            existing = findByName(command.tenantId(), command.name());
-        }
-        if (existing.isPresent()) {
-            Service current = existing.get();
-            String description   = command.description()   != null ? command.description()   : current.description();
-            String repositoryUrl = command.repositoryUrl() != null ? command.repositoryUrl() : current.repositoryUrl();
-            List<String> techStack = !command.techStack().isEmpty() ? command.techStack()    : current.techStack();
-            ServiceHealthStatus healthStatus = ServiceHealthStatus.fromString(command.healthStatus());
-            String repositoryRef = command.repositoryRef() != null ? command.repositoryRef() : current.repositoryRef();
-            String k8sCluster    = command.k8sCluster()    != null ? command.k8sCluster()    : current.k8sCluster();
-            String k8sNamespace  = command.k8sNamespace()  != null ? command.k8sNamespace()  : current.k8sNamespace();
-            String k8sDeployment = command.k8sDeployment() != null ? command.k8sDeployment() : current.k8sDeployment();
-            String healthEndpoint = command.healthEndpoint() != null ? command.healthEndpoint() : current.healthEndpoint();
-            Instant lastCommitAt  = command.lastCommitAt()  != null ? command.lastCommitAt()  : current.lastCommitAt();
-            String lastCommitSha  = command.lastCommitSha() != null ? command.lastCommitSha() : current.lastCommitSha();
-
-            boolean changed = !Objects.equals(current.description(), description)
-                    || !Objects.equals(current.repositoryUrl(), repositoryUrl)
-                    || !Objects.equals(current.techStack(), techStack)
-                    || current.healthStatus() != healthStatus
-                    || !Objects.equals(current.connectionId(), command.connectionId())
-                    || !Objects.equals(current.source(), command.source())
-                    || !Objects.equals(current.repositoryRef(), repositoryRef)
-                    || !Objects.equals(current.k8sCluster(), k8sCluster)
-                    || !Objects.equals(current.k8sNamespace(), k8sNamespace)
-                    || !Objects.equals(current.k8sDeployment(), k8sDeployment)
-                    || !Objects.equals(current.healthEndpoint(), healthEndpoint)
-                    || !Objects.equals(current.lastCommitAt(), lastCommitAt)
-                    || !Objects.equals(current.lastCommitSha(), lastCommitSha);
-
-            if (!changed) {
-                return Optional.empty();
-            }
-
-            var updated = new Service(
-                    current.id(), current.tenantId(), current.name(),
-                    description, current.teamId(), repositoryUrl, techStack, current.metadata(),
-                    healthStatus, current.lastDeployedAt(), current.createdAt(), now, null,
-                    current.externalId(), command.connectionId(), command.source(),
-                    repositoryRef, k8sCluster, k8sNamespace, k8sDeployment,
-                    healthEndpoint, lastCommitAt, lastCommitSha, current.healthCheckedAt(),
-                    current.tier(), current.tags(), current.slaTarget(),
-                    current.documentationUrl(), current.runbookUrl()
-            );
-            return Optional.of(save(updated));
-        }
-
-        var newService = new Service(
-                UUID.randomUUID(),
-                command.tenantId(),
-                command.name(),
-                command.description(),
-                null,
-                command.repositoryUrl(),
-                command.techStack().isEmpty() ? null : command.techStack(),
-                null,
-                ServiceHealthStatus.fromString(command.healthStatus()),
-                null,
-                now,
-                now,
-                null,
-                command.externalId(),
-                command.connectionId(),
-                command.source(),
-                command.repositoryRef(),
-                command.k8sCluster(),
-                command.k8sNamespace(),
-                command.k8sDeployment(),
-                command.healthEndpoint(),
-                command.lastCommitAt(),
-                command.lastCommitSha(),
-                null,
-                null, null, null, null, null
-        );
-        return Optional.of(save(newService));
-    }
-
-    @Override
     public List<Service> findAllWithHealthEndpoint() {
         String sql = """
                 SELECT * FROM services
@@ -302,10 +215,46 @@ public class JdbcServiceRepository implements ServiceRepository {
                 .addValue("id", id));
     }
 
-    private Optional<Service> findByName(UUID tenantId, String name) {
+    @Override
+    public Optional<Service> findByName(UUID tenantId, String name) {
         String sql = """
                 SELECT * FROM services
                 WHERE tenant_id = :tenantId AND lower(name) = lower(:name) AND deleted_at IS NULL
+                LIMIT 1
+                """;
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("name", name);
+        return jdbc.query(sql, params, SERVICE_MAPPER).stream().findFirst();
+    }
+
+    @Override
+    public Optional<Service> findByK8sIdentity(UUID tenantId, String k8sCluster, String k8sNamespace, String name) {
+        String sql = """
+                SELECT * FROM services
+                WHERE tenant_id = :tenantId
+                  AND k8s_cluster = :k8sCluster
+                  AND k8s_namespace = :k8sNamespace
+                  AND lower(name) = lower(:name)
+                  AND deleted_at IS NULL
+                LIMIT 1
+                """;
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("k8sCluster", k8sCluster)
+                .addValue("k8sNamespace", k8sNamespace)
+                .addValue("name", name);
+        return jdbc.query(sql, params, SERVICE_MAPPER).stream().findFirst();
+    }
+
+    @Override
+    public Optional<Service> findByNameForK8sClaim(UUID tenantId, String name) {
+        String sql = """
+                SELECT * FROM services
+                WHERE tenant_id = :tenantId
+                  AND lower(name) = lower(:name)
+                  AND (source IS DISTINCT FROM 'kubernetes' OR k8s_cluster IS NULL)
+                  AND deleted_at IS NULL
                 LIMIT 1
                 """;
         var params = new MapSqlParameterSource()

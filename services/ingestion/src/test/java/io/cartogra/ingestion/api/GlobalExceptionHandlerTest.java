@@ -1,6 +1,7 @@
 package io.cartogra.ingestion.api;
 
 import io.cartogra.common.api.ErrorCodes;
+import io.cartogra.ingestion.domain.exception.ClusterNotFoundException;
 import io.cartogra.ingestion.domain.exception.ScmConnectionNotFoundException;
 import io.cartogra.ingestion.domain.exception.WebhookConnectionNotFoundException;
 import io.cartogra.ingestion.domain.exception.WebhookSignatureInvalidException;
@@ -16,6 +17,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 class GlobalExceptionHandlerTest {
 
     private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
+
+    @Test
+    void clusterNotFoundReturns404() {
+        var resp = handler.handleClusterNotFound(new ClusterNotFoundException(UUID.randomUUID()));
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(error(resp)).isEqualTo(ErrorCodes.NOT_FOUND);
+        assertThat(traceId(resp)).isNotNull();
+    }
 
     @Test
     void scmConnectionNotFoundReturns404() {

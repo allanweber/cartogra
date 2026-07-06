@@ -12,7 +12,7 @@ const testUser: AuthUser = {
 }
 
 beforeEach(() => {
-  useAuthStore.setState({ user: null, isAuthenticated: false, isHydrated: false })
+  useAuthStore.setState({ user: null, isAuthenticated: false, isHydrated: false, tokenExpiresAt: null })
 })
 
 describe('clearAuth', () => {

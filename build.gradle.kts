@@ -5,6 +5,8 @@
  * Learn more about Gradle by exploring our Samples at https://docs.gradle.org/9.5.0/samples
  */
 
+import net.ltgt.gradle.errorprone.errorprone
+import org.gradle.api.plugins.quality.CheckstyleExtension
 import org.gradle.api.tasks.testing.logging.TestLogEvent
 import io.spring.gradle.dependencymanagement.dsl.DependencyManagementExtension
 
@@ -12,6 +14,7 @@ plugins {
     id("org.springframework.boot") apply false
     id("io.spring.dependency-management") version "1.1.7" apply false
     id("com.diffplug.spotless") version "7.0.2" apply false
+    id("net.ltgt.errorprone") version "4.1.0" apply false
     java
 }
 
@@ -24,6 +27,8 @@ subprojects {
     apply(plugin = "java")
     apply(plugin = "io.spring.dependency-management")
     apply(plugin = "com.diffplug.spotless")
+    apply(plugin = "net.ltgt.errorprone")
+    apply(plugin = "checkstyle")
 
     // Import hygiene only — no full reformat. `check`/`build` run spotlessCheck automatically.
     configure<com.diffplug.gradle.spotless.SpotlessExtension> {
@@ -33,6 +38,11 @@ subprojects {
             trimTrailingWhitespace()
             endWithNewline()
         }
+    }
+
+    configure<CheckstyleExtension> {
+        configFile = rootProject.file("config/checkstyle/checkstyle.xml")
+        toolVersion = "10.21.0"
     }
 
     group = "io.cartogra"
@@ -59,9 +69,26 @@ subprojects {
         maven { url = uri("https://repo.spring.io/milestone") }
     }
 
+    dependencies {
+        "errorprone"("com.google.errorprone:error_prone_core:2.36.0")
+    }
+
     tasks.withType<JavaCompile> {
         options.encoding = "UTF-8"
-        options.compilerArgs.addAll(listOf("-parameters"))
+        options.compilerArgs.addAll(listOf(
+            "-parameters",
+            "-Xlint:deprecation",
+            "-Xlint:unchecked",
+        ))
+        options.errorprone {
+            error("UnusedVariable")
+            // fire-and-forget Kafka sends are intentional
+            disable("FutureReturnValueIgnored")
+            // Optional.orElseThrow() used for side-effect (existence check before delete)
+            disable("ReturnValueIgnored")
+            // split("\\s+") on controlled config input is fine
+            disable("StringSplitter")
+        }
     }
 
     tasks.withType<Test> {

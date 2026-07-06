@@ -26,6 +26,7 @@ interface TokenPayload {
   name?: string | null
   auth_provider: string
   roles: string[]
+  exp: number
 }
 
 function decodeJwtPayload(token: string): TokenPayload {
@@ -66,7 +67,7 @@ function LoginPage() {
       const claims = decodeJwtPayload(result.accessToken)
       const user = { id: claims.sub, email: claims.email, name: claims.name ?? null, authProvider: claims.auth_provider, tenantId: claims.tid, roles: claims.roles }
       writeSessionCookie(user, result.expiresIn)
-      hydrateWith(user)
+      hydrateWith(user, claims.exp)
       queryClient.removeQueries({ queryKey: ['session'] })
       navigate({ to: redirectTo ?? '/dashboard' })
     } catch (err) {

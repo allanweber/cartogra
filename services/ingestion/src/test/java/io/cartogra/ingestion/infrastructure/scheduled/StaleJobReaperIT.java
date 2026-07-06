@@ -34,7 +34,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest(properties = "ingestion.workers.k8s.enabled=false")
+@SpringBootTest
 class StaleJobReaperIT {
 
     @MockitoBean

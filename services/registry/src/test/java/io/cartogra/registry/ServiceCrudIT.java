@@ -86,11 +86,11 @@ class ServiceCrudIT {
                 {"name":"payments-svc","description":"handles payments"}
                 """;
         HttpResponse<String> created = HTTP.send(
-                post("/api/v1/services", body), HttpResponse.BodyHandlers.ofString());
+                post("/api/v1/registry/services", body), HttpResponse.BodyHandlers.ofString());
         assertThat(created.statusCode()).isEqualTo(201);
         JsonNode data = objectMapper.readTree(created.body()).get("data");
-        String serviceId = data.get("id").asText();
-        assertThat(data.get("name").asText()).isEqualTo("payments-svc");
+        String serviceId = data.get("id").asString();
+        assertThat(data.get("name").asString()).isEqualTo("payments-svc");
         assertThat(created.headers().firstValue("X-Trace-Id")).isPresent();
 
         ConsumerRecord<String, String> registeredRecord = pollForRecord("cartogra.registry.service.registered", serviceId);
@@ -107,18 +107,18 @@ class ServiceCrudIT {
 
         // READ
         HttpResponse<String> got = HTTP.send(
-                get("/api/v1/services/" + serviceId), HttpResponse.BodyHandlers.ofString());
+                get("/api/v1/registry/services/" + serviceId), HttpResponse.BodyHandlers.ofString());
         assertThat(got.statusCode()).isEqualTo(200);
-        assertThat(objectMapper.readTree(got.body()).get("data").get("name").asText()).isEqualTo("payments-svc");
+        assertThat(objectMapper.readTree(got.body()).get("data").get("name").asString()).isEqualTo("payments-svc");
 
         // UPDATE
         String updateBody = """
                 {"name":"payments-service","description":"handles payments v2","healthStatus":"HEALTHY"}
                 """;
         HttpResponse<String> updated = HTTP.send(
-                put("/api/v1/services/" + serviceId, updateBody), HttpResponse.BodyHandlers.ofString());
+                put("/api/v1/registry/services/" + serviceId, updateBody), HttpResponse.BodyHandlers.ofString());
         assertThat(updated.statusCode()).isEqualTo(200);
-        assertThat(objectMapper.readTree(updated.body()).get("data").get("name").asText()).isEqualTo("payments-service");
+        assertThat(objectMapper.readTree(updated.body()).get("data").get("name").asString()).isEqualTo("payments-service");
 
         ConsumerRecord<String, String> updatedRecord = pollForRecord("cartogra.registry.service.updated", serviceId);
         assertThat(updatedRecord).isNotNull();
@@ -132,7 +132,7 @@ class ServiceCrudIT {
 
         // DELETE
         HttpResponse<String> deleted = HTTP.send(
-                delete("/api/v1/services/" + serviceId), HttpResponse.BodyHandlers.ofString());
+                delete("/api/v1/registry/services/" + serviceId), HttpResponse.BodyHandlers.ofString());
         assertThat(deleted.statusCode()).isEqualTo(204);
 
         ConsumerRecord<String, String> deletedRecord = pollForRecord("cartogra.registry.service.deleted", serviceId);
@@ -146,19 +146,19 @@ class ServiceCrudIT {
 
         // 404 after delete
         HttpResponse<String> gone = HTTP.send(
-                get("/api/v1/services/" + serviceId), HttpResponse.BodyHandlers.ofString());
+                get("/api/v1/registry/services/" + serviceId), HttpResponse.BodyHandlers.ofString());
         assertThat(gone.statusCode()).isEqualTo(404);
     }
 
     @Test
     void listServices() throws Exception {
-        HTTP.send(post("/api/v1/services", """
+        HTTP.send(post("/api/v1/registry/services", """
                 {"name":"list-test-svc-1"}"""), HttpResponse.BodyHandlers.ofString());
-        HTTP.send(post("/api/v1/services", """
+        HTTP.send(post("/api/v1/registry/services", """
                 {"name":"list-test-svc-2"}"""), HttpResponse.BodyHandlers.ofString());
 
         HttpResponse<String> list = HTTP.send(
-                get("/api/v1/services?limit=50&offset=0"), HttpResponse.BodyHandlers.ofString());
+                get("/api/v1/registry/services?limit=50&offset=0"), HttpResponse.BodyHandlers.ofString());
         assertThat(list.statusCode()).isEqualTo(200);
         JsonNode result = objectMapper.readTree(list.body()).get("data");
         assertThat(result.get("total").asLong()).isGreaterThanOrEqualTo(2);
@@ -168,36 +168,36 @@ class ServiceCrudIT {
     @Test
     void techStackRoundTrip() throws Exception {
         HttpResponse<String> created = HTTP.send(
-                post("/api/v1/services", """
+                post("/api/v1/registry/services", """
                         {"name":"ts-roundtrip-svc","techStack":["java","kotlin"]}"""),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(created.statusCode()).isEqualTo(201);
         JsonNode createData = objectMapper.readTree(created.body()).get("data");
-        String svcId = createData.get("id").asText();
+        String svcId = createData.get("id").asString();
 
         JsonNode createTs = createData.get("techStack");
         assertThat(createTs.isArray()).isTrue();
         List<String> createdStacks = new ArrayList<>();
-        createTs.forEach(n -> createdStacks.add(n.textValue()));
+        createTs.forEach(n -> createdStacks.add(n.stringValue()));
         assertThat(createdStacks).containsExactlyInAnyOrder("java", "kotlin");
 
         HttpResponse<String> got = HTTP.send(
-                get("/api/v1/services/" + svcId), HttpResponse.BodyHandlers.ofString());
+                get("/api/v1/registry/services/" + svcId), HttpResponse.BodyHandlers.ofString());
         assertThat(got.statusCode()).isEqualTo(200);
         JsonNode readTs = objectMapper.readTree(got.body()).get("data").get("techStack");
         assertThat(readTs.isArray()).isTrue();
         List<String> readStacks = new ArrayList<>();
-        readTs.forEach(n -> readStacks.add(n.textValue()));
+        readTs.forEach(n -> readStacks.add(n.stringValue()));
         assertThat(readStacks).containsExactlyInAnyOrder("java", "kotlin");
     }
 
     @Test
     void missingServiceReturns404() throws Exception {
         HttpResponse<String> resp = HTTP.send(
-                get("/api/v1/services/" + UUID.randomUUID()), HttpResponse.BodyHandlers.ofString());
+                get("/api/v1/registry/services/" + UUID.randomUUID()), HttpResponse.BodyHandlers.ofString());
         assertThat(resp.statusCode()).isEqualTo(404);
         JsonNode error = objectMapper.readTree(resp.body()).get("error");
-        assertThat(error.get("code").asText()).isEqualTo("NOT_FOUND");
+        assertThat(error.get("code").asString()).isEqualTo("NOT_FOUND");
     }
 
 

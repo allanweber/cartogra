@@ -7,7 +7,6 @@
 ### Catalog UI wired to real APIs
 
 
-- [ ] Kuberntes config from database - PlatformConnection
 - [ ] Add the onboarding modal on start
 
 ### Production hardening

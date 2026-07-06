@@ -81,12 +81,12 @@ class TeamCrudIT {
     @Test
     void createReadUpdateDelete() throws Exception {
         HttpResponse<String> created = HTTP.send(
-                post("/api/v1/teams", """
+                post("/api/v1/registry/teams", """
                         {"name":"platform-team"}"""), HttpResponse.BodyHandlers.ofString());
         assertThat(created.statusCode()).isEqualTo(201);
         JsonNode data = objectMapper.readTree(created.body()).get("data");
-        String teamId = data.get("id").asText();
-        assertThat(data.get("name").asText()).isEqualTo("platform-team");
+        String teamId = data.get("id").asString();
+        assertThat(data.get("name").asString()).isEqualTo("platform-team");
         assertThat(created.headers().firstValue("X-Trace-Id")).isPresent();
 
         ConsumerRecord<String, String> createdRecord = pollForRecord("cartogra.registry.team.created", teamId);
@@ -101,15 +101,15 @@ class TeamCrudIT {
         assertThat(createdEnvelope.payload().deletedAt()).isNull();
 
         HttpResponse<String> got = HTTP.send(
-                get("/api/v1/teams/" + teamId), HttpResponse.BodyHandlers.ofString());
+                get("/api/v1/registry/teams/" + teamId), HttpResponse.BodyHandlers.ofString());
         assertThat(got.statusCode()).isEqualTo(200);
-        assertThat(objectMapper.readTree(got.body()).get("data").get("name").asText()).isEqualTo("platform-team");
+        assertThat(objectMapper.readTree(got.body()).get("data").get("name").asString()).isEqualTo("platform-team");
 
         HttpResponse<String> updated = HTTP.send(
-                put("/api/v1/teams/" + teamId, """
+                put("/api/v1/registry/teams/" + teamId, """
                         {"name":"platform-engineering"}"""), HttpResponse.BodyHandlers.ofString());
         assertThat(updated.statusCode()).isEqualTo(200);
-        assertThat(objectMapper.readTree(updated.body()).get("data").get("name").asText()).isEqualTo("platform-engineering");
+        assertThat(objectMapper.readTree(updated.body()).get("data").get("name").asString()).isEqualTo("platform-engineering");
 
         ConsumerRecord<String, String> updatedRecord = pollForRecord("cartogra.registry.team.updated", teamId);
         assertThat(updatedRecord).isNotNull();
@@ -121,7 +121,7 @@ class TeamCrudIT {
         assertThat(updatedEnvelope.payload().name()).isEqualTo("platform-engineering");
 
         HttpResponse<String> deleted = HTTP.send(
-                delete("/api/v1/teams/" + teamId), HttpResponse.BodyHandlers.ofString());
+                delete("/api/v1/registry/teams/" + teamId), HttpResponse.BodyHandlers.ofString());
         assertThat(deleted.statusCode()).isEqualTo(204);
 
         ConsumerRecord<String, String> deletedRecord = pollForRecord("cartogra.registry.team.deleted", teamId);
@@ -134,19 +134,19 @@ class TeamCrudIT {
         assertThat(deletedEnvelope.payload().deletedAt()).isNotNull();
 
         HttpResponse<String> gone = HTTP.send(
-                get("/api/v1/teams/" + teamId), HttpResponse.BodyHandlers.ofString());
+                get("/api/v1/registry/teams/" + teamId), HttpResponse.BodyHandlers.ofString());
         assertThat(gone.statusCode()).isEqualTo(404);
     }
 
     @Test
     void listTeams() throws Exception {
-        HTTP.send(post("/api/v1/teams", """
+        HTTP.send(post("/api/v1/registry/teams", """
                 {"name":"list-team-alpha"}"""), HttpResponse.BodyHandlers.ofString());
-        HTTP.send(post("/api/v1/teams", """
+        HTTP.send(post("/api/v1/registry/teams", """
                 {"name":"list-team-beta"}"""), HttpResponse.BodyHandlers.ofString());
 
         HttpResponse<String> list = HTTP.send(
-                get("/api/v1/teams?limit=50&offset=0"), HttpResponse.BodyHandlers.ofString());
+                get("/api/v1/registry/teams?limit=50&offset=0"), HttpResponse.BodyHandlers.ofString());
         assertThat(list.statusCode()).isEqualTo(200);
         JsonNode result = objectMapper.readTree(list.body()).get("data");
         assertThat(result.get("total").asLong()).isGreaterThanOrEqualTo(2);
@@ -156,63 +156,63 @@ class TeamCrudIT {
     @Test
     void missingTeamReturns404() throws Exception {
         HttpResponse<String> resp = HTTP.send(
-                get("/api/v1/teams/" + UUID.randomUUID()), HttpResponse.BodyHandlers.ofString());
+                get("/api/v1/registry/teams/" + UUID.randomUUID()), HttpResponse.BodyHandlers.ofString());
         assertThat(resp.statusCode()).isEqualTo(404);
-        assertThat(objectMapper.readTree(resp.body()).get("error").get("code").asText()).isEqualTo("NOT_FOUND");
+        assertThat(objectMapper.readTree(resp.body()).get("error").get("code").asString()).isEqualTo("NOT_FOUND");
     }
 
     @Test
     void updateNonExistentTeamReturns404() throws Exception {
         HttpResponse<String> resp = HTTP.send(
-                put("/api/v1/teams/" + UUID.randomUUID(), """
+                put("/api/v1/registry/teams/" + UUID.randomUUID(), """
                         {"name":"ghost-team"}"""), HttpResponse.BodyHandlers.ofString());
         assertThat(resp.statusCode()).isEqualTo(404);
-        assertThat(objectMapper.readTree(resp.body()).get("error").get("code").asText()).isEqualTo("NOT_FOUND");
+        assertThat(objectMapper.readTree(resp.body()).get("error").get("code").asString()).isEqualTo("NOT_FOUND");
     }
 
     @Test
     void deleteNonExistentTeamReturns404() throws Exception {
         HttpResponse<String> resp = HTTP.send(
-                delete("/api/v1/teams/" + UUID.randomUUID()), HttpResponse.BodyHandlers.ofString());
+                delete("/api/v1/registry/teams/" + UUID.randomUUID()), HttpResponse.BodyHandlers.ofString());
         assertThat(resp.statusCode()).isEqualTo(404);
-        assertThat(objectMapper.readTree(resp.body()).get("error").get("code").asText()).isEqualTo("NOT_FOUND");
+        assertThat(objectMapper.readTree(resp.body()).get("error").get("code").asString()).isEqualTo("NOT_FOUND");
     }
 
     @Test
     void duplicateTeamNameReturns409() throws Exception {
-        HTTP.send(post("/api/v1/teams", """
+        HTTP.send(post("/api/v1/registry/teams", """
                 {"name":"dup-team-x"}"""), HttpResponse.BodyHandlers.ofString());
 
         HttpResponse<String> dup = HTTP.send(
-                post("/api/v1/teams", """
+                post("/api/v1/registry/teams", """
                         {"name":"dup-team-x"}"""), HttpResponse.BodyHandlers.ofString());
         assertThat(dup.statusCode()).isEqualTo(409);
-        assertThat(objectMapper.readTree(dup.body()).get("error").get("code").asText()).isEqualTo("CONFLICT");
+        assertThat(objectMapper.readTree(dup.body()).get("error").get("code").asString()).isEqualTo("CONFLICT");
     }
 
     @Test
     void renameToExistingTeamNameReturns409() throws Exception {
-        HTTP.send(post("/api/v1/teams", """
+        HTTP.send(post("/api/v1/registry/teams", """
                 {"name":"rename-target-team"}"""), HttpResponse.BodyHandlers.ofString());
         HttpResponse<String> second = HTTP.send(
-                post("/api/v1/teams", """
+                post("/api/v1/registry/teams", """
                         {"name":"rename-source-team"}"""), HttpResponse.BodyHandlers.ofString());
-        String secondId = objectMapper.readTree(second.body()).get("data").get("id").asText();
+        String secondId = objectMapper.readTree(second.body()).get("data").get("id").asString();
 
         HttpResponse<String> resp = HTTP.send(
-                put("/api/v1/teams/" + secondId, """
+                put("/api/v1/registry/teams/" + secondId, """
                         {"name":"rename-target-team"}"""), HttpResponse.BodyHandlers.ofString());
         assertThat(resp.statusCode()).isEqualTo(409);
-        assertThat(objectMapper.readTree(resp.body()).get("error").get("code").asText()).isEqualTo("CONFLICT");
+        assertThat(objectMapper.readTree(resp.body()).get("error").get("code").asString()).isEqualTo("CONFLICT");
     }
 
     @Test
     void blankTeamNameReturns400() throws Exception {
         HttpResponse<String> resp = HTTP.send(
-                post("/api/v1/teams", """
+                post("/api/v1/registry/teams", """
                         {"name":""}"""), HttpResponse.BodyHandlers.ofString());
         assertThat(resp.statusCode()).isEqualTo(400);
-        assertThat(objectMapper.readTree(resp.body()).get("error").get("code").asText()).isEqualTo("VALIDATION_ERROR");
+        assertThat(objectMapper.readTree(resp.body()).get("error").get("code").asString()).isEqualTo("VALIDATION_ERROR");
     }
 
     private ConsumerRecord<String, String> pollForRecord(String topic, String key) {

@@ -33,20 +33,24 @@ public class ServiceDiscoveredProducer {
                 payload.tenantId(),
                 1,
                 payload);
-        var record = new ProducerRecord<Object, Object>(TOPIC, payload.externalId(), envelope);
+        // K8s no longer sets externalId; use cluster/namespace/name as the stable partition key.
+        String messageKey = payload.externalId() != null
+                ? payload.externalId()
+                : payload.k8sCluster() + "/" + payload.k8sNamespace() + "/" + payload.name();
+        var record = new ProducerRecord<Object, Object>(TOPIC, messageKey, envelope);
         W3CTraceContextPropagator.getInstance().inject(Context.current(), record.headers(),
                 (h, key, value) -> h.add(key, value.getBytes(StandardCharsets.UTF_8)));
 
         log.info("Publishing service.discovered topic={} key={} source={} tenant={}",
-                TOPIC, payload.externalId(), payload.source(), payload.tenantId());
+                TOPIC, messageKey, payload.source(), payload.tenantId());
 
         kafkaTemplate.send(record).whenComplete((result, ex) -> {
             if (ex != null) {
                 log.warn("Failed to publish service.discovered key={} source={} tenant={}: {}",
-                        payload.externalId(), payload.source(), payload.tenantId(), ex.getMessage());
+                        messageKey, payload.source(), payload.tenantId(), ex.getMessage());
             } else {
                 log.debug("service.discovered ack key={} partition={} offset={}",
-                        payload.externalId(),
+                        messageKey,
                         result.getRecordMetadata().partition(),
                         result.getRecordMetadata().offset());
             }

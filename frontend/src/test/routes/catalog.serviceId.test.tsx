@@ -89,7 +89,7 @@ function renderPage() {
 
 function mockSuccess(service = MOCK_SERVICE) {
   vi.mocked(apiFetch).mockImplementation((path: string) => {
-    if (path.includes('/v1/teams')) return Promise.resolve(EMPTY_TEAMS)
+    if (path.includes('/v1/registry/teams')) return Promise.resolve(EMPTY_TEAMS)
     return Promise.resolve(service)
   })
 }
@@ -169,7 +169,7 @@ describe('ServiceDetailPage', () => {
 
   it('shows error alert on fetch failure', async () => {
     vi.mocked(apiFetch).mockImplementation((path: string) => {
-      if (path.includes('/v1/teams')) return Promise.resolve(EMPTY_TEAMS)
+      if (path.includes('/v1/registry/teams')) return Promise.resolve(EMPTY_TEAMS)
       return Promise.reject(new ApiError('NOT_FOUND', 'Service not found', 'trace-err'))
     })
     renderPage()
@@ -190,7 +190,7 @@ describe('ServiceDetailPage', () => {
     const ownedService = { ...MOCK_SERVICE, teamId: 'team-1' }
     const teams: PageResult<RegistryTeam> = { items: [MOCK_TEAM], total: 1, limit: 200, offset: 0 }
     vi.mocked(apiFetch).mockImplementation((path: string) => {
-      if (path.includes('/v1/teams')) return Promise.resolve(teams)
+      if (path.includes('/v1/registry/teams')) return Promise.resolve(teams)
       return Promise.resolve(ownedService)
     })
     renderPage()

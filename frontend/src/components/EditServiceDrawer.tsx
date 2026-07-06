@@ -27,6 +27,7 @@ interface UpdateServicePayload {
   runbookUrl: string | null
   healthStatus: string | null
   repositoryUrl: string | null
+  healthEndpoint: string | null
 }
 
 function Label({
@@ -76,14 +77,14 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
 
   const { data: teamsPage } = useQuery({
     queryKey: ['teams'],
-    queryFn: () => apiFetch<PageResult<RegistryTeam>>('/v1/teams?limit=200'),
+    queryFn: () => apiFetch<PageResult<RegistryTeam>>('/v1/registry/teams?limit=200'),
     enabled: open,
   })
   const teams = teamsPage?.items ?? ([] as RegistryTeam[])
 
   const updateMutation = useMutation({
     mutationFn: (payload: UpdateServicePayload) =>
-      apiFetch<RegistryService>(`/v1/services/${service.id}`, {
+      apiFetch<RegistryService>(`/v1/registry/services/${service.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -105,6 +106,7 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
           runbookUrl: payload.runbookUrl,
           healthStatus: (payload.healthStatus ?? old.healthStatus) as RegistryService['healthStatus'],
           repositoryUrl: payload.repositoryUrl,
+          healthEndpoint: payload.healthEndpoint,
         }
       })
       return { previous }
@@ -122,7 +124,7 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
 
   const assignOwnerMutation = useMutation({
     mutationFn: (teamId: string) =>
-      apiFetch<RegistryService>(`/v1/services/${service.id}/owner`, {
+      apiFetch<RegistryService>(`/v1/registry/services/${service.id}/owner`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ teamId }),
@@ -141,6 +143,7 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
       tier: service.tier ?? '',
       healthStatus: `${service.healthStatus}`,
       repositoryUrl: service.repositoryUrl ?? '',
+      healthEndpoint: service.healthEndpoint ?? '',
       techStack: service.techStack ?? [],
       tags: service.tags ?? [],
       slaTarget: service.slaTarget != null ? String(service.slaTarget) : '',
@@ -160,6 +163,7 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
           runbookUrl: value.runbookUrl || null,
           healthStatus: value.healthStatus !== '' ? value.healthStatus : null,
           repositoryUrl: value.repositoryUrl || null,
+          healthEndpoint: value.healthEndpoint || null,
         })
 
         if (value.teamId && value.teamId !== service.teamId) {
@@ -187,6 +191,7 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
       tier: service.tier ?? '',
       healthStatus: `${service.healthStatus}`,
       repositoryUrl: service.repositoryUrl ?? '',
+      healthEndpoint: service.healthEndpoint ?? '',
       techStack: service.techStack ?? [],
       tags: service.tags ?? [],
       slaTarget: service.slaTarget != null ? String(service.slaTarget) : '',
@@ -336,6 +341,21 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
                 )}
               </form.Field>
             </div>
+
+            <form.Field name="healthEndpoint">
+              {(field) => (
+                <Field>
+                  <Label optional>Health endpoint</Label>
+                  <Input
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    onBlur={field.handleBlur}
+                    maxLength={2048}
+                    placeholder="https://example.com/actuator/health"
+                  />
+                </Field>
+              )}
+            </form.Field>
 
             <form.Field name="techStack">
               {(field) => (

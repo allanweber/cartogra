@@ -50,58 +50,58 @@ class RegistryEnvelopeContractTest {
     @Test
     void servicesPost201ConformsToSpec() throws Exception {
         HttpResponse<String> response = HTTP.send(
-                post("/api/v1/services", """
+                post("/api/v1/registry/services", """
                         {"name":"contract-svc-%s"}""".formatted(UUID.randomUUID())),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(201);
-        assertConformsToSpec("POST", "/api/v1/services", response);
+        assertConformsToSpec("POST", "/api/v1/registry/services", response);
     }
 
     @Test
     void servicesGet200ConformsToSpec() throws Exception {
-        HTTP.send(post("/api/v1/services", """
+        HTTP.send(post("/api/v1/registry/services", """
                         {"name":"list-contract-svc-%s"}""".formatted(UUID.randomUUID())),
                 HttpResponse.BodyHandlers.ofString());
 
         HttpResponse<String> response = HTTP.send(
-                get("/api/v1/services"),
+                get("/api/v1/registry/services"),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(200);
-        assertConformsToSpec("GET", "/api/v1/services", response);
+        assertConformsToSpec("GET", "/api/v1/registry/services", response);
     }
 
     @Test
     void servicesGetById200ConformsToSpec() throws Exception {
         HttpResponse<String> created = HTTP.send(
-                post("/api/v1/services", """
+                post("/api/v1/registry/services", """
                         {"name":"get-by-id-svc-%s"}""".formatted(UUID.randomUUID())),
                 HttpResponse.BodyHandlers.ofString());
         String id = objectMapper.readValue(created.body(), CreatedResponse.class).data().id();
 
         HttpResponse<String> response = HTTP.send(
-                get("/api/v1/services/" + id),
+                get("/api/v1/registry/services/" + id),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(200);
-        assertConformsToSpec("GET", "/api/v1/services/" + id, response);
+        assertConformsToSpec("GET", "/api/v1/registry/services/" + id, response);
     }
 
     @Test
     void servicesGetByIdNotFoundConformsToSpec() throws Exception {
         UUID missingId = UUID.randomUUID();
         HttpResponse<String> response = HTTP.send(
-                get("/api/v1/services/" + missingId),
+                get("/api/v1/registry/services/" + missingId),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(404);
-        assertConformsToSpec("GET", "/api/v1/services/" + missingId, response);
+        assertConformsToSpec("GET", "/api/v1/registry/services/" + missingId, response);
     }
 
     @Test
     void servicesPostInvalidBodyConformsToSpec() throws Exception {
         HttpResponse<String> response = HTTP.send(
-                post("/api/v1/services", "{}"),
+                post("/api/v1/registry/services", "{}"),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(400);
-        assertConformsToSpec("POST", "/api/v1/services", response);
+        assertConformsToSpec("POST", "/api/v1/registry/services", response);
     }
 
     // ── Teams ─────────────────────────────────────────────────────────────
@@ -109,24 +109,24 @@ class RegistryEnvelopeContractTest {
     @Test
     void teamsPost201ConformsToSpec() throws Exception {
         HttpResponse<String> response = HTTP.send(
-                post("/api/v1/teams", """
+                post("/api/v1/registry/teams", """
                         {"name":"contract-team-%s"}""".formatted(UUID.randomUUID())),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(201);
-        assertConformsToSpec("POST", "/api/v1/teams", response);
+        assertConformsToSpec("POST", "/api/v1/registry/teams", response);
     }
 
     @Test
     void teamsGet200ConformsToSpec() throws Exception {
-        HTTP.send(post("/api/v1/teams", """
+        HTTP.send(post("/api/v1/registry/teams", """
                         {"name":"list-team-%s"}""".formatted(UUID.randomUUID())),
                 HttpResponse.BodyHandlers.ofString());
 
         HttpResponse<String> response = HTTP.send(
-                get("/api/v1/teams"),
+                get("/api/v1/registry/teams"),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(200);
-        assertConformsToSpec("GET", "/api/v1/teams", response);
+        assertConformsToSpec("GET", "/api/v1/registry/teams", response);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────

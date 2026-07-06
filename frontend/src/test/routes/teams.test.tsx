@@ -114,7 +114,7 @@ function mockApiFetch(
   services: PageResult<RegistryService> = EMPTY_SERVICES,
 ) {
   vi.mocked(apiFetch).mockImplementation((path: string) => {
-    if (path.includes('/v1/teams')) return Promise.resolve(teams)
+    if (path.includes('/v1/registry/teams')) return Promise.resolve(teams)
     return Promise.resolve(services)
   })
 }

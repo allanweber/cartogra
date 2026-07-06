@@ -1,7 +1,7 @@
 package io.cartogra.registry;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import io.cartogra.registry.infrastructure.kafka.ServiceLifecycleEventProducer;
 import io.cartogra.test.PostgresTestSupport;
 import org.junit.jupiter.api.Test;
@@ -25,7 +25,7 @@ class ServiceHistoryIT {
     @MockitoBean
     ServiceLifecycleEventProducer eventProducer;
 
-    private static final ObjectMapper MAPPER = new ObjectMapper().findAndRegisterModules();
+    private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
     private static final UUID TENANT = UUID.randomUUID();
 
@@ -44,19 +44,19 @@ class ServiceHistoryIT {
     void updateProducesHistoryRow() throws Exception {
         // create
         HttpResponse<String> created = HTTP.send(
-                post("/api/v1/services", """
+                post("/api/v1/registry/services", """
                         {"name":"history-test-svc"}"""), HttpResponse.BodyHandlers.ofString());
         assertThat(created.statusCode()).isEqualTo(201);
-        String serviceId = MAPPER.readTree(created.body()).get("data").get("id").asText();
+        String serviceId = MAPPER.readTree(created.body()).get("data").get("id").asString();
 
         // update (generates second history row)
-        HTTP.send(put("/api/v1/services/" + serviceId, """
+        HTTP.send(put("/api/v1/registry/services/" + serviceId, """
                 {"name":"history-test-svc","description":"updated","healthStatus":"HEALTHY"}"""),
                 HttpResponse.BodyHandlers.ofString());
 
         // history should have at least 2 entries
         HttpResponse<String> history = HTTP.send(
-                get("/api/v1/services/" + serviceId + "/history"),
+                get("/api/v1/registry/services/" + serviceId + "/history"),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(history.statusCode()).isEqualTo(200);
         JsonNode data = MAPPER.readTree(history.body()).get("data");
@@ -67,15 +67,15 @@ class ServiceHistoryIT {
     @Test
     void pointInTimeQueryReturnsSnapshot() throws Exception {
         HttpResponse<String> created = HTTP.send(
-                post("/api/v1/services", """
+                post("/api/v1/registry/services", """
                         {"name":"pit-test-svc"}"""), HttpResponse.BodyHandlers.ofString());
         assertThat(created.statusCode()).isEqualTo(201);
-        String serviceId = MAPPER.readTree(created.body()).get("data").get("id").asText();
+        String serviceId = MAPPER.readTree(created.body()).get("data").get("id").asString();
 
         // query at "now" — should return the creation snapshot
         String atNow = java.time.Instant.now().toString();
         HttpResponse<String> pit = HTTP.send(
-                get("/api/v1/services/" + serviceId + "/history?at=" + java.net.URLEncoder.encode(atNow, "UTF-8")),
+                get("/api/v1/registry/services/" + serviceId + "/history?at=" + java.net.URLEncoder.encode(atNow, "UTF-8")),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(pit.statusCode()).isEqualTo(200);
         JsonNode items = MAPPER.readTree(pit.body()).get("data").get("items");

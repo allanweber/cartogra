@@ -1,7 +1,7 @@
 package io.cartogra.registry;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import io.cartogra.registry.infrastructure.kafka.ServiceLifecycleEventProducer;
 import io.cartogra.registry.infrastructure.kafka.TeamLifecycleEventProducer;
 import io.cartogra.test.PostgresTestSupport;
@@ -31,7 +31,7 @@ class ServiceFilterIT {
     @MockitoBean
     TeamLifecycleEventProducer teamEventProducer;
 
-    private static final ObjectMapper MAPPER = new ObjectMapper().findAndRegisterModules();
+    private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
     private static final UUID TENANT = UUID.randomUUID();
 
@@ -49,28 +49,28 @@ class ServiceFilterIT {
     @Test
     void filterByTeamId() throws Exception {
         HttpResponse<String> teamResp = HTTP.send(
-                postAdmin("/api/v1/teams", """
+                postAdmin("/api/v1/registry/teams", """
                         {"name":"filter-owner-team"}"""), HttpResponse.BodyHandlers.ofString());
-        String teamId = MAPPER.readTree(teamResp.body()).get("data").get("id").asText();
+        String teamId = MAPPER.readTree(teamResp.body()).get("data").get("id").asString();
 
         HttpResponse<String> owned = HTTP.send(
-                post("/api/v1/services", String.format("""
+                post("/api/v1/registry/services", String.format("""
                         {"name":"filter-owned-svc","teamId":"%s"}""", teamId)),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(owned.statusCode()).isEqualTo(201);
-        String ownedId = MAPPER.readTree(owned.body()).get("data").get("id").asText();
+        String ownedId = MAPPER.readTree(owned.body()).get("data").get("id").asString();
 
-        HTTP.send(post("/api/v1/services", """
+        HTTP.send(post("/api/v1/registry/services", """
                 {"name":"filter-unowned-svc"}"""), HttpResponse.BodyHandlers.ofString());
 
         HttpResponse<String> filtered = HTTP.send(
-                get("/api/v1/services?teamId=" + teamId + "&limit=50"), HttpResponse.BodyHandlers.ofString());
+                get("/api/v1/registry/services?teamId=" + teamId + "&limit=50"), HttpResponse.BodyHandlers.ofString());
         assertThat(filtered.statusCode()).isEqualTo(200);
         JsonNode items = MAPPER.readTree(filtered.body()).get("data").get("items");
         boolean found = false;
         for (JsonNode item : items) {
-            assertThat(item.get("teamId").asText()).isEqualTo(teamId);
-            if (ownedId.equals(item.get("id").asText())) found = true;
+            assertThat(item.get("teamId").asString()).isEqualTo(teamId);
+            if (ownedId.equals(item.get("id").asString())) found = true;
         }
         assertThat(found).as("owned service should appear in teamId-filtered results").isTrue();
     }
@@ -78,21 +78,21 @@ class ServiceFilterIT {
     @Test
     void filterByHealthStatus() throws Exception {
         HttpResponse<String> created = HTTP.send(
-                post("/api/v1/services", """
+                post("/api/v1/registry/services", """
                         {"name":"filter-health-svc"}"""), HttpResponse.BodyHandlers.ofString());
-        String svcId = MAPPER.readTree(created.body()).get("data").get("id").asText();
+        String svcId = MAPPER.readTree(created.body()).get("data").get("id").asString();
 
-        HTTP.send(put("/api/v1/services/" + svcId, """
+        HTTP.send(put("/api/v1/registry/services/" + svcId, """
                         {"name":"filter-health-svc","healthStatus":"HEALTHY"}"""),
                 HttpResponse.BodyHandlers.ofString());
 
         HttpResponse<String> filtered = HTTP.send(
-                get("/api/v1/services?health=healthy&limit=50"), HttpResponse.BodyHandlers.ofString());
+                get("/api/v1/registry/services?health=healthy&limit=50"), HttpResponse.BodyHandlers.ofString());
         assertThat(filtered.statusCode()).isEqualTo(200);
         JsonNode items = MAPPER.readTree(filtered.body()).get("data").get("items");
         boolean found = false;
         for (JsonNode item : items) {
-            if (svcId.equals(item.get("id").asText())) {
+            if (svcId.equals(item.get("id").asString())) {
                 found = true;
                 break;
             }
@@ -104,18 +104,18 @@ class ServiceFilterIT {
     void filterByDegradedIncludesUnknown() throws Exception {
         // New services start with UNKNOWN health — they must appear under health=degraded
         HttpResponse<String> created = HTTP.send(
-                post("/api/v1/services", """
+                post("/api/v1/registry/services", """
                         {"name":"filter-degraded-unknown-svc"}"""), HttpResponse.BodyHandlers.ofString());
         assertThat(created.statusCode()).isEqualTo(201);
-        String svcId = MAPPER.readTree(created.body()).get("data").get("id").asText();
+        String svcId = MAPPER.readTree(created.body()).get("data").get("id").asString();
 
         HttpResponse<String> filtered = HTTP.send(
-                get("/api/v1/services?health=degraded&limit=50"), HttpResponse.BodyHandlers.ofString());
+                get("/api/v1/registry/services?health=degraded&limit=50"), HttpResponse.BodyHandlers.ofString());
         assertThat(filtered.statusCode()).isEqualTo(200);
         JsonNode items = MAPPER.readTree(filtered.body()).get("data").get("items");
         boolean found = false;
         for (JsonNode item : items) {
-            if (svcId.equals(item.get("id").asText())) { found = true; break; }
+            if (svcId.equals(item.get("id").asString())) { found = true; break; }
         }
         assertThat(found).as("new service with UNKNOWN health must appear under health=degraded filter").isTrue();
     }
@@ -123,19 +123,19 @@ class ServiceFilterIT {
     @Test
     void filterByTechStack() throws Exception {
         HttpResponse<String> created = HTTP.send(
-                post("/api/v1/services", """
+                post("/api/v1/registry/services", """
                         {"name":"filter-techstack-svc","techStack":["golang"]}"""),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(created.statusCode()).isEqualTo(201);
-        String svcId = MAPPER.readTree(created.body()).get("data").get("id").asText();
+        String svcId = MAPPER.readTree(created.body()).get("data").get("id").asString();
 
         HttpResponse<String> filtered = HTTP.send(
-                get("/api/v1/services?techStack=golang&limit=50"), HttpResponse.BodyHandlers.ofString());
+                get("/api/v1/registry/services?techStack=golang&limit=50"), HttpResponse.BodyHandlers.ofString());
         assertThat(filtered.statusCode()).isEqualTo(200);
         JsonNode items = MAPPER.readTree(filtered.body()).get("data").get("items");
         boolean found = false;
         for (JsonNode item : items) {
-            if (svcId.equals(item.get("id").asText())) {
+            if (svcId.equals(item.get("id").asString())) {
                 found = true;
                 break;
             }
@@ -145,36 +145,36 @@ class ServiceFilterIT {
 
     @Test
     void techStacksEndpoint() throws Exception {
-        HTTP.send(post("/api/v1/services", """
+        HTTP.send(post("/api/v1/registry/services", """
                 {"name":"ts-endpoint-svc","techStack":["rust","wasm"]}"""),
                 HttpResponse.BodyHandlers.ofString());
 
         HttpResponse<String> resp = HTTP.send(
-                get("/api/v1/services/tech-stacks"), HttpResponse.BodyHandlers.ofString());
+                get("/api/v1/registry/services/tech-stacks"), HttpResponse.BodyHandlers.ofString());
         assertThat(resp.statusCode()).isEqualTo(200);
         JsonNode items = MAPPER.readTree(resp.body()).get("data");
         assertThat(items.isArray()).isTrue();
         List<String> stacks = new ArrayList<>();
-        items.forEach(n -> stacks.add(n.asText()));
+        items.forEach(n -> stacks.add(n.asString()));
         assertThat(stacks).contains("rust", "wasm");
     }
 
     @Test
     void filterBySearch() throws Exception {
         HttpResponse<String> created = HTTP.send(
-                post("/api/v1/services", """
+                post("/api/v1/registry/services", """
                         {"name":"billing-processor","description":"processes invoices for billing"}"""),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(created.statusCode()).isEqualTo(201);
-        String svcId = MAPPER.readTree(created.body()).get("data").get("id").asText();
+        String svcId = MAPPER.readTree(created.body()).get("data").get("id").asString();
 
         HttpResponse<String> filtered = HTTP.send(
-                get("/api/v1/services?search=billing&limit=50"), HttpResponse.BodyHandlers.ofString());
+                get("/api/v1/registry/services?search=billing&limit=50"), HttpResponse.BodyHandlers.ofString());
         assertThat(filtered.statusCode()).isEqualTo(200);
         JsonNode items = MAPPER.readTree(filtered.body()).get("data").get("items");
         boolean found = false;
         for (JsonNode item : items) {
-            if (svcId.equals(item.get("id").asText())) {
+            if (svcId.equals(item.get("id").asString())) {
                 found = true;
                 break;
             }
@@ -202,23 +202,23 @@ class ServiceFilterIT {
     @Test
     void filterByUnowned() throws Exception {
         HttpResponse<String> teamResp = HTTP.send(
-                postAdmin("/api/v1/teams", """
+                postAdmin("/api/v1/registry/teams", """
                         {"name":"unowned-filter-team"}"""), HttpResponse.BodyHandlers.ofString());
-        String teamId = MAPPER.readTree(teamResp.body()).get("data").get("id").asText();
+        String teamId = MAPPER.readTree(teamResp.body()).get("data").get("id").asString();
 
         HttpResponse<String> ownedResp = HTTP.send(
-                post("/api/v1/services", String.format("""
+                post("/api/v1/registry/services", String.format("""
                         {"name":"unowned-filter-owned","teamId":"%s"}""", teamId)),
                 HttpResponse.BodyHandlers.ofString());
-        String ownedId = MAPPER.readTree(ownedResp.body()).get("data").get("id").asText();
+        String ownedId = MAPPER.readTree(ownedResp.body()).get("data").get("id").asString();
 
         HttpResponse<String> orphanResp = HTTP.send(
-                post("/api/v1/services", """
+                post("/api/v1/registry/services", """
                         {"name":"unowned-filter-orphan"}"""), HttpResponse.BodyHandlers.ofString());
-        String orphanId = MAPPER.readTree(orphanResp.body()).get("data").get("id").asText();
+        String orphanId = MAPPER.readTree(orphanResp.body()).get("data").get("id").asString();
 
         HttpResponse<String> filtered = HTTP.send(
-                get("/api/v1/services?unowned=true&limit=50"), HttpResponse.BodyHandlers.ofString());
+                get("/api/v1/registry/services?unowned=true&limit=50"), HttpResponse.BodyHandlers.ofString());
         assertThat(filtered.statusCode()).isEqualTo(200);
 
         JsonNode items = MAPPER.readTree(filtered.body()).get("data").get("items");
@@ -227,8 +227,8 @@ class ServiceFilterIT {
             assertThat(item.get("teamId").isNull())
                     .as("unowned filter must return only services with null teamId")
                     .isTrue();
-            if (orphanId.equals(item.get("id").asText())) orphanFound = true;
-            assertThat(item.get("id").asText()).isNotEqualTo(ownedId);
+            if (orphanId.equals(item.get("id").asString())) orphanFound = true;
+            assertThat(item.get("id").asString()).isNotEqualTo(ownedId);
         }
         assertThat(orphanFound).as("orphan service must appear in unowned=true results").isTrue();
     }

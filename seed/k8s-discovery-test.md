@@ -109,23 +109,43 @@ risk-engine-xxx            1/1   Running
 
 ---
 
-## Step 2 — Start the ingestion service with K8s enabled
+## Step 2 — Register the cluster via the API
+
+Start the ingestion service:
 
 ```bash
-INGESTION_WORKERS_K8S_ENABLED=true ./gradlew :services:ingestion:bootRun
+./gradlew :services:ingestion:bootRun
 ```
 
-The fabric8 client reads `~/.kube/config` automatically (Docker Desktop sets this up).
+Then register your local cluster. The fabric8 client will use your `~/.kube/config` automatically — upload it via the API:
 
-Look for this line in the logs:
+```bash
+KUBECONFIG_B64=$(base64 -w0 ~/.kube/config)
+
+curl -s -X POST http://localhost:8083/k8s/clusters \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-Id: <YOUR-TENANT-ID>" \
+  -d "{\"name\": \"local\", \"source\": \"KUBECONFIG\", \"kubeconfig\": \"$KUBECONFIG_B64\"}" | jq .
+```
+
+The response returns immediately with `status: CONNECTING`. The worker connects in the background and transitions to `ACTIVE` within seconds.
+
+Check status:
+
+```bash
+curl -s http://localhost:8083/k8s/clusters \
+  -H "X-Tenant-Id: <YOUR-TENANT-ID>" | jq '.data[].status'
+```
+
+On successful connection, look for this line in the logs:
 
 ```text
 Starting Kubernetes worker watching all namespaces for label cartogra.io/tenant-id
 ```
 
-The worker registers three watches:
+The worker then immediately scans all labeled namespaces for existing services (bootstrap scan), followed by three live watches:
 
-- **Services** — fires for `ADDED` / `MODIFIED` events cluster-wide (initial discovery + updates)
+- **Services** — fires for `ADDED` / `MODIFIED` events cluster-wide
 - **Endpoints** — fires for `MODIFIED` events when pod readiness changes (health-status tracking)
 - **Namespaces** — fires for `MODIFIED` events; when the tenant label is added to a namespace, all its Services are discovered automatically
 

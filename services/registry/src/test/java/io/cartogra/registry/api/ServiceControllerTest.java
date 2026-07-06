@@ -54,7 +54,7 @@ class ServiceControllerTest {
         Service svc = service("payments");
         when(serviceService.create(eq(TENANT), any(), isNull())).thenReturn(svc);
 
-        mockMvc.perform(post("/api/v1/services")
+        mockMvc.perform(post("/services")
                         .header("X-Tenant-Id", TENANT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -70,7 +70,7 @@ class ServiceControllerTest {
         UUID userId = UUID.randomUUID();
         when(serviceService.create(eq(TENANT), any(), eq(userId))).thenReturn(service("payments"));
 
-        mockMvc.perform(post("/api/v1/services")
+        mockMvc.perform(post("/services")
                         .header("X-Tenant-Id", TENANT)
                         .header("X-User-Id", userId)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -83,7 +83,7 @@ class ServiceControllerTest {
 
     @Test
     void createWithBlankNameReturns400WithValidationError() throws Exception {
-        mockMvc.perform(post("/api/v1/services")
+        mockMvc.perform(post("/services")
                         .header("X-Tenant-Id", TENANT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -94,7 +94,7 @@ class ServiceControllerTest {
 
     @Test
     void createMissingTenantHeaderReturns400() throws Exception {
-        mockMvc.perform(post("/api/v1/services")
+        mockMvc.perform(post("/services")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"payments"}"""))
@@ -106,7 +106,7 @@ class ServiceControllerTest {
         UUID id = UUID.randomUUID();
         when(serviceService.get(TENANT, id)).thenReturn(service("payments"));
 
-        mockMvc.perform(get("/api/v1/services/{id}", id)
+        mockMvc.perform(get("/services/{id}", id)
                         .header("X-Tenant-Id", TENANT))
                 .andExpect(status().isOk())
                 .andExpect(header().exists("X-Trace-Id"))
@@ -118,7 +118,7 @@ class ServiceControllerTest {
         UUID id = UUID.randomUUID();
         when(serviceService.get(TENANT, id)).thenThrow(new ServiceNotFoundException(id));
 
-        mockMvc.perform(get("/api/v1/services/{id}", id)
+        mockMvc.perform(get("/services/{id}", id)
                         .header("X-Tenant-Id", TENANT))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("NOT_FOUND"));
@@ -129,7 +129,7 @@ class ServiceControllerTest {
         var page = PageResult.of(List.of(service("svc-1"), service("svc-2")), 2L, 20, 0);
         when(serviceService.list(eq(TENANT), any(ServiceFilter.class), eq(20), eq(0))).thenReturn(page);
 
-        mockMvc.perform(get("/api/v1/services")
+        mockMvc.perform(get("/services")
                         .header("X-Tenant-Id", TENANT))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(2))
@@ -142,7 +142,7 @@ class ServiceControllerTest {
         when(serviceService.list(eq(TENANT), any(), anyInt(), anyInt()))
                 .thenReturn(PageResult.of(List.of(), 0L, 10, 5));
 
-        mockMvc.perform(get("/api/v1/services")
+        mockMvc.perform(get("/services")
                         .header("X-Tenant-Id", TENANT)
                         .param("teamId", teamId.toString())
                         .param("health", "healthy")
@@ -159,7 +159,7 @@ class ServiceControllerTest {
         var page = PageResult.of(List.of(service("orphan")), 1L, 20, 0);
         when(serviceService.detectOrphans(TENANT, 20, 0)).thenReturn(page);
 
-        mockMvc.perform(get("/api/v1/services/orphaned")
+        mockMvc.perform(get("/services/orphaned")
                         .header("X-Tenant-Id", TENANT))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(1));
@@ -170,7 +170,7 @@ class ServiceControllerTest {
         UUID id = UUID.randomUUID();
         when(serviceService.update(eq(TENANT), eq(id), any(), isNull())).thenReturn(service("updated-svc"));
 
-        mockMvc.perform(put("/api/v1/services/{id}", id)
+        mockMvc.perform(put("/services/{id}", id)
                         .header("X-Tenant-Id", TENANT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -183,7 +183,7 @@ class ServiceControllerTest {
     void deleteReturns204WithTraceHeader() throws Exception {
         UUID id = UUID.randomUUID();
 
-        mockMvc.perform(delete("/api/v1/services/{id}", id)
+        mockMvc.perform(delete("/services/{id}", id)
                         .header("X-Tenant-Id", TENANT))
                 .andExpect(status().isNoContent())
                 .andExpect(header().exists("X-Trace-Id"));
@@ -197,7 +197,7 @@ class ServiceControllerTest {
         UUID teamId = UUID.randomUUID();
         when(serviceService.assignOwner(eq(TENANT), eq(id), eq(teamId), isNull())).thenReturn(service("payments"));
 
-        mockMvc.perform(patch("/api/v1/services/{id}/owner", id)
+        mockMvc.perform(patch("/services/{id}/owner", id)
                         .header("X-Tenant-Id", TENANT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -211,7 +211,7 @@ class ServiceControllerTest {
         UUID id = UUID.randomUUID();
         when(serviceService.assignOwner(eq(TENANT), eq(id), isNull(), isNull())).thenReturn(service("payments"));
 
-        mockMvc.perform(delete("/api/v1/services/{id}/owner", id)
+        mockMvc.perform(delete("/services/{id}/owner", id)
                         .header("X-Tenant-Id", TENANT))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.name").value("payments"));
@@ -224,7 +224,7 @@ class ServiceControllerTest {
         when(serviceService.list(eq(TENANT), eq(new ServiceFilter(null, true, null, null, null, null)), eq(20), eq(0)))
                 .thenReturn(PageResult.of(List.of(), 0L, 20, 0));
 
-        mockMvc.perform(get("/api/v1/services")
+        mockMvc.perform(get("/services")
                         .header("X-Tenant-Id", TENANT)
                         .param("unowned", "true"))
                 .andExpect(status().isOk());
@@ -238,7 +238,7 @@ class ServiceControllerTest {
         var page = PageResult.of(List.of(snapshot(id)), 1L, 20, 0);
         when(serviceService.history(eq(TENANT), eq(id), eq(20), eq(0))).thenReturn(page);
 
-        mockMvc.perform(get("/api/v1/services/{id}/history", id)
+        mockMvc.perform(get("/services/{id}/history", id)
                         .header("X-Tenant-Id", TENANT))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(1))
@@ -251,7 +251,7 @@ class ServiceControllerTest {
         var snap = snapshot(id);
         when(serviceService.historyAt(eq(TENANT), eq(id), any(Instant.class))).thenReturn(Optional.of(snap));
 
-        mockMvc.perform(get("/api/v1/services/{id}/history", id)
+        mockMvc.perform(get("/services/{id}/history", id)
                         .header("X-Tenant-Id", TENANT)
                         .param("at", "2024-01-01T00:00:00Z"))
                 .andExpect(status().isOk())
@@ -263,7 +263,7 @@ class ServiceControllerTest {
         UUID connId = UUID.randomUUID();
         when(serviceService.countByConnectionId(TENANT)).thenReturn(Map.of(connId, 3L));
 
-        mockMvc.perform(get("/api/v1/services/counts-by-connection")
+        mockMvc.perform(get("/services/counts-by-connection")
                         .header("X-Tenant-Id", TENANT))
                 .andExpect(status().isOk())
                 .andExpect(header().exists("X-Trace-Id"))
@@ -275,7 +275,7 @@ class ServiceControllerTest {
     void countsByConnectionReturnsEmptyMapWhenNoServices() throws Exception {
         when(serviceService.countByConnectionId(TENANT)).thenReturn(Map.of());
 
-        mockMvc.perform(get("/api/v1/services/counts-by-connection")
+        mockMvc.perform(get("/services/counts-by-connection")
                         .header("X-Tenant-Id", TENANT))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.counts").isMap());
@@ -283,7 +283,7 @@ class ServiceControllerTest {
 
     @Test
     void countsByConnectionMissingTenantHeaderReturns400() throws Exception {
-        mockMvc.perform(get("/api/v1/services/counts-by-connection"))
+        mockMvc.perform(get("/services/counts-by-connection"))
                 .andExpect(status().isBadRequest());
     }
 

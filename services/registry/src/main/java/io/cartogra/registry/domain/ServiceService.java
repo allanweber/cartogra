@@ -98,8 +98,22 @@ public class ServiceService {
                 && serviceRepository.existsByName(tenantId, req.name(), serviceId)) {
             throw new DuplicateServiceNameException(req.name());
         }
-        if (req.healthEndpoint() != null) {
-            healthEndpointValidator.validate(req.healthEndpoint());
+        boolean isKubernetesService = "kubernetes".equals(existing.source());
+
+        // For kubernetes-sourced services, health status and health endpoint are owned exclusively
+        // by the K8s cluster worker. Manual edits must never overwrite them.
+        ServiceHealthStatus healthStatus;
+        String healthEndpoint;
+        if (isKubernetesService) {
+            healthStatus = existing.healthStatus();
+            healthEndpoint = existing.healthEndpoint();
+        } else {
+            if (req.healthEndpoint() != null) {
+                healthEndpointValidator.validate(req.healthEndpoint());
+            }
+            healthStatus = req.healthStatus() != null
+                    ? ServiceHealthStatus.fromString(req.healthStatus()) : existing.healthStatus();
+            healthEndpoint = req.healthEndpoint() != null ? req.healthEndpoint() : existing.healthEndpoint();
         }
 
         String name              = req.name()             != null ? req.name()             : existing.name();
@@ -107,9 +121,6 @@ public class ServiceService {
         String repositoryUrl     = req.repositoryUrl()    != null ? req.repositoryUrl()    : existing.repositoryUrl();
         List<String> techStack   = req.techStack()        != null ? req.techStack()        : existing.techStack();
         String metadata          = req.metadata()         != null ? req.metadata()         : existing.metadata();
-        ServiceHealthStatus healthStatus = req.healthStatus() != null
-                ? ServiceHealthStatus.fromString(req.healthStatus()) : existing.healthStatus();
-        String healthEndpoint    = req.healthEndpoint()   != null ? req.healthEndpoint()   : existing.healthEndpoint();
         ServiceTier tier         = req.tier()             != null ? req.tier()             : existing.tier();
         List<String> tags        = req.tags()             != null ? req.tags()             : existing.tags();
         BigDecimal slaTarget     = req.slaTarget()        != null ? req.slaTarget()        : existing.slaTarget();
@@ -246,11 +257,130 @@ public class ServiceService {
 
     @Transactional
     public void upsertDiscovered(ServiceDiscoveryCommand command) {
-        if (command.healthEndpoint() != null) {
+        boolean isKubernetesCommand = "kubernetes".equals(command.source());
+
+        if (command.healthEndpoint() != null && !isKubernetesCommand) {
             healthEndpointValidator.validate(command.healthEndpoint());
         }
-        serviceRepository.upsertDiscovered(command)
-                .ifPresent(saved -> historyRepository.save(snapshot(saved, SystemActors.SYSTEM)));
+
+        // K8s uses its cluster/namespace/name triple as identity — externalId is SCM-owned.
+        // SCM uses externalId, falling back to name for first contact.
+        Optional<Service> existing;
+        if (isKubernetesCommand) {
+            existing = serviceRepository.findByK8sIdentity(
+                    command.tenantId(), command.k8sCluster(), command.k8sNamespace(), command.name());
+            if (existing.isEmpty()) {
+                existing = serviceRepository.findByNameForK8sClaim(command.tenantId(), command.name());
+            }
+        } else {
+            existing = command.externalId() != null
+                    ? serviceRepository.findByExternalId(command.tenantId(), command.externalId())
+                    : Optional.empty();
+            if (existing.isEmpty()) {
+                existing = serviceRepository.findByName(command.tenantId(), command.name());
+            }
+        }
+
+        Instant now = Instant.now();
+
+        if (existing.isPresent()) {
+            Service current = existing.get();
+            boolean isKubernetesService = "kubernetes".equals(current.source());
+
+            ServiceHealthStatus healthStatus;
+            String healthEndpoint;
+            String source;
+            // K8s never owns externalId or connectionId — those belong to SCM.
+            String externalId;
+            UUID connectionId;
+
+            if (isKubernetesService && !isKubernetesCommand) {
+                // SCM cannot override health or source of a kubernetes service.
+                healthStatus   = current.healthStatus();
+                healthEndpoint = current.healthEndpoint();
+                source         = current.source();
+                externalId     = command.externalId() != null ? command.externalId() : current.externalId();
+                connectionId   = command.connectionId() != null ? command.connectionId() : current.connectionId();
+            } else if (isKubernetesCommand) {
+                ServiceHealthStatus incoming = ServiceHealthStatus.fromString(command.healthStatus());
+                // Transient Endpoints API failure returns UNKNOWN — don't regress a service that
+                // last had a definitive status; the next resync will correct it.
+                healthStatus = (incoming == ServiceHealthStatus.UNKNOWN
+                        && current.healthStatus() != ServiceHealthStatus.UNKNOWN)
+                        ? current.healthStatus()
+                        : incoming;
+                healthEndpoint = command.healthEndpoint() != null ? command.healthEndpoint() : current.healthEndpoint();
+                source         = command.source();
+                // K8s never writes externalId or connectionId — preserve whatever SCM set.
+                externalId   = current.externalId();
+                connectionId = current.connectionId();
+            } else {
+                healthStatus   = ServiceHealthStatus.fromString(command.healthStatus());
+                healthEndpoint = command.healthEndpoint() != null ? command.healthEndpoint() : current.healthEndpoint();
+                source         = command.source();
+                externalId     = command.externalId() != null ? command.externalId() : current.externalId();
+                connectionId   = command.connectionId() != null ? command.connectionId() : current.connectionId();
+            }
+
+            String description   = command.description()   != null ? command.description()   : current.description();
+            String repositoryUrl = command.repositoryUrl() != null ? command.repositoryUrl() : current.repositoryUrl();
+            List<String> techStack = !command.techStack().isEmpty() ? command.techStack()    : current.techStack();
+            String repositoryRef = command.repositoryRef() != null ? command.repositoryRef() : current.repositoryRef();
+            String k8sCluster    = command.k8sCluster()    != null ? command.k8sCluster()    : current.k8sCluster();
+            String k8sNamespace  = command.k8sNamespace()  != null ? command.k8sNamespace()  : current.k8sNamespace();
+            String k8sDeployment = command.k8sDeployment() != null ? command.k8sDeployment() : current.k8sDeployment();
+            Instant lastCommitAt = command.lastCommitAt()  != null ? command.lastCommitAt()  : current.lastCommitAt();
+            String lastCommitSha = command.lastCommitSha() != null ? command.lastCommitSha() : current.lastCommitSha();
+
+            boolean changed = !Objects.equals(current.description(), description)
+                    || !Objects.equals(current.repositoryUrl(), repositoryUrl)
+                    || !Objects.equals(current.techStack(), techStack)
+                    || current.healthStatus() != healthStatus
+                    || !Objects.equals(current.connectionId(), connectionId)
+                    || !Objects.equals(current.source(), source)
+                    || !Objects.equals(current.repositoryRef(), repositoryRef)
+                    || !Objects.equals(current.k8sCluster(), k8sCluster)
+                    || !Objects.equals(current.k8sNamespace(), k8sNamespace)
+                    || !Objects.equals(current.k8sDeployment(), k8sDeployment)
+                    || !Objects.equals(current.healthEndpoint(), healthEndpoint)
+                    || !Objects.equals(current.lastCommitAt(), lastCommitAt)
+                    || !Objects.equals(current.lastCommitSha(), lastCommitSha)
+                    || !Objects.equals(current.externalId(), externalId);
+
+            if (!changed) return;
+
+            var updated = new Service(
+                    current.id(), current.tenantId(), current.name(),
+                    description, current.teamId(), repositoryUrl, techStack, current.metadata(),
+                    healthStatus, current.lastDeployedAt(), current.createdAt(), now, null,
+                    externalId, connectionId, source,
+                    repositoryRef, k8sCluster, k8sNamespace, k8sDeployment,
+                    healthEndpoint, lastCommitAt, lastCommitSha, current.healthCheckedAt(),
+                    current.tier(), current.tags(), current.slaTarget(),
+                    current.documentationUrl(), current.runbookUrl()
+            );
+            Service saved = serviceRepository.save(updated);
+            historyRepository.save(snapshot(saved, SystemActors.SYSTEM));
+        } else {
+            // K8s never creates a row with externalId or connectionId.
+            var created = new Service(
+                    UUID.randomUUID(), command.tenantId(), command.name(), command.description(),
+                    null, command.repositoryUrl(),
+                    command.techStack().isEmpty() ? null : command.techStack(),
+                    null,
+                    ServiceHealthStatus.fromString(command.healthStatus()),
+                    null, now, now, null,
+                    isKubernetesCommand ? null : command.externalId(),
+                    isKubernetesCommand ? null : command.connectionId(),
+                    command.source(),
+                    command.repositoryRef(), command.k8sCluster(), command.k8sNamespace(),
+                    command.k8sDeployment(), command.healthEndpoint(),
+                    command.lastCommitAt(), command.lastCommitSha(),
+                    null, null, null, null, null, null
+            );
+            Service saved = serviceRepository.save(created);
+            historyRepository.save(snapshot(saved, SystemActors.SYSTEM));
+        }
     }
 
     /**

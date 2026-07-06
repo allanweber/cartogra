@@ -3,6 +3,7 @@ package io.cartogra.gateway.api;
 import io.cartogra.gateway.api.dto.TokenResponse;
 import io.cartogra.gateway.domain.OAuthService;
 import io.cartogra.gateway.config.FrontendProperties;
+import io.cartogra.gateway.config.JwtConfig;
 import io.cartogra.gateway.infrastructure.tracing.TraceContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,11 +26,13 @@ public class OAuthController {
     private final OAuthService oauth;
     private final FrontendProperties frontend;
     private final TraceContext traceContext;
+    private final boolean cookieSecure;
 
-    public OAuthController(OAuthService oauth, FrontendProperties frontend, TraceContext traceContext) {
+    public OAuthController(OAuthService oauth, FrontendProperties frontend, TraceContext traceContext, JwtConfig jwtConfig) {
         this.oauth = oauth;
         this.frontend = frontend;
         this.traceContext = traceContext;
+        this.cookieSecure = jwtConfig.cookieSecure();
     }
 
     @GetMapping("/{provider}/start")
@@ -57,13 +60,13 @@ public class OAuthController {
             if (result.accessToken() != null) {
                 headers.add(HttpHeaders.SET_COOKIE,
                     ResponseCookie.from(COOKIE_JWT, result.accessToken())
-                        .httpOnly(true).secure(false).sameSite("Lax").path("/")
+                        .httpOnly(true).secure(cookieSecure).sameSite("Lax").path("/")
                         .maxAge(result.expiresIn()).build().toString());
             }
             if (result.refreshToken() != null) {
                 headers.add(HttpHeaders.SET_COOKIE,
                     ResponseCookie.from(COOKIE_REFRESH, result.refreshToken())
-                        .httpOnly(true).secure(false).sameSite("Lax").path("/api/auth/refresh")
+                        .httpOnly(true).secure(cookieSecure).sameSite("Lax").path("/")
                         .maxAge(30L * 24 * 3600).build().toString());
             }
             return ResponseEntity.status(HttpStatus.FOUND).headers(headers).build();

@@ -189,7 +189,7 @@ public class AuthController {
         if (tokens.refreshToken() != null) {
             response.addHeader(HttpHeaders.SET_COOKIE,
                 ResponseCookie.from(COOKIE_REFRESH, tokens.refreshToken())
-                    .httpOnly(true).secure(cookieSecure).sameSite("Lax").path("/api/auth/refresh")
+                    .httpOnly(true).secure(cookieSecure).sameSite("Lax").path("/")
                     .maxAge(30L * 24 * 3600).build().toString());
         }
     }
@@ -200,7 +200,7 @@ public class AuthController {
                 .httpOnly(true).secure(cookieSecure).path("/").maxAge(0).build().toString());
         response.addHeader(HttpHeaders.SET_COOKIE,
             ResponseCookie.from(COOKIE_REFRESH, "")
-                .httpOnly(true).secure(cookieSecure).path("/api/auth/refresh").maxAge(0).build().toString());
+                .httpOnly(true).secure(cookieSecure).path("/").maxAge(0).build().toString());
     }
 
     private String extractRefreshToken(HttpServletRequest request) {

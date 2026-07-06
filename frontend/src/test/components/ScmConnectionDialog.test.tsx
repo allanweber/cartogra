@@ -135,7 +135,7 @@ describe('ScmConnectionDialog — GitHub create', () => {
     await waitFor(() => {
       const [path, body, method] = vi.mocked(apiMutate).mock.calls[0]
       expect(method).toBe('POST')
-      expect(path).toBe('/v1/scm-connections')
+      expect(path).toBe('/v1/ingestion/scm-connections')
       expect((body as any).provider).toBe('github')
       expect((body as any).pollIntervalMinutes).toBe(5)
       const config = JSON.parse((body as any).config)

@@ -48,7 +48,7 @@ class TeamControllerTest {
     void createReturns201WithEnvelopeAndTraceHeader() throws Exception {
         when(teamService.create(TENANT, "platform")).thenReturn(team("platform"));
 
-        mockMvc.perform(post("/api/v1/teams")
+        mockMvc.perform(post("/teams")
                         .header("X-Tenant-Id", TENANT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -61,7 +61,7 @@ class TeamControllerTest {
 
     @Test
     void createWithBlankNameReturns400WithValidationError() throws Exception {
-        mockMvc.perform(post("/api/v1/teams")
+        mockMvc.perform(post("/teams")
                         .header("X-Tenant-Id", TENANT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -72,7 +72,7 @@ class TeamControllerTest {
 
     @Test
     void createMissingTenantHeaderReturns400() throws Exception {
-        mockMvc.perform(post("/api/v1/teams")
+        mockMvc.perform(post("/teams")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"platform"}"""))
@@ -84,7 +84,7 @@ class TeamControllerTest {
         UUID id = UUID.randomUUID();
         when(teamService.get(TENANT, id)).thenReturn(team("platform"));
 
-        mockMvc.perform(get("/api/v1/teams/{id}", id)
+        mockMvc.perform(get("/teams/{id}", id)
                         .header("X-Tenant-Id", TENANT))
                 .andExpect(status().isOk())
                 .andExpect(header().exists("X-Trace-Id"))
@@ -96,7 +96,7 @@ class TeamControllerTest {
         UUID id = UUID.randomUUID();
         when(teamService.get(TENANT, id)).thenThrow(new TeamNotFoundException(id));
 
-        mockMvc.perform(get("/api/v1/teams/{id}", id)
+        mockMvc.perform(get("/teams/{id}", id)
                         .header("X-Tenant-Id", TENANT))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("NOT_FOUND"));
@@ -107,7 +107,7 @@ class TeamControllerTest {
         var page = PageResult.of(List.of(team("platform"), team("backend")), 2L, 20, 0);
         when(teamService.list(TENANT, 20, 0)).thenReturn(page);
 
-        mockMvc.perform(get("/api/v1/teams")
+        mockMvc.perform(get("/teams")
                         .header("X-Tenant-Id", TENANT))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(2))
@@ -118,7 +118,7 @@ class TeamControllerTest {
     void listPassesPaginationToService() throws Exception {
         when(teamService.list(TENANT, 10, 5)).thenReturn(PageResult.of(List.of(), 0L, 10, 5));
 
-        mockMvc.perform(get("/api/v1/teams")
+        mockMvc.perform(get("/teams")
                         .header("X-Tenant-Id", TENANT)
                         .param("limit", "10")
                         .param("offset", "5"))
@@ -132,7 +132,7 @@ class TeamControllerTest {
         UUID id = UUID.randomUUID();
         when(teamService.update(TENANT, id, "platform-eng")).thenReturn(team("platform-eng"));
 
-        mockMvc.perform(put("/api/v1/teams/{id}", id)
+        mockMvc.perform(put("/teams/{id}", id)
                         .header("X-Tenant-Id", TENANT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -146,7 +146,7 @@ class TeamControllerTest {
         UUID id = UUID.randomUUID();
         when(teamService.update(eq(TENANT), eq(id), anyString())).thenThrow(new TeamNotFoundException(id));
 
-        mockMvc.perform(put("/api/v1/teams/{id}", id)
+        mockMvc.perform(put("/teams/{id}", id)
                         .header("X-Tenant-Id", TENANT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -158,7 +158,7 @@ class TeamControllerTest {
     void deleteReturns204WithTraceHeader() throws Exception {
         UUID id = UUID.randomUUID();
 
-        mockMvc.perform(delete("/api/v1/teams/{id}", id)
+        mockMvc.perform(delete("/teams/{id}", id)
                         .header("X-Tenant-Id", TENANT))
                 .andExpect(status().isNoContent())
                 .andExpect(header().exists("X-Trace-Id"));
@@ -171,7 +171,7 @@ class TeamControllerTest {
         UUID id = UUID.randomUUID();
         doThrow(new TeamNotFoundException(id)).when(teamService).delete(TENANT, id);
 
-        mockMvc.perform(delete("/api/v1/teams/{id}", id)
+        mockMvc.perform(delete("/teams/{id}", id)
                         .header("X-Tenant-Id", TENANT))
                 .andExpect(status().isNotFound());
     }

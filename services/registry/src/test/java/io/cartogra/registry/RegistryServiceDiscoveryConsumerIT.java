@@ -80,7 +80,7 @@ class RegistryServiceDiscoveryConsumerIT {
     }
 
     @Test
-    void serviceDiscovered_upsertsServiceAndWritesHistory() throws Exception {
+    void serviceDiscoveredUpsertsServiceAndWritesHistory() throws Exception {
         UUID tenantId = UUID.randomUUID();
         UUID connectionId = UUID.randomUUID();
         String externalId = "test-org/payments-service";
@@ -131,7 +131,7 @@ class RegistryServiceDiscoveryConsumerIT {
     }
 
     @Test
-    void serviceDiscovered_idempotent_secondEventUpdatesNotDuplicates() throws Exception {
+    void serviceDiscoveredIdempotentSecondEventUpdatesNotDuplicates() throws Exception {
         UUID tenantId = UUID.randomUUID();
         UUID connectionId = UUID.randomUUID();
         String externalId = "test-org/idempotent-service";
@@ -191,7 +191,7 @@ class RegistryServiceDiscoveryConsumerIT {
                 .untilAsserted(() -> {
                     HttpResponse<String> resp = HTTP.send(
                             HttpRequest.newBuilder()
-                                    .uri(URI.create("http://localhost:" + port + "/api/v1/services?source=azuredevops&limit=50"))
+                                    .uri(URI.create("http://localhost:" + port + "/api/v1/registry/services?source=azuredevops&limit=50"))
                                     .header("X-Tenant-Id", tenantId.toString())
                                     .GET()
                                     .build(),
@@ -201,8 +201,8 @@ class RegistryServiceDiscoveryConsumerIT {
                     assertThat(items.isArray()).isTrue();
                     boolean found = false;
                     for (JsonNode item : items) {
-                        if (externalId.equals(item.get("externalId").textValue())) {
-                            assertThat(item.get("source").textValue()).isEqualTo("azuredevops");
+                        if (externalId.equals(item.get("externalId").stringValue())) {
+                            assertThat(item.get("source").stringValue()).isEqualTo("azuredevops");
                             found = true;
                         }
                     }

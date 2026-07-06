@@ -17,10 +17,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest(properties = {
-        "ingestion.workers.k8s.enabled=false",
-        "spring.kafka.bootstrap-servers=localhost:9092"
-})
+@SpringBootTest(properties = "spring.kafka.bootstrap-servers=localhost:9092")
 class SyncJobRepositoryIT {
 
     @MockitoBean

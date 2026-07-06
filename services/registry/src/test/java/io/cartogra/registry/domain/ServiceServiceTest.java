@@ -361,32 +361,58 @@ class ServiceServiceTest {
     // ── upsertDiscovered ──────────────────────────────────────────────────────
 
     @Test
-    void upsertDiscoveredSavesAndRecordsHistoryWhenChanged() {
+    void upsertDiscoveredCreatesNewServiceAndRecordsHistory() {
         UUID tenantId = UUID.randomUUID();
-        var command = new ServiceDiscoveryCommand(tenantId, null, "k8s", "ext-123",
+        var command = new ServiceDiscoveryCommand(tenantId, null, "github", "ext-123",
                 "payments", null, null, null, null, null, null,
-                List.of(), "healthy", null, null, null);
+                List.of(), "HEALTHY", null, null, null);
+        when(serviceRepository.findByExternalId(tenantId, "ext-123")).thenReturn(Optional.empty());
+        when(serviceRepository.findByName(tenantId, "payments")).thenReturn(Optional.empty());
         Service saved = service(tenantId, "payments");
-        when(serviceRepository.upsertDiscovered(command)).thenReturn(Optional.of(saved));
+        when(serviceRepository.save(any())).thenReturn(saved);
 
         serviceService.upsertDiscovered(command);
 
-        verify(serviceRepository).upsertDiscovered(command);
+        verify(serviceRepository).save(any());
         verify(historyRepository).save(any());
         verifyNoInteractions(eventProducer);
     }
 
     @Test
-    void upsertDiscoveredSkipsHistoryWhenUnchanged() {
+    void upsertDiscoveredUpdatesExistingServiceAndRecordsHistory() {
         UUID tenantId = UUID.randomUUID();
-        var command = new ServiceDiscoveryCommand(tenantId, null, "k8s", "ext-123",
-                "payments", null, null, null, null, null, null,
-                List.of(), "healthy", null, null, null);
-        when(serviceRepository.upsertDiscovered(command)).thenReturn(Optional.empty());
+        var command = new ServiceDiscoveryCommand(tenantId, null, "github", "ext-123",
+                "payments", "new description", null, null, null, null, null,
+                List.of(), "HEALTHY", null, null, null);
+        Service existing = service(tenantId, "payments");
+        when(serviceRepository.findByExternalId(tenantId, "ext-123")).thenReturn(Optional.of(existing));
+        Service saved = service(tenantId, "payments");
+        when(serviceRepository.save(any())).thenReturn(saved);
 
         serviceService.upsertDiscovered(command);
 
-        verify(serviceRepository).upsertDiscovered(command);
+        verify(serviceRepository).save(any());
+        verify(historyRepository).save(any());
+    }
+
+    @Test
+    void upsertDiscoveredSkipsHistoryWhenNothingChanged() {
+        UUID tenantId = UUID.randomUUID();
+        // Command matches the existing service exactly — no field differs.
+        Service existing = service(tenantId, "payments");
+        var command = new ServiceDiscoveryCommand(tenantId, existing.connectionId(), existing.source(),
+                existing.externalId(), existing.name(), existing.description(), existing.repositoryUrl(),
+                existing.repositoryRef(), existing.k8sCluster(), existing.k8sNamespace(), existing.k8sDeployment(),
+                existing.techStack() != null ? existing.techStack() : List.of(),
+                existing.healthStatus().toDbValue(), existing.healthEndpoint(),
+                existing.lastCommitAt(), existing.lastCommitSha());
+        // service() helper has null source and null externalId, so the non-K8s path falls
+        // through to findByName (externalId is null → skip findByExternalId).
+        when(serviceRepository.findByName(tenantId, "payments")).thenReturn(Optional.of(existing));
+
+        serviceService.upsertDiscovered(command);
+
+        verify(serviceRepository, never()).save(any());
         verifyNoInteractions(historyRepository);
         verifyNoInteractions(eventProducer);
     }
@@ -394,14 +420,75 @@ class ServiceServiceTest {
     @Test
     void upsertDiscoveredValidatesHealthEndpoint() {
         UUID tenantId = UUID.randomUUID();
-        var command = new ServiceDiscoveryCommand(tenantId, null, "k8s", "ext-123",
+        var command = new ServiceDiscoveryCommand(tenantId, null, "github", "ext-123",
                 "payments", null, null, null, null, null, null,
-                List.of(), "healthy", "http://example.com/health", null, null);
-        when(serviceRepository.upsertDiscovered(command)).thenReturn(Optional.of(service(tenantId, "payments")));
+                List.of(), "HEALTHY", "http://example.com/health", null, null);
+        when(serviceRepository.findByExternalId(tenantId, "ext-123")).thenReturn(Optional.empty());
+        when(serviceRepository.findByName(tenantId, "payments")).thenReturn(Optional.empty());
+        when(serviceRepository.save(any())).thenReturn(service(tenantId, "payments"));
 
         serviceService.upsertDiscovered(command);
 
         verify(healthEndpointValidator).validate("http://example.com/health");
+    }
+
+    @Test
+    void upsertDiscoveredSkipsValidationForKubernetesSource() {
+        UUID tenantId = UUID.randomUUID();
+        var command = new ServiceDiscoveryCommand(tenantId, null, "kubernetes", null,
+                "my-svc", null, null, null, null, "prod", null,
+                List.of(), "HEALTHY", "http://my-svc.prod.svc.cluster.local:8080/actuator/health/ready", null, null);
+        when(serviceRepository.findByK8sIdentity(tenantId, null, "prod", "my-svc")).thenReturn(Optional.empty());
+        when(serviceRepository.findByNameForK8sClaim(tenantId, "my-svc")).thenReturn(Optional.empty());
+        when(serviceRepository.save(any())).thenReturn(service(tenantId, "my-svc"));
+
+        serviceService.upsertDiscovered(command);
+
+        verifyNoInteractions(healthEndpointValidator);
+    }
+
+    @Test
+    void upsertDiscoveredPreservesKubernetesHealthWhenScmSyncs() {
+        UUID tenantId = UUID.randomUUID();
+        Instant now = Instant.now();
+        Service k8sSvc = new Service(UUID.randomUUID(), tenantId, "payments", null, null, null,
+                null, null, ServiceHealthStatus.HEALTHY, null, now, now, null,
+                "prod/payments", null, "kubernetes", null, "prod", "default", "payments-deploy",
+                null, null, null, null, null, null, null, null, null);
+        var scmCommand = new ServiceDiscoveryCommand(tenantId, null, "github", "prod/payments",
+                "payments", null, "https://github.com/org/payments", null, null, null, null,
+                List.of(), "UNKNOWN", null, null, null);
+        when(serviceRepository.findByExternalId(tenantId, "prod/payments")).thenReturn(Optional.of(k8sSvc));
+        when(serviceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        serviceService.upsertDiscovered(scmCommand);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(Service.class);
+        verify(serviceRepository).save(captor.capture());
+        assertThat(captor.getValue().healthStatus()).isEqualTo(ServiceHealthStatus.HEALTHY);
+        assertThat(captor.getValue().source()).isEqualTo("kubernetes");
+    }
+
+    @Test
+    void upsertDiscoveredDoesNotDowngradeKubernetesHealthToUnknown() {
+        UUID tenantId = UUID.randomUUID();
+        Instant now = Instant.now();
+        Service k8sSvc = new Service(UUID.randomUUID(), tenantId, "payments", null, null, null,
+                null, null, ServiceHealthStatus.HEALTHY, null, now, now, null,
+                "prod/payments", null, "kubernetes", null, "prod", "default", "payments-deploy",
+                null, null, null, null, null, null, null, null, null);
+        // description differs so a save is triggered — lets us inspect the preserved health status
+        var k8sCommand = new ServiceDiscoveryCommand(tenantId, null, "kubernetes", null,
+                "payments", "updated description", null, null, "prod", "default", "payments-deploy",
+                List.of(), "UNKNOWN", null, null, null);
+        when(serviceRepository.findByK8sIdentity(tenantId, "prod", "default", "payments")).thenReturn(Optional.of(k8sSvc));
+        when(serviceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        serviceService.upsertDiscovered(k8sCommand);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(Service.class);
+        verify(serviceRepository).save(captor.capture());
+        assertThat(captor.getValue().healthStatus()).isEqualTo(ServiceHealthStatus.HEALTHY);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

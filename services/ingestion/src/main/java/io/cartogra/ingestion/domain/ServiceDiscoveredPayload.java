@@ -10,7 +10,7 @@ public record ServiceDiscoveredPayload(
         UUID tenantId,
         @Nullable UUID connectionId,
         String source,
-        String externalId,
+        @Nullable String externalId,
         String name,
         @Nullable String description,
         @Nullable String repositoryUrl,

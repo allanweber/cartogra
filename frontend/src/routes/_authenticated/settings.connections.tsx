@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query'
 import { Activity, Cloud, Hexagon, Server } from 'lucide-react'
 import { useState } from 'react'
 
+import type { KubernetesCluster } from '#/components/KubernetesClusterDialog'
+import { KubernetesClusterDialog } from '#/components/KubernetesClusterDialog'
 import type { ScmConnection } from '#/components/ScmConnectionDialog'
 import { ScmConnectionDialog } from '#/components/ScmConnectionDialog'
 import { SettingsTabsLayout } from '#/components/SettingsTabsLayout'
@@ -49,7 +51,7 @@ const PROVIDERS: ProviderItem[] = [
     label: 'Kubernetes',
     description: 'Monitor cluster health and deployments',
     icon: <Server className="size-5" />,
-    active: false,
+    active: true,
   },
   {
     key: 'opentelemetry',
@@ -77,20 +79,35 @@ const PROVIDERS: ProviderItem[] = [
 function ConnectionsPage() {
   const [dialogProvider, setDialogProvider] = useState<'github' | 'azuredevops' | null>(null)
   const [editConnection, setEditConnection] = useState<ScmConnection | undefined>(undefined)
+  const [k8sDialogOpen, setK8sDialogOpen] = useState(false)
+  const [editCluster, setEditCluster] = useState<KubernetesCluster | undefined>(undefined)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['scm-connections'],
-    queryFn: () => apiFetch<PageResult<ScmConnection>>('/v1/scm-connections'),
+    queryFn: () => apiFetch<PageResult<ScmConnection>>('/v1/ingestion/scm-connections'),
   })
 
   const { data: countsData } = useQuery({
     queryKey: ['services-counts-by-connection'],
-    queryFn: () => apiFetch<{ counts: Record<string, number> }>('/v1/services/counts-by-connection'),
+    queryFn: () => apiFetch<{ counts: Record<string, number> }>('/v1/registry/services/counts-by-connection'),
+  })
+
+  const { data: clustersData } = useQuery({
+    queryKey: ['k8s-clusters'],
+    queryFn: () => apiFetch<PageResult<KubernetesCluster>>('/v1/ingestion/k8s/clusters'),
+    refetchInterval: (query) =>
+      query.state.data?.items.some((c) => c.status === 'CONNECTING') ? 2000 : false,
   })
 
   const connections = data?.items ?? []
+  const clusters = clustersData?.items ?? []
 
   function openCreate(key: string) {
+    if (key === 'kubernetes') {
+      setEditCluster(undefined)
+      setK8sDialogOpen(true)
+      return
+    }
     setEditConnection(undefined)
     setDialogProvider(key as 'github' | 'azuredevops')
   }
@@ -98,6 +115,11 @@ function ConnectionsPage() {
   function openEdit(conn: ScmConnection) {
     setEditConnection(conn)
     setDialogProvider(conn.provider as 'github' | 'azuredevops')
+  }
+
+  function openEditCluster(cluster: KubernetesCluster) {
+    setEditCluster(cluster)
+    setK8sDialogOpen(true)
   }
 
   return (
@@ -127,6 +149,56 @@ function ConnectionsPage() {
         {!isLoading && !error && (
           <div className="rounded-lg border border-border bg-card divide-y divide-border">
             {PROVIDERS.map((p) => {
+              if (p.key === 'kubernetes') {
+                const clusterCount = clusters.length
+                return (
+                  <div key={p.key} className="flex items-center gap-4 px-5 py-4">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                      {p.icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{p.label}</p>
+                      {clusterCount > 0 ? (
+                        <p className="text-xs text-muted-foreground truncate">
+                          {clusterCount} cluster{clusterCount !== 1 ? 's' : ''} registered
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground truncate">{p.description}</p>
+                      )}
+                    </div>
+                    {clusterCount > 0 ? (
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        {clusters[0].status === 'ACTIVE' && (
+                          <span className="flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400">
+                            <span className="size-1.5 rounded-full bg-green-500" />
+                            Active
+                          </span>
+                        )}
+                        {clusters[0].status === 'CONNECTING' && (
+                          <span className="flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+                            <span className="size-1.5 rounded-full bg-amber-500" />
+                            Connecting
+                          </span>
+                        )}
+                        {clusters[0].status === 'ERROR' && (
+                          <span className="flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400">
+                            <span className="size-1.5 rounded-full bg-red-500" />
+                            Error
+                          </span>
+                        )}
+                        <Button size="sm" variant="outline" onClick={() => openEditCluster(clusters[0])}>
+                          Manage
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button size="sm" onClick={() => openCreate(p.key)}>
+                        Connect
+                      </Button>
+                    )}
+                  </div>
+                )
+              }
+
               const conn = connections.find((c) => c.provider === p.key)
               return (
                 <div key={p.key} className="flex items-center gap-4 px-5 py-4">
@@ -181,6 +253,13 @@ function ConnectionsPage() {
           connection={editConnection}
         />
       )}
+
+      <KubernetesClusterDialog
+        key={editCluster?.id ?? 'new-cluster'}
+        open={k8sDialogOpen}
+        onOpenChange={(open) => { if (!open) { setK8sDialogOpen(false); setEditCluster(undefined) } }}
+        cluster={editCluster}
+      />
     </SettingsTabsLayout>
   )
 }

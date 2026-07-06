@@ -137,7 +137,7 @@ describe('TeamDialog — create mode', () => {
     expect(screen.queryByText('Services')).not.toBeInTheDocument()
   })
 
-  it('POST /v1/teams with trimmed name on submit', async () => {
+  it('POST /v1/registry/teams with trimmed name on submit', async () => {
     vi.mocked(apiFetch).mockResolvedValue(MOCK_TEAM)
     renderDialog()
 
@@ -267,7 +267,7 @@ describe('TeamDialog — edit mode', () => {
     expect(screen.getByRole('checkbox', { name: 'Orphan Worker' })).toBeInTheDocument()
   })
 
-  it('PUT /v1/teams/:id with updated name', async () => {
+  it('PUT /v1/registry/teams/:id with updated name', async () => {
     mockEditFetch()
     renderDialog({ team: MOCK_TEAM })
 
@@ -283,7 +283,7 @@ describe('TeamDialog — edit mode', () => {
     })
   })
 
-  it('PATCH /v1/services/:id/owner when assigning an orphan', async () => {
+  it('PATCH /v1/registry/services/:id/owner when assigning an orphan', async () => {
     mockEditFetch(WITH_SERVICES)
     renderDialog({ team: MOCK_TEAM })
 
@@ -300,7 +300,7 @@ describe('TeamDialog — edit mode', () => {
     })
   })
 
-  it('DELETE /v1/services/:id/owner when unassigning an owned service', async () => {
+  it('DELETE /v1/registry/services/:id/owner when unassigning an owned service', async () => {
     mockEditFetch(WITH_SERVICES)
     renderDialog({ team: MOCK_TEAM })
 
@@ -357,7 +357,7 @@ describe('TeamDialog — edit mode', () => {
     expect(await screen.findByRole('button', { name: /confirm delete/i })).toBeInTheDocument()
   })
 
-  it('DELETE /v1/teams/:id on confirmed delete', async () => {
+  it('DELETE /v1/registry/teams/:id on confirmed delete', async () => {
     vi.mocked(apiFetch).mockImplementation((_path: string, init?: RequestInit) => {
       if (!init?.method || init.method === 'GET') return Promise.resolve(EMPTY_SERVICES)
       return Promise.resolve(undefined)

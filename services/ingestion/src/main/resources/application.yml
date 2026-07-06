@@ -28,12 +28,13 @@ ingestion:
     stale-timeout: PT30M
     reaper-interval: PT1M
     poll-interval: ${INGESTION_SYNC_POLL_INTERVAL:PT15M}
-  workers:
-    k8s:
-      enabled: true
+  k8s:
+    credentials-key: ${CLUSTER_CREDENTIALS_KEY:}
 
 server:
   port: 8085
+  servlet:
+    context-path: /api/v1/ingestion
 
 management:
   endpoints:

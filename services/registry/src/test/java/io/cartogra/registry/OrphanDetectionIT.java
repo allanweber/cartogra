@@ -1,7 +1,7 @@
 package io.cartogra.registry;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import io.cartogra.registry.infrastructure.kafka.ServiceLifecycleEventProducer;
 import io.cartogra.registry.infrastructure.kafka.TeamLifecycleEventProducer;
 import io.cartogra.test.PostgresTestSupport;
@@ -29,7 +29,7 @@ class OrphanDetectionIT {
     @MockitoBean
     TeamLifecycleEventProducer teamEventProducer;
 
-    private static final ObjectMapper MAPPER = new ObjectMapper().findAndRegisterModules();
+    private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
     private static final UUID TENANT = UUID.randomUUID();
 
@@ -48,19 +48,19 @@ class OrphanDetectionIT {
     void serviceWithNoTeamAppearsInOrphaned() throws Exception {
         // create service without a team (orphan by default)
         HttpResponse<String> created = HTTP.send(
-                post("/api/v1/services", """
+                post("/api/v1/registry/services", """
                         {"name":"orphan-svc-no-team"}"""), HttpResponse.BodyHandlers.ofString());
         assertThat(created.statusCode()).isEqualTo(201);
-        String serviceId = MAPPER.readTree(created.body()).get("data").get("id").asText();
+        String serviceId = MAPPER.readTree(created.body()).get("data").get("id").asString();
 
         // must appear in /orphaned
         HttpResponse<String> orphaned = HTTP.send(
-                get("/api/v1/services/orphaned?limit=100"), HttpResponse.BodyHandlers.ofString());
+                get("/api/v1/registry/services/orphaned?limit=100"), HttpResponse.BodyHandlers.ofString());
         assertThat(orphaned.statusCode()).isEqualTo(200);
         JsonNode items = MAPPER.readTree(orphaned.body()).get("data").get("items");
         boolean found = false;
         for (JsonNode item : items) {
-            if (serviceId.equals(item.get("id").asText())) {
+            if (serviceId.equals(item.get("id").asString())) {
                 found = true;
                 break;
             }
@@ -72,28 +72,28 @@ class OrphanDetectionIT {
     void serviceAssignedToTeamDoesNotAppearInOrphaned() throws Exception {
         // create a team
         HttpResponse<String> teamResp = HTTP.send(
-                post("/api/v1/teams", """
+                post("/api/v1/registry/teams", """
                         {"name":"orphan-test-team"}"""), HttpResponse.BodyHandlers.ofString());
         assertThat(teamResp.statusCode()).isEqualTo(201);
-        String teamId = MAPPER.readTree(teamResp.body()).get("data").get("id").asText();
+        String teamId = MAPPER.readTree(teamResp.body()).get("data").get("id").asString();
 
         // create a service, then assign it to the team
         HttpResponse<String> svcResp = HTTP.send(
-                post("/api/v1/services", """
+                post("/api/v1/registry/services", """
                         {"name":"owned-svc"}"""), HttpResponse.BodyHandlers.ofString());
         assertThat(svcResp.statusCode()).isEqualTo(201);
-        String serviceId = MAPPER.readTree(svcResp.body()).get("data").get("id").asText();
+        String serviceId = MAPPER.readTree(svcResp.body()).get("data").get("id").asString();
 
-        HTTP.send(patch("/api/v1/services/" + serviceId + "/owner",
+        HTTP.send(patch("/api/v1/registry/services/" + serviceId + "/owner",
                 "{\"teamId\":\"" + teamId + "\"}"), HttpResponse.BodyHandlers.ofString());
 
         // must NOT appear in /orphaned
         HttpResponse<String> orphaned = HTTP.send(
-                get("/api/v1/services/orphaned?limit=100"), HttpResponse.BodyHandlers.ofString());
+                get("/api/v1/registry/services/orphaned?limit=100"), HttpResponse.BodyHandlers.ofString());
         assertThat(orphaned.statusCode()).isEqualTo(200);
         JsonNode items = MAPPER.readTree(orphaned.body()).get("data").get("items");
         for (JsonNode item : items) {
-            assertThat(item.get("id").asText()).isNotEqualTo(serviceId);
+            assertThat(item.get("id").asString()).isNotEqualTo(serviceId);
         }
     }
 

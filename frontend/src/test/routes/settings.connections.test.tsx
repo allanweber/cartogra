@@ -98,7 +98,10 @@ describe('ConnectionsPage', () => {
   })
 
   it('shows Connected badge and Manage button when GitHub is connected', async () => {
-    vi.mocked(apiFetch).mockResolvedValue(WITH_GITHUB)
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path.includes('k8s')) return Promise.resolve({ items: [], total: 0, limit: 20, offset: 0 })
+      return Promise.resolve(WITH_GITHUB)
+    })
     renderPage()
     await screen.findByText('Connected')
     expect(screen.getByRole('button', { name: /manage/i })).toBeInTheDocument()
@@ -162,7 +165,10 @@ describe('ConnectionsPage', () => {
   })
 
   it('opens dialog when Manage is clicked', async () => {
-    vi.mocked(apiFetch).mockResolvedValue(WITH_GITHUB)
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path.includes('k8s')) return Promise.resolve({ items: [], total: 0, limit: 20, offset: 0 })
+      return Promise.resolve(WITH_GITHUB)
+    })
     renderPage()
     await screen.findByText('Connected')
     fireEvent.click(screen.getByRole('button', { name: /manage/i }))

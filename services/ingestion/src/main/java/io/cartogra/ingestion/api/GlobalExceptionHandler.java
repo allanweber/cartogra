@@ -3,6 +3,7 @@ package io.cartogra.ingestion.api;
 import io.cartogra.common.api.ApiError;
 import io.cartogra.common.api.ApiErrorResponse;
 import io.cartogra.common.api.ErrorCodes;
+import io.cartogra.ingestion.domain.exception.ClusterNotFoundException;
 import io.cartogra.ingestion.domain.exception.ScmConnectionNotFoundException;
 import io.cartogra.ingestion.domain.exception.WebhookConnectionNotFoundException;
 import io.cartogra.ingestion.domain.exception.WebhookSignatureInvalidException;
@@ -27,6 +28,14 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(ClusterNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleClusterNotFound(ClusterNotFoundException ex) {
+        String traceId = Span.current().getSpanContext().getTraceId();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .header("X-Trace-Id", traceId)
+                .body(new ApiErrorResponse(ApiError.of(ErrorCodes.NOT_FOUND, ex.getMessage()), traceId));
+    }
 
     @ExceptionHandler(ScmConnectionNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleScmConnectionNotFound(ScmConnectionNotFoundException ex) {

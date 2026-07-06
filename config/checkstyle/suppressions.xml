@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<!DOCTYPE suppressions PUBLIC
+        "-//Checkstyle//DTD SuppressionFilter Configuration 1.2//EN"
+        "https://checkstyle.org/dtds/suppressions_1_2.dtd">
+<suppressions>
+    <!-- Test methods use method_scenario_result naming convention -->
+    <suppress checks="MethodName" files=".*Test\.java$"/>
+    <suppress checks="MethodName" files=".*IT\.java$"/>
+</suppressions>

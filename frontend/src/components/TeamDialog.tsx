@@ -29,7 +29,7 @@ export function TeamDialog({ team, open, onOpenChange, onDeleted }: TeamDialogPr
 
   const { data: servicesPage } = useQuery({
     queryKey: ['services', 'dialog', team?.id],
-    queryFn: () => apiFetch<PageResult<RegistryService>>('/v1/services?limit=1000'),
+    queryFn: () => apiFetch<PageResult<RegistryService>>('/v1/registry/services?limit=1000'),
     enabled: isEdit && open,
   })
 
@@ -61,20 +61,20 @@ export function TeamDialog({ team, open, onOpenChange, onDeleted }: TeamDialogPr
       const toRemove = [...initialOwned].filter((id) => !selectedServiceIds.has(id))
 
       await Promise.all([
-        apiFetch<RegistryTeam>(`/v1/teams/${team!.id}`, {
+        apiFetch<RegistryTeam>(`/v1/registry/teams/${team!.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name }),
         }),
         ...toAdd.map((id) =>
-          apiFetch(`/v1/services/${id}/owner`, {
+          apiFetch(`/v1/registry/services/${id}/owner`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ teamId: team!.id }),
           }),
         ),
         ...toRemove.map((id) =>
-          apiFetch(`/v1/services/${id}/owner`, { method: 'DELETE' }),
+          apiFetch(`/v1/registry/services/${id}/owner`, { method: 'DELETE' }),
         ),
       ])
     },
@@ -88,7 +88,7 @@ export function TeamDialog({ team, open, onOpenChange, onDeleted }: TeamDialogPr
 
   const createMutation = useMutation({
     mutationFn: (name: string) =>
-      apiFetch<RegistryTeam>('/v1/teams', {
+      apiFetch<RegistryTeam>('/v1/registry/teams', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
@@ -101,7 +101,7 @@ export function TeamDialog({ team, open, onOpenChange, onDeleted }: TeamDialogPr
 
   const deleteMutation = useMutation({
     mutationFn: () =>
-      apiFetch<void>(`/v1/teams/${team!.id}`, { method: 'DELETE' }),
+      apiFetch<void>(`/v1/registry/teams/${team!.id}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['teams'] })
       queryClient.invalidateQueries({ queryKey: ['services', 'teams-page'] })

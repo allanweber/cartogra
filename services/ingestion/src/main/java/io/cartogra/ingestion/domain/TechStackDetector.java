@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 @Component
@@ -56,9 +57,9 @@ public class TechStackDetector {
 
     private void detectFromDockerfile(String content, List<String> stack) {
         content.lines()
-                .filter(line -> line.trim().toUpperCase().startsWith("FROM"))
+                .filter(line -> line.trim().toUpperCase(Locale.ROOT).startsWith("FROM"))
                 .forEach(line -> {
-                    String lower = line.toLowerCase();
+                    String lower = line.toLowerCase(Locale.ROOT);
                     if (!stack.contains("java") && lower.contains("eclipse-temurin")) addIfAbsent(stack, "java");
                     if (lower.contains("node:")) addIfAbsent(stack, "javascript");
                     if (lower.contains("python:")) addIfAbsent(stack, "python");

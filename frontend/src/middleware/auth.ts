@@ -39,12 +39,27 @@ async function tryServerRefresh(
   }
 }
 
+function decodeJwtExp(jwt: string): number | null {
+  try {
+    const payload = JSON.parse(
+      Buffer.from(jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8'),
+    )
+    return typeof payload.exp === 'number' ? payload.exp : null
+  } catch {
+    return null
+  }
+}
+
 export const sessionMiddleware = createMiddleware({ type: 'function' }).server(async ({ next }) => {
   let user: AuthUser | null = null
+  let tokenExpiresAt: number | null = null
 
   const jwt = getCookie('jwt')
   if (jwt) {
     user = await fetchUserInfo(jwt)
+    if (user) {
+      tokenExpiresAt = decodeJwtExp(jwt)
+    }
   }
 
   if (!user) {
@@ -63,10 +78,13 @@ export const sessionMiddleware = createMiddleware({ type: 'function' }).server(a
           httpOnly: true,
           secure: true,
           sameSite: 'lax',
-          path: '/api/auth/refresh',
+          path: '/',
           maxAge: 30 * 24 * 3600,
         })
         user = await fetchUserInfo(tokens.accessToken)
+        if (user) {
+          tokenExpiresAt = Math.floor(Date.now() / 1000) + tokens.expiresIn
+        }
       }
     }
   }
@@ -82,5 +100,5 @@ export const sessionMiddleware = createMiddleware({ type: 'function' }).server(a
     }
   }
 
-  return next({ context: { user } })
+  return next({ context: { user, tokenExpiresAt } })
 })

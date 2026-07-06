@@ -1,3 +1,7 @@
+server:
+  servlet:
+    context-path: /api/v1/registry
+
 spring:
   kafka:
     bootstrap-servers: localhost:9092

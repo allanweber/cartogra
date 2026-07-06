@@ -81,12 +81,12 @@ function TeamsPage() {
 
   const { data: teamsPage, isLoading, error } = useQuery({
     queryKey: ['teams'],
-    queryFn: () => apiFetch<PageResult<RegistryTeam>>('/v1/teams?limit=200'),
+    queryFn: () => apiFetch<PageResult<RegistryTeam>>('/v1/registry/teams?limit=200'),
   })
 
   const { data: servicesPage } = useQuery({
     queryKey: ['services', 'teams-page'],
-    queryFn: () => apiFetch<PageResult<RegistryService>>('/v1/services?limit=1000'),
+    queryFn: () => apiFetch<PageResult<RegistryService>>('/v1/registry/services?limit=1000'),
   })
 
   const teams = teamsPage?.items ?? []

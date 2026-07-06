@@ -80,9 +80,9 @@ export function ScmConnectionDialog({ open, onOpenChange, provider, connection }
           ? buildConfig(provider, { org: ghOrg, token: ghToken }, connection)
           : buildConfig(provider, { org: azUrl, pat: azPat }, connection)
       if (isEdit) {
-        return apiMutate<ScmConnection>(`/v1/scm-connections/${connection.id}`, { config, pollIntervalMinutes: pollInterval }, 'PUT')
+        return apiMutate<ScmConnection>(`/v1/ingestion/scm-connections/${connection.id}`, { config, pollIntervalMinutes: pollInterval }, 'PUT')
       }
-      return apiMutate<ScmConnection>('/v1/scm-connections', { provider, config, syncScheduler: true, pollIntervalMinutes: pollInterval }, 'POST')
+      return apiMutate<ScmConnection>('/v1/ingestion/scm-connections', { provider, config, syncScheduler: true, pollIntervalMinutes: pollInterval }, 'POST')
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scm-connections'] })
@@ -93,7 +93,7 @@ export function ScmConnectionDialog({ open, onOpenChange, provider, connection }
   const disconnectMutation = useMutation({
     mutationFn: () => {
       if (!connection) throw new Error('No connection to disconnect')
-      return apiFetch<void>(`/v1/scm-connections/${connection.id}`, { method: 'DELETE' })
+      return apiFetch<void>(`/v1/ingestion/scm-connections/${connection.id}`, { method: 'DELETE' })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scm-connections'] })

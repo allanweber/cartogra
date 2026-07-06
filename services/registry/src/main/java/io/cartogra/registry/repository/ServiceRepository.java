@@ -28,7 +28,17 @@ public interface ServiceRepository {
 
     Optional<Service> findByExternalId(UUID tenantId, String externalId);
 
-    Optional<Service> upsertDiscovered(ServiceDiscoveryCommand command);
+    Optional<Service> findByName(UUID tenantId, String name);
+
+    /** Looks up by the K8s cluster/namespace/name triple — the stable identity for kubernetes-sourced services. */
+    Optional<Service> findByK8sIdentity(UUID tenantId, String k8sCluster, String k8sNamespace, String name);
+
+    /**
+     * Name fallback for first-contact K8s discovery. Only matches rows that have NOT yet been
+     * claimed by any K8s identity (source != 'kubernetes' OR k8s_cluster IS NULL), preventing
+     * two distinct K8s services with the same name from merging into one row.
+     */
+    Optional<Service> findByNameForK8sClaim(UUID tenantId, String name);
 
     /** Cross-tenant query; excludes K8s-sourced services and deleted rows. */
     List<Service> findAllWithHealthEndpoint();

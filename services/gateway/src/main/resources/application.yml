@@ -17,26 +17,15 @@ spring:
       server:
         webmvc:
           routes:
-            # Public webhook receiver (no JWT) — must be matched before the registry catch-all.
-            - id: ingestion-webhooks
+            # All ingestion traffic under a single namespace.
+            - id: ingestion
               uri: ${INGESTION_URI:http://localhost:8085}
               predicates:
-                - Path=/api/v1/ingestion/webhooks/**
-              filters:
-                - StripPrefix=3
-              order: -20
-            # SCM connection CRUD lives in the ingestion service.
-            - id: ingestion-scm-connections
-              uri: ${INGESTION_URI:http://localhost:8085}
-              predicates:
-                - Path=/api/v1/scm-connections/**
-              filters:
-                - StripPrefix=2
-              order: -10
+                - Path=/api/v1/ingestion/**
             - id: registry
               uri: ${REGISTRY_URI:http://localhost:8081}
               predicates:
-                - Path=/api/v1/**
+                - Path=/api/v1/registry/**
 
 server:
   port: 8080

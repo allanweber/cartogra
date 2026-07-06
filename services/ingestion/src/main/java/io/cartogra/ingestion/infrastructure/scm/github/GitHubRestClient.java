@@ -7,6 +7,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.web.client.RestClient;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -102,7 +103,7 @@ class GitHubRestClient {
 
     private static String decodeBase64(String encoded) {
         String cleaned = encoded.replace("\n", "").replace(" ", "");
-        return new String(java.util.Base64.getDecoder().decode(cleaned));
+        return new String(java.util.Base64.getDecoder().decode(cleaned), StandardCharsets.UTF_8);
     }
 
     private static List<Map<String, Object>> parseCodeOwners(String content) {

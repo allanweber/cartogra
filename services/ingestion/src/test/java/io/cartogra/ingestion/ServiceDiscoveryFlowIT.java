@@ -47,7 +47,6 @@ class ServiceDiscoveryFlowIT {
         registry.add("spring.datasource.password", PostgresTestSupport.POSTGRES::getPassword);
         registry.add("spring.flyway.schemas", () -> "ingestion");
         registry.add("spring.flyway.default-schema", () -> "ingestion");
-        registry.add("ingestion.workers.k8s.enabled", () -> "false");
         registry.add("spring.kafka.bootstrap-servers", KafkaTestSupport.KAFKA::getBootstrapServers);
     }
 

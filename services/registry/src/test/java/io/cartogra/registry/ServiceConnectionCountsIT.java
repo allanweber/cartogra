@@ -64,7 +64,7 @@ class ServiceConnectionCountsIT {
 
         HttpResponse<String> resp = HTTP.send(
                 HttpRequest.newBuilder()
-                        .uri(URI.create("http://localhost:" + port + "/api/v1/services/counts-by-connection"))
+                        .uri(URI.create("http://localhost:" + port + "/api/v1/registry/services/counts-by-connection"))
                         .header("X-Tenant-Id", tenantId.toString())
                         .GET().build(),
                 HttpResponse.BodyHandlers.ofString());
@@ -92,7 +92,7 @@ class ServiceConnectionCountsIT {
 
         HttpResponse<String> resp = HTTP.send(
                 HttpRequest.newBuilder()
-                        .uri(URI.create("http://localhost:" + port + "/api/v1/services/counts-by-connection"))
+                        .uri(URI.create("http://localhost:" + port + "/api/v1/registry/services/counts-by-connection"))
                         .header("X-Tenant-Id", tenantId.toString())
                         .GET().build(),
                 HttpResponse.BodyHandlers.ofString());
@@ -113,7 +113,7 @@ class ServiceConnectionCountsIT {
 
         HttpResponse<String> resp = HTTP.send(
                 HttpRequest.newBuilder()
-                        .uri(URI.create("http://localhost:" + port + "/api/v1/services/counts-by-connection"))
+                        .uri(URI.create("http://localhost:" + port + "/api/v1/registry/services/counts-by-connection"))
                         .header("X-Tenant-Id", tenant1.toString())
                         .GET().build(),
                 HttpResponse.BodyHandlers.ofString());
@@ -129,7 +129,7 @@ class ServiceConnectionCountsIT {
 
         HttpResponse<String> resp = HTTP.send(
                 HttpRequest.newBuilder()
-                        .uri(URI.create("http://localhost:" + port + "/api/v1/services/counts-by-connection"))
+                        .uri(URI.create("http://localhost:" + port + "/api/v1/registry/services/counts-by-connection"))
                         .header("X-Tenant-Id", tenantId.toString())
                         .GET().build(),
                 HttpResponse.BodyHandlers.ofString());

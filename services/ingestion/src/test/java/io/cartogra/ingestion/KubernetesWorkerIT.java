@@ -11,10 +11,13 @@ import io.fabric8.kubernetes.api.model.EndpointsBuilder;
 import io.fabric8.kubernetes.api.model.Namespace;
 import io.fabric8.kubernetes.api.model.NamespaceBuilder;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
+import io.fabric8.kubernetes.api.model.Service;
+import io.fabric8.kubernetes.api.model.ServiceBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.dsl.MixedOperation;
 import io.fabric8.kubernetes.client.dsl.NonNamespaceOperation;
 import io.fabric8.kubernetes.client.dsl.Resource;
+import io.fabric8.kubernetes.client.dsl.ServiceResource;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -54,7 +57,6 @@ class KubernetesWorkerIT {
         registry.add("spring.datasource.password", PostgresTestSupport.POSTGRES::getPassword);
         registry.add("spring.flyway.schemas", () -> "ingestion");
         registry.add("spring.flyway.default-schema", () -> "ingestion");
-        registry.add("ingestion.workers.k8s.enabled", () -> "false");
         registry.add("spring.kafka.bootstrap-servers", KafkaTestSupport.KAFKA::getBootstrapServers);
     }
 
@@ -102,10 +104,22 @@ class KubernetesWorkerIT {
         doReturn(epResource).when(epNsOps).withName(SVC_NAME);
         doReturn(endpoints).when(epResource).get();
 
-        KubernetesWorker worker = new KubernetesWorker(kubernetesClient, serviceDiscoveredProducer);
+        Service svc = new ServiceBuilder()
+                .withMetadata(new ObjectMetaBuilder().withName(SVC_NAME).withNamespace(NS).build())
+                .build();
+        MixedOperation<Service, ?, ServiceResource<Service>> svcOps = mock(MixedOperation.class);
+        NonNamespaceOperation<Service, ?, ServiceResource<Service>> svcNsOps = mock(NonNamespaceOperation.class);
+        ServiceResource<Service> svcResource = mock(ServiceResource.class);
+        doReturn(svcOps).when(kubernetesClient).services();
+        doReturn(svcNsOps).when(svcOps).inNamespace(NS);
+        doReturn(svcResource).when(svcNsOps).withName(SVC_NAME);
+        doReturn(svc).when(svcResource).get();
+
+        KubernetesWorker worker = new KubernetesWorker(kubernetesClient, serviceDiscoveredProducer, "test-cluster");
         worker.handleServiceEvent(NS, SVC_NAME);
 
-        String expectedKey = NS + "/" + SVC_NAME;
+        // K8s key is cluster/namespace/name (externalId is null for K8s sources).
+        String expectedKey = "test-cluster/" + NS + "/" + SVC_NAME;
         List<ConsumerRecord<String, String>> messages = pollTopic(
                 "cartogra.ingestion.service.discovered", bootstrapServers, expectedKey);
 
@@ -114,8 +128,9 @@ class KubernetesWorkerIT {
         JsonNode payload = envelope.get("payload");
         assertThat(objectMapper.treeToValue(payload.get("source"), String.class)).isEqualTo("kubernetes");
         assertThat(objectMapper.treeToValue(payload.get("healthStatus"), String.class)).isEqualTo("HEALTHY");
-        assertThat(objectMapper.treeToValue(payload.get("externalId"), String.class)).isEqualTo(NS + "/" + SVC_NAME);
         assertThat(objectMapper.treeToValue(payload.get("tenantId"), String.class)).isEqualTo(TENANT_ID.toString());
+        // K8s worker no longer sets externalId — identity is the k8sCluster/k8sNamespace/name triple.
+        assertThat(payload.get("externalId").isNull()).isTrue();
     }
 
     private List<ConsumerRecord<String, String>> pollTopic(String topic, String servers, String key) {

@@ -95,7 +95,7 @@ describe('RegisterServiceDrawer', () => {
 
   it('POST is called with name and techStack on submit', async () => {
     vi.mocked(apiFetch).mockImplementation((path: string) => {
-      if (path.includes('/v1/teams')) return Promise.resolve(EMPTY_TEAMS)
+      if (path.includes('/v1/registry/teams')) return Promise.resolve(EMPTY_TEAMS)
       return Promise.resolve(CREATED_SERVICE)
     })
     renderDrawer()
@@ -119,7 +119,7 @@ describe('RegisterServiceDrawer', () => {
 
   it('POST sends null for empty optional fields', async () => {
     vi.mocked(apiFetch).mockImplementation((path: string) => {
-      if (path.includes('/v1/teams')) return Promise.resolve(EMPTY_TEAMS)
+      if (path.includes('/v1/registry/teams')) return Promise.resolve(EMPTY_TEAMS)
       return Promise.resolve(CREATED_SERVICE)
     })
     renderDrawer()
@@ -141,7 +141,7 @@ describe('RegisterServiceDrawer', () => {
 
   it('displays error with traceId when POST fails', async () => {
     vi.mocked(apiFetch).mockImplementation((path: string) => {
-      if (path.includes('/v1/teams')) return Promise.resolve(EMPTY_TEAMS)
+      if (path.includes('/v1/registry/teams')) return Promise.resolve(EMPTY_TEAMS)
       return Promise.reject(new ApiError('CONFLICT', 'Name already exists', 'trace-reg-1'))
     })
     renderDrawer()
@@ -155,7 +155,7 @@ describe('RegisterServiceDrawer', () => {
 
   it('calls onOpenChange(false) after successful registration', async () => {
     vi.mocked(apiFetch).mockImplementation((path: string) => {
-      if (path.includes('/v1/teams')) return Promise.resolve(EMPTY_TEAMS)
+      if (path.includes('/v1/registry/teams')) return Promise.resolve(EMPTY_TEAMS)
       return Promise.resolve(CREATED_SERVICE)
     })
     const onOpenChange = vi.fn()
@@ -169,7 +169,7 @@ describe('RegisterServiceDrawer', () => {
 
   it('error clears when drawer is closed and reopened', async () => {
     vi.mocked(apiFetch).mockImplementation((path: string) => {
-      if (path.includes('/v1/teams')) return Promise.resolve(EMPTY_TEAMS)
+      if (path.includes('/v1/registry/teams')) return Promise.resolve(EMPTY_TEAMS)
       return Promise.reject(new ApiError('SERVER_ERROR', 'kaboom', 'trace-2'))
     })
     const onOpenChange = vi.fn()
@@ -195,7 +195,7 @@ describe('RegisterServiceDrawer', () => {
 
   it('form fields are empty when drawer is closed and reopened', async () => {
     vi.mocked(apiFetch).mockImplementation((path: string) => {
-      if (path.includes('/v1/teams')) return Promise.resolve(EMPTY_TEAMS)
+      if (path.includes('/v1/registry/teams')) return Promise.resolve(EMPTY_TEAMS)
       return Promise.resolve(CREATED_SERVICE)
     })
     const onOpenChange = vi.fn()

@@ -10,7 +10,7 @@ import { Button } from '#/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
 import { Skeleton } from '#/components/ui/skeleton'
 import { ApiError, apiFetch } from '#/lib/api'
-import { normalizeHealth } from '#/lib/registry-types'
+import { normalizeHealth, SCM_LABEL } from '#/lib/registry-types'
 import { cn } from '#/lib/utils'
 
 import type { PageResult, RegistryService, RegistryTeam, ServiceHealth } from '#/lib/registry-types'
@@ -127,12 +127,13 @@ function ServiceDetailPage() {
 
   const { data: service, isLoading, error } = useQuery({
     queryKey: ['service', serviceId],
-    queryFn: () => apiFetch<RegistryService>(`/v1/services/${serviceId}`),
+    queryFn: () => apiFetch<RegistryService>(`/v1/registry/services/${serviceId}`),
+    refetchInterval: 5000,
   })
 
   const { data: teamsPage } = useQuery({
     queryKey: ['teams'],
-    queryFn: () => apiFetch<PageResult<RegistryTeam>>('/v1/teams?limit=200'),
+    queryFn: () => apiFetch<PageResult<RegistryTeam>>('/v1/registry/teams?limit=200'),
   })
 
   const teamMap = new Map((teamsPage?.items ?? []).map((t) => [t.id, t.name]))
@@ -325,58 +326,121 @@ function ServiceDetailPage() {
 
                 <Card>
                   <CardHeader className="pb-2 pt-5">
-                    <CardTitle className="text-sm font-semibold">Metadata</CardTitle>
+                    <CardTitle className="text-sm font-semibold">Details</CardTitle>
                   </CardHeader>
-                  <CardContent className="pb-5 pt-0">
-                    <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                  <CardContent className="space-y-5 pb-5 pt-0">
+
+                    {/* Identity */}
+                    <MetaSection>
                       <MetaField label="Service ID" value={service.id} mono />
+                      {service.source && <MetaField label="Source" value={SCM_LABEL[service.source] ?? service.source} />}
                       {service.tier && <MetaField label="Tier" value={service.tier} capitalize />}
-                      <MetaField label="Health" value={health} capitalize />
-                      <MetaField label="Risk Score" value={String(riskScore)} />
+                      {service.slaTarget != null && <MetaField label="SLA Target" value={`${service.slaTarget}%`} />}
                       {teamName && (
                         <div className="space-y-0.5">
                           <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Owner Team</p>
-                          <Link
-                            to="/teams"
-                            className="block font-medium hover:text-primary hover:underline"
-                          >
+                          <Link to="/teams" className="block font-medium hover:text-primary hover:underline">
                             {teamName}
                           </Link>
                         </div>
                       )}
-                      {service.k8sCluster && <MetaField label="K8s Cluster" value={service.k8sCluster} />}
-                      {service.k8sNamespace && <MetaField label="Namespace" value={service.k8sNamespace} />}
-                      {service.k8sDeployment && <MetaField label="Deployment" value={service.k8sDeployment} />}
-                      {service.slaTarget != null && (
-                        <MetaField label="SLA Target" value={`${service.slaTarget}%`} />
+                      {service.tags && service.tags.length > 0 && (
+                        <div className="col-span-2 space-y-1.5">
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Tags</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {service.tags.map((tag) => (
+                              <span key={tag} className="rounded-md border border-border bg-background px-2 py-0.5 text-xs font-medium text-foreground">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
                       )}
-                      {service.documentationUrl && (
-                        <div className="space-y-0.5">
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Documentation</p>
+                    </MetaSection>
+
+                    {/* Health */}
+                    <MetaSection label="Health">
+                      <MetaField label="Status" value={health} capitalize />
+                      <MetaField label="Risk Score" value={String(riskScore)} />
+                      {service.healthCheckedAt && (
+                        <MetaField label="Last Checked" value={relativeTime(service.healthCheckedAt)} />
+                      )}
+                      {service.healthEndpoint && (
+                        <div className="col-span-2 space-y-0.5">
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Health Endpoint</p>
                           <a
-                            href={service.documentationUrl}
+                            href={service.healthEndpoint}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="block truncate text-xs text-primary hover:underline"
+                            className="block truncate font-mono text-xs text-primary hover:underline"
                           >
-                            {service.documentationUrl}
+                            {service.healthEndpoint}
                           </a>
                         </div>
                       )}
-                      {service.runbookUrl && (
-                        <div className="space-y-0.5">
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Runbook</p>
-                          <a
-                            href={service.runbookUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="block truncate text-xs text-primary hover:underline"
-                          >
-                            {service.runbookUrl}
-                          </a>
-                        </div>
-                      )}
-                    </div>
+                    </MetaSection>
+
+                    {/* Repository */}
+                    {(service.repositoryUrl || service.repositoryRef || service.lastCommitAt || service.lastDeployedAt) && (
+                      <MetaSection label="Repository">
+                        {service.repositoryRef && <MetaField label="Branch / Ref" value={service.repositoryRef} mono />}
+                        {service.lastDeployedAt && <MetaField label="Last Deploy" value={relativeTime(service.lastDeployedAt)} />}
+                        {service.lastCommitAt && <MetaField label="Last Commit" value={relativeTime(service.lastCommitAt)} />}
+                        {service.lastCommitSha && <MetaField label="Commit SHA" value={service.lastCommitSha.slice(0, 7)} mono />}
+                        {service.repositoryUrl && (
+                          <div className="col-span-2 space-y-0.5">
+                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Repository</p>
+                            <a
+                              href={service.repositoryUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block truncate text-xs text-primary hover:underline"
+                            >
+                              {service.repositoryUrl}
+                            </a>
+                          </div>
+                        )}
+                      </MetaSection>
+                    )}
+
+                    {/* Kubernetes */}
+                    {(service.k8sCluster || service.k8sNamespace || service.k8sDeployment || service.externalId) && (
+                      <MetaSection label="Kubernetes">
+                        {service.k8sCluster && <MetaField label="Cluster" value={service.k8sCluster} />}
+                        {service.k8sNamespace && <MetaField label="Namespace" value={service.k8sNamespace} mono />}
+                        {service.k8sDeployment && <MetaField label="Deployment" value={service.k8sDeployment} mono />}
+                        {service.externalId && <MetaField label="External ID" value={service.externalId} mono />}
+                      </MetaSection>
+                    )}
+
+                    {/* Links */}
+                    {(service.documentationUrl || service.runbookUrl) && (
+                      <MetaSection label="Links">
+                        {service.documentationUrl && (
+                          <div className="space-y-0.5">
+                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Documentation</p>
+                            <a href={service.documentationUrl} target="_blank" rel="noopener noreferrer" className="block truncate text-xs text-primary hover:underline">
+                              {service.documentationUrl}
+                            </a>
+                          </div>
+                        )}
+                        {service.runbookUrl && (
+                          <div className="space-y-0.5">
+                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Runbook</p>
+                            <a href={service.runbookUrl} target="_blank" rel="noopener noreferrer" className="block truncate text-xs text-primary hover:underline">
+                              {service.runbookUrl}
+                            </a>
+                          </div>
+                        )}
+                      </MetaSection>
+                    )}
+
+                    {/* Timestamps */}
+                    <MetaSection label="Timestamps">
+                      <MetaField label="Registered" value={relativeTime(service.createdAt)} />
+                      <MetaField label="Updated" value={relativeTime(service.updatedAt)} />
+                    </MetaSection>
+
                   </CardContent>
                 </Card>
               </div>
@@ -475,6 +539,17 @@ function InsightCard({ insight }: { insight: Insight }) {
         {insight.label}
       </p>
       <p className="mt-0.5 text-xs text-muted-foreground">{insight.description}</p>
+    </div>
+  )
+}
+
+function MetaSection({ label, children }: { label?: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-3">
+      {label && <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/60">{label}</p>}
+      <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
+        {children}
+      </div>
     </div>
   )
 }

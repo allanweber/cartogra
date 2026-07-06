@@ -69,28 +69,28 @@ class CodeownersFlowIT {
     }
 
     @Test
-    void ownershipResolved_autoAssignsTeamToService() throws Exception {
+    void ownershipResolvedAutoAssignsTeamToService() throws Exception {
         UUID tenantId = UUID.randomUUID();
 
         // Create team
         HttpResponse<String> teamResp = HTTP.send(
-                post("/api/v1/teams", """
+                post("/api/v1/registry/teams", """
                         {"name":"platform-team"}""", tenantId),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(teamResp.statusCode()).isEqualTo(201);
-        String teamId = objectMapper.readTree(teamResp.body()).get("data").get("id").textValue();
+        String teamId = objectMapper.readTree(teamResp.body()).get("data").get("id").stringValue();
 
         // Create service with a repositoryUrl that contains the full path
         HttpResponse<String> svcResp = HTTP.send(
-                post("/api/v1/services", """
+                post("/api/v1/registry/services", """
                         {"name":"codeowners-test-svc","repositoryUrl":"https://github.com/acme/platform-api"}""", tenantId),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(svcResp.statusCode()).isEqualTo(201);
-        String serviceId = objectMapper.readTree(svcResp.body()).get("data").get("id").textValue();
+        String serviceId = objectMapper.readTree(svcResp.body()).get("data").get("id").stringValue();
 
         // Verify service has no team yet
         JsonNode svcData = objectMapper.readTree(
-                HTTP.send(get("/api/v1/services/" + serviceId, tenantId), HttpResponse.BodyHandlers.ofString()).body())
+                HTTP.send(get("/api/v1/registry/services/" + serviceId, tenantId), HttpResponse.BodyHandlers.ofString()).body())
                 .get("data");
         JsonNode initialTeamId = svcData.get("teamId");
         assertThat(initialTeamId == null || initialTeamId.isNull()).isTrue();
@@ -116,12 +116,12 @@ class CodeownersFlowIT {
                 .pollInterval(Duration.ofMillis(300))
                 .untilAsserted(() -> {
                     HttpResponse<String> check = HTTP.send(
-                            get("/api/v1/services/" + serviceId, tenantId),
+                            get("/api/v1/registry/services/" + serviceId, tenantId),
                             HttpResponse.BodyHandlers.ofString());
                     assertThat(check.statusCode()).isEqualTo(200);
                     JsonNode updated = objectMapper.readTree(check.body()).get("data");
                     assertThat(updated.get("teamId")).isNotNull();
-                    assertThat(updated.get("teamId").textValue()).isEqualTo(teamId);
+                    assertThat(updated.get("teamId").stringValue()).isEqualTo(teamId);
                 });
     }
 

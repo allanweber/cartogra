@@ -98,7 +98,7 @@ function renderDrawer(
 
 function mockApiFetch(putResponse: RegistryService = MOCK_SERVICE) {
   vi.mocked(apiFetch).mockImplementation((path: string) => {
-    if (path.includes('/v1/teams')) return Promise.resolve(MOCK_TEAMS)
+    if (path.includes('/v1/registry/teams')) return Promise.resolve(MOCK_TEAMS)
     if (path.includes('/owner')) return Promise.resolve(putResponse)
     return Promise.resolve(putResponse)
   })
@@ -185,7 +185,7 @@ describe('EditServiceDrawer', () => {
 
   it('displays PUT error with traceId', async () => {
     vi.mocked(apiFetch).mockImplementation((path: string) => {
-      if (path.includes('/v1/teams')) return Promise.resolve(MOCK_TEAMS)
+      if (path.includes('/v1/registry/teams')) return Promise.resolve(MOCK_TEAMS)
       return Promise.reject(new ApiError('CONFLICT', 'Name already taken', 'trace-edit-1'))
     })
     renderDrawer()
@@ -209,7 +209,7 @@ describe('EditServiceDrawer', () => {
   it('does not close while save is in progress', async () => {
     let resolvePut!: (v: RegistryService) => void
     vi.mocked(apiFetch).mockImplementation((path: string) => {
-      if (path.includes('/v1/teams')) return Promise.resolve(MOCK_TEAMS)
+      if (path.includes('/v1/registry/teams')) return Promise.resolve(MOCK_TEAMS)
       return new Promise<RegistryService>((res) => { resolvePut = res })
     })
     const onOpenChange = vi.fn()
@@ -227,7 +227,7 @@ describe('EditServiceDrawer', () => {
 
   it('error clears when drawer is closed and reopened', async () => {
     vi.mocked(apiFetch).mockImplementation((path: string) => {
-      if (path.includes('/v1/teams')) return Promise.resolve(MOCK_TEAMS)
+      if (path.includes('/v1/registry/teams')) return Promise.resolve(MOCK_TEAMS)
       return Promise.reject(new ApiError('SERVER_ERROR', 'boom', 'trace-1'))
     })
     const onOpenChange = vi.fn()

@@ -21,5 +21,5 @@ COPY --from=builder --chown=appuser:appuser /build/services/registry/build/libs/
 
 USER appuser
 EXPOSE 8081
-HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 CMD curl -f http://localhost:8081/actuator/health/liveness || exit 1
+HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 CMD curl -f http://localhost:8081/api/v1/registry/actuator/health/liveness || exit 1
 ENTRYPOINT ["sh", "-c", "exec java ${JAVA_OPTS} -XX:MaxRAMPercentage=75 -jar app.jar"]

@@ -13,22 +13,28 @@ export class ApiError extends Error {
   }
 }
 
-// Singleton promise — concurrent 401s all await the same refresh attempt.
-let refreshPromise: Promise<boolean> | null = null
+export type RefreshResult = { expiresIn: number } | null
 
-async function tryRefresh(baseUrl: string): Promise<boolean> {
+// Singleton promise — concurrent 401s all await the same refresh attempt.
+let refreshPromise: Promise<RefreshResult> | null = null
+
+export async function tryRefresh(baseUrl: string): Promise<RefreshResult> {
   if (!refreshPromise) {
     refreshPromise = fetch(`${baseUrl}/api/auth/refresh`, {
       method: 'POST',
       credentials: 'include',
     })
-      .then((r) => {
-        if (!r.ok) console.warn('[auth] token refresh failed with status', r.status)
-        return r.ok
+      .then(async (r) => {
+        if (!r.ok) {
+          console.warn('[auth] token refresh failed with status', r.status)
+          return null
+        }
+        const body = (await r.json()) as { data?: { expiresIn: number } }
+        return body.data ? { expiresIn: body.data.expiresIn } : null
       })
       .catch((err) => {
         console.warn('[auth] token refresh error', err)
-        return false
+        return null
       })
       .finally(() => {
         refreshPromise = null
@@ -93,6 +99,9 @@ export async function apiFetch<T>(
     if (!refreshed) {
       redirectToLogin()
       throw new ApiError('UNAUTHORIZED', 'Session expired.', response.headers.get('X-Trace-Id') ?? 'unknown')
+    }
+    if (refreshed.expiresIn) {
+      useAuthStore.getState().setTokenExpiresAt(Math.floor(Date.now() / 1000) + refreshed.expiresIn)
     }
     // Retry once with fresh cookies — browser sends the new jwt cookie automatically.
     try {

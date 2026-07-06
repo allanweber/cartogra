@@ -12,10 +12,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '#/components/ui/input'
 import { Skeleton } from '#/components/ui/skeleton'
 import { ApiError, apiFetch } from '#/lib/api'
-import { normalizeHealth } from '#/lib/registry-types'
+import { normalizeHealth, SCM_LABEL } from '#/lib/registry-types'
 import { cn } from '#/lib/utils'
 
-import type { PageResult, RegistryService, RegistryTeam, ServiceHealth } from '#/lib/registry-types'
+import type { PageResult, RegistryService, RegistryTeam, ScmSource, ServiceHealth } from '#/lib/registry-types'
 
 export const Route = createFileRoute('/_authenticated/catalog/')({
   component: CatalogPage,
@@ -28,6 +28,15 @@ const HEALTH_OPTIONS: Array<{ label: string; value: ServiceHealth | 'all'; dbVal
   { label: 'Healthy', value: 'healthy', dbValue: 'HEALTHY' },
   { label: 'Degraded', value: 'degraded', dbValue: 'DEGRADED' },
   { label: 'Down', value: 'down', dbValue: 'UNHEALTHY' },
+]
+
+const SOURCE_OPTIONS: Array<{ label: string; value: ScmSource | 'all' }> = [
+  { label: 'All sources', value: 'all' },
+  { label: 'Kubernetes', value: 'kubernetes' },
+  { label: 'GitHub', value: 'github' },
+  { label: 'GitLab', value: 'gitlab' },
+  { label: 'Azure DevOps', value: 'azuredevops' },
+  { label: 'Bitbucket', value: 'bitbucket' },
 ]
 
 function relativeTime(dateStr: string | null): string | null {
@@ -72,6 +81,7 @@ function CatalogPage() {
   const [query, setQuery] = useState('')
   const [teamFilter, setTeamFilter] = useState('')
   const [healthFilter, setHealthFilter] = useState<ServiceHealth | 'all'>('all')
+  const [sourceFilter, setSourceFilter] = useState<ScmSource | 'all'>('all')
   const [techFilter, setTechFilter] = useState<Set<string>>(new Set())
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [page, setPage] = useState(0)
@@ -80,6 +90,7 @@ function CatalogPage() {
   const dQuery  = useDebounce(query, 500)
   const dTeam   = useDebounce(teamFilter, 500)
   const dHealth = useDebounce(healthFilter, 500)
+  const dSource = useDebounce(sourceFilter, 500)
   const dTech   = useDebounce(techFilter, 500)
   const dPage   = useDebounce(page, 500)
 
@@ -88,7 +99,7 @@ function CatalogPage() {
   const UNOWNED_SENTINEL = '__unowned__'
 
   const { data: pageResult, isLoading, error } = useQuery({
-    queryKey: ['services', dTeam, dHealth, [...dTech].sort(), dQuery, dPage],
+    queryKey: ['services', dTeam, dHealth, dSource, [...dTech].sort(), dQuery, dPage],
     queryFn: () => {
       const params = new URLSearchParams()
       if (dTeam === UNOWNED_SENTINEL) {
@@ -97,22 +108,24 @@ function CatalogPage() {
         params.set('teamId', dTeam)
       }
       if (healthDbValue) params.set('health', healthDbValue)
+      if (dSource !== 'all') params.set('source', dSource)
       dTech.forEach((t) => params.append('techStack', t))
       if (dQuery.trim()) params.set('search', dQuery.trim())
       params.set('limit', String(LIMIT))
       params.set('offset', String(dPage * LIMIT))
-      return apiFetch<PageResult<RegistryService>>(`/v1/services?${params}`)
+      return apiFetch<PageResult<RegistryService>>(`/v1/registry/services?${params}`)
     },
+    refetchInterval: 5000,
   })
 
   const { data: teamsPage } = useQuery({
     queryKey: ['teams'],
-    queryFn: () => apiFetch<PageResult<RegistryTeam>>('/v1/teams?limit=200'),
+    queryFn: () => apiFetch<PageResult<RegistryTeam>>('/v1/registry/teams?limit=200'),
   })
 
   const { data: techStacks } = useQuery({
     queryKey: ['tech-stacks'],
-    queryFn: () => apiFetch<string[]>('/v1/services/tech-stacks'),
+    queryFn: () => apiFetch<string[]>('/v1/registry/services/tech-stacks'),
   })
 
   const teams = teamsPage?.items ?? []
@@ -123,12 +136,13 @@ function CatalogPage() {
 
   function resetPage() { setPage(0) }
 
-  const hasActiveFilters = query !== '' || teamFilter !== '' || healthFilter !== 'all' || techFilter.size > 0
+  const hasActiveFilters = query !== '' || teamFilter !== '' || healthFilter !== 'all' || sourceFilter !== 'all' || techFilter.size > 0
 
   function clearAllFilters() {
     setQuery('')
     setTeamFilter('')
     setHealthFilter('all')
+    setSourceFilter('all')
     setTechFilter(new Set())
     setPage(0)
   }
@@ -143,6 +157,7 @@ function CatalogPage() {
     ? 'Unowned'
     : (teams.find((t) => t.id === teamFilter)?.name ?? 'All teams')
   const selectedHealthLabel = HEALTH_OPTIONS.find((f) => f.value === healthFilter)?.label ?? 'All health'
+  const selectedSourceLabel = SOURCE_OPTIONS.find((f) => f.value === sourceFilter)?.label ?? 'All sources'
   const selectedTechLabel = techFilter.size > 0 ? `All tech (${techFilter.size})` : 'All tech'
 
   const pageDescription = isLoading ? undefined : `${total} service${total !== 1 ? 's' : ''}`
@@ -221,6 +236,29 @@ function CatalogPage() {
               {HEALTH_OPTIONS.map((opt) => (
                 <DropdownMenuItem key={opt.value} onSelect={() => { setHealthFilter(opt.value); resetPage() }} className="flex items-center gap-2">
                   <CheckMark checked={healthFilter === opt.value} />
+                  {opt.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className={cn(
+                  'flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                  sourceFilter !== 'all' ? 'border-primary bg-primary/5 text-foreground' : 'border-input bg-background text-foreground',
+                )}
+                aria-label="Filter by source"
+              >
+                {selectedSourceLabel}
+                <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden="true" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {SOURCE_OPTIONS.map((opt) => (
+                <DropdownMenuItem key={opt.value} onSelect={() => { setSourceFilter(opt.value); resetPage() }} className="flex items-center gap-2">
+                  <CheckMark checked={sourceFilter === opt.value} />
                   {opt.label}
                 </DropdownMenuItem>
               ))}
@@ -441,9 +479,16 @@ function ServiceCard({ service, teamName }: { service: RegistryService; teamName
 
         {/* Footer */}
         <div className="mt-auto flex items-center justify-between border-t border-border pt-2">
-          <span className="text-xs text-muted-foreground">
-            {deploy ? `Deploy: ${deploy}` : 'Never deployed'}
-          </span>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-muted-foreground">
+              {deploy ? `Deploy: ${deploy}` : 'Never deployed'}
+            </span>
+            {service.source && (
+              <span className="text-[10px] text-muted-foreground">
+                {SCM_LABEL[service.source] ?? service.source}
+              </span>
+            )}
+          </div>
           <span className={cn('text-sm font-semibold tabular-nums', riskColorClass(risk))}>
             {risk}
           </span>
@@ -462,7 +507,7 @@ function ServiceCard({ service, teamName }: { service: RegistryService; teamName
   )
 }
 
-const LIST_COLS = 'grid-cols-[minmax(0,2.5fr)_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,0.65fr)]'
+const LIST_COLS = 'grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,0.9fr)_minmax(0,0.65fr)]'
 
 function ServiceListTable({ services, teamMap }: { services: RegistryService[]; teamMap: Map<string, string> }) {
   return (
@@ -470,6 +515,7 @@ function ServiceListTable({ services, teamMap }: { services: RegistryService[]; 
       <div className={cn('grid gap-x-4 border-b border-border bg-muted/50 px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground', LIST_COLS)}>
         <span>Service</span>
         <span>Health</span>
+        <span>Source</span>
         <span>Owner</span>
         <span>Tech</span>
         <span>Last deploy</span>
@@ -502,6 +548,11 @@ function ServiceListRow({ service, teamName }: { service: RegistryService; teamN
         </div>
         <div className="flex items-center">
           <HealthCell health={health} />
+        </div>
+        <div className="flex items-center">
+          <span className="text-sm text-muted-foreground">
+            {service.source ? (SCM_LABEL[service.source] ?? service.source) : '—'}
+          </span>
         </div>
         <div className="flex items-center">
           {isOrphan ? (

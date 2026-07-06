@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.cartogra.ingestion.infrastructure.kafka.SyncCommandConsumer;
 import io.cartogra.ingestion.infrastructure.kafka.SyncResultProducer;
+import io.cartogra.ingestion.repository.ClusterRepository;
 import io.cartogra.test.PostgresTestSupport;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -18,8 +19,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = {"spring.flyway.enabled=false", "ingestion.workers.k8s.enabled=false",
-                      "spring.kafka.bootstrap-servers=localhost:9092"})
+        properties = {"spring.flyway.enabled=false", "spring.kafka.bootstrap-servers=localhost:9092"})
 class ActuatorHealthIntegrationTest {
 
     @MockitoBean
@@ -27,6 +27,9 @@ class ActuatorHealthIntegrationTest {
 
     @MockitoBean
     SyncCommandConsumer syncCommandConsumer;
+
+    @MockitoBean
+    ClusterRepository clusterRepository;
 
     @DynamicPropertySource
     static void datasourceProperties(DynamicPropertyRegistry registry) {
@@ -41,7 +44,7 @@ class ActuatorHealthIntegrationTest {
     @Test
     void healthEndpointReturnsUp() throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:" + port + "/actuator/health"))
+                .uri(URI.create("http://localhost:" + port + "/api/v1/ingestion/actuator/health"))
                 .GET()
                 .build();
         HttpResponse<String> response = HttpClient.newHttpClient()

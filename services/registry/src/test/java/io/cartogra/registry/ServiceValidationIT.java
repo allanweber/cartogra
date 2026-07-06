@@ -1,6 +1,6 @@
 package io.cartogra.registry;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import io.cartogra.registry.infrastructure.kafka.ServiceLifecycleEventProducer;
 import io.cartogra.test.PostgresTestSupport;
 import org.junit.jupiter.api.Test;
@@ -24,7 +24,7 @@ class ServiceValidationIT {
     @MockitoBean
     ServiceLifecycleEventProducer eventProducer;
 
-    private static final ObjectMapper MAPPER = new ObjectMapper().findAndRegisterModules();
+    private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
     private static final UUID TENANT = UUID.randomUUID();
 
@@ -42,80 +42,80 @@ class ServiceValidationIT {
     @Test
     void blankServiceNameReturns400() throws Exception {
         HttpResponse<String> resp = HTTP.send(
-                post("/api/v1/services", """
+                post("/api/v1/registry/services", """
                         {"name":""}"""), HttpResponse.BodyHandlers.ofString());
         assertThat(resp.statusCode()).isEqualTo(400);
-        assertThat(MAPPER.readTree(resp.body()).get("error").get("code").asText()).isEqualTo("VALIDATION_ERROR");
+        assertThat(MAPPER.readTree(resp.body()).get("error").get("code").asString()).isEqualTo("VALIDATION_ERROR");
     }
 
     @Test
     void duplicateServiceNameReturns409() throws Exception {
-        HTTP.send(post("/api/v1/services", """
+        HTTP.send(post("/api/v1/registry/services", """
                 {"name":"dup-svc-name"}"""), HttpResponse.BodyHandlers.ofString());
 
         HttpResponse<String> dup = HTTP.send(
-                post("/api/v1/services", """
+                post("/api/v1/registry/services", """
                         {"name":"dup-svc-name"}"""), HttpResponse.BodyHandlers.ofString());
         assertThat(dup.statusCode()).isEqualTo(409);
-        assertThat(MAPPER.readTree(dup.body()).get("error").get("code").asText()).isEqualTo("CONFLICT");
+        assertThat(MAPPER.readTree(dup.body()).get("error").get("code").asString()).isEqualTo("CONFLICT");
     }
 
     @Test
     void updateToExistingServiceNameReturns409() throws Exception {
-        HTTP.send(post("/api/v1/services", """
+        HTTP.send(post("/api/v1/registry/services", """
                 {"name":"svc-rename-target"}"""), HttpResponse.BodyHandlers.ofString());
         HttpResponse<String> second = HTTP.send(
-                post("/api/v1/services", """
+                post("/api/v1/registry/services", """
                         {"name":"svc-rename-source"}"""), HttpResponse.BodyHandlers.ofString());
-        String secondId = MAPPER.readTree(second.body()).get("data").get("id").asText();
+        String secondId = MAPPER.readTree(second.body()).get("data").get("id").asString();
 
         HttpResponse<String> resp = HTTP.send(
-                put("/api/v1/services/" + secondId, """
+                put("/api/v1/registry/services/" + secondId, """
                         {"name":"svc-rename-target","description":"updated"}"""),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(resp.statusCode()).isEqualTo(409);
-        assertThat(MAPPER.readTree(resp.body()).get("error").get("code").asText()).isEqualTo("CONFLICT");
+        assertThat(MAPPER.readTree(resp.body()).get("error").get("code").asString()).isEqualTo("CONFLICT");
     }
 
     @Test
     void invalidEnumTierValueReturns400() throws Exception {
         HttpResponse<String> created = HTTP.send(
-                post("/api/v1/services", """
+                post("/api/v1/registry/services", """
                         {"name":"enum-validation-svc"}"""), HttpResponse.BodyHandlers.ofString());
-        String id = MAPPER.readTree(created.body()).get("data").get("id").asText();
+        String id = MAPPER.readTree(created.body()).get("data").get("id").asString();
 
         HttpResponse<String> resp = HTTP.send(
-                put("/api/v1/services/" + id, """
+                put("/api/v1/registry/services/" + id, """
                         {"name":"enum-validation-svc","tier":"critical"}"""),
                 HttpResponse.BodyHandlers.ofString());
 
         assertThat(resp.statusCode()).isEqualTo(400);
         var error = MAPPER.readTree(resp.body()).get("error");
-        assertThat(error.get("code").asText()).isEqualTo("VALIDATION_ERROR");
-        assertThat(error.get("message").asText()).contains("critical");
-        assertThat(error.get("message").asText()).contains("CRITICAL");
+        assertThat(error.get("code").asString()).isEqualTo("VALIDATION_ERROR");
+        assertThat(error.get("message").asString()).contains("critical");
+        assertThat(error.get("message").asString()).contains("CRITICAL");
     }
 
     @Test
     void missingTenantIdHeaderReturns400() throws Exception {
         HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:" + port + "/api/v1/services"))
+                .uri(URI.create("http://localhost:" + port + "/api/v1/registry/services"))
                 .header("Content-Type", "application/json")
                 .GET()
                 .build();
         HttpResponse<String> resp = HTTP.send(req, HttpResponse.BodyHandlers.ofString());
         assertThat(resp.statusCode()).isEqualTo(400);
-        assertThat(MAPPER.readTree(resp.body()).get("error").get("code").asText()).isEqualTo("BAD_REQUEST");
+        assertThat(MAPPER.readTree(resp.body()).get("error").get("code").asString()).isEqualTo("BAD_REQUEST");
     }
 
     @Test
     void updateNonExistentServiceReturns404() throws Exception {
         HttpResponse<String> resp = HTTP.send(
-                put("/api/v1/services/" + UUID.randomUUID(), """
+                put("/api/v1/registry/services/" + UUID.randomUUID(), """
                         {"name":"ghost-svc","description":"does not exist"}"""),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(resp.statusCode()).isEqualTo(404);
-        assertThat(MAPPER.readTree(resp.body()).get("error").get("code").asText()).isEqualTo("NOT_FOUND");
+        assertThat(MAPPER.readTree(resp.body()).get("error").get("code").asString()).isEqualTo("NOT_FOUND");
     }
 
     private HttpRequest post(String path, String body) {

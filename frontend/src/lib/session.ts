@@ -3,6 +3,11 @@ import { createServerFn } from '@tanstack/react-start'
 import { sessionMiddleware } from '#/middleware/auth'
 import type { AuthUser } from '#/stores/useAuthStore'
 
+export interface SessionData {
+  user: AuthUser
+  tokenExpiresAt: number | null
+}
+
 const SESSION_COOKIE = 'user_session'
 
 export function writeSessionCookie(user: AuthUser, maxAgeSeconds: number) {
@@ -15,4 +20,6 @@ export function clearSessionCookie() {
 
 export const fetchSession = createServerFn({ method: 'GET' })
   .middleware([sessionMiddleware])
-  .handler(({ context }): AuthUser | null => context.user)
+  .handler(({ context }): SessionData | null =>
+    context.user ? { user: context.user, tokenExpiresAt: context.tokenExpiresAt } : null,
+  )

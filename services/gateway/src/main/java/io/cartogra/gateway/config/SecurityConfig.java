@@ -79,7 +79,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/userinfo", "/api/auth/tenant").authenticated()
                 .requestMatchers("/api/auth/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
-                .requestMatchers("/api/v1/scm-connections/**").hasRole("ADMIN")
+                .requestMatchers("/api/v1/ingestion/scm-connections/**").hasRole("ADMIN")
+                .requestMatchers("/api/v1/ingestion/k8s/clusters/**").hasRole("ADMIN")
                 .requestMatchers("/api/v1/**").hasAnyRole("VIEWER", "MEMBER", "ADMIN")
                 .anyRequest().authenticated())
             .exceptionHandling(e -> e

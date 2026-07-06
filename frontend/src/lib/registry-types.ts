@@ -1,7 +1,7 @@
 export type ServiceHealth = 'healthy' | 'degraded' | 'down'
 export type ServiceTierValue = 'CRITICAL' | 'STANDARD' | 'EXPERIMENTAL'
 export type ServiceHealthStatus = 'HEALTHY' | 'DEGRADED' | 'UNHEALTHY' | 'PROBE_AUTH_FAILED' | 'UNKNOWN'
-export type ScmSource = 'github' | 'gitlab' | 'azuredevops' | 'bitbucket'
+export type ScmSource = 'github' | 'gitlab' | 'azuredevops' | 'bitbucket' | 'kubernetes'
 
 export interface RegistryService {
   id: string
@@ -62,4 +62,5 @@ export const SCM_LABEL: Record<string, string> = {
   gitlab: 'GitLab',
   azuredevops: 'Azure DevOps',
   bitbucket: 'Bitbucket',
+  kubernetes: 'Kubernetes',
 }

@@ -21,6 +21,7 @@ interface CreateServicePayload {
   teamId: string | null
   repositoryUrl: string | null
   techStack: string[]
+  healthEndpoint: string | null
 }
 
 function Label({ children, required, optional }: { children: React.ReactNode; required?: boolean; optional?: boolean }) {
@@ -42,14 +43,14 @@ export function RegisterServiceDrawer({ open, onOpenChange }: RegisterServiceDra
 
   const { data: teamsPage } = useQuery({
     queryKey: ['teams'],
-    queryFn: () => apiFetch<PageResult<RegistryTeam>>('/v1/teams?limit=200'),
+    queryFn: () => apiFetch<PageResult<RegistryTeam>>('/v1/registry/teams?limit=200'),
     enabled: open,
   })
   const teams = teamsPage?.items ?? []
 
   const mutation = useMutation({
     mutationFn: (payload: CreateServicePayload) =>
-      apiFetch<RegistryService>('/v1/services', {
+      apiFetch<RegistryService>('/v1/registry/services', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -67,6 +68,7 @@ export function RegisterServiceDrawer({ open, onOpenChange }: RegisterServiceDra
       description: '',
       teamId: '',
       repositoryUrl: '',
+      healthEndpoint: '',
       techStack: [] as string[],
     },
     onSubmit: ({ value }) => {
@@ -75,6 +77,7 @@ export function RegisterServiceDrawer({ open, onOpenChange }: RegisterServiceDra
         description: value.description || null,
         teamId: value.teamId || null,
         repositoryUrl: value.repositoryUrl || null,
+        healthEndpoint: value.healthEndpoint || null,
         techStack: value.techStack,
       })
     },
@@ -193,6 +196,22 @@ export function RegisterServiceDrawer({ open, onOpenChange }: RegisterServiceDra
                 )}
               </form.Field>
             </div>
+
+            <form.Field name="healthEndpoint">
+              {(field) => (
+                <Field>
+                  <Label optional>Health endpoint</Label>
+                  <Input
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    onBlur={field.handleBlur}
+                    placeholder="https://example.com/actuator/health"
+                    type="url"
+                    maxLength={2048}
+                  />
+                </Field>
+              )}
+            </form.Field>
 
             <form.Field name="techStack">
               {(field) => (
