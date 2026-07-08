@@ -13,6 +13,7 @@ import { Button } from '#/components/ui/button'
 import { Skeleton } from '#/components/ui/skeleton'
 import { apiFetch } from '#/lib/api'
 import type { PageResult } from '#/lib/registry-types'
+import { useWizardStore } from '#/stores/useWizardStore'
 import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/_authenticated/settings/connections')({
@@ -77,6 +78,7 @@ const PROVIDERS: ProviderItem[] = [
 ]
 
 function ConnectionsPage() {
+  const openWizard = useWizardStore((s) => s.openWizard)
   const [dialogProvider, setDialogProvider] = useState<'github' | 'azuredevops' | null>(null)
   const [editConnection, setEditConnection] = useState<ScmConnection | undefined>(undefined)
   const [k8sDialogOpen, setK8sDialogOpen] = useState(false)
@@ -125,11 +127,20 @@ function ConnectionsPage() {
   return (
     <SettingsTabsLayout>
       <div className="space-y-2">
-        <div className="mb-1">
-          <h2 className="text-sm font-semibold">SCM & Platform Connections</h2>
-          <p className="text-xs text-muted-foreground">
-            Connect your source control and infrastructure providers to start syncing services.
-          </p>
+        <div className="mb-1 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-semibold">SCM & Platform Connections</h2>
+            <p className="text-xs text-muted-foreground">
+              Connect your source control and infrastructure providers to start syncing services.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={openWizard}
+          >
+            Setup wizard
+          </Button>
         </div>
 
         {isLoading && (

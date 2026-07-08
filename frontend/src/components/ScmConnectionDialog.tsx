@@ -29,6 +29,7 @@ interface Props {
   onOpenChange: (open: boolean) => void
   provider: 'github' | 'azuredevops'
   connection?: ScmConnection
+  onSuccess?: () => void
 }
 
 function buildConfig(
@@ -49,7 +50,7 @@ function buildConfig(
   return JSON.stringify(base)
 }
 
-export function ScmConnectionDialog({ open, onOpenChange, provider, connection }: Props) {
+export function ScmConnectionDialog({ open, onOpenChange, provider, connection, onSuccess }: Props) {
   const isEdit = !!connection
   const queryClient = useQueryClient()
 
@@ -87,6 +88,7 @@ export function ScmConnectionDialog({ open, onOpenChange, provider, connection }
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scm-connections'] })
       onOpenChange(false)
+      onSuccess?.()
     },
   })
 

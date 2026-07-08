@@ -1,6 +1,7 @@
 import { Outlet, createFileRoute, redirect } from '@tanstack/react-router'
 import { useEffect, useRef } from 'react'
 
+import { OnboardingWizard } from '#/components/OnboardingWizard'
 import { tryRefresh } from '#/lib/api'
 import { fetchSession } from '#/lib/session'
 import { useAuthStore } from '#/stores/useAuthStore'
@@ -79,5 +80,10 @@ function AuthenticatedLayout() {
     hydrateWith(user, tokenExpiresAt ?? undefined)
   }, [])
 
-  return <Outlet />
+  return (
+    <>
+      <Outlet />
+      <OnboardingWizard />
+    </>
+  )
 }
