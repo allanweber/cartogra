@@ -2,6 +2,7 @@ package io.cartogra.gateway.config;
 
 import io.cartogra.common.api.ApiError;
 import io.cartogra.common.api.ApiErrorResponse;
+import io.cartogra.gateway.infrastructure.security.JwtAuthentication;
 import io.cartogra.gateway.infrastructure.tracing.TraceContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -15,6 +16,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import tools.jackson.databind.ObjectMapper;
@@ -59,22 +61,27 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
 
         boolean isAuthPath = path.startsWith("/api/auth/");
-        String clientIp = resolveClientIp(request);
+        String bucketScope = resolveBucketScope(request);
 
-        if (isAllowed(clientIp, isAuthPath)) {
+        if (isAllowed(bucketScope, isAuthPath)) {
             filterChain.doFilter(request, response);
         } else {
             write429(response, isAuthPath);
         }
     }
 
-    private String resolveClientIp(HttpServletRequest request) {
+    private String resolveBucketScope(HttpServletRequest request) {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth instanceof JwtAuthentication jwtAuth) {
+            return "tenant:" + jwtAuth.getTenantId();
+        }
         String ip = request.getRemoteAddr();
-        return (ip != null) ? ip : "unknown";
+        return "ip:" + ((ip != null) ? ip : "unknown");
     }
 
-    private boolean isAllowed(String clientIp, boolean isAuthPath) {
-        String bucket = isAuthPath ? "rate_limit:auth:" + clientIp : "rate_limit:default:" + clientIp;
+    private boolean isAllowed(String bucketScope, boolean isAuthPath) {
+        String routeClass = isAuthPath ? "auth" : "default";
+        String bucket = "rate_limit:" + bucketScope + ":" + routeClass;
         List<String> keys = List.of(bucket + ".tokens", bucket + ".timestamp");
         List<String> args = List.of(
             String.valueOf(isAuthPath ? props.authReplenishRate() : props.defaultReplenishRate()),

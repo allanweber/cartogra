@@ -3,15 +3,8 @@
 
 ## Phase 1 — Gateway MVP auth + Registry
 
-
-### Catalog UI wired to real APIs
-
-
-- [ ] Add the onboarding modal on start
-
 ### Production hardening
 
-- [ ] 1.68 [CODE] Per-tenant Redis rate limits. Extend `RateLimitWebFilter` to key on `rate_limit:tenant:<tenantId>:<route>` for authenticated routes (fall back to per-IP only for unauthenticated paths). Per-tenant limits configurable per plan tier from config (Phase 3 wires plan resolution; until then read from `application.yml` defaults). ITs assert 429 + `Retry-After` for both authenticated and unauthenticated paths.
 - [ ] 1.69 [INFRA] Graceful shutdown across all JVM services. Set `server.shutdown=graceful` and `spring.lifecycle.timeout-per-shutdown-phase=30s` in every `application.yml`. IT verifies in-flight Kafka consumer commits complete before pod terminates and HTTP requests in flight finish cleanly.
 - [ ] 1.70 [CODE] Resilience4j circuit breakers on every gateway `RestClient` (registry, topology, contract, intelligence). Expose breaker state in `/actuator/health`. IT proves the breaker opens on repeated downstream failures and surfaces a domain error mapped to the envelope.
 - [ ] 1.71 [UI] Verify the root error boundary claimed in 0.37. If absent, add a React class component with `componentDidCatch`, display `traceId` from the caught `ApiError`, add a Vitest snapshot test. If present, add the `traceId` rendering + test.
