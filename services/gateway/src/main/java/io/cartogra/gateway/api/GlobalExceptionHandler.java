@@ -7,6 +7,7 @@ import io.cartogra.gateway.domain.exception.ConflictException;
 import io.cartogra.gateway.domain.exception.InvalidOAuthStateException;
 import io.cartogra.gateway.domain.exception.InvalidOtpException;
 import io.cartogra.gateway.domain.exception.NotFoundException;
+import io.cartogra.gateway.domain.exception.ServiceUnavailableException;
 import io.cartogra.gateway.domain.exception.UnauthorizedException;
 import io.cartogra.gateway.domain.exception.UnverifiedEmailException;
 import io.cartogra.gateway.infrastructure.tracing.TraceContext;
@@ -71,6 +72,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleNotFound(NotFoundException ex) {
         log.warn("Not found: {}", ex.getMessage());
         return error(HttpStatus.NOT_FOUND, ErrorCodes.NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(ServiceUnavailableException.class)
+    public ResponseEntity<ApiErrorResponse> handleServiceUnavailable(ServiceUnavailableException ex) {
+        log.warn("Service unavailable: {}", ex.getMessage());
+        return error(HttpStatus.SERVICE_UNAVAILABLE, ErrorCodes.SERVICE_UNAVAILABLE, ex.getMessage());
     }
 
     @ExceptionHandler(NoResourceFoundException.class)

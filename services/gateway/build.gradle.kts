@@ -34,6 +34,9 @@ dependencies {
     // Rate limiting (blocking Redis)
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
 
+    // Circuit breakers on proxied routes
+    implementation("org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j")
+
     testImplementation(project(":shared:test-support"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")

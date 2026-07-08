@@ -24,10 +24,22 @@ spring:
               uri: ${INGESTION_URI:http://localhost:8085}
               predicates:
                 - Path=/api/v1/ingestion/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    id: ingestion
+                    fallbackPath: /internal/fallback/ingestion
+                    statusCodes: 500,501,502,503,504
             - id: registry
               uri: ${REGISTRY_URI:http://localhost:8081}
               predicates:
                 - Path=/api/v1/registry/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    id: registry
+                    fallbackPath: /internal/fallback/registry
+                    statusCodes: 500,501,502,503,504
 
 server:
   port: 8080
@@ -68,6 +80,21 @@ management:
     metrics:
       export:
         url: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/metrics
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+    instances:
+      registry:
+        base-config: default
+      ingestion:
+        base-config: default
 
 app:
   frontend:

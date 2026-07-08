@@ -183,49 +183,87 @@ Every message payload MUST match this envelope:
 
 ## Internal Service Communication (Gateway → Services)
 
-The Gateway calls downstream services via REST using Spring's `RestClient`. This is the only approved synchronous inter-service communication mechanism. gRPC is deferred to Phase 6 research.
+The Gateway proxies to downstream services declaratively via Spring Cloud Gateway (webmvc) routes — there is no per-service `RestClient` client class. This is the only approved synchronous inter-service communication mechanism. gRPC is deferred to Phase 6 research. See ADR-0024.
 
 **Rules:**
-- Inject a configured `RestClient` bean per downstream service (base URL from env var)
-- Propagate the W3C `traceparent` header on every outbound request
-- Forward the gateway-derived `X-Tenant-Id` header on every call
-- Catch HTTP errors and map them to domain exceptions at the infrastructure boundary — never let `RestClientException` reach the REST layer
-- OTel auto-instrumentation covers `RestClient` via the Spring Boot starter — no manual interceptor required
+- Declare each downstream as a route in `application.yml` (base URL from env var, path predicate)
+- Attach a Resilience4j `CircuitBreaker` gateway filter to every route — instance name identical to the route id (e.g. `registry`, `ingestion`)
+- Count 5xx responses AND connection exceptions/timeouts as breaker failures
+- On open breaker / call failure, forward to a fallback route that throws `ServiceUnavailableException` (carries the downstream service name) — mapped by `GlobalExceptionHandler` to HTTP 503 + `ErrorCodes.SERVICE_UNAVAILABLE`, never a raw proxy error
+- Expose breaker state under `/actuator/health` as a detail only — an open breaker must NOT flip the aggregate status (the gateway is healthy; failing readiness would pull it from the LB and worsen the incident)
+- W3C `traceparent` propagation and `X-Tenant-Id` forwarding are handled by the existing filter chain (`GlobalTracingFilter`, `TenantInjectionFilter`) — no per-route configuration needed
+- OTel auto-instrumentation covers Spring Cloud Gateway routes via the Spring Boot starter — no manual interceptor required
+
+```yaml
+# application.yml
+spring:
+  cloud:
+    gateway:
+      server:
+        webmvc:
+          routes:
+            - id: registry
+              uri: ${REGISTRY_URI:http://localhost:8081}
+              predicates:
+                - Path=/api/v1/registry/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    id: registry
+                    fallbackPath: /internal/fallback/registry
+                    statusCodes: 500,501,502,503,504
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+    instances:
+      registry:
+        base-config: default
+```
+
+Notes on gotchas hit wiring this up: the `CircuitBreaker` filter's `args` bind to bean properties, so the keys are `id`/`fallbackPath`/`statusCodes` (not `name`/`fallbackUri` — those don't bind and fail silently or error at startup); `statusCodes` takes numeric HTTP codes only, not series names like `SERVER_ERROR`. A bare `instances.<name>: {}` with no `base-config` does NOT inherit `configs.default` in practice — set `base-config: default` explicitly per instance. `resilience4j-spring-boot3`'s own `CircuitBreakersHealthIndicatorAutoConfiguration` (and its `register-health-indicator`/`allow-health-indicator-to-fail` properties) silently never activates on Spring Boot 4 — it's `@ConditionalOnClass`-gated on the old `org.springframework.boot.actuate.health.HealthIndicator`, which moved to `org.springframework.boot.health.contributor.HealthIndicator` in the Boot 4 actuator restructuring. Write a plain `HealthIndicator` bean against the new package instead (see below) — don't rely on the resilience4j starter for this until it ships Boot 4 support.
 
 ```java
-// infrastructure/client/RegistryClient.java
-@Component
-public class RegistryClient {
+// infrastructure/health/CircuitBreakersHealthIndicator.java — Boot 4's new health package, always UP
+@Component("circuitBreakersHealthIndicator")
+public class CircuitBreakersHealthIndicator implements HealthIndicator {
 
-    private final RestClient restClient;
+    private final CircuitBreakerRegistry circuitBreakerRegistry;
 
-    public RegistryClient(@Value("${services.registry.base-url}") String baseUrl) {
-        this.restClient = RestClient.builder().baseUrl(baseUrl).build();
+    public CircuitBreakersHealthIndicator(CircuitBreakerRegistry circuitBreakerRegistry) {
+        this.circuitBreakerRegistry = circuitBreakerRegistry;
     }
 
-    public ServiceDto getService(UUID tenantId, UUID serviceId) {
-        return restClient.get()
-            .uri("/services/{id}", serviceId)
-            .header("X-Tenant-Id", tenantId.toString())
-            .retrieve()
-            .onStatus(HttpStatusCode::isError, (req, res) -> {
-                throw new InfrastructureException("registry call failed: " + res.getStatusCode());
-            })
-            .body(new ParameterizedTypeReference<ApiResponse<ServiceDto>>() {})
-            .data();
+    @Override
+    public Health health() {
+        Map<String, Object> details = new LinkedHashMap<>();
+        for (CircuitBreaker cb : circuitBreakerRegistry.getAllCircuitBreakers()) {
+            details.put(cb.getName(), Map.of("circuitBreakerState", cb.getState().name()));
+        }
+        return Health.up().withDetails(details).build(); // always UP — state is a detail, never drags down the aggregate
     }
 }
 ```
 
-Configure base URLs in `application.yml`:
+```java
+// api/CircuitBreakerFallbackController.java
+@RestController
+public class CircuitBreakerFallbackController {
 
-```yaml
-services:
-  registry:
-    base-url: ${REGISTRY_BASE_URL:http://localhost:8081}
-  topology:
-    base-url: ${TOPOLOGY_BASE_URL:http://localhost:8082}
+    @RequestMapping("/internal/fallback/{service}")
+    public void fallback(@PathVariable String service) {
+        throw new ServiceUnavailableException(service);
+    }
+}
 ```
+
+New route for a not-yet-built service (topology/contract/intelligence): add the route + a same-named breaker instance together — don't route to a service with no breaker.
 
 ## Auth
 

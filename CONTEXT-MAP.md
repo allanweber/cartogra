@@ -34,7 +34,7 @@
         ║  Issues JWT · Rate-limits Redis  ║
         ║  Injects X-Tenant-Id · Proxies   ║
         ╚═══════════╤══════════════════════╝
-                    │  REST (RestClient + traceparent)
+                    │  REST (Spring Cloud Gateway declarative proxy + traceparent)
           ┌─────────┼──────────────────────┐
           │         │                      │
           ▼         ▼                      ▼
@@ -78,10 +78,10 @@
 
 | Upstream (U) | Downstream (D) | Relationship | Integration point |
 |---|---|---|---|
-| Identity & Access | Service Catalog | **Open Host Service / Conformist** | REST proxy; Gateway forwards `X-Tenant-Id` derived from JWT |
-| Identity & Access | Topology | Open Host Service / Conformist | REST proxy (Phase 2) |
-| Identity & Access | Contract | Open Host Service / Conformist | REST proxy (Phase 3) |
-| Identity & Access | Intelligence | Open Host Service / Conformist | REST proxy (Phase 4) |
+| Identity & Access | Service Catalog | **Open Host Service / Conformist** | Declarative reverse proxy (Spring Cloud Gateway route, circuit-breaker guarded); Gateway forwards `X-Tenant-Id` derived from JWT |
+| Identity & Access | Topology | Open Host Service / Conformist | Declarative reverse proxy (Phase 2 — route not yet created) |
+| Identity & Access | Contract | Open Host Service / Conformist | Declarative reverse proxy (Phase 3 — route not yet created) |
+| Identity & Access | Intelligence | Open Host Service / Conformist | Declarative reverse proxy (Phase 4 — route not yet created) |
 | Service Catalog (U) | Topology (D) | **Customer / Supplier** | Kafka `cartogra.registry.service.{registered,updated,deleted}` |
 | Service Catalog (U) | Contract (D) | Customer / Supplier | Kafka `cartogra.registry.service.deleted` |
 | Service Catalog (U) | Intelligence (D) | Customer / Supplier | Kafka registry events |

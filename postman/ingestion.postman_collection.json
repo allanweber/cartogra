@@ -1,248 +1,473 @@
 {
-  "info": {
-    "name": "Cartogra Ingestion",
-    "description": "Ingestion service: SCM connection CRUD, on-demand sync, and webhook simulation. Requests target the ingestion service directly (set X-Tenant-Id manually). Webhooks are public; the GitHub push request computes a valid HMAC-SHA256 signature in a pre-request script.",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-  },
-  "variable": [
-    { "key": "ingestion-url", "value": "http://localhost:8085", "type": "string" }
-  ],
-  "item": [
-    {
-      "name": "SCM Connections",
-      "item": [
-        {
-          "name": "Create Connection",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" },
-              { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"provider\": \"github\",\n  \"config\": \"{\\\"token\\\":\\\"ghp_xxx\\\",\\\"org\\\":\\\"acme\\\"}\",\n  \"syncScheduler\": true,\n  \"pollIntervalMinutes\": 15,\n  \"webhookEnabled\": true\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{ingestion-url}}/scm-connections",
-              "host": ["{{ingestion-url}}"],
-              "path": ["scm-connections"]
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"status is 201\", () => pm.response.to.have.status(201));",
-                  "pm.environment.set(\"connectionId\", pm.response.json().data.id);"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
-        {
-          "name": "List Connections",
-          "request": {
-            "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" },
-              { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
-            ],
-            "url": {
-              "raw": "{{ingestion-url}}/scm-connections?limit=20&offset=0",
-              "host": ["{{ingestion-url}}"],
-              "path": ["scm-connections"],
-              "query": [
-                { "key": "limit", "value": "20" },
-                { "key": "offset", "value": "0" }
-              ]
-            }
-          }
-        },
-        {
-          "name": "Get Connection",
-          "request": {
-            "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" },
-              { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
-            ],
-            "url": {
-              "raw": "{{ingestion-url}}/scm-connections/{{connectionId}}",
-              "host": ["{{ingestion-url}}"],
-              "path": ["scm-connections", "{{connectionId}}"]
-            }
-          }
-        },
-        {
-          "name": "Update Connection",
-          "request": {
-            "method": "PUT",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" },
-              { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"pollIntervalMinutes\": 30,\n  \"syncScheduler\": false\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{ingestion-url}}/scm-connections/{{connectionId}}",
-              "host": ["{{ingestion-url}}"],
-              "path": ["scm-connections", "{{connectionId}}"]
-            }
-          }
-        },
-        {
-          "name": "Trigger Sync",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" },
-              { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
-            ],
-            "url": {
-              "raw": "{{ingestion-url}}/scm-connections/{{connectionId}}/sync",
-              "host": ["{{ingestion-url}}"],
-              "path": ["scm-connections", "{{connectionId}}", "sync"]
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": ["pm.test(\"status is 202\", () => pm.response.to.have.status(202));"],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
-        {
-          "name": "Delete Connection",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" },
-              { "key": "X-Tenant-Id", "value": "{{tenantId}}", "type": "text" }
-            ],
-            "url": {
-              "raw": "{{ingestion-url}}/scm-connections/{{connectionId}}",
-              "host": ["{{ingestion-url}}"],
-              "path": ["scm-connections", "{{connectionId}}"]
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "Webhooks",
-      "item": [
-        {
-          "name": "GitHub push (valid HMAC)",
-          "event": [
-            {
-              "listen": "prerequest",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "// Sign a fixed body so the HMAC matches the bytes sent.",
-                  "const body = JSON.stringify({ ref: 'refs/heads/main', repository: { full_name: 'acme/payments' } });",
-                  "pm.variables.set('webhookBody', body);",
-                  "const secret = pm.environment.get('webhookSecret');",
-                  "const sig = 'sha256=' + CryptoJS.HmacSHA256(body, secret).toString(CryptoJS.enc.Hex);",
-                  "pm.variables.set('ghSignature', sig);"
-                ]
-              }
-            },
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": ["pm.test(\"status is 202\", () => pm.response.to.have.status(202));"]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json", "type": "text" },
-              { "key": "X-GitHub-Event", "value": "push", "type": "text" },
-              { "key": "X-Hub-Signature-256", "value": "{{ghSignature}}", "type": "text" }
-            ],
-            "body": { "mode": "raw", "raw": "{{webhookBody}}", "options": { "raw": { "language": "json" } } },
-            "url": {
-              "raw": "{{ingestion-url}}/webhooks/github/{{connectionId}}",
-              "host": ["{{ingestion-url}}"],
-              "path": ["webhooks", "github", "{{connectionId}}"]
-            }
-          }
-        },
-        {
-          "name": "GitHub ping (ignored, 202)",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json", "type": "text" },
-              { "key": "X-GitHub-Event", "value": "ping", "type": "text" }
-            ],
-            "body": { "mode": "raw", "raw": "{\"zen\":\"Keep it simple.\"}", "options": { "raw": { "language": "json" } } },
-            "url": {
-              "raw": "{{ingestion-url}}/webhooks/github/{{connectionId}}",
-              "host": ["{{ingestion-url}}"],
-              "path": ["webhooks", "github", "{{connectionId}}"]
-            }
-          }
-        },
-        {
-          "name": "GitHub push (tampered → 401)",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json", "type": "text" },
-              { "key": "X-GitHub-Event", "value": "push", "type": "text" },
-              { "key": "X-Hub-Signature-256", "value": "sha256=deadbeef", "type": "text" }
-            ],
-            "body": { "mode": "raw", "raw": "{\"ref\":\"refs/heads/main\"}", "options": { "raw": { "language": "json" } } },
-            "url": {
-              "raw": "{{ingestion-url}}/webhooks/github/{{connectionId}}",
-              "host": ["{{ingestion-url}}"],
-              "path": ["webhooks", "github", "{{connectionId}}"]
-            }
-          }
-        },
-        {
-          "name": "Azure DevOps git.push (Basic auth)",
-          "event": [
-            {
-              "listen": "prerequest",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const auth = 'Basic ' + btoa(pm.environment.get('webhookSecret'));",
-                  "pm.variables.set('azdoAuth', auth);"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json", "type": "text" },
-              { "key": "Authorization", "value": "{{azdoAuth}}", "type": "text" }
-            ],
-            "body": { "mode": "raw", "raw": "{\"eventType\":\"git.push\",\"resource\":{}}", "options": { "raw": { "language": "json" } } },
-            "url": {
-              "raw": "{{ingestion-url}}/webhooks/azuredevops/{{connectionId}}",
-              "host": ["{{ingestion-url}}"],
-              "path": ["webhooks", "azuredevops", "{{connectionId}}"]
-            }
-          }
-        }
-      ]
-    }
-  ]
+	"info": {
+		"name": "Cartogra Ingestion",
+		"description": "Ingestion service: SCM connection CRUD, on-demand sync, and webhook simulation. Requests target the ingestion service directly (set X-Tenant-Id manually). Webhooks are public; the GitHub push request computes a valid HMAC-SHA256 signature in a pre-request script.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "ingestion-url",
+			"value": "http://localhost:8085",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "SCM Connections",
+			"item": [
+				{
+					"name": "Create Connection",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "X-Tenant-Id",
+								"value": "{{tenantId}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"provider\": \"github\",\n  \"config\": \"{\\\"token\\\":\\\"ghp_xxx\\\",\\\"org\\\":\\\"acme\\\"}\",\n  \"syncScheduler\": true,\n  \"pollIntervalMinutes\": 15,\n  \"webhookEnabled\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{ingestion-url}}/api/v1/ingestion/scm-connections",
+							"host": [
+								"{{ingestion-url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"ingestion",
+								"scm-connections"
+							]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"status is 201\", () => pm.response.to.have.status(201));",
+									"pm.environment.set(\"connectionId\", pm.response.json().data.id);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "List Connections",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "X-Tenant-Id",
+								"value": "{{tenantId}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{ingestion-url}}/api/v1/ingestion/scm-connections?limit=20&offset=0",
+							"host": [
+								"{{ingestion-url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"ingestion",
+								"scm-connections"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "20"
+								},
+								{
+									"key": "offset",
+									"value": "0"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Connection",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "X-Tenant-Id",
+								"value": "{{tenantId}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{ingestion-url}}/api/v1/ingestion/scm-connections/{{connectionId}}",
+							"host": [
+								"{{ingestion-url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"ingestion",
+								"scm-connections",
+								"{{connectionId}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Connection",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "X-Tenant-Id",
+								"value": "{{tenantId}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"pollIntervalMinutes\": 30,\n  \"syncScheduler\": false\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{ingestion-url}}/api/v1/ingestion/scm-connections/{{connectionId}}",
+							"host": [
+								"{{ingestion-url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"ingestion",
+								"scm-connections",
+								"{{connectionId}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Trigger Sync",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "X-Tenant-Id",
+								"value": "{{tenantId}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{ingestion-url}}/api/v1/ingestion/scm-connections/{{connectionId}}/sync",
+							"host": [
+								"{{ingestion-url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"ingestion",
+								"scm-connections",
+								"{{connectionId}}",
+								"sync"
+							]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"status is 202\", () => pm.response.to.have.status(202));"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Delete Connection",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "X-Tenant-Id",
+								"value": "{{tenantId}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{ingestion-url}}/api/v1/ingestion/scm-connections/{{connectionId}}",
+							"host": [
+								"{{ingestion-url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"ingestion",
+								"scm-connections",
+								"{{connectionId}}"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Webhooks",
+			"item": [
+				{
+					"name": "GitHub push (valid HMAC)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// Sign a fixed body so the HMAC matches the bytes sent.",
+									"const body = JSON.stringify({ ref: 'refs/heads/main', repository: { full_name: 'acme/payments' } });",
+									"pm.variables.set('webhookBody', body);",
+									"const secret = pm.environment.get('webhookSecret');",
+									"const sig = 'sha256=' + CryptoJS.HmacSHA256(body, secret).toString(CryptoJS.enc.Hex);",
+									"pm.variables.set('ghSignature', sig);"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"status is 202\", () => pm.response.to.have.status(202));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "X-GitHub-Event",
+								"value": "push",
+								"type": "text"
+							},
+							{
+								"key": "X-Hub-Signature-256",
+								"value": "{{ghSignature}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{{webhookBody}}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{ingestion-url}}/api/v1/ingestion/webhooks/github/{{connectionId}}",
+							"host": [
+								"{{ingestion-url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"ingestion",
+								"webhooks",
+								"github",
+								"{{connectionId}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "GitHub ping (ignored, 202)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "X-GitHub-Event",
+								"value": "ping",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"zen\":\"Keep it simple.\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{ingestion-url}}/api/v1/ingestion/webhooks/github/{{connectionId}}",
+							"host": [
+								"{{ingestion-url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"ingestion",
+								"webhooks",
+								"github",
+								"{{connectionId}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "GitHub push (tampered \u2192 401)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "X-GitHub-Event",
+								"value": "push",
+								"type": "text"
+							},
+							{
+								"key": "X-Hub-Signature-256",
+								"value": "sha256=deadbeef",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"ref\":\"refs/heads/main\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{ingestion-url}}/api/v1/ingestion/webhooks/github/{{connectionId}}",
+							"host": [
+								"{{ingestion-url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"ingestion",
+								"webhooks",
+								"github",
+								"{{connectionId}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Azure DevOps git.push (Basic auth)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const auth = 'Basic ' + btoa(pm.environment.get('webhookSecret'));",
+									"pm.variables.set('azdoAuth', auth);"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "{{azdoAuth}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"eventType\":\"git.push\",\"resource\":{}}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{ingestion-url}}/api/v1/ingestion/webhooks/azuredevops/{{connectionId}}",
+							"host": [
+								"{{ingestion-url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"ingestion",
+								"webhooks",
+								"azuredevops",
+								"{{connectionId}}"
+							]
+						}
+					}
+				}
+			]
+		}
+	]
 }

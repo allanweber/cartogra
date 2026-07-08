@@ -17,4 +17,5 @@ public final class ErrorCodes {
     public static final String INVALID_HEALTH_ENDPOINT      = "INVALID_HEALTH_ENDPOINT";
     public static final String WEBHOOK_SIGNATURE_INVALID     = "WEBHOOK_SIGNATURE_INVALID";
     public static final String WEBHOOK_CONNECTION_NOT_FOUND  = "WEBHOOK_CONNECTION_NOT_FOUND";
+    public static final String SERVICE_UNAVAILABLE           = "SERVICE_UNAVAILABLE";
 }

@@ -23,6 +23,9 @@ The Gateway is Cartogra's single entry point and the sole issuer of identity tok
 | **OTP** | One-time 6-digit email code used to verify a new account (sent via Resend) |
 | **OIDC** | Per-tenant SSO config (discovery URI + client credentials) |
 | **API Key** | Tenant-scoped `X-Cartogra-Api-Key` for CI/automation; never HMAC |
+| **Circuit Breaker** | Resilience4j gate on a proxied route; after repeated failures (5xx or exception/timeout) it opens and short-circuits to a fallback instead of calling the downstream. One breaker instance per downstream, named identically to its Spring Cloud Gateway route id (`registry`, `ingestion`) |
+| **Downstream Service Name** | The single identifier shared across a route id, its circuit breaker instance name, its fallback path segment, and the value carried on `ServiceUnavailableException` — never diverges per use site |
+| **ServiceUnavailableException** | Domain exception thrown by the fallback handler when a breaker is open; carries the Downstream Service Name; mapped by `GlobalExceptionHandler` to HTTP 503 + `ErrorCodes.SERVICE_UNAVAILABLE` |
 
 ---
 
@@ -32,7 +35,7 @@ The Gateway is Cartogra's single entry point and the sole issuer of identity tok
 2. **Token validation** — JWT filter on every authenticated route
 3. **Tenant injection** — strips any client-supplied `X-Tenant-Id`, replaces from JWT `tid` claim
 4. **Rate limiting** — Redis Lua token-bucket; returns `429` with `Retry-After` and error envelope
-5. **Reverse proxy** — Spring Cloud Gateway routes `/api/v1/**` → Registry (and future services)
+5. **Reverse proxy** — Spring Cloud Gateway routes `/api/v1/**` → Registry (and future services); each route carries a Circuit Breaker that opens on repeated downstream failure and returns an envelope-shaped `SERVICE_UNAVAILABLE` error instead of a raw proxy error
 6. **Tracing** — adds `X-Trace-Id` response header; propagates W3C `traceparent` to all proxied requests
 
 ---
