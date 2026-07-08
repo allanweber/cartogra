@@ -5,7 +5,6 @@
 
 ### Production hardening
 
-- [ ] 1.70 [CODE] Resilience4j circuit breakers on every gateway route to a live downstream (registry, ingestion — topology/contract/intelligence deferred until those services exist, per ADR-0024). Expose breaker state in `/actuator/health` (detail only, does not affect aggregate status). IT proves the breaker opens on repeated downstream failures and surfaces a domain error mapped to the envelope. [BIP] Publish a short thread on circuit-breaking at the gateway-proxy layer once the IT is green: why a Resilience4j route filter beat a per-service RestClient wrapper (ADR-0024), and why an open breaker deliberately doesn't fail k8s readiness/liveness.
 - [ ] 1.71 [UI] Verify the root error boundary claimed in 0.37. If absent, add a React class component with `componentDidCatch`, display `traceId` from the caught `ApiError`, add a Vitest snapshot test. If present, add the `traceId` rendering + test.
 - [ ] add team members and users, before that add the plans
 - [ ] Add web hooks, configure scm
