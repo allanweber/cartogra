@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingestion-config
+data:
+  DB_URL: "jdbc:postgresql://postgres:5432/cartogra?currentSchema=ingestion"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"

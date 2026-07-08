@@ -14,6 +14,7 @@ import org.apache.kafka.common.header.Headers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -54,7 +55,7 @@ public class RegistryServiceDiscoveryConsumer {
             topics = "cartogra.ingestion.service.discovered",
             groupId = "${spring.kafka.consumer.group-id:registry-discovery-consumer}"
     )
-    public void consume(ConsumerRecord<String, String> record) {
+    public void consume(ConsumerRecord<String, String> record, Acknowledgment ack) {
         log.debug("Received service.discovered key={} partition={} offset={}",
                 record.key(), record.partition(), record.offset());
 
@@ -90,6 +91,8 @@ public class RegistryServiceDiscoveryConsumer {
         } catch (Exception e) {
             log.warn("Failed to process service.discovered event key={} partition={} offset={}: {}",
                     record.key(), record.partition(), record.offset(), e.getMessage(), e);
+        } finally {
+            ack.acknowledge();
         }
     }
 }

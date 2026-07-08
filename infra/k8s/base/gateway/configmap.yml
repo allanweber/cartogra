@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-config
+data:
+  DB_URL: "jdbc:postgresql://postgres:5432/cartogra?currentSchema=registry"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"

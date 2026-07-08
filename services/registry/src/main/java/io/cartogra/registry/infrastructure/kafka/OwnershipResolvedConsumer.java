@@ -13,6 +13,7 @@ import org.apache.kafka.common.header.Headers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -49,7 +50,7 @@ public class OwnershipResolvedConsumer {
     }
 
     @KafkaListener(topics = "cartogra.ingestion.ownership.resolved", groupId = "${spring.kafka.consumer.group-id:registry-ownership-consumer}")
-    public void consume(ConsumerRecord<String, String> record) {
+    public void consume(ConsumerRecord<String, String> record, Acknowledgment ack) {
         Context ctx = W3CTraceContextPropagator.getInstance().extract(
                 Context.current(), record.headers(), HEADERS_GETTER);
 
@@ -60,6 +61,8 @@ public class OwnershipResolvedConsumer {
             serviceService.resolveOwnership(envelope.payload());
         } catch (Exception e) {
             log.error("Failed to process ownership.resolved event key={}: {}", record.key(), e.getMessage(), e);
+        } finally {
+            ack.acknowledge();
         }
     }
 }

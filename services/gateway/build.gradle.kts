@@ -40,6 +40,7 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers-postgresql")
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("com.redis:testcontainers-redis:2.2.2")
+    testImplementation("org.wiremock:wiremock-standalone:3.9.1")
 
     developmentOnly("org.springframework.boot:spring-boot-devtools")
 }

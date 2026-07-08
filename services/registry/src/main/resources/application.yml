@@ -1,6 +1,8 @@
 spring:
   application:
     name: registry
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
   threads:
     virtual:
       enabled: true
@@ -22,6 +24,8 @@ spring:
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      ack-mode: manual_immediate
   mvc:
     throw-exception-if-no-handler-found: true
   web:
@@ -30,6 +34,7 @@ spring:
 
 server:
   port: 8081
+  shutdown: graceful
   servlet:
     context-path: /api/v1/registry
 
@@ -57,6 +62,11 @@ management:
       probes:
         enabled: true
       show-details: when-authorized
+      group:
+        live:
+          include: livenessState
+        ready:
+          include: readinessState
   tracing:
     sampling:
       probability: 1.0

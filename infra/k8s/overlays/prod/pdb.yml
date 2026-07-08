@@ -1,0 +1,38 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gateway
+  labels:
+    app: gateway
+    team: platform
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: gateway
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: registry
+  labels:
+    app: registry
+    team: platform
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: registry
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ingestion
+  labels:
+    app: ingestion
+    team: platform
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: ingestion

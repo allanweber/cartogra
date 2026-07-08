@@ -15,6 +15,7 @@ import org.apache.kafka.common.header.Headers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
@@ -49,7 +50,7 @@ public class SyncCommandConsumer {
     };
 
     @KafkaListener(topics = "cartogra.registry.sync.command", groupId = "${spring.kafka.consumer.group-id}")
-    public void consume(ConsumerRecord<String, String> record) {
+    public void consume(ConsumerRecord<String, String> record, Acknowledgment ack) {
         Context ctx = W3CTraceContextPropagator.getInstance().extract(
                 Context.current(), record.headers(), HEADERS_GETTER);
 
@@ -60,6 +61,8 @@ public class SyncCommandConsumer {
             syncExecutionService.execute(envelope.payload());
         } catch (Exception ex) {
             log.error("Failed to process sync command key={}: {}", record.key(), ex.getMessage(), ex);
+        } finally {
+            ack.acknowledge();
         }
     }
 }

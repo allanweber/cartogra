@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry
+  labels:
+    app: registry
+    version: "0.1.0"
+    team: platform
+spec:
+  selector:
+    matchLabels:
+      app: registry
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: registry
+        version: "0.1.0"
+        team: platform
+    spec:
+      terminationGracePeriodSeconds: 45
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: registry
+          image: ghcr.io/cartogra/registry:0.1.0
+          ports:
+            - name: http
+              containerPort: 8081
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 10"]
+          env:
+            - name: DB_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: registry-config
+                  key: DB_URL
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              valueFrom:
+                configMapKeyRef:
+                  name: registry-config
+                  key: KAFKA_BOOTSTRAP_SERVERS
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: registry-secrets
+                  key: DB_USERNAME
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: registry-secrets
+                  key: DB_PASSWORD
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          livenessProbe:
+            httpGet:
+              path: /api/v1/registry/actuator/health/live
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v1/registry/actuator/health/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /api/v1/registry/actuator/health
+              port: http
+            failureThreshold: 12
+            periodSeconds: 5
+      volumes:
+        - name: tmp
+          emptyDir: {}

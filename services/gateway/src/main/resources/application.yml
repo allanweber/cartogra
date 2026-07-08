@@ -1,6 +1,8 @@
 spring:
   application:
     name: gateway
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
   threads:
     virtual:
       enabled: true
@@ -29,6 +31,7 @@ spring:
 
 server:
   port: 8080
+  shutdown: graceful
 
 management:
   endpoints:
