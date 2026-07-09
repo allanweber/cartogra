@@ -1,13 +1,38 @@
 -- Test schema for gateway integration tests.
--- Mirrors the registry Flyway migrations (V001, V003, V008, V009).
+-- Mirrors the registry Flyway migrations (V001, V003, V008, V009, V010, V011).
 -- Used instead of Flyway since the gateway has no migrations of its own.
+
+CREATE TABLE IF NOT EXISTS billing_plans (
+    id                    UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+    name                  TEXT        NOT NULL,
+    slug                  TEXT        NOT NULL UNIQUE,
+    max_services          INT         NOT NULL,
+    max_users             INT         NOT NULL,
+    max_api_keys          INT         NOT NULL,
+    max_scm_connections   INT         NOT NULL,
+    max_k8s_clusters      INT         NOT NULL,
+    sso_enabled           BOOLEAN     NOT NULL,
+    rate_limit_replenish  INT         NOT NULL,
+    rate_limit_burst      INT         NOT NULL,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    deleted_at            TIMESTAMPTZ
+);
+
+INSERT INTO billing_plans
+    (name, slug, max_services, max_users, max_api_keys, max_scm_connections, max_k8s_clusters, sso_enabled, rate_limit_replenish, rate_limit_burst)
+VALUES
+    ('Free',       'free',       10,  3,  2,  1, 0, false, 20,  40),
+    ('Business',   'business',   100, 25, 20, 5, 3, true,  60,  120),
+    ('Enterprise', 'enterprise', -1,  -1, -1, -1, -1, true, 200, 400)
+ON CONFLICT (slug) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS tenants (
     id          UUID          NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
     tenant_id   UUID          NOT NULL,
     name        VARCHAR(255)  NOT NULL,
     slug        VARCHAR(255)  NOT NULL UNIQUE,
-    plan        VARCHAR(50)   NOT NULL DEFAULT 'free',
+    plan_id     UUID          NOT NULL REFERENCES billing_plans(id),
     metadata    JSONB,
     created_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),
     updated_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),

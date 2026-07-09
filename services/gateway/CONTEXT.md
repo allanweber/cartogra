@@ -26,6 +26,9 @@ The Gateway is Cartogra's single entry point and the sole issuer of identity tok
 | **Circuit Breaker** | Resilience4j gate on a proxied route; after repeated failures (5xx or exception/timeout) it opens and short-circuits to a fallback instead of calling the downstream. One breaker instance per downstream, named identically to its Spring Cloud Gateway route id (`registry`, `ingestion`) |
 | **Downstream Service Name** | The single identifier shared across a route id, its circuit breaker instance name, its fallback path segment, and the value carried on `ServiceUnavailableException` — never diverges per use site |
 | **ServiceUnavailableException** | Domain exception thrown by the fallback handler when a breaker is open; carries the Downstream Service Name; mapped by `GlobalExceptionHandler` to HTTP 503 + `ErrorCodes.SERVICE_UNAVAILABLE` |
+| **BillingPlan** | One of the 3 fixed tenant tiers — `free`, `business`, `enterprise` — each carrying a fixed set of resource limits (max services, users, API keys, SCM connections, K8s clusters), an SSO entitlement flag, and rate-limit numbers. A Tenant has exactly one BillingPlan at a time |
+| **Unlimited (limit sentinel)** | A BillingPlan limit column value of `-1`, meaning no cap. Limit columns are `NOT NULL INT` — `-1` is used instead of `NULL` so limits never need null-handling |
+| **Plan-gated feature** | A capability available only from a given BillingPlan tier upward (e.g. SSO/OIDC: business+, K8s cluster sync: business+, free = 0). Distinct from a resource limit, which caps a *count* rather than turning a feature fully on/off |
 
 ---
 
@@ -52,12 +55,13 @@ Tenant ──○ TenantOidcConfig   (one optional SSO config per tenant)
 
 | Entity | Table | Notes |
 |---|---|---|
-| `Tenant` | `tenants` | slug UNIQUE; plan: free/pro/enterprise |
+| `Tenant` | `tenants` | slug UNIQUE; `plan_id` FK → `billing_plans.id` |
 | `User` | `users` | email UNIQUE; password_hash NULL for OAuth-only; roles TEXT[] |
 | `RefreshToken` | `refresh_tokens` | token_hash (SHA-256, raw never stored); revoked_at soft-revoke |
 | `TenantOidcConfig` | `tenant_oidc_configs` | discovery_uri + client_id/secret; one per tenant |
+| `BillingPlan` | `billing_plans` | 3 seeded rows: free/business/enterprise; explicit `max_*` limit columns (`-1` = unlimited), `sso_enabled`, `rate_limit_replenish`, `rate_limit_burst` |
 
-**No Flyway migrations** — reads the Registry service's database tables directly (Phase 0 compromise, ADR-0010).
+**No Flyway migrations** — reads the Registry service's database tables directly (Phase 0 compromise, ADR-0010). This includes `billing_plans`: its migration lives under `services/registry/.../db/migration/` alongside `tenants`, even though the `BillingPlan` Java domain code lives in gateway next to `Tenant`.
 
 ---
 

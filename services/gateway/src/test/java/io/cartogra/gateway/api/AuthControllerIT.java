@@ -397,7 +397,7 @@ class AuthControllerIT extends AbstractGatewayIT {
     private UUID insertTenant() {
         UUID tenantId = UUID.randomUUID();
         jdbcTemplate.update(
-            "INSERT INTO tenants (id, tenant_id, name, slug) VALUES (:id, :tid, :name, :slug)",
+            "INSERT INTO tenants (id, tenant_id, name, slug, plan_id) VALUES (:id, :tid, :name, :slug, (SELECT id FROM billing_plans WHERE slug = 'free'))",
             new MapSqlParameterSource()
                 .addValue("id", UUID.randomUUID())
                 .addValue("tid", tenantId)

@@ -2,6 +2,8 @@ package io.cartogra.gateway.api;
 
 import io.cartogra.gateway.api.dto.ApiResponse;
 import io.cartogra.gateway.api.dto.TenantResponse;
+import io.cartogra.gateway.domain.BillingPlanService;
+import io.cartogra.gateway.domain.Tenant;
 import io.cartogra.gateway.domain.TenantService;
 import io.cartogra.gateway.domain.exception.UnauthorizedException;
 import io.cartogra.gateway.infrastructure.security.JwtAuthentication;
@@ -17,10 +19,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class TenantController {
 
     private final TenantService tenantService;
+    private final BillingPlanService billingPlanService;
     private final TraceContext traceContext;
 
-    public TenantController(TenantService tenantService, TraceContext traceContext) {
+    public TenantController(TenantService tenantService, BillingPlanService billingPlanService, TraceContext traceContext) {
         this.tenantService = tenantService;
+        this.billingPlanService = billingPlanService;
         this.traceContext = traceContext;
     }
 
@@ -31,7 +35,8 @@ public class TenantController {
             throw new UnauthorizedException("Authentication required");
         }
         String traceId = traceContext.currentTraceId();
-        TenantResponse result = TenantResponse.from(tenantService.getTenant(principal.getTenantId()));
+        Tenant tenant = tenantService.getTenant(principal.getTenantId());
+        TenantResponse result = TenantResponse.from(tenant, billingPlanService.getBySlug(tenant.plan()));
         return ResponseEntity.ok()
             .header("X-Trace-Id", traceId)
             .body(new ApiResponse<>(result, traceId));

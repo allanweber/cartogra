@@ -12,12 +12,29 @@ export const Route = createFileRoute('/_authenticated/settings/tenant')({
   component: TenantPage,
 })
 
+interface PlanInfo {
+  name: string
+  slug: string
+  maxServices: number
+  maxUsers: number
+  maxApiKeys: number
+  maxScmConnections: number
+  maxK8sClusters: number
+  ssoEnabled: boolean
+  rateLimitReplenish: number
+  rateLimitBurst: number
+}
+
 interface TenantInfo {
   id: string
   name: string
   slug: string
-  plan: string
+  plan: PlanInfo
   createdAt: string
+}
+
+function formatLimit(value: number): string {
+  return value === -1 ? 'Unlimited' : String(value)
 }
 
 function TenantPage() {
@@ -57,9 +74,9 @@ function TenantPage() {
             <div className="flex items-center justify-between rounded-lg bg-muted/50 px-4 py-3">
               <div>
                 <p className="text-sm font-medium">Plan</p>
-                <p className="text-xs text-muted-foreground">{data.plan}</p>
+                <p className="text-xs text-muted-foreground">{data.plan.name}</p>
               </div>
-              <Badge variant="outline">{data.plan}</Badge>
+              <Badge variant="outline">{data.plan.name}</Badge>
             </div>
             <div className="flex items-center justify-between rounded-lg bg-muted/50 px-4 py-3">
               <div>
@@ -69,6 +86,42 @@ function TenantPage() {
                 </p>
               </div>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {data && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Plan Limits</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="rounded-lg bg-muted/50 px-4 py-3">
+                <dt className="text-xs text-muted-foreground">Services</dt>
+                <dd className="text-sm font-medium">{formatLimit(data.plan.maxServices)}</dd>
+              </div>
+              <div className="rounded-lg bg-muted/50 px-4 py-3">
+                <dt className="text-xs text-muted-foreground">Users</dt>
+                <dd className="text-sm font-medium">{formatLimit(data.plan.maxUsers)}</dd>
+              </div>
+              <div className="rounded-lg bg-muted/50 px-4 py-3">
+                <dt className="text-xs text-muted-foreground">API Keys</dt>
+                <dd className="text-sm font-medium">{formatLimit(data.plan.maxApiKeys)}</dd>
+              </div>
+              <div className="rounded-lg bg-muted/50 px-4 py-3">
+                <dt className="text-xs text-muted-foreground">SCM Connections</dt>
+                <dd className="text-sm font-medium">{formatLimit(data.plan.maxScmConnections)}</dd>
+              </div>
+              <div className="rounded-lg bg-muted/50 px-4 py-3">
+                <dt className="text-xs text-muted-foreground">K8s Clusters</dt>
+                <dd className="text-sm font-medium">{formatLimit(data.plan.maxK8sClusters)}</dd>
+              </div>
+              <div className="rounded-lg bg-muted/50 px-4 py-3">
+                <dt className="text-xs text-muted-foreground">SSO / OIDC</dt>
+                <dd className="text-sm font-medium">{data.plan.ssoEnabled ? 'Included' : 'Not included'}</dd>
+              </div>
+            </dl>
           </CardContent>
         </Card>
       )}
