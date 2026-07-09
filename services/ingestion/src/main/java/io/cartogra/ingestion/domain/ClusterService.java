@@ -3,9 +3,12 @@ package io.cartogra.ingestion.domain;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.ingestion.api.dto.KubernetesClusterRequest;
 import io.cartogra.ingestion.domain.exception.ClusterNotFoundException;
+import io.cartogra.ingestion.domain.exception.PlanLimitExceededException;
 import io.cartogra.ingestion.infrastructure.k8s.ClusterWorkerManager;
 import io.cartogra.ingestion.infrastructure.k8s.CredentialEncryptor;
 import io.cartogra.ingestion.infrastructure.k8s.KubeconfigParser;
+import io.cartogra.ingestion.infrastructure.registry.RegistryPlanLimitClient;
+import io.cartogra.ingestion.infrastructure.registry.RegistryPlanLimits;
 import io.cartogra.ingestion.repository.ClusterRepository;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -21,15 +24,18 @@ public class ClusterService {
     private final ClusterWorkerManager workerManager;
     private final CredentialEncryptor encryptor;
     private final KubeconfigParser kubeconfigParser;
+    private final RegistryPlanLimitClient planLimitClient;
 
     public ClusterService(ClusterRepository repository,
                           ClusterWorkerManager workerManager,
                           CredentialEncryptor encryptor,
-                          KubeconfigParser kubeconfigParser) {
+                          KubeconfigParser kubeconfigParser,
+                          RegistryPlanLimitClient planLimitClient) {
         this.repository = repository;
         this.workerManager = workerManager;
         this.encryptor = encryptor;
         this.kubeconfigParser = kubeconfigParser;
+        this.planLimitClient = planLimitClient;
     }
 
     @PreAuthorize("hasRole('ADMIN')")
@@ -40,6 +46,12 @@ public class ClusterService {
         }
         if (req.source() == null) {
             throw new IllegalArgumentException("source is required");
+        }
+        int maxK8sClusters = planLimitClient.fetchLimits(tenantId)
+                .map(RegistryPlanLimits::maxK8sClusters)
+                .orElse(RegistryPlanLimits.UNLIMITED);
+        if (maxK8sClusters != RegistryPlanLimits.UNLIMITED && repository.count(tenantId) >= maxK8sClusters) {
+            throw new PlanLimitExceededException("k8s clusters", maxK8sClusters);
         }
 
         String apiServerUrl;

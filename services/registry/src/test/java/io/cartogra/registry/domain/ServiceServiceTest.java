@@ -39,14 +39,17 @@ class ServiceServiceTest {
     @Mock TeamRepository teamRepository;
     @Mock ServiceLifecycleEventProducer eventProducer;
     @Mock HealthEndpointValidator healthEndpointValidator;
+    @Mock PlanLimitService planLimitService;
 
     private ServiceService serviceService;
 
     @BeforeEach
     void setUp() {
+        lenient().when(planLimitService.getLimits(any()))
+                .thenReturn(new PlanLimits(PlanLimits.UNLIMITED, PlanLimits.UNLIMITED, PlanLimits.UNLIMITED));
         serviceService = new ServiceService(
                 serviceRepository, historyRepository, teamRepository,
-                new ObjectMapper(), eventProducer, healthEndpointValidator);
+                new ObjectMapper(), eventProducer, healthEndpointValidator, planLimitService);
     }
 
     // ── create ────────────────────────────────────────────────────────────────

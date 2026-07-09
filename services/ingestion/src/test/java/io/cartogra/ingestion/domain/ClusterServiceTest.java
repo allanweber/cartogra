@@ -5,6 +5,7 @@ import io.cartogra.ingestion.domain.exception.ClusterNotFoundException;
 import io.cartogra.ingestion.infrastructure.k8s.ClusterWorkerManager;
 import io.cartogra.ingestion.infrastructure.k8s.CredentialEncryptor;
 import io.cartogra.ingestion.infrastructure.k8s.KubeconfigParser;
+import io.cartogra.ingestion.infrastructure.registry.RegistryPlanLimitClient;
 import io.cartogra.ingestion.repository.ClusterRepository;
 import org.junit.jupiter.api.Test;
 
@@ -23,7 +24,9 @@ class ClusterServiceTest {
     private final ClusterWorkerManager workerManager = mock(ClusterWorkerManager.class);
     private final CredentialEncryptor encryptor = mock(CredentialEncryptor.class);
     private final KubeconfigParser kubeconfigParser = mock(KubeconfigParser.class);
-    private final ClusterService service = new ClusterService(repository, workerManager, encryptor, kubeconfigParser);
+    private final RegistryPlanLimitClient planLimitClient = mock(RegistryPlanLimitClient.class);
+    private final ClusterService service =
+            new ClusterService(repository, workerManager, encryptor, kubeconfigParser, planLimitClient);
 
     private static final UUID TENANT_ID = UUID.randomUUID();
 

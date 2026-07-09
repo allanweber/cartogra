@@ -34,6 +34,8 @@ ingestion:
     poll-interval: ${INGESTION_SYNC_POLL_INTERVAL:PT15M}
   k8s:
     credentials-key: ${CLUSTER_CREDENTIALS_KEY:}
+  registry:
+    base-url: ${REGISTRY_URI:http://localhost:8081}/api/v1/registry
 
 server:
   port: 8085

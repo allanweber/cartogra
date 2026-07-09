@@ -2,9 +2,12 @@ package io.cartogra.ingestion.domain;
 
 import io.cartogra.common.api.PageResult;
 import io.cartogra.ingestion.api.dto.ScmConnectionRequest;
+import io.cartogra.ingestion.domain.exception.PlanLimitExceededException;
 import io.cartogra.ingestion.repository.ScmConnectionRepository;
 import io.cartogra.ingestion.domain.exception.ScmConnectionNotFoundException;
 import io.cartogra.ingestion.infrastructure.kafka.SyncCommandProducer;
+import io.cartogra.ingestion.infrastructure.registry.RegistryPlanLimitClient;
+import io.cartogra.ingestion.infrastructure.registry.RegistryPlanLimits;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,16 +26,25 @@ public class ScmConnectionService {
 
     private final ScmConnectionRepository repository;
     private final SyncCommandProducer syncCommandProducer;
+    private final RegistryPlanLimitClient planLimitClient;
 
-    public ScmConnectionService(ScmConnectionRepository repository, SyncCommandProducer syncCommandProducer) {
+    public ScmConnectionService(ScmConnectionRepository repository, SyncCommandProducer syncCommandProducer,
+                                RegistryPlanLimitClient planLimitClient) {
         this.repository = repository;
         this.syncCommandProducer = syncCommandProducer;
+        this.planLimitClient = planLimitClient;
     }
 
     @Transactional
     public ScmConnection create(UUID tenantId, ScmConnectionRequest req) {
         if (req.provider() == null || req.provider().isBlank()) {
             throw new IllegalArgumentException("provider is required");
+        }
+        int maxScmConnections = planLimitClient.fetchLimits(tenantId)
+                .map(RegistryPlanLimits::maxScmConnections)
+                .orElse(RegistryPlanLimits.UNLIMITED);
+        if (maxScmConnections != RegistryPlanLimits.UNLIMITED && repository.count(tenantId) >= maxScmConnections) {
+            throw new PlanLimitExceededException("scm connections", maxScmConnections);
         }
         Instant now = Instant.now();
         boolean scheduler = Boolean.TRUE.equals(req.syncScheduler());

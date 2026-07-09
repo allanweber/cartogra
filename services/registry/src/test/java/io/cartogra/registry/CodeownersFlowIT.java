@@ -14,6 +14,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -52,6 +54,18 @@ class CodeownersFlowIT {
     @Autowired
     private KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
 
+    @Autowired
+    private NamedParameterJdbcTemplate jdbcTemplate;
+
+    private void seedTenant(UUID tenantId) {
+        jdbcTemplate.update("""
+            INSERT INTO tenants (tenant_id, name, slug, plan_id)
+            SELECT :tenantId, 'Test Tenant', 'test-tenant-' || :tenantId, (SELECT id FROM billing_plans WHERE slug = 'free')
+            WHERE NOT EXISTS (SELECT 1 FROM tenants WHERE tenant_id = :tenantId)
+            """,
+            new MapSqlParameterSource().addValue("tenantId", tenantId));
+    }
+
     @BeforeEach
     void waitForConsumerAssignment() throws InterruptedException {
         for (MessageListenerContainer container : kafkaListenerEndpointRegistry.getListenerContainers()) {
@@ -71,6 +85,7 @@ class CodeownersFlowIT {
     @Test
     void ownershipResolvedAutoAssignsTeamToService() throws Exception {
         UUID tenantId = UUID.randomUUID();
+        seedTenant(tenantId);
 
         // Create team
         HttpResponse<String> teamResp = HTTP.send(

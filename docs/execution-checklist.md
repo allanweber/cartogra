@@ -5,7 +5,7 @@
 
 ### Production hardening
 
-- [ ] add team members and users, before that add the plans
+- [ ] add team members and users
 - [ ] Add web hooks, configure scm
 
 ### Phase 1 Gate

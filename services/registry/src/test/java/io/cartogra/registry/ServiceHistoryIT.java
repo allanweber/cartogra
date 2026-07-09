@@ -4,9 +4,13 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import io.cartogra.registry.infrastructure.kafka.ServiceLifecycleEventProducer;
 import io.cartogra.test.PostgresTestSupport;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -39,6 +43,19 @@ class ServiceHistoryIT {
 
     @LocalServerPort
     private int port;
+
+    @Autowired
+    private NamedParameterJdbcTemplate jdbcTemplate;
+
+    @BeforeEach
+    void seedTenant() {
+        jdbcTemplate.update("""
+            INSERT INTO tenants (tenant_id, name, slug, plan_id)
+            SELECT :tenantId, 'Test Tenant', 'test-tenant-' || :tenantId, (SELECT id FROM billing_plans WHERE slug = 'free')
+            WHERE NOT EXISTS (SELECT 1 FROM tenants WHERE tenant_id = :tenantId)
+            """,
+            new MapSqlParameterSource().addValue("tenantId", TENANT));
+    }
 
     @Test
     void updateProducesHistoryRow() throws Exception {

@@ -3,10 +3,13 @@ package io.cartogra.registry;
 import io.cartogra.test.OpenApiContractValidator;
 import io.cartogra.test.KafkaTestSupport;
 import io.cartogra.test.PostgresTestSupport;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import tools.jackson.databind.ObjectMapper;
@@ -30,8 +33,21 @@ class RegistryEnvelopeContractTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private NamedParameterJdbcTemplate jdbcTemplate;
+
     @LocalServerPort
     private int port;
+
+    @BeforeEach
+    void seedTenant() {
+        jdbcTemplate.update("""
+            INSERT INTO tenants (tenant_id, name, slug, plan_id)
+            SELECT :tenantId, 'Test Tenant', 'test-tenant-' || :tenantId, (SELECT id FROM billing_plans WHERE slug = 'free')
+            WHERE NOT EXISTS (SELECT 1 FROM tenants WHERE tenant_id = :tenantId)
+            """,
+            new MapSqlParameterSource().addValue("tenantId", TENANT));
+    }
 
     @DynamicPropertySource
     static void datasourceProperties(DynamicPropertyRegistry registry) {

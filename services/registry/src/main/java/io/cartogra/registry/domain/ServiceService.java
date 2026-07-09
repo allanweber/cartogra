@@ -12,6 +12,7 @@ import io.cartogra.registry.repository.ServiceRepository;
 import io.cartogra.registry.repository.TeamRepository;
 import io.cartogra.registry.domain.event.OwnershipResolvedPayload;
 import io.cartogra.registry.domain.exception.DuplicateServiceNameException;
+import io.cartogra.registry.domain.exception.PlanLimitExceededException;
 import io.cartogra.registry.domain.exception.ServiceNotFoundException;
 import io.cartogra.registry.domain.exception.TeamNotFoundException;
 import io.cartogra.registry.infrastructure.kafka.ServiceLifecycleEventProducer;
@@ -45,25 +46,33 @@ public class ServiceService {
     private final ObjectMapper objectMapper;
     private final ServiceLifecycleEventProducer eventProducer;
     private final HealthEndpointValidator healthEndpointValidator;
+    private final PlanLimitService planLimitService;
 
     public ServiceService(ServiceRepository serviceRepository,
                           ServiceHistoryRepository historyRepository,
                           TeamRepository teamRepository,
                           ObjectMapper objectMapper,
                           ServiceLifecycleEventProducer eventProducer,
-                          HealthEndpointValidator healthEndpointValidator) {
+                          HealthEndpointValidator healthEndpointValidator,
+                          PlanLimitService planLimitService) {
         this.serviceRepository = serviceRepository;
         this.historyRepository = historyRepository;
         this.teamRepository = teamRepository;
         this.objectMapper = objectMapper;
         this.eventProducer = eventProducer;
         this.healthEndpointValidator = healthEndpointValidator;
+        this.planLimitService = planLimitService;
     }
 
     @Transactional
     public Service create(UUID tenantId, CreateServiceRequest req, @Nullable UUID requestedBy) {
         if (serviceRepository.existsByName(tenantId, req.name(), null)) {
             throw new DuplicateServiceNameException(req.name());
+        }
+        int maxServices = planLimitService.getLimits(tenantId).maxServices();
+        if (maxServices != PlanLimits.UNLIMITED
+                && serviceRepository.count(tenantId, ServiceFilter.empty()) >= maxServices) {
+            throw new PlanLimitExceededException("services", maxServices);
         }
         if (req.teamId() != null) {
             teamRepository.findById(tenantId, req.teamId())

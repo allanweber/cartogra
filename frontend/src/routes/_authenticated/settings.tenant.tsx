@@ -7,6 +7,7 @@ import { Badge } from '#/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
 import { Skeleton } from '#/components/ui/skeleton'
 import { apiFetch } from '#/lib/api'
+import type { PageResult } from '#/lib/registry-types'
 
 export const Route = createFileRoute('/_authenticated/settings/tenant')({
   component: TenantPage,
@@ -37,10 +38,28 @@ function formatLimit(value: number): string {
   return value === -1 ? 'Unlimited' : String(value)
 }
 
+function formatUsage(used: number | undefined, limit: number): string {
+  const limitLabel = formatLimit(limit)
+  return used === undefined ? limitLabel : `${used} / ${limitLabel}`
+}
+
 function TenantPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['tenant-info'],
     queryFn: () => apiFetch<TenantInfo>('/auth/tenant'),
+  })
+
+  const servicesUsage = useQuery({
+    queryKey: ['tenant-usage', 'services'],
+    queryFn: () => apiFetch<PageResult<unknown>>('/v1/registry/services?limit=1'),
+  })
+  const scmConnectionsUsage = useQuery({
+    queryKey: ['tenant-usage', 'scm-connections'],
+    queryFn: () => apiFetch<PageResult<unknown>>('/v1/ingestion/scm-connections?limit=1'),
+  })
+  const k8sClustersUsage = useQuery({
+    queryKey: ['tenant-usage', 'k8s-clusters'],
+    queryFn: () => apiFetch<PageResult<unknown>>('/v1/ingestion/k8s/clusters?limit=1'),
   })
 
   return (
@@ -99,7 +118,9 @@ function TenantPage() {
             <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <div className="rounded-lg bg-muted/50 px-4 py-3">
                 <dt className="text-xs text-muted-foreground">Services</dt>
-                <dd className="text-sm font-medium">{formatLimit(data.plan.maxServices)}</dd>
+                <dd className="text-sm font-medium">
+                  {formatUsage(servicesUsage.data?.total, data.plan.maxServices)}
+                </dd>
               </div>
               <div className="rounded-lg bg-muted/50 px-4 py-3">
                 <dt className="text-xs text-muted-foreground">Users</dt>
@@ -111,11 +132,15 @@ function TenantPage() {
               </div>
               <div className="rounded-lg bg-muted/50 px-4 py-3">
                 <dt className="text-xs text-muted-foreground">SCM Connections</dt>
-                <dd className="text-sm font-medium">{formatLimit(data.plan.maxScmConnections)}</dd>
+                <dd className="text-sm font-medium">
+                  {formatUsage(scmConnectionsUsage.data?.total, data.plan.maxScmConnections)}
+                </dd>
               </div>
               <div className="rounded-lg bg-muted/50 px-4 py-3">
                 <dt className="text-xs text-muted-foreground">K8s Clusters</dt>
-                <dd className="text-sm font-medium">{formatLimit(data.plan.maxK8sClusters)}</dd>
+                <dd className="text-sm font-medium">
+                  {formatUsage(k8sClustersUsage.data?.total, data.plan.maxK8sClusters)}
+                </dd>
               </div>
               <div className="rounded-lg bg-muted/50 px-4 py-3">
                 <dt className="text-xs text-muted-foreground">SSO / OIDC</dt>
