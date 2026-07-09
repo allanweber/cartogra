@@ -118,7 +118,7 @@ function RootNotFound() {
   )
 }
 
-function RootErrorBoundary({
+export function RootErrorBoundary({
   error,
   reset,
 }: {

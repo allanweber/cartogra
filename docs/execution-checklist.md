@@ -5,7 +5,6 @@
 
 ### Production hardening
 
-- [ ] 1.71 [UI] Verify the root error boundary claimed in 0.37. If absent, add a React class component with `componentDidCatch`, display `traceId` from the caught `ApiError`, add a Vitest snapshot test. If present, add the `traceId` rendering + test.
 - [ ] add team members and users, before that add the plans
 - [ ] Add web hooks, configure scm
 
