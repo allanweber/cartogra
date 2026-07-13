@@ -28,7 +28,8 @@ The Registry is Cartogra's source of truth for the service estate. It owns every
 | **Source** | How a Service was discovered: `scm`, `k8s`, or `manual` |
 | **Sync Command** | A Kafka message requesting Ingestion to start a sync job for a given SCM Connection |
 | **Ownership Resolution** | Assigning a Team to a Service based on CODEOWNERS or K8s namespace labels |
-| **TEAM_OWNER** | A tenant-level role permitted to mutate Service profile fields. Semantically scoped to services the user's team owns; enforced tenant-wide until team membership is introduced (see ADR-0022) |
+| **Team Member** | A tenant User attached to a Team via `team_members` (any tenant role — VIEWER/MEMBER/ADMIN — is eligible). All members of a Team are equal; there is no distinguished lead |
+| **Team management** | Mutating a Team's own state: rename, delete, add/remove members. Gated to ADMIN or an existing member of that Team; creating a new Team is ADMIN-only (a new Team has no members yet). Distinct from editing the Services a Team owns |
 
 ---
 
@@ -50,6 +51,7 @@ The Registry is Cartogra's source of truth for the service estate. It owns every
 ```
 Tenant ──< Team ──< Service
 Tenant ──< ScmConnection
+Team ──< TeamMember ──> User   (child of Team aggregate; user_id references Gateway's User by ID only)
 Service ──< ServiceSnapshot   (append-only history)
 Service ──> Team               (team_id FK, nullable — orphan when NULL)
 ```
@@ -59,8 +61,10 @@ Service ──> Team               (team_id FK, nullable — orphan when NULL)
 | Aggregate root | Entity | Table |
 |---|---|---|
 | `Service` | `Service` record (23 fields) | `services` |
-| `Team` | `Team` record | `teams` |
+| `Team` | `Team` record; `TeamMember` is a child entity saved through the `Team` root | `teams`, `team_members` |
 | `ScmConnection` | `ScmConnection` record | `scm_connections` |
+
+**Authorization model**: service edit (`PUT /services/{id}`) and team management (rename/delete/add-member/remove-member) are both checked live against `team_members` on each request — ADMIN always passes; otherwise the requester must be a member of the Team in question. Orphan services (`team_id IS NULL`) have no owning Team, so only ADMIN can edit them. No role is baked into the JWT for this (see ADR-0025, supersedes ADR-0022).
 
 **Value objects / supporting types**:
 - `ServiceHealthStatus` enum: `HEALTHY`, `DEGRADED`, `UNHEALTHY`, `UNKNOWN`

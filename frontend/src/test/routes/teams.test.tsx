@@ -112,8 +112,10 @@ function renderPage() {
 function mockApiFetch(
   teams: PageResult<RegistryTeam> = EMPTY_TEAMS,
   services: PageResult<RegistryService> = EMPTY_SERVICES,
+  myTeamIds: string[] = [],
 ) {
   vi.mocked(apiFetch).mockImplementation((path: string) => {
+    if (path.includes('/v1/registry/teams/mine')) return Promise.resolve(myTeamIds)
     if (path.includes('/v1/registry/teams')) return Promise.resolve(teams)
     return Promise.resolve(services)
   })
@@ -264,12 +266,44 @@ describe('TeamsPage', () => {
     expect(links.some((l) => l.getAttribute('href') === '/catalog/svc-1')).toBe(true)
   })
 
-  it('non-admin user does not see add team button or manage buttons', async () => {
+  it('non-admin user does not see add team button', async () => {
     mockRoles = []
     mockApiFetch({ items: [MOCK_TEAM], total: 1, limit: 200, offset: 0 })
     renderPage()
     await screen.findByText('Platform')
     expect(screen.queryByRole('button', { name: /add team/i })).not.toBeInTheDocument()
+  })
+
+  it('non-admin user who is not a team member does not see its manage button', async () => {
+    mockRoles = []
+    mockApiFetch({ items: [MOCK_TEAM], total: 1, limit: 200, offset: 0 }, EMPTY_SERVICES, [])
+    renderPage()
+    await screen.findByText('Platform')
     expect(screen.queryByTestId('manage-btn-team-1')).not.toBeInTheDocument()
+  })
+
+  it('non-admin user who is a team member sees its manage button', async () => {
+    mockRoles = []
+    mockApiFetch({ items: [MOCK_TEAM], total: 1, limit: 200, offset: 0 }, EMPTY_SERVICES, ['team-1'])
+    renderPage()
+    await screen.findByText('Platform')
+    expect(await screen.findByTestId('manage-btn-team-1')).toBeInTheDocument()
+  })
+
+  it('team owner sees add team button', async () => {
+    mockRoles = ['TEAM_OWNER']
+    mockApiFetch()
+    renderPage()
+    await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
+    expect(screen.getByRole('button', { name: /add team/i })).toBeInTheDocument()
+  })
+
+  it('team owner add team button opens create dialog', async () => {
+    mockRoles = ['TEAM_OWNER']
+    mockApiFetch()
+    renderPage()
+    await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /add team/i }))
+    expect(await screen.findByTestId('create-team-dialog')).toBeInTheDocument()
   })
 })

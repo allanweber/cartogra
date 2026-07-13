@@ -21,7 +21,7 @@ class ScheduledSyncServiceTest {
     private static ScmConnection connection() {
         Instant now = Instant.now();
         return new ScmConnection(UUID.randomUUID(), UUID.randomUUID(), "github", "{}",
-                true, 15, now, null, null, false, now, now, null);
+                true, 15, now, null, null, null, false, now, now, null);
     }
 
     @Test

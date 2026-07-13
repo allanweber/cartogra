@@ -7,6 +7,7 @@ import io.cartogra.gateway.domain.exception.ConflictException;
 import io.cartogra.gateway.domain.exception.InvalidOAuthStateException;
 import io.cartogra.gateway.domain.exception.InvalidOtpException;
 import io.cartogra.gateway.domain.exception.NotFoundException;
+import io.cartogra.gateway.domain.exception.PlanLimitExceededException;
 import io.cartogra.gateway.domain.exception.ServiceUnavailableException;
 import io.cartogra.gateway.domain.exception.UnauthorizedException;
 import io.cartogra.gateway.domain.exception.UnverifiedEmailException;
@@ -72,6 +73,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleNotFound(NotFoundException ex) {
         log.warn("Not found: {}", ex.getMessage());
         return error(HttpStatus.NOT_FOUND, ErrorCodes.NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(PlanLimitExceededException.class)
+    public ResponseEntity<ApiErrorResponse> handlePlanLimitExceeded(PlanLimitExceededException ex) {
+        log.warn("Plan limit exceeded: {}", ex.getMessage());
+        return error(HttpStatus.PAYMENT_REQUIRED, ErrorCodes.PLAN_LIMIT_EXCEEDED, ex.getMessage());
     }
 
     @ExceptionHandler(ServiceUnavailableException.class)

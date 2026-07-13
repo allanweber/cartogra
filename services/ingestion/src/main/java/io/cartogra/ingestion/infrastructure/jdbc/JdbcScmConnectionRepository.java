@@ -60,11 +60,11 @@ public class JdbcScmConnectionRepository implements ScmConnectionRepository {
         String sql = """
                 INSERT INTO scm_connections (
                     id, tenant_id, provider, config, sync_scheduler, poll_interval_minutes,
-                    next_sync_at, last_sync_at, last_sync_status, webhook_enabled,
+                    next_sync_at, last_sync_at, last_sync_status, last_sync_error, webhook_enabled,
                     created_at, updated_at, deleted_at)
                 VALUES (
                     :id, :tenantId, :provider, CAST(:config AS JSONB), :syncScheduler, :pollIntervalMinutes,
-                    :nextSyncAt, :lastSyncAt, :lastSyncStatus, :webhookEnabled,
+                    :nextSyncAt, :lastSyncAt, :lastSyncStatus, :lastSyncError, :webhookEnabled,
                     :createdAt, :updatedAt, :deletedAt)
                 ON CONFLICT (id) DO UPDATE SET
                     provider              = EXCLUDED.provider,
@@ -74,6 +74,7 @@ public class JdbcScmConnectionRepository implements ScmConnectionRepository {
                     next_sync_at          = EXCLUDED.next_sync_at,
                     last_sync_at          = EXCLUDED.last_sync_at,
                     last_sync_status      = EXCLUDED.last_sync_status,
+                    last_sync_error       = EXCLUDED.last_sync_error,
                     webhook_enabled       = EXCLUDED.webhook_enabled,
                     updated_at            = EXCLUDED.updated_at,
                     deleted_at            = EXCLUDED.deleted_at
@@ -127,15 +128,16 @@ public class JdbcScmConnectionRepository implements ScmConnectionRepository {
     }
 
     @Override
-    public void updateSyncResult(UUID id, String status, Instant lastSyncAt) {
+    public void updateSyncResult(UUID id, String status, String error, Instant lastSyncAt) {
         String sql = """
                 UPDATE scm_connections
-                SET last_sync_status = :status, last_sync_at = :lastSyncAt, updated_at = now()
+                SET last_sync_status = :status, last_sync_error = :error, last_sync_at = :lastSyncAt, updated_at = now()
                 WHERE id = :id
                 """;
         jdbc.update(sql, new MapSqlParameterSource()
                 .addValue("id", id)
                 .addValue("status", status)
+                .addValue("error", error)
                 .addValue("lastSyncAt", Timestamp.from(lastSyncAt)));
     }
 
@@ -150,6 +152,7 @@ public class JdbcScmConnectionRepository implements ScmConnectionRepository {
                 .addValue("nextSyncAt", toTimestamp(c.nextSyncAt()))
                 .addValue("lastSyncAt", toTimestamp(c.lastSyncAt()))
                 .addValue("lastSyncStatus", c.lastSyncStatus())
+                .addValue("lastSyncError", c.lastSyncError())
                 .addValue("webhookEnabled", c.webhookEnabled())
                 .addValue("createdAt", Timestamp.from(c.createdAt()))
                 .addValue("updatedAt", Timestamp.from(c.updatedAt()))
@@ -174,6 +177,7 @@ public class JdbcScmConnectionRepository implements ScmConnectionRepository {
             toInstant(rs.getTimestamp("next_sync_at")),
             toInstant(rs.getTimestamp("last_sync_at")),
             rs.getString("last_sync_status"),
+            rs.getString("last_sync_error"),
             rs.getBoolean("webhook_enabled"),
             toInstant(rs.getTimestamp("created_at")),
             toInstant(rs.getTimestamp("updated_at")),

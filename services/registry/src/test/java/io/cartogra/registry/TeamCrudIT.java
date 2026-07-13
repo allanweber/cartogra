@@ -14,6 +14,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import tools.jackson.core.type.TypeReference;
@@ -55,7 +57,22 @@ class TeamCrudIT {
     @Value("${spring.kafka.bootstrap-servers}")
     private String bootstrapServers;
 
+    @Autowired
+    private NamedParameterJdbcTemplate jdbcTemplate;
+
     private KafkaConsumer<String, String> consumer;
+
+    @BeforeEach
+    void seedTenant() {
+        // enterprise (unlimited max_teams) — this suite exercises CRUD mechanics, not plan limits,
+        // and shares one tenant across many tests that each create teams.
+        jdbcTemplate.update("""
+            INSERT INTO tenants (tenant_id, name, slug, plan_id)
+            SELECT :tenantId, 'Test Tenant', 'test-tenant-' || :tenantId, (SELECT id FROM billing_plans WHERE slug = 'enterprise')
+            WHERE NOT EXISTS (SELECT 1 FROM tenants WHERE tenant_id = :tenantId)
+            """,
+            new MapSqlParameterSource().addValue("tenantId", TENANT));
+    }
 
     @BeforeEach
     void setupConsumer() {

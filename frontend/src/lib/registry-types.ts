@@ -42,6 +42,21 @@ export interface RegistryTeam {
   updatedAt: string
 }
 
+export interface RegistryTeamMember {
+  id: string
+  teamId: string
+  userId: string
+  createdAt: string
+}
+
+export interface TenantUser {
+  id: string
+  email: string
+  name: string | null
+  roles: string[]
+  disabled: boolean
+}
+
 export interface PageResult<T> {
   items: T[]
   total: number

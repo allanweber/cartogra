@@ -20,6 +20,7 @@ public record ScmConnectionResponse(
         @Nullable Instant nextSyncAt,
         @Nullable Instant lastSyncAt,
         @Nullable String lastSyncStatus,
+        @Nullable String lastSyncError,
         boolean webhookEnabled,
         Instant createdAt,
         Instant updatedAt
@@ -31,7 +32,7 @@ public record ScmConnectionResponse(
         return new ScmConnectionResponse(
                 c.id(), c.tenantId(), c.provider(), scrubConfig(c.config()),
                 c.syncScheduler(), c.pollIntervalMinutes(),
-                c.nextSyncAt(), c.lastSyncAt(), c.lastSyncStatus(),
+                c.nextSyncAt(), c.lastSyncAt(), c.lastSyncStatus(), c.lastSyncError(),
                 c.webhookEnabled(), c.createdAt(), c.updatedAt());
     }
 

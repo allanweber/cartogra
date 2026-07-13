@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { KeyRound, Moon, Sun } from 'lucide-react'
 import { useState } from 'react'
+import { toast } from 'sonner'
 
 import { AppLayout } from '#/components/AppLayout'
 import { Alert, AlertDescription } from '#/components/ui/alert'
@@ -54,14 +55,19 @@ function ProfilePage() {
       const updated = await apiMutate<AuthUser>('/auth/userinfo', payload, 'PUT')
       hydrateWith(updated)
       if (updated.email !== originalEmail) {
+        toast.success('Profile updated', { description: 'Verify your new email to complete the change.' })
         navigate({ to: '/verify-email', search: { email: updated.email } })
+      } else {
+        toast.success('Profile updated')
       }
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message)
         setTraceId(err.traceId)
+        toast.error(err.message, { description: `trace: ${err.traceId}` })
       } else {
         setError('An unexpected error occurred.')
+        toast.error('An unexpected error occurred.')
       }
     } finally {
       setSaving(false)

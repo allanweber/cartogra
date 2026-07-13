@@ -33,7 +33,25 @@ vi.mock('#/lib/api', () => ({
 }))
 
 vi.mock('#/components/AppLayout', () => ({
-  AppLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  AppLayout: ({
+    children,
+    actions,
+  }: {
+    children: React.ReactNode
+    actions?: React.ReactNode
+  }) => (
+    <div>
+      {actions}
+      {children}
+    </div>
+  ),
+}))
+
+let mockRoles = ['ADMIN']
+
+vi.mock('#/stores/useAuthStore', () => ({
+  useAuthStore: (selector: (s: { user: { roles: string[] } }) => unknown) =>
+    selector({ user: { roles: mockRoles } }),
 }))
 
 const EMPTY_TEAMS: PageResult<RegistryTeam> = { items: [], total: 0, limit: 200, offset: 0 }
@@ -87,8 +105,9 @@ function renderPage() {
   )
 }
 
-function mockSuccess(service = MOCK_SERVICE) {
+function mockSuccess(service = MOCK_SERVICE, myTeamIds: string[] = []) {
   vi.mocked(apiFetch).mockImplementation((path: string) => {
+    if (path.includes('/v1/registry/teams/mine')) return Promise.resolve(myTeamIds)
     if (path.includes('/v1/registry/teams')) return Promise.resolve(EMPTY_TEAMS)
     return Promise.resolve(service)
   })
@@ -98,6 +117,7 @@ describe('ServiceDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockServiceId = 'svc-1'
+    mockRoles = ['ADMIN']
   })
 
   it('shows skeletons while loading', () => {
@@ -169,6 +189,7 @@ describe('ServiceDetailPage', () => {
 
   it('shows error alert on fetch failure', async () => {
     vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path.includes('/v1/registry/teams/mine')) return Promise.resolve([])
       if (path.includes('/v1/registry/teams')) return Promise.resolve(EMPTY_TEAMS)
       return Promise.reject(new ApiError('NOT_FOUND', 'Service not found', 'trace-err'))
     })
@@ -190,6 +211,7 @@ describe('ServiceDetailPage', () => {
     const ownedService = { ...MOCK_SERVICE, teamId: 'team-1' }
     const teams: PageResult<RegistryTeam> = { items: [MOCK_TEAM], total: 1, limit: 200, offset: 0 }
     vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path.includes('/v1/registry/teams/mine')) return Promise.resolve([])
       if (path.includes('/v1/registry/teams')) return Promise.resolve(teams)
       return Promise.resolve(ownedService)
     })
@@ -198,5 +220,37 @@ describe('ServiceDetailPage', () => {
     const links = screen.getAllByRole('link', { name: 'Platform' })
     expect(links.length).toBeGreaterThan(0)
     links.forEach((l) => expect(l).toHaveAttribute('href', '/teams'))
+  })
+
+  it('admin sees the Edit button', async () => {
+    mockRoles = ['ADMIN']
+    mockSuccess()
+    renderPage()
+    expect(await screen.findByRole('button', { name: /edit/i })).toBeInTheDocument()
+  })
+
+  it('non-admin who is not a member of the owning team does not see the Edit button', async () => {
+    mockRoles = ['MEMBER']
+    const ownedService = { ...MOCK_SERVICE, teamId: 'team-1' }
+    mockSuccess(ownedService, [])
+    renderPage()
+    await screen.findByRole('heading', { name: 'payments-api' })
+    expect(screen.queryByRole('button', { name: /edit/i })).not.toBeInTheDocument()
+  })
+
+  it('non-admin who is a member of the owning team sees the Edit button', async () => {
+    mockRoles = ['MEMBER']
+    const ownedService = { ...MOCK_SERVICE, teamId: 'team-1' }
+    mockSuccess(ownedService, ['team-1'])
+    renderPage()
+    expect(await screen.findByRole('button', { name: /edit/i })).toBeInTheDocument()
+  })
+
+  it('non-admin does not see the Edit button for an unowned service', async () => {
+    mockRoles = ['MEMBER']
+    mockSuccess({ ...MOCK_SERVICE, teamId: null }, [])
+    renderPage()
+    await screen.findByRole('heading', { name: 'payments-api' })
+    expect(screen.queryByRole('button', { name: /edit/i })).not.toBeInTheDocument()
   })
 })

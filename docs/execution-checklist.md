@@ -5,7 +5,6 @@
 
 ### Production hardening
 
-- [ ] add team members and users
 - [ ] Add web hooks, configure scm
 
 ### Phase 1 Gate
@@ -315,3 +314,7 @@ Research tasks (if we decide to pursue):
 ### Phase 6 Gate
 
 - [ ] [GATE] Each research item produces either a rejected ADR (with documented reasoning) or an accepted ADR with a concrete implementation plan for a future phase.
+
+### Phase Future
+
+- Users with multiple tenants

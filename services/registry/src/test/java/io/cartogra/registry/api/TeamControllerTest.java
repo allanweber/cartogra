@@ -46,7 +46,7 @@ class TeamControllerTest {
 
     @Test
     void createReturns201WithEnvelopeAndTraceHeader() throws Exception {
-        when(teamService.create(TENANT, "platform")).thenReturn(team("platform"));
+        when(teamService.create(TENANT, "platform", null)).thenReturn(team("platform"));
 
         mockMvc.perform(post("/teams")
                         .header("X-Tenant-Id", TENANT)
@@ -130,7 +130,7 @@ class TeamControllerTest {
     @Test
     void updateReturns200() throws Exception {
         UUID id = UUID.randomUUID();
-        when(teamService.update(TENANT, id, "platform-eng")).thenReturn(team("platform-eng"));
+        when(teamService.update(TENANT, id, "platform-eng", null)).thenReturn(team("platform-eng"));
 
         mockMvc.perform(put("/teams/{id}", id)
                         .header("X-Tenant-Id", TENANT)
@@ -144,7 +144,7 @@ class TeamControllerTest {
     @Test
     void updateNotFoundReturns404() throws Exception {
         UUID id = UUID.randomUUID();
-        when(teamService.update(eq(TENANT), eq(id), anyString())).thenThrow(new TeamNotFoundException(id));
+        when(teamService.update(eq(TENANT), eq(id), anyString(), any())).thenThrow(new TeamNotFoundException(id));
 
         mockMvc.perform(put("/teams/{id}", id)
                         .header("X-Tenant-Id", TENANT)
@@ -163,13 +163,13 @@ class TeamControllerTest {
                 .andExpect(status().isNoContent())
                 .andExpect(header().exists("X-Trace-Id"));
 
-        verify(teamService).delete(TENANT, id);
+        verify(teamService).delete(TENANT, id, null);
     }
 
     @Test
     void deleteNotFoundReturns404() throws Exception {
         UUID id = UUID.randomUUID();
-        doThrow(new TeamNotFoundException(id)).when(teamService).delete(TENANT, id);
+        doThrow(new TeamNotFoundException(id)).when(teamService).delete(TENANT, id, null);
 
         mockMvc.perform(delete("/teams/{id}", id)
                         .header("X-Tenant-Id", TENANT))

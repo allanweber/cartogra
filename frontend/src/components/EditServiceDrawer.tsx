@@ -2,6 +2,7 @@ import { useForm } from '@tanstack/react-form'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { X } from 'lucide-react'
+import { toast } from 'sonner'
 import { ApiError, apiFetch } from '#/lib/api'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
@@ -170,9 +171,13 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
           await assignOwnerMutation.mutateAsync(value.teamId)
         }
 
+        toast.success('Service updated')
         onOpenChange(false)
-      } catch (_) {
+      } catch (err) {
         // error surfaced via updateMutation.error / assignOwnerMutation.error
+        toast.error(err instanceof Error ? err.message : 'Failed to save service', {
+          description: err instanceof ApiError ? `trace: ${err.traceId}` : undefined,
+        })
       }
     },
   })

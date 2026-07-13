@@ -17,9 +17,26 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 public class AzureDevOpsProvider implements ScmProvider {
+
+    /** One REST client per connection, reused across the calls a single sync makes per repo — avoids paying a fresh TLS handshake on every call. Re-created when the config changes (e.g. a rotated PAT). */
+    private final Map<UUID, CachedClient> clients = new ConcurrentHashMap<>();
+
+    private record CachedClient(ScmConnectionConfig config, AzureDevOpsRestClient client) {}
+
+    private AzureDevOpsRestClient clientFor(ScmConnectionConfig config) {
+        CachedClient cached = clients.get(config.connectionId());
+        if (cached != null && cached.config().equals(config)) {
+            return cached.client();
+        }
+        AzureDevOpsRestClient client = new AzureDevOpsRestClient(config);
+        clients.put(config.connectionId(), new CachedClient(config, client));
+        return client;
+    }
 
     private static final Set<String> RELEVANT_EVENTS = Set.of(
             "git.push",
@@ -60,7 +77,7 @@ public class AzureDevOpsProvider implements ScmProvider {
 
     @Override
     public List<ScmRepository> listRepositories(ScmConnectionConfig config) {
-        var client = new AzureDevOpsRestClient(config);
+        var client = clientFor(config);
         List<String> projects = client.listProjects();
         List<ScmRepository> repositories = new ArrayList<>();
         for (String project : projects) {
@@ -88,7 +105,7 @@ public class AzureDevOpsProvider implements ScmProvider {
         String[] parts = repository.fullPath().split("/", 2);
         String project = parts[0];
         String repoName = parts.length > 1 ? parts[1] : parts[0];
-        var client = new AzureDevOpsRestClient(config);
+        var client = clientFor(config);
         return client.getLastCommit(project, repoName);
     }
 
@@ -97,7 +114,7 @@ public class AzureDevOpsProvider implements ScmProvider {
         String[] parts = repoPath.split("/", 2);
         String project = parts[0];
         String repoName = parts.length > 1 ? parts[1] : parts[0];
-        var client = new AzureDevOpsRestClient(config);
+        var client = clientFor(config);
         return client.getFileContents(project, repoName, filePath);
     }
 
@@ -106,7 +123,7 @@ public class AzureDevOpsProvider implements ScmProvider {
         String[] parts = repository.fullPath().split("/", 2);
         String project = parts[0];
         String repoName = parts.length > 1 ? parts[1] : parts[0];
-        var client = new AzureDevOpsRestClient(config);
+        var client = clientFor(config);
 
         Optional<String> content = client.getFileContents(project, repoName, "CODEOWNERS")
                 .or(() -> client.getFileContents(project, repoName, ".azuredevops/CODEOWNERS"));

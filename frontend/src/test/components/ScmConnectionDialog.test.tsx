@@ -29,6 +29,7 @@ const GITHUB_CONN: ScmConnection = {
   nextSyncAt: null,
   lastSyncAt: '2024-01-01T12:00:00Z',
   lastSyncStatus: 'SUCCESS',
+  lastSyncError: null,
   webhookEnabled: false,
   createdAt: '2024-01-01T00:00:00Z',
   updatedAt: '2024-01-01T00:00:00Z',
@@ -185,7 +186,16 @@ describe('ScmConnectionDialog — GitHub edit', () => {
 
   it('shows last sync status badge', () => {
     renderDialog({ provider: 'github', connection: GITHUB_CONN })
-    expect(screen.getByText('SUCCESS')).toBeInTheDocument()
+    expect(screen.getByText('Synced')).toBeInTheDocument()
+  })
+
+  it('shows sync failed badge with error message when last sync failed', () => {
+    renderDialog({
+      provider: 'github',
+      connection: { ...GITHUB_CONN, lastSyncStatus: 'FAILED', lastSyncError: 'GitHub API error listing repos: 401 UNAUTHORIZED' },
+    })
+    expect(screen.getByText('Sync failed')).toBeInTheDocument()
+    expect(screen.getByText('GitHub API error listing repos: 401 UNAUTHORIZED')).toBeInTheDocument()
   })
 
   it('PUT includes config with org key and pollIntervalMinutes', async () => {

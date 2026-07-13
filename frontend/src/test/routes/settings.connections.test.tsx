@@ -50,6 +50,7 @@ const GITHUB_CONN: ScmConnection = {
   nextSyncAt: null,
   lastSyncAt: '2024-06-01T10:00:00Z',
   lastSyncStatus: 'SUCCESS',
+  lastSyncError: null,
   webhookEnabled: false,
   createdAt: '2024-01-01T00:00:00Z',
   updatedAt: '2024-01-01T00:00:00Z',
@@ -154,6 +155,38 @@ describe('ConnectionsPage', () => {
     vi.mocked(apiFetch).mockResolvedValue(noSync)
     renderPage()
     expect(await screen.findByText('Never synced')).toBeInTheDocument()
+  })
+
+  it('shows "Sync failed" badge instead of "Connected" when last sync failed', async () => {
+    const failed: PageResult<ScmConnection> = {
+      items: [{ ...GITHUB_CONN, lastSyncStatus: 'FAILED', lastSyncError: 'GitHub API error listing repos: 401 UNAUTHORIZED' }],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    }
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path.includes('k8s')) return Promise.resolve({ items: [], total: 0, limit: 20, offset: 0 })
+      return Promise.resolve(failed)
+    })
+    renderPage()
+    expect(await screen.findByText('Sync failed')).toBeInTheDocument()
+    expect(screen.queryByText('Connected')).not.toBeInTheDocument()
+  })
+
+  it('shows a banner alert when a connection failed to sync', async () => {
+    const failed: PageResult<ScmConnection> = {
+      items: [{ ...GITHUB_CONN, lastSyncStatus: 'FAILED', lastSyncError: 'GitHub API error listing repos: 401 UNAUTHORIZED' }],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    }
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path.includes('k8s')) return Promise.resolve({ items: [], total: 0, limit: 20, offset: 0 })
+      return Promise.resolve(failed)
+    })
+    renderPage()
+    expect(await screen.findByText(/GitHub sync failed/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/401 UNAUTHORIZED/).length).toBeGreaterThan(0)
   })
 
   it('opens dialog when Connect is clicked', async () => {

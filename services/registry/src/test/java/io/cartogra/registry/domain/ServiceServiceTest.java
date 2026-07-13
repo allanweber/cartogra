@@ -12,12 +12,16 @@ import io.cartogra.registry.repository.ServiceDiscoveryCommand;
 import io.cartogra.registry.repository.ServiceHistoryRepository;
 import io.cartogra.registry.repository.ServiceRepository;
 import io.cartogra.registry.repository.TeamRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
@@ -46,10 +50,17 @@ class ServiceServiceTest {
     @BeforeEach
     void setUp() {
         lenient().when(planLimitService.getLimits(any()))
-                .thenReturn(new PlanLimits(PlanLimits.UNLIMITED, PlanLimits.UNLIMITED, PlanLimits.UNLIMITED));
+                .thenReturn(new PlanLimits(PlanLimits.UNLIMITED, PlanLimits.UNLIMITED, PlanLimits.UNLIMITED, PlanLimits.UNLIMITED));
         serviceService = new ServiceService(
                 serviceRepository, historyRepository, teamRepository,
                 new ObjectMapper(), eventProducer, healthEndpointValidator, planLimitService);
+        SecurityContextHolder.getContext().setAuthentication(
+                new TestingAuthenticationToken("admin", null, new SimpleGrantedAuthority("ROLE_ADMIN")));
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
     }
 
     // ── create ────────────────────────────────────────────────────────────────
@@ -159,6 +170,44 @@ class ServiceServiceTest {
                 .isInstanceOf(DuplicateServiceNameException.class);
 
         verifyNoInteractions(eventProducer);
+    }
+
+    @Test
+    void updateOrphanServiceByNonAdminIsDenied() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new TestingAuthenticationToken("user", null, new SimpleGrantedAuthority("ROLE_VIEWER")));
+        UUID tenantId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        Service existing = service(tenantId, serviceId, "old"); // teamId is null (orphan)
+        var req = new UpdateServiceRequest("new", null, null, null, null, null, null, null, null, null, null, null);
+        when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> serviceService.update(tenantId, serviceId, req, userId))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+        verifyNoInteractions(eventProducer);
+    }
+
+    @Test
+    void updateByOwningTeamMemberSucceeds() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new TestingAuthenticationToken("user", null, new SimpleGrantedAuthority("ROLE_VIEWER")));
+        UUID tenantId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        Service existing = serviceWithTeam(tenantId, serviceId, "old", teamId);
+        Service saved = serviceWithTeam(tenantId, serviceId, "new", teamId);
+        var req = new UpdateServiceRequest("new", null, null, null, null, null, null, null, null, null, null, null);
+        when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.of(existing));
+        when(teamRepository.isMember(tenantId, teamId, userId)).thenReturn(true);
+        when(serviceRepository.existsByName(tenantId, "new", serviceId)).thenReturn(false);
+        when(serviceRepository.save(any())).thenReturn(saved);
+
+        serviceService.update(tenantId, serviceId, req, userId);
+
+        verify(eventProducer).publishUpdated(any());
     }
 
     // ── delete ────────────────────────────────────────────────────────────────

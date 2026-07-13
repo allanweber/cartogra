@@ -101,7 +101,7 @@ class ScmConnectionControllerTest {
     void responseScrubbedOfSecretConfigKeys() throws Exception {
         ScmConnection conn = new ScmConnection(UUID.randomUUID(), TENANT, "github",
                 "{\"org\":\"acme\",\"token\":\"secret\",\"pat\":\"also-secret\"}",
-                true, 60, null, null, null, false, Instant.now(), Instant.now(), null);
+                true, 60, null, null, null, null, false, Instant.now(), Instant.now(), null);
         when(scmConnectionService.create(eq(TENANT), any())).thenReturn(conn);
 
         mockMvc.perform(post("/scm-connections")
@@ -258,7 +258,7 @@ class ScmConnectionControllerTest {
 
     private ScmConnection connection() {
         return new ScmConnection(UUID.randomUUID(), TENANT, "github",
-                "{\"org\":\"acme\"}", true, 60, null, null, null,
+                "{\"org\":\"acme\"}", true, 60, null, null, null, null,
                 false, Instant.now(), Instant.now(), null);
     }
 }

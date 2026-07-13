@@ -19,7 +19,8 @@ import io.cartogra.registry.infrastructure.kafka.ServiceLifecycleEventProducer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
@@ -98,10 +99,10 @@ public class ServiceService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEAM_OWNER')")
     public Service update(UUID tenantId, UUID serviceId, UpdateServiceRequest req, @Nullable UUID requestedBy) {
         Service existing = serviceRepository.findById(tenantId, serviceId)
                 .orElseThrow(() -> new ServiceNotFoundException(serviceId));
+        requireAdminOrOwningTeamMember(tenantId, existing.teamId(), requestedBy);
 
         if (!existing.name().equalsIgnoreCase(req.name())
                 && serviceRepository.existsByName(tenantId, req.name(), serviceId)) {
@@ -442,6 +443,22 @@ public class ServiceService {
             return new ServiceSnapshot(UUID.randomUUID(), service.id(), service.tenantId(), json, changedBy, Instant.now());
         } catch (JacksonException e) {
             throw new IllegalStateException("Failed to serialize service snapshot", e);
+        }
+    }
+
+    /**
+     * ADMIN always passes. Otherwise the caller must be a member of the service's owning team.
+     * An orphan service (teamId == null) has no team to be a member of, so only ADMIN may edit it.
+     */
+    private void requireAdminOrOwningTeamMember(UUID tenantId, @Nullable UUID teamId, @Nullable UUID requestedBy) {
+        boolean isAdmin = SecurityContextHolder.getContext().getAuthentication() != null
+                && SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+                        .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        if (isAdmin) {
+            return;
+        }
+        if (teamId == null || requestedBy == null || !teamRepository.isMember(tenantId, teamId, requestedBy)) {
+            throw new AccessDeniedException("Only ADMIN or a member of the owning team may edit this service");
         }
     }
 }

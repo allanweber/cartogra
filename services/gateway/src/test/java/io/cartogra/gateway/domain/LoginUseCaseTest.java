@@ -5,7 +5,9 @@ import io.cartogra.gateway.config.JwtConfig;
 import io.cartogra.gateway.domain.exception.UnauthorizedException;
 import io.cartogra.gateway.domain.exception.UnverifiedEmailException;
 import io.cartogra.gateway.infrastructure.email.EmailSender;
+import io.cartogra.gateway.repository.InvitationRepository;
 import io.cartogra.gateway.repository.RefreshTokenRepository;
+import io.cartogra.gateway.repository.TeamMembershipRepository;
 import io.cartogra.gateway.repository.TenantRepository;
 import io.cartogra.gateway.repository.UserRepository;
 import io.cartogra.gateway.infrastructure.jwt.JwtClaims;
@@ -41,10 +43,19 @@ class LoginUseCaseTest {
     private RefreshTokenRepository refreshTokenRepository;
 
     @Mock
+    private TeamMembershipRepository teamMembershipRepository;
+
+    @Mock
+    private InvitationRepository invitationRepository;
+
+    @Mock
     private EmailSender emailSender;
 
     @Mock
     private JwtTokenProvider jwtTokenProvider;
+
+    @Mock
+    private BillingPlanService billingPlanService;
 
     private AuthService auth;
 
@@ -56,13 +67,13 @@ class LoginUseCaseTest {
     void setUp() {
         JwtConfig config = new JwtConfig("secret", 900L, 2592000L, false);
         auth = new AuthService(userRepository, tenantRepository, refreshTokenRepository,
-            emailSender, encoder, jwtTokenProvider, config);
+            teamMembershipRepository, invitationRepository, emailSender, encoder, jwtTokenProvider, config, billingPlanService);
     }
 
     private User verifiedUser(String password) {
         return new User(userId, tenantId, "user@test.com", null, "local", null,
             encoder.encode(password), true, List.of("VIEWER"), null, null,
-            null, null, Instant.now(), Instant.now(), null);
+            null, null, Instant.now(), Instant.now(), null, null);
     }
 
     @Test
@@ -105,7 +116,7 @@ class LoginUseCaseTest {
     void unverifiedUserThrowsUnverifiedEmailException() {
         User unverified = new User(userId, tenantId, "user@test.com", null, "local", null,
             encoder.encode("password123"), false, List.of("VIEWER"), "123456",
-            Instant.now().plusSeconds(900), null, null, Instant.now(), Instant.now(), null);
+            Instant.now().plusSeconds(900), null, null, Instant.now(), Instant.now(), null, null);
         when(userRepository.findByEmail("user@test.com"))
             .thenReturn(Optional.of(unverified));
 
@@ -117,12 +128,25 @@ class LoginUseCaseTest {
     void softDeletedUserThrowsUnauthorized() {
         User deleted = new User(userId, tenantId, "user@test.com", null, "local", null,
             encoder.encode("password123"), true, List.of("VIEWER"), null, null,
-            null, null, Instant.now(), Instant.now(), Instant.now());
+            null, null, Instant.now(), Instant.now(), Instant.now(), null);
         when(userRepository.findByEmail("user@test.com"))
             .thenReturn(Optional.of(deleted));
 
         assertThatThrownBy(() -> auth.login("user@test.com", "password123"))
             .isInstanceOf(UnauthorizedException.class);
+    }
+
+    @Test
+    void disabledUserThrowsUnauthorized() {
+        User disabled = new User(userId, tenantId, "user@test.com", null, "local", null,
+            encoder.encode("password123"), true, List.of("VIEWER"), null, null,
+            null, null, Instant.now(), Instant.now(), null, Instant.now());
+        when(userRepository.findByEmail("user@test.com"))
+            .thenReturn(Optional.of(disabled));
+
+        assertThatThrownBy(() -> auth.login("user@test.com", "password123"))
+            .isInstanceOf(UnauthorizedException.class)
+            .hasMessageContaining("disabled");
     }
 
     @Test

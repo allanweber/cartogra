@@ -13,6 +13,7 @@ import TanStackQueryDevtools from '../integrations/tanstack-query/devtools'
 import { AppLayout } from '../components/AppLayout'
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert'
 import { Button } from '../components/ui/button'
+import { Toaster } from '../components/ui/sonner'
 import { TooltipProvider } from '../components/ui/tooltip'
 import { ApiError } from '../lib/api'
 import { useAuthStore } from '../stores/useAuthStore'
@@ -71,6 +72,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         </a>
         <TooltipProvider>
           {children}
+          <Toaster />
           <TanStackDevtools
             config={{
               position: 'bottom-right',

@@ -16,6 +16,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -75,7 +79,7 @@ public class SyncExecutionService {
             String msg = "No provider registered for type: " + command.providerType();
             syncJobRepository.markFailed(job.id(), msg);
             resultProducer.publishFailure(job, msg);
-            recordResult(command.connectionId(), STATUS_FAILED);
+            recordResult(command.connectionId(), STATUS_FAILED, msg);
             throw new ScmProviderException(command.providerType(), msg);
         }
 
@@ -88,62 +92,87 @@ public class SyncExecutionService {
 
         try {
             List<ScmRepository> repositories = provider.listRepositories(connectionConfig);
-            for (ScmRepository repo : repositories) {
-                if (!repo.archived()) {
+            List<ScmRepository> active = repositories.stream().filter(r -> !r.archived()).toList();
+
+            // Each repo does ~10 blocking SCM API calls (tech-stack detection, last commit,
+            // CODEOWNERS); virtual threads let a sync of many repos run in parallel instead
+            // of paying that cost serially, repo by repo.
+            try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+                List<Future<?>> futures = active.stream()
+                        .<Future<?>>map(repo -> executor.submit(() -> processRepo(command, provider, connectionConfig, repo)))
+                        .toList();
+                for (Future<?> future : futures) {
                     try {
-                        List<String> techStack = techStackDetector.detect(provider, connectionConfig, repo);
-                        Optional<CommitInfo> commit = provider.getLastCommit(connectionConfig, repo);
-                        var payload = new ServiceDiscoveredPayload(
-                                command.tenantId(),
-                                command.connectionId(),
-                                command.providerType(),
-                                repo.fullPath(),
-                                repo.name(),
-                                repo.description(),
-                                repo.repositoryUrl(),
-                                repo.defaultBranch(),
-                                null, null, null,
-                                techStack,
-                                "UNKNOWN",
-                                null,
-                                commit.map(CommitInfo::committedAt).orElse(null),
-                                commit.map(CommitInfo::sha).orElse(null)
-                        );
-                        serviceDiscoveredProducer.publish(payload);
-                    } catch (Exception ex) {
-                        log.warn("Failed to publish service.discovered for repo={}: {}",
-                                repo.fullPath(), ex.getMessage());
+                        future.get();
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new ScmProviderException(command.providerType(), "Sync interrupted", ie);
+                    } catch (ExecutionException ee) {
+                        switch (ee.getCause()) {
+                            case ScmProviderException spe -> throw spe;
+                            case RuntimeException re -> throw re;
+                            case Throwable t -> throw new ScmProviderException(
+                                    command.providerType(), "Unexpected error during sync", t);
+                        }
                     }
-                    OwnershipMap ownership = provider.resolveOwnership(connectionConfig, repo);
-                    ownershipProducer.publish(command.tenantId(), command.connectionId(), repo, ownership);
                 }
             }
-            int count = (int) repositories.stream().filter(r -> !r.archived()).count();
+
+            int count = active.size();
             syncJobRepository.markCompleted(job.id(), count);
             resultProducer.publishSuccess(job, count);
-            recordResult(command.connectionId(), STATUS_SUCCESS);
+            recordResult(command.connectionId(), STATUS_SUCCESS, null);
             log.info("Sync completed for connection={} repos={}", command.connectionId(), count);
             return syncJobRepository.findById(command.tenantId(), job.id()).orElse(job);
         } catch (ScmProviderException ex) {
             log.error("Sync failed for connection={}: {}", command.connectionId(), ex.getMessage());
             syncJobRepository.markFailed(job.id(), ex.getMessage());
             resultProducer.publishFailure(job, ex.getMessage());
-            recordResult(command.connectionId(), STATUS_FAILED);
+            recordResult(command.connectionId(), STATUS_FAILED, ex.getMessage());
             throw ex;
         } catch (Exception ex) {
             String msg = "Unexpected error during sync: " + ex.getMessage();
             log.error(msg, ex);
             syncJobRepository.markFailed(job.id(), msg);
             resultProducer.publishFailure(job, msg);
-            recordResult(command.connectionId(), STATUS_FAILED);
+            recordResult(command.connectionId(), STATUS_FAILED, msg);
             throw new ScmProviderException(command.providerType(), msg, ex);
         }
     }
 
-    /** Best-effort feedback write; a stale connection row must not fail the sync. */
-    private void recordResult(java.util.UUID connectionId, String status) {
+    private void processRepo(SyncCommandPayload command, ScmProvider provider,
+                              ScmConnectionConfig connectionConfig, ScmRepository repo) {
         try {
-            scmConnectionRepository.updateSyncResult(connectionId, status, Instant.now());
+            List<String> techStack = techStackDetector.detect(provider, connectionConfig, repo);
+            Optional<CommitInfo> commit = provider.getLastCommit(connectionConfig, repo);
+            var payload = new ServiceDiscoveredPayload(
+                    command.tenantId(),
+                    command.connectionId(),
+                    command.providerType(),
+                    repo.fullPath(),
+                    repo.name(),
+                    repo.description(),
+                    repo.repositoryUrl(),
+                    repo.defaultBranch(),
+                    null, null, null,
+                    techStack,
+                    "UNKNOWN",
+                    null,
+                    commit.map(CommitInfo::committedAt).orElse(null),
+                    commit.map(CommitInfo::sha).orElse(null)
+            );
+            serviceDiscoveredProducer.publish(payload);
+        } catch (Exception ex) {
+            log.warn("Failed to publish service.discovered for repo={}: {}", repo.fullPath(), ex.getMessage());
+        }
+        OwnershipMap ownership = provider.resolveOwnership(connectionConfig, repo);
+        ownershipProducer.publish(command.tenantId(), command.connectionId(), repo, ownership);
+    }
+
+    /** Best-effort feedback write; a stale connection row must not fail the sync. */
+    private void recordResult(java.util.UUID connectionId, String status, String error) {
+        try {
+            scmConnectionRepository.updateSyncResult(connectionId, status, error, Instant.now());
         } catch (Exception ex) {
             log.warn("Failed to record sync result for connection={}: {}", connectionId, ex.getMessage());
         }

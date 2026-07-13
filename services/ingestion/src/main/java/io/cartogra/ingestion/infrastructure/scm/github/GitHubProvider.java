@@ -20,9 +20,26 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 public class GitHubProvider implements ScmProvider {
+
+    /** One REST client per connection, reused across the ~10 calls a single sync makes per repo — avoids paying a fresh TLS handshake on every call. Re-created when the config changes (e.g. a rotated token). */
+    private final Map<UUID, CachedClient> clients = new ConcurrentHashMap<>();
+
+    private record CachedClient(ScmConnectionConfig config, GitHubRestClient client) {}
+
+    private GitHubRestClient clientFor(ScmConnectionConfig config) {
+        CachedClient cached = clients.get(config.connectionId());
+        if (cached != null && cached.config().equals(config)) {
+            return cached.client();
+        }
+        GitHubRestClient client = new GitHubRestClient(config);
+        clients.put(config.connectionId(), new CachedClient(config, client));
+        return client;
+    }
 
     /** Events that warrant a re-sync; everything else (e.g. {@code ping}) is ignored. */
     private static final Set<String> RELEVANT_EVENTS = Set.of(
@@ -74,7 +91,7 @@ public class GitHubProvider implements ScmProvider {
     @Override
     public List<ScmRepository> listRepositories(ScmConnectionConfig config) {
         String org = requiredString(config, "org");
-        var client = new GitHubRestClient(config);
+        var client = clientFor(config);
         List<Map<String, Object>> raw = client.listRepositories(org);
         return raw.stream()
                 .map(r -> new ScmRepository(
@@ -94,7 +111,7 @@ public class GitHubProvider implements ScmProvider {
         String[] parts = repository.fullPath().split("/", 2);
         String owner = parts[0];
         String repo = parts.length > 1 ? parts[1] : parts[0];
-        var client = new GitHubRestClient(config);
+        var client = clientFor(config);
         return client.getLastCommit(owner, repo);
     }
 
@@ -103,7 +120,7 @@ public class GitHubProvider implements ScmProvider {
         String[] parts = repoPath.split("/", 2);
         String owner = parts[0];
         String repo = parts.length > 1 ? parts[1] : parts[0];
-        var client = new GitHubRestClient(config);
+        var client = clientFor(config);
         return client.getFileContents(owner, repo, filePath);
     }
 
@@ -112,7 +129,7 @@ public class GitHubProvider implements ScmProvider {
         String[] parts = repository.fullPath().split("/", 2);
         String owner = parts[0];
         String repo = parts.length > 1 ? parts[1] : parts[0];
-        var client = new GitHubRestClient(config);
+        var client = clientFor(config);
         List<Map<String, Object>> entries = client.getCodeOwners(owner, repo);
 
         List<String> ownerTeams = new ArrayList<>();

@@ -103,6 +103,7 @@ function ConnectionsPage() {
 
   const connections = data?.items ?? []
   const clusters = clustersData?.items ?? []
+  const failedConnections = connections.filter((c) => c.lastSyncStatus === 'FAILED')
 
   function openCreate(key: string) {
     if (key === 'kubernetes') {
@@ -154,6 +155,18 @@ function ConnectionsPage() {
         {error && (
           <Alert variant="destructive">
             <AlertDescription>Failed to load connections.</AlertDescription>
+          </Alert>
+        )}
+
+        {!isLoading && !error && failedConnections.length > 0 && (
+          <Alert variant="destructive">
+            <AlertDescription>
+              {failedConnections.length === 1
+                ? `${PROVIDERS.find((p) => p.key === failedConnections[0].provider)?.label ?? failedConnections[0].provider} sync failed`
+                : `${failedConnections.length} connections failed to sync`}
+              {failedConnections[0].lastSyncError ? ` — ${failedConnections[0].lastSyncError}` : ''}
+              . Open "Manage" below to review.
+            </AlertDescription>
           </Alert>
         )}
 
@@ -219,14 +232,20 @@ function ConnectionsPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{p.label}</p>
                     {conn ? (
-                      <p className="text-xs text-muted-foreground truncate">
-                        {conn.lastSyncAt
-                          ? (() => {
-                              const count = (countsData?.counts ?? {})[conn.id] ?? 0
-                              return `Synced ${new Date(conn.lastSyncAt).toLocaleString()} · ${count} service${count !== 1 ? 's' : ''}`
-                            })()
-                          : 'Never synced'}
-                      </p>
+                      conn.lastSyncStatus === 'FAILED' && conn.lastSyncError ? (
+                        <p className="text-xs text-red-600 dark:text-red-400 truncate" title={conn.lastSyncError}>
+                          {conn.lastSyncError}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground truncate">
+                          {conn.lastSyncAt
+                            ? (() => {
+                                const count = (countsData?.counts ?? {})[conn.id] ?? 0
+                                return `Synced ${new Date(conn.lastSyncAt).toLocaleString()} · ${count} service${count !== 1 ? 's' : ''}`
+                              })()
+                            : 'Never synced'}
+                        </p>
+                      )
                     ) : (
                       <p className="text-xs text-muted-foreground truncate">{p.description}</p>
                     )}
@@ -235,10 +254,17 @@ function ConnectionsPage() {
                     <Badge variant="outline" className="text-xs">Coming soon</Badge>
                   ) : conn ? (
                     <div className="flex items-center gap-2.5 shrink-0">
-                      <span className="flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400">
-                        <span className="size-1.5 rounded-full bg-green-500" />
-                        Connected
-                      </span>
+                      {conn.lastSyncStatus === 'FAILED' ? (
+                        <span className="flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400">
+                          <span className="size-1.5 rounded-full bg-red-500" />
+                          Sync failed
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400">
+                          <span className="size-1.5 rounded-full bg-green-500" />
+                          Connected
+                        </span>
+                      )}
                       <Button size="sm" variant="outline" onClick={() => openEdit(conn)}>
                         Manage
                       </Button>

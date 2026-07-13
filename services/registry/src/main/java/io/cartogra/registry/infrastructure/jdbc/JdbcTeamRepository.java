@@ -2,6 +2,7 @@ package io.cartogra.registry.infrastructure.jdbc;
 
 import io.cartogra.registry.repository.TeamRepository;
 import io.cartogra.registry.domain.Team;
+import io.cartogra.registry.domain.TeamMember;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Repository
@@ -105,6 +107,81 @@ public class JdbcTeamRepository implements TeamRepository {
         Long count = jdbc.queryForObject(sql, params, Long.class);
         return count != null && count > 0;
     }
+
+    @Override
+    public boolean isMember(UUID tenantId, UUID teamId, UUID userId) {
+        String sql = """
+                SELECT COUNT(*) FROM team_members
+                WHERE tenant_id = :tenantId AND team_id = :teamId AND user_id = :userId
+                """;
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("teamId", teamId)
+                .addValue("userId", userId);
+        Long count = jdbc.queryForObject(sql, params, Long.class);
+        return count != null && count > 0;
+    }
+
+    @Override
+    public Set<UUID> findTeamIdsByMember(UUID tenantId, UUID userId) {
+        String sql = """
+                SELECT team_id FROM team_members
+                WHERE tenant_id = :tenantId AND user_id = :userId
+                """;
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("userId", userId);
+        return Set.copyOf(jdbc.queryForList(sql, params, UUID.class));
+    }
+
+    @Override
+    public List<TeamMember> findMembers(UUID tenantId, UUID teamId) {
+        String sql = """
+                SELECT * FROM team_members
+                WHERE tenant_id = :tenantId AND team_id = :teamId
+                ORDER BY created_at ASC
+                """;
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("teamId", teamId);
+        return jdbc.query(sql, params, TEAM_MEMBER_MAPPER);
+    }
+
+    @Override
+    public TeamMember addMember(TeamMember member) {
+        String sql = """
+                INSERT INTO team_members (id, tenant_id, team_id, user_id, created_at)
+                VALUES (:id, :tenantId, :teamId, :userId, :createdAt)
+                RETURNING *
+                """;
+        var params = new MapSqlParameterSource()
+                .addValue("id", member.id())
+                .addValue("tenantId", member.tenantId())
+                .addValue("teamId", member.teamId())
+                .addValue("userId", member.userId())
+                .addValue("createdAt", java.sql.Timestamp.from(member.createdAt()));
+        return jdbc.queryForObject(sql, params, TEAM_MEMBER_MAPPER);
+    }
+
+    @Override
+    public void removeMember(UUID tenantId, UUID teamId, UUID userId) {
+        String sql = """
+                DELETE FROM team_members
+                WHERE tenant_id = :tenantId AND team_id = :teamId AND user_id = :userId
+                """;
+        jdbc.update(sql, new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("teamId", teamId)
+                .addValue("userId", userId));
+    }
+
+    private static final RowMapper<TeamMember> TEAM_MEMBER_MAPPER = (rs, _) -> new TeamMember(
+            UUID.fromString(rs.getString("id")),
+            UUID.fromString(rs.getString("tenant_id")),
+            UUID.fromString(rs.getString("team_id")),
+            UUID.fromString(rs.getString("user_id")),
+            rs.getTimestamp("created_at").toInstant()
+    );
 
     private MapSqlParameterSource toParams(Team t) {
         return new MapSqlParameterSource()

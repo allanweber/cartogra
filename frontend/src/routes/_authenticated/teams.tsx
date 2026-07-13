@@ -78,6 +78,8 @@ function TeamsPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [manageTeamId, setManageTeamId] = useState<string | null>(null)
   const isAdmin = useAuthStore((s) => s.user?.roles.includes('ADMIN') ?? false)
+  const isTeamOwner = useAuthStore((s) => s.user?.roles.includes('TEAM_OWNER') ?? false)
+  const canCreateTeam = isAdmin || isTeamOwner
 
   const { data: teamsPage, isLoading, error } = useQuery({
     queryKey: ['teams'],
@@ -88,6 +90,14 @@ function TeamsPage() {
     queryKey: ['services', 'teams-page'],
     queryFn: () => apiFetch<PageResult<RegistryService>>('/v1/registry/services?limit=1000'),
   })
+
+  const { data: myTeamIds } = useQuery({
+    queryKey: ['teams', 'mine'],
+    queryFn: () => apiFetch<string[]>('/v1/registry/teams/mine'),
+    enabled: !isAdmin,
+  })
+  const myTeamIdSet = new Set(myTeamIds ?? [])
+  const canManage = (teamId: string) => isAdmin || myTeamIdSet.has(teamId)
 
   const teams = teamsPage?.items ?? []
   const totalTeams = teamsPage?.total ?? 0
@@ -116,7 +126,7 @@ function TeamsPage() {
       title="Teams"
       description="Team ownership, health summary, and risk exposure"
       actions={
-        isAdmin && (
+        canCreateTeam && (
           <Button onClick={() => setCreateOpen(true)} size="sm" className="gap-1.5">
             <Plus className="size-3.5" aria-hidden="true" />
             Add team
@@ -150,7 +160,7 @@ function TeamsPage() {
             <Users className="mb-3 size-8 text-muted-foreground/50" aria-hidden="true" />
             <p className="text-sm font-medium">No teams yet</p>
             <p className="mt-1 text-xs text-muted-foreground">Create a team to start assigning service ownership</p>
-            {isAdmin && (
+            {canCreateTeam && (
               <Button onClick={() => setCreateOpen(true)} size="sm" className="mt-4 gap-1.5">
                 <Plus className="size-3.5" aria-hidden="true" />
                 Add team
@@ -170,7 +180,7 @@ function TeamsPage() {
                     health={deriveTeamHealth(svcs)}
                     riskExposure={deriveRiskExposure(svcs)}
                     selected={selectedTeamId === team.id}
-                    isAdmin={isAdmin}
+                    canManage={canManage(team.id)}
                     onClick={() =>
                       setSelectedTeamId((prev) => (prev === team.id ? null : team.id))
                     }
@@ -189,7 +199,7 @@ function TeamsPage() {
                 services={teamServiceMap.get(selectedTeam.id) ?? []}
                 health={deriveTeamHealth(teamServiceMap.get(selectedTeam.id) ?? [])}
                 riskExposure={deriveRiskExposure(teamServiceMap.get(selectedTeam.id) ?? [])}
-                isAdmin={isAdmin}
+                canManage={canManage(selectedTeam.id)}
                 onClose={() => setSelectedTeamId(null)}
                 onManage={() => setManageTeamId(selectedTeam.id)}
               />
@@ -198,23 +208,19 @@ function TeamsPage() {
         )}
       </div>
 
-      {isAdmin && (
-        <>
-          <TeamDialog open={createOpen} onOpenChange={setCreateOpen} />
+      {canCreateTeam && <TeamDialog open={createOpen} onOpenChange={setCreateOpen} />}
 
-          <TeamDialog
-            team={manageTeam ?? undefined}
-            open={!!manageTeamId}
-            onOpenChange={(open) => {
-              if (!open) setManageTeamId(null)
-            }}
-            onDeleted={() => {
-              if (selectedTeamId === manageTeamId) setSelectedTeamId(null)
-              setManageTeamId(null)
-            }}
-          />
-        </>
-      )}
+      <TeamDialog
+        team={manageTeam ?? undefined}
+        open={!!manageTeamId}
+        onOpenChange={(open) => {
+          if (!open) setManageTeamId(null)
+        }}
+        onDeleted={() => {
+          if (selectedTeamId === manageTeamId) setSelectedTeamId(null)
+          setManageTeamId(null)
+        }}
+      />
     </AppLayout>
   )
 }
@@ -252,7 +258,7 @@ function TeamRow({
   health,
   riskExposure,
   selected,
-  isAdmin,
+  canManage,
   onClick,
   onManage,
 }: {
@@ -261,7 +267,7 @@ function TeamRow({
   health: ServiceHealth
   riskExposure: RiskExposure
   selected: boolean
-  isAdmin: boolean
+  canManage: boolean
   onClick: () => void
   onManage: (e: React.MouseEvent) => void
 }) {
@@ -322,7 +328,7 @@ function TeamRow({
           <RiskExposureBadge exposure={riskExposure} />
         </div>
 
-        {isAdmin && (
+        {canManage && (
           <button
             onClick={onManage}
             aria-label={`Manage ${team.name}`}
@@ -342,7 +348,7 @@ function TeamDetailPanel({
   services,
   health,
   riskExposure,
-  isAdmin,
+  canManage,
   onClose,
   onManage,
 }: {
@@ -350,7 +356,7 @@ function TeamDetailPanel({
   services: RegistryService[]
   health: ServiceHealth
   riskExposure: RiskExposure
-  isAdmin: boolean
+  canManage: boolean
   onClose: () => void
   onManage: () => void
 }) {
@@ -431,12 +437,12 @@ function TeamDetailPanel({
         )}
 
         <div className="mt-4 flex gap-2">
-          {isAdmin && (
+          {canManage && (
             <Button onClick={onManage} size="sm" className="flex-1">
               Manage team
             </Button>
           )}
-          <Button asChild variant="outline" size="sm" className={isAdmin ? undefined : 'flex-1'}>
+          <Button asChild variant="outline" size="sm" className={canManage ? undefined : 'flex-1'}>
             <Link to="/graph">View graph</Link>
           </Button>
         </div>

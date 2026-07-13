@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
@@ -19,6 +20,7 @@ export interface ScmConnection {
   nextSyncAt: string | null
   lastSyncAt: string | null
   lastSyncStatus: string | null
+  lastSyncError: string | null
   webhookEnabled: boolean
   createdAt: string
   updatedAt: string
@@ -87,8 +89,14 @@ export function ScmConnectionDialog({ open, onOpenChange, provider, connection, 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scm-connections'] })
+      toast.success(isEdit ? 'Connection updated' : 'Connection added')
       onOpenChange(false)
       onSuccess?.()
+    },
+    onError: (err) => {
+      toast.error(err.message, {
+        description: err instanceof ApiError ? `trace: ${err.traceId}` : undefined,
+      })
     },
   })
 
@@ -99,9 +107,15 @@ export function ScmConnectionDialog({ open, onOpenChange, provider, connection, 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scm-connections'] })
+      toast.success('Connection removed')
       onOpenChange(false)
     },
-    onError: () => setDisconnectConfirm(false),
+    onError: (err) => {
+      setDisconnectConfirm(false)
+      toast.error(err.message, {
+        description: err instanceof ApiError ? `trace: ${err.traceId}` : undefined,
+      })
+    },
   })
 
   function handleClose() {
@@ -141,9 +155,16 @@ export function ScmConnectionDialog({ open, onOpenChange, provider, connection, 
         >
           <div className="space-y-5 px-6 py-6">
             {isEdit && connection.lastSyncStatus && (
-              <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-4 py-2.5 text-sm">
-                <span className="size-2 shrink-0 rounded-full bg-green-500" />
-                {connection.lastSyncStatus}
+              <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 px-4 py-2.5 text-sm">
+                <span className="flex items-center gap-2">
+                  <span
+                    className={`size-2 shrink-0 rounded-full ${connection.lastSyncStatus === 'FAILED' ? 'bg-red-500' : 'bg-green-500'}`}
+                  />
+                  {connection.lastSyncStatus === 'FAILED' ? 'Sync failed' : 'Synced'}
+                </span>
+                {connection.lastSyncStatus === 'FAILED' && connection.lastSyncError && (
+                  <span className="truncate text-xs text-muted-foreground">{connection.lastSyncError}</span>
+                )}
               </div>
             )}
 

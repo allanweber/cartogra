@@ -21,7 +21,7 @@ public class JdbcPlanLimitRepository implements PlanLimitRepository {
     @Override
     public PlanLimits findByTenantId(UUID tenantId) {
         String sql = """
-            SELECT bp.max_services, bp.max_scm_connections, bp.max_k8s_clusters
+            SELECT bp.max_services, bp.max_scm_connections, bp.max_k8s_clusters, bp.max_teams
             FROM tenants t
             JOIN billing_plans bp ON bp.id = t.plan_id
             WHERE t.tenant_id = :tenantId AND t.deleted_at IS NULL
@@ -30,7 +30,8 @@ public class JdbcPlanLimitRepository implements PlanLimitRepository {
         return jdbc.query(sql, params, (rs, _) -> new PlanLimits(
             rs.getInt("max_services"),
             rs.getInt("max_scm_connections"),
-            rs.getInt("max_k8s_clusters")
+            rs.getInt("max_k8s_clusters"),
+            rs.getInt("max_teams")
         )).stream().findFirst()
             .orElseThrow(() -> new NoSuchElementException("No billing plan found for tenant " + tenantId));
     }

@@ -53,6 +53,13 @@ function redirectToLogin() {
 async function parseResponse<T>(response: Response): Promise<T> {
   const traceId = response.headers.get('X-Trace-Id') ?? 'unknown'
 
+  if (response.status === 204) {
+    if (!response.ok) {
+      throw new ApiError('UNKNOWN', 'Request failed.', traceId)
+    }
+    return undefined as T
+  }
+
   let body: Record<string, unknown>
   try {
     body = await response.json()

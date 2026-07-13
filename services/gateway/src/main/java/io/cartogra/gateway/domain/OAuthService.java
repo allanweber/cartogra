@@ -4,6 +4,8 @@ import io.cartogra.gateway.api.dto.TokenResponse;
 import io.cartogra.gateway.config.JwtConfig;
 import io.cartogra.gateway.config.OAuthConfig;
 import io.cartogra.gateway.domain.exception.InvalidOAuthStateException;
+import io.cartogra.gateway.domain.exception.PlanLimitExceededException;
+import io.cartogra.gateway.domain.exception.UnauthorizedException;
 import io.cartogra.gateway.repository.RefreshTokenRepository;
 import io.cartogra.gateway.repository.TenantRepository;
 import io.cartogra.gateway.repository.UserRepository;
@@ -35,6 +37,7 @@ public class OAuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final JwtConfig jwtConfig;
     private final StringRedisTemplate redis;
+    private final BillingPlanService billingPlanService;
 
     public OAuthService(List<OAuthProvider> providers,
                         OAuthConfig oauthConfig,
@@ -43,7 +46,8 @@ public class OAuthService {
                         RefreshTokenRepository refreshTokenRepository,
                         JwtTokenProvider jwtTokenProvider,
                         JwtConfig jwtConfig,
-                        StringRedisTemplate redis) {
+                        StringRedisTemplate redis,
+                        BillingPlanService billingPlanService) {
         this.providers = List.copyOf(providers);
         this.oauthConfig = oauthConfig;
         this.userRepository = userRepository;
@@ -52,6 +56,7 @@ public class OAuthService {
         this.jwtTokenProvider = jwtTokenProvider;
         this.jwtConfig = jwtConfig;
         this.redis = redis;
+        this.billingPlanService = billingPlanService;
     }
 
     public String buildAuthorizationUri(String provider, @Nullable UUID tenantId, String state) {
@@ -78,6 +83,10 @@ public class OAuthService {
             ? resolveNewTenantUser(provider, profile)
             : resolveExistingTenantUser(UUID.fromString(stateValue), provider, profile);
 
+        if (user.disabledAt() != null) {
+            throw new UnauthorizedException("This account has been disabled. Contact your administrator.");
+        }
+
         JwtClaims claims = new JwtClaims(user.id(), user.tenantId(), user.email(),
             user.name(), user.authProvider(), user.roles(),
             Instant.now().plusSeconds(jwtConfig.accessTokenExpirySeconds()));
@@ -98,7 +107,7 @@ public class OAuthService {
                 new Tenant(null, null, profile.email(), null, "free", null, null, null));
             return userRepository.save(new User(null, tenant.id(), profile.email(), profile.name(),
                 provider, profile.subject(), null, true, List.of("ADMIN"),
-                null, null, null, null, null, null, null));
+                null, null, null, null, null, null, null, null));
         });
     }
 
@@ -110,14 +119,23 @@ public class OAuthService {
                         existing.name(), provider, profile.subject(), existing.passwordHash(),
                         true, existing.roles(), null, null,
                         existing.passwordResetToken(), existing.passwordResetTokenExp(),
-                        existing.createdAt(), existing.updatedAt(), existing.deletedAt());
+                        existing.createdAt(), existing.updatedAt(), existing.deletedAt(),
+                        existing.disabledAt());
                 }
                 return existing;
             })
             .map(userRepository::save)
-            .orElseGet(() -> userRepository.save(new User(null, tenantId, profile.email(),
-                profile.name(), provider, profile.subject(), null, true, List.of("VIEWER"),
-                null, null, null, null, null, null, null)));
+            .orElseGet(() -> {
+                Tenant tenant = tenantRepository.findByTenantId(tenantId)
+                    .orElseThrow(() -> new IllegalStateException("Tenant not found: " + tenantId));
+                int maxUsers = billingPlanService.getBySlug(tenant.plan()).maxUsers();
+                if (maxUsers != BillingPlan.UNLIMITED && userRepository.count(tenantId) >= maxUsers) {
+                    throw new PlanLimitExceededException("users", maxUsers);
+                }
+                return userRepository.save(new User(null, tenantId, profile.email(),
+                    profile.name(), provider, profile.subject(), null, true, List.of("VIEWER"),
+                    null, null, null, null, null, null, null, null));
+            });
     }
 
     private OAuthProvider providerFor(String provider) {

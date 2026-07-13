@@ -4,7 +4,9 @@ import io.cartogra.gateway.api.dto.RegisterRequest;
 import io.cartogra.gateway.api.dto.RegisterResponse;
 import io.cartogra.gateway.config.JwtConfig;
 import io.cartogra.gateway.infrastructure.email.EmailSender;
+import io.cartogra.gateway.repository.InvitationRepository;
 import io.cartogra.gateway.repository.RefreshTokenRepository;
+import io.cartogra.gateway.repository.TeamMembershipRepository;
 import io.cartogra.gateway.repository.TenantRepository;
 import io.cartogra.gateway.repository.UserRepository;
 import io.cartogra.gateway.infrastructure.jwt.JwtTokenProvider;
@@ -39,10 +41,19 @@ class RegisterUserUseCaseTest {
     private RefreshTokenRepository refreshTokenRepository;
 
     @Mock
+    private TeamMembershipRepository teamMembershipRepository;
+
+    @Mock
+    private InvitationRepository invitationRepository;
+
+    @Mock
     private EmailSender emailSender;
 
     @Mock
     private JwtTokenProvider jwtTokenProvider;
+
+    @Mock
+    private BillingPlanService billingPlanService;
 
     private AuthService auth;
 
@@ -53,7 +64,7 @@ class RegisterUserUseCaseTest {
     void setUp() {
         JwtConfig config = new JwtConfig("secret", 900L, 2592000L, false);
         auth = new AuthService(userRepository, tenantRepository, refreshTokenRepository,
-            emailSender, passwordEncoder, jwtTokenProvider, config);
+            teamMembershipRepository, invitationRepository, emailSender, passwordEncoder, jwtTokenProvider, config, billingPlanService);
         when(tenantRepository.save(any(Tenant.class)))
             .thenReturn(new Tenant(fixedTenantId, fixedTenantId, "name", "slug", "free", null, null, null));
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));

@@ -20,5 +20,6 @@ public record User(
     Instant passwordResetTokenExp,
     Instant createdAt,
     Instant updatedAt,
-    Instant deletedAt
+    Instant deletedAt,
+    Instant disabledAt
 ) {}

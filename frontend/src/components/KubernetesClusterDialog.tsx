@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
@@ -91,8 +92,14 @@ export function KubernetesClusterDialog({ open, onOpenChange, cluster, onSuccess
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['k8s-clusters'] })
+      toast.success(isEdit ? 'Cluster updated' : 'Cluster connected')
       onOpenChange(false)
       onSuccess?.()
+    },
+    onError: (err) => {
+      toast.error(err.message, {
+        description: err instanceof ApiError ? `trace: ${err.traceId}` : undefined,
+      })
     },
   })
 
@@ -103,9 +110,15 @@ export function KubernetesClusterDialog({ open, onOpenChange, cluster, onSuccess
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['k8s-clusters'] })
+      toast.success('Cluster removed')
       onOpenChange(false)
     },
-    onError: () => setRemoveConfirm(false),
+    onError: (err) => {
+      setRemoveConfirm(false)
+      toast.error(err.message, {
+        description: err instanceof ApiError ? `trace: ${err.traceId}` : undefined,
+      })
+    },
   })
 
   function handleClose() {

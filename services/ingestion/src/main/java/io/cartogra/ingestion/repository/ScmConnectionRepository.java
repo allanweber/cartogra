@@ -1,6 +1,7 @@
 package io.cartogra.ingestion.repository;
 
 import io.cartogra.ingestion.domain.ScmConnection;
+import org.jspecify.annotations.Nullable;
 
 import java.time.Instant;
 import java.util.List;
@@ -26,7 +27,7 @@ public interface ScmConnectionRepository {
     void updateSyncTimestamps(UUID id, Instant lastSyncAt, Instant nextSyncAt);
 
     /** Sync feedback: record the outcome of a completed sync job. */
-    void updateSyncResult(UUID id, String status, Instant lastSyncAt);
+    void updateSyncResult(UUID id, String status, @Nullable String error, Instant lastSyncAt);
 
     /** Webhook path: find a connection by id alone — tenant is derived from the record itself. */
     Optional<ScmConnection> findByIdForWebhook(UUID id);

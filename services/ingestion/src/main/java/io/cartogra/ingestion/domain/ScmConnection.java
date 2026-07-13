@@ -15,6 +15,7 @@ public record ScmConnection(
         @Nullable Instant nextSyncAt,
         @Nullable Instant lastSyncAt,
         @Nullable String lastSyncStatus,
+        @Nullable String lastSyncError,
         boolean webhookEnabled,
         Instant createdAt,
         Instant updatedAt,

@@ -72,6 +72,7 @@ function useProactiveRefresh() {
 function AuthenticatedLayout() {
   const { user, tokenExpiresAt } = Route.useRouteContext()
   const { isHydrated, hydrateWith } = useAuthStore()
+  const isAdmin = useAuthStore((s) => s.user?.roles.includes('ADMIN') ?? false)
   useProactiveRefresh()
 
   useEffect(() => {
@@ -83,7 +84,7 @@ function AuthenticatedLayout() {
   return (
     <>
       <Outlet />
-      <OnboardingWizard />
+      {isAdmin && <OnboardingWizard />}
     </>
   )
 }

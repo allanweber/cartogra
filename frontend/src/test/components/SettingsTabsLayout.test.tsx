@@ -81,6 +81,7 @@ describe('SettingsTabsLayout — admin guard', () => {
     expect(screen.getByText('Connections')).toBeInTheDocument()
     expect(screen.getByText('Notifications')).toBeInTheDocument()
     expect(screen.getByText('API Keys')).toBeInTheDocument()
+    expect(screen.getByText('Users')).toBeInTheDocument()
     expect(screen.getByText('Tenant')).toBeInTheDocument()
   })
 })

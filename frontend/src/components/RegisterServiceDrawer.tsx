@@ -2,6 +2,7 @@ import { useForm } from '@tanstack/react-form'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { X } from 'lucide-react'
+import { toast } from 'sonner'
 import { ApiError, apiFetch } from '#/lib/api'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
@@ -58,7 +59,13 @@ export function RegisterServiceDrawer({ open, onOpenChange }: RegisterServiceDra
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['services'] })
       queryClient.invalidateQueries({ queryKey: ['tech-stacks'] })
+      toast.success('Service registered')
       onOpenChange(false)
+    },
+    onError: (err) => {
+      toast.error(err.message, {
+        description: err instanceof ApiError ? `trace: ${err.traceId}` : undefined,
+      })
     },
   })
 

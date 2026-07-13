@@ -10,9 +10,13 @@ import io.cartogra.ingestion.infrastructure.registry.RegistryPlanLimitClient;
 import io.cartogra.ingestion.infrastructure.registry.RegistryPlanLimits;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -23,6 +27,8 @@ import java.util.UUID;
 public class ScmConnectionService {
 
     private static final int DEFAULT_POLL_INTERVAL_MINUTES = 15;
+    private static final Set<String> SECRET_KEYS = Set.of("token", "pat", "webhookSecret");
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final ScmConnectionRepository repository;
     private final SyncCommandProducer syncCommandProducer;
@@ -62,6 +68,7 @@ public class ScmConnectionService {
                 nextSyncAt,
                 null,
                 null,
+                null,
                 webhook,
                 now, now, null
         ));
@@ -77,10 +84,11 @@ public class ScmConnectionService {
         int interval = req.pollIntervalMinutes() != null ? req.pollIntervalMinutes() : existing.pollIntervalMinutes();
         boolean webhook = req.webhookEnabled() != null ? req.webhookEnabled() : existing.webhookEnabled();
         String provider = req.provider() != null ? req.provider() : existing.provider();
-        String config = req.config() != null ? req.config() : existing.config();
+        String config = req.config() != null ? preserveSecrets(req.config(), existing.config()) : existing.config();
+        boolean configChanged = !config.equals(existing.config());
 
         boolean changed = !provider.equals(existing.provider())
-                || !config.equals(existing.config())
+                || configChanged
                 || scheduler != existing.syncScheduler()
                 || interval != existing.pollIntervalMinutes()
                 || webhook != existing.webhookEnabled();
@@ -97,7 +105,7 @@ public class ScmConnectionService {
             nextSyncAt = null;
         }
 
-        return repository.save(new ScmConnection(
+        ScmConnection updated = repository.save(new ScmConnection(
                 existing.id(),
                 existing.tenantId(),
                 provider,
@@ -107,11 +115,36 @@ public class ScmConnectionService {
                 nextSyncAt,
                 existing.lastSyncAt(),
                 existing.lastSyncStatus(),
+                existing.lastSyncError(),
                 webhook,
                 existing.createdAt(),
                 Instant.now(),
                 null
         ));
+
+        // Config changes (e.g. a rotated token) fix the reason a sync was failing —
+        // don't make the user wait for the next scheduled tick to find out.
+        if (configChanged) {
+            syncCommandProducer.publish(updated);
+        }
+        return updated;
+    }
+
+    /** Re-injects any secret keys the request omitted, so a config-only edit (e.g. poll interval) doesn't wipe stored credentials. */
+    @SuppressWarnings("unchecked")
+    private static String preserveSecrets(String incomingConfig, String existingConfig) {
+        try {
+            Map<String, Object> incoming = new LinkedHashMap<>(MAPPER.readValue(incomingConfig, Map.class));
+            Map<String, Object> existing = MAPPER.readValue(existingConfig, Map.class);
+            for (String key : SECRET_KEYS) {
+                if (!incoming.containsKey(key) && existing.containsKey(key)) {
+                    incoming.put(key, existing.get(key));
+                }
+            }
+            return MAPPER.writeValueAsString(incoming);
+        } catch (Exception _) {
+            return incomingConfig;
+        }
     }
 
     public ScmConnection get(UUID tenantId, UUID id) {

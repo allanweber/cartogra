@@ -1,7 +1,10 @@
 package io.cartogra.gateway.api;
 
+import io.cartogra.gateway.api.dto.AcceptInviteRequest;
 import io.cartogra.gateway.api.dto.ApiResponse;
 import io.cartogra.gateway.api.dto.ForgotPasswordRequest;
+import io.cartogra.gateway.api.dto.InviteUserRequest;
+import io.cartogra.gateway.api.dto.InviteUserResponse;
 import io.cartogra.gateway.api.dto.LoginRequest;
 import io.cartogra.gateway.api.dto.RegisterRequest;
 import io.cartogra.gateway.api.dto.RegisterResponse;
@@ -9,7 +12,9 @@ import io.cartogra.gateway.api.dto.ResendVerificationRequest;
 import io.cartogra.gateway.api.dto.ResetPasswordRequest;
 import io.cartogra.gateway.api.dto.TokenResponse;
 import io.cartogra.gateway.api.dto.UpdateUserInfoRequest;
+import io.cartogra.gateway.api.dto.UpdateUserRoleRequest;
 import io.cartogra.gateway.api.dto.UserInfoResponse;
+import io.cartogra.gateway.api.dto.UserSummaryResponse;
 import io.cartogra.gateway.api.dto.VerifyEmailRequest;
 import io.cartogra.gateway.config.JwtConfig;
 import io.cartogra.gateway.domain.AuthService;
@@ -28,6 +33,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 @RestController
@@ -138,6 +146,120 @@ public class AuthController {
         return ResponseEntity.ok()
             .header("X-Trace-Id", traceId)
             .body(new ApiResponse<>(null, traceId));
+    }
+
+    @GetMapping("/users")
+    public ResponseEntity<ApiResponse<List<UserSummaryResponse>>> usersByIds(
+            @RequestParam List<UUID> ids) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (!(authentication instanceof JwtAuthentication principal)) {
+            throw new UnauthorizedException("Authentication required");
+        }
+        String traceId = traceContext.currentTraceId();
+        List<UserSummaryResponse> result = auth.listUsersByIds(principal.getTenantId(), Set.copyOf(ids)).stream()
+            .map(UserSummaryResponse::from)
+            .toList();
+        return ResponseEntity.ok()
+            .header("X-Trace-Id", traceId)
+            .body(new ApiResponse<>(result, traceId));
+    }
+
+    @GetMapping("/admin/users")
+    public ResponseEntity<ApiResponse<List<UserSummaryResponse>>> listUsers() {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (!(authentication instanceof JwtAuthentication principal)) {
+            throw new UnauthorizedException("Authentication required");
+        }
+        String traceId = traceContext.currentTraceId();
+        List<UserSummaryResponse> result = auth.listUsers(principal.getTenantId()).stream()
+            .map(UserSummaryResponse::from)
+            .toList();
+        return ResponseEntity.ok()
+            .header("X-Trace-Id", traceId)
+            .body(new ApiResponse<>(result, traceId));
+    }
+
+    @PostMapping("/admin/invite")
+    public ResponseEntity<ApiResponse<InviteUserResponse>> invite(
+            @Valid @RequestBody InviteUserRequest request) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (!(authentication instanceof JwtAuthentication principal)) {
+            throw new UnauthorizedException("Authentication required");
+        }
+        String traceId = traceContext.currentTraceId();
+        InviteUserResponse result = auth.inviteUser(principal.getTenantId(), principal.getUserId(), request);
+        return ResponseEntity.status(201)
+            .header("X-Trace-Id", traceId)
+            .body(new ApiResponse<>(result, traceId));
+    }
+
+    @PatchMapping("/admin/users/{id}/role")
+    public ResponseEntity<ApiResponse<UserSummaryResponse>> updateUserRole(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateUserRoleRequest request) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (!(authentication instanceof JwtAuthentication principal)) {
+            throw new UnauthorizedException("Authentication required");
+        }
+        String traceId = traceContext.currentTraceId();
+        UserSummaryResponse result = UserSummaryResponse.from(
+            auth.updateUserRole(principal.getTenantId(), id, request.role()));
+        return ResponseEntity.ok()
+            .header("X-Trace-Id", traceId)
+            .body(new ApiResponse<>(result, traceId));
+    }
+
+    @PostMapping("/admin/users/{id}/disable")
+    public ResponseEntity<ApiResponse<UserSummaryResponse>> disableUser(@PathVariable UUID id) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (!(authentication instanceof JwtAuthentication principal)) {
+            throw new UnauthorizedException("Authentication required");
+        }
+        String traceId = traceContext.currentTraceId();
+        UserSummaryResponse result = UserSummaryResponse.from(
+            auth.setUserDisabled(principal.getTenantId(), principal.getUserId(), id, true));
+        return ResponseEntity.ok()
+            .header("X-Trace-Id", traceId)
+            .body(new ApiResponse<>(result, traceId));
+    }
+
+    @PostMapping("/admin/users/{id}/enable")
+    public ResponseEntity<ApiResponse<UserSummaryResponse>> enableUser(@PathVariable UUID id) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (!(authentication instanceof JwtAuthentication principal)) {
+            throw new UnauthorizedException("Authentication required");
+        }
+        String traceId = traceContext.currentTraceId();
+        UserSummaryResponse result = UserSummaryResponse.from(
+            auth.setUserDisabled(principal.getTenantId(), principal.getUserId(), id, false));
+        return ResponseEntity.ok()
+            .header("X-Trace-Id", traceId)
+            .body(new ApiResponse<>(result, traceId));
+    }
+
+    @DeleteMapping("/admin/users/{id}")
+    public ResponseEntity<ApiResponse<Void>> removeUser(@PathVariable UUID id) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (!(authentication instanceof JwtAuthentication principal)) {
+            throw new UnauthorizedException("Authentication required");
+        }
+        String traceId = traceContext.currentTraceId();
+        auth.removeUser(principal.getTenantId(), principal.getUserId(), id);
+        return ResponseEntity.noContent()
+            .header("X-Trace-Id", traceId)
+            .build();
+    }
+
+    @PostMapping("/accept-invite")
+    public ResponseEntity<ApiResponse<TokenResponse>> acceptInvite(
+            @Valid @RequestBody AcceptInviteRequest request,
+            HttpServletResponse response) {
+        String traceId = traceContext.currentTraceId();
+        TokenResponse result = auth.acceptInvite(request);
+        setAuthCookies(response, result);
+        return ResponseEntity.ok()
+            .header("X-Trace-Id", traceId)
+            .body(new ApiResponse<>(result, traceId));
     }
 
     @GetMapping("/userinfo")

@@ -1,5 +1,5 @@
 -- Test schema for gateway integration tests.
--- Mirrors the registry Flyway migrations (V001, V003, V008, V009, V010, V011).
+-- Mirrors the registry Flyway migrations (V001, V002, V003, V008, V009, V010, V011, V012, V013, V014).
 -- Used instead of Flyway since the gateway has no migrations of its own.
 
 CREATE TABLE IF NOT EXISTS billing_plans (
@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS billing_plans (
     max_api_keys          INT         NOT NULL,
     max_scm_connections   INT         NOT NULL,
     max_k8s_clusters      INT         NOT NULL,
+    max_teams             INT         NOT NULL DEFAULT -1,
     sso_enabled           BOOLEAN     NOT NULL,
     rate_limit_replenish  INT         NOT NULL,
     rate_limit_burst      INT         NOT NULL,
@@ -20,11 +21,11 @@ CREATE TABLE IF NOT EXISTS billing_plans (
 );
 
 INSERT INTO billing_plans
-    (name, slug, max_services, max_users, max_api_keys, max_scm_connections, max_k8s_clusters, sso_enabled, rate_limit_replenish, rate_limit_burst)
+    (name, slug, max_services, max_users, max_api_keys, max_scm_connections, max_k8s_clusters, max_teams, sso_enabled, rate_limit_replenish, rate_limit_burst)
 VALUES
-    ('Free',       'free',       10,  3,  2,  1, 0, false, 20,  40),
-    ('Business',   'business',   100, 25, 20, 5, 3, true,  60,  120),
-    ('Enterprise', 'enterprise', -1,  -1, -1, -1, -1, true, 200, 400)
+    ('Free',       'free',       10,  3,  2,  1, 0, 2,  false, 20,  40),
+    ('Business',   'business',   100, 25, 20, 5, 3, 25, true,  60,  120),
+    ('Enterprise', 'enterprise', -1,  -1, -1, -1, -1, -1, true, 200, 400)
 ON CONFLICT (slug) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS tenants (
@@ -37,6 +38,16 @@ CREATE TABLE IF NOT EXISTS tenants (
     created_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),
     updated_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),
     deleted_at  TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS teams (
+    id          UUID         NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+    tenant_id   UUID         NOT NULL,
+    name        VARCHAR(255) NOT NULL,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    deleted_at  TIMESTAMPTZ,
+    CONSTRAINT uq_team_tenant_name UNIQUE (tenant_id, name)
 );
 
 CREATE TABLE IF NOT EXISTS users (
@@ -57,7 +68,17 @@ CREATE TABLE IF NOT EXISTS users (
     created_at                      TIMESTAMPTZ   NOT NULL DEFAULT now(),
     updated_at                      TIMESTAMPTZ   NOT NULL DEFAULT now(),
     deleted_at                      TIMESTAMPTZ,
+    disabled_at                     TIMESTAMPTZ,
     CONSTRAINT uq_user_tenant_email UNIQUE (tenant_id, email)
+);
+
+CREATE TABLE IF NOT EXISTS team_members (
+    id          UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+    tenant_id   UUID        NOT NULL,
+    team_id     UUID        NOT NULL REFERENCES teams(id),
+    user_id     UUID        NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_team_member UNIQUE (team_id, user_id)
 );
 
 CREATE TABLE IF NOT EXISTS refresh_tokens (
@@ -70,6 +91,20 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
     revoked_at  TIMESTAMPTZ,
     created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
     deleted_at  TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS invitations (
+    id          UUID         NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+    tenant_id   UUID         NOT NULL,
+    email       VARCHAR(254) NOT NULL,
+    role        VARCHAR(50)  NOT NULL,
+    invited_by  UUID         NOT NULL REFERENCES users(id),
+    team_id     UUID         REFERENCES teams(id),
+    token       VARCHAR(64)  NOT NULL UNIQUE,
+    token_exp   TIMESTAMPTZ  NOT NULL,
+    status      VARCHAR(20)  NOT NULL DEFAULT 'PENDING',
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS tenant_oidc_configs (

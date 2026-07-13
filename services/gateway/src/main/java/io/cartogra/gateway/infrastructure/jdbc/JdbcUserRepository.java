@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Repository
@@ -59,6 +60,28 @@ public class JdbcUserRepository implements UserRepository {
     }
 
     @Override
+    public List<User> findAllByTenant(UUID tenantId) {
+        String sql = "SELECT * FROM users WHERE tenant_id = :tenantId AND deleted_at IS NULL ORDER BY email";
+        var params = new MapSqlParameterSource("tenantId", tenantId);
+        return jdbc.query(sql, params, JdbcUserRepository::mapRow);
+    }
+
+    @Override
+    public List<User> findByIds(UUID tenantId, Set<UUID> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        String sql = """
+            SELECT * FROM users
+            WHERE tenant_id = :tenantId AND id IN (:ids) AND deleted_at IS NULL
+            """;
+        var params = new MapSqlParameterSource()
+            .addValue("tenantId", tenantId)
+            .addValue("ids", ids);
+        return jdbc.query(sql, params, JdbcUserRepository::mapRow);
+    }
+
+    @Override
     public Optional<User> findByVerificationToken(String token) {
         String sql = """
             SELECT * FROM users
@@ -69,14 +92,6 @@ public class JdbcUserRepository implements UserRepository {
     }
 
     @Override
-    public User save(User user) {
-        if (user.id() == null) {
-            return insert(user);
-        }
-        return update(user);
-    }
-
-    @Override
     public Optional<User> findByPasswordResetToken(String token) {
         String sql = """
             SELECT * FROM users
@@ -84,6 +99,21 @@ public class JdbcUserRepository implements UserRepository {
             """;
         var params = new MapSqlParameterSource("token", token);
         return jdbc.query(sql, params, JdbcUserRepository::mapRow).stream().findFirst();
+    }
+
+    @Override
+    public long count(UUID tenantId) {
+        String sql = "SELECT COUNT(*) FROM users WHERE tenant_id = :tenantId AND deleted_at IS NULL";
+        Long result = jdbc.queryForObject(sql, new MapSqlParameterSource("tenantId", tenantId), Long.class);
+        return result != null ? result : 0L;
+    }
+
+    @Override
+    public User save(User user) {
+        if (user.id() == null) {
+            return insert(user);
+        }
+        return update(user);
     }
 
     private User insert(User user) {
@@ -122,7 +152,7 @@ public class JdbcUserRepository implements UserRepository {
             user.authSubject(), user.passwordHash(), user.emailVerified(),
             user.roles(), user.emailVerificationToken(), user.emailVerificationTokenExp(),
             user.passwordResetToken(), user.passwordResetTokenExp(),
-            now, now, null);
+            now, now, null, null);
     }
 
     private User update(User user) {
@@ -133,7 +163,7 @@ public class JdbcUserRepository implements UserRepository {
                 email_verification_token_exp = :emailVerificationTokenExp,
                 password_reset_token = :passwordResetToken,
                 password_reset_token_exp = :passwordResetTokenExp,
-                roles = :roles::text[], updated_at = now()
+                roles = :roles::text[], disabled_at = :disabledAt, updated_at = now()
             WHERE id = :id AND deleted_at IS NULL
             """;
         var params = new MapSqlParameterSource()
@@ -150,9 +180,22 @@ public class JdbcUserRepository implements UserRepository {
             .addValue("passwordResetToken", user.passwordResetToken())
             .addValue("passwordResetTokenExp", user.passwordResetTokenExp() != null
                 ? Timestamp.from(user.passwordResetTokenExp()) : null)
-            .addValue("roles", "{" + String.join(",", user.roles()) + "}");
+            .addValue("roles", "{" + String.join(",", user.roles()) + "}")
+            .addValue("disabledAt", user.disabledAt() != null ? Timestamp.from(user.disabledAt()) : null);
         jdbc.update(sql, params);
         return user;
+    }
+
+    @Override
+    public void softDelete(UUID tenantId, UUID id) {
+        String sql = """
+            UPDATE users SET deleted_at = now(), updated_at = now()
+            WHERE id = :id AND tenant_id = :tenantId AND deleted_at IS NULL
+            """;
+        var params = new MapSqlParameterSource()
+            .addValue("id", id)
+            .addValue("tenantId", tenantId);
+        jdbc.update(sql, params);
     }
 
     private static User mapRow(ResultSet rs, int rowNum) throws SQLException {
@@ -174,7 +217,8 @@ public class JdbcUserRepository implements UserRepository {
             toInstant(rs.getTimestamp("password_reset_token_exp")),
             toInstant(rs.getTimestamp("created_at")),
             toInstant(rs.getTimestamp("updated_at")),
-            toInstant(rs.getTimestamp("deleted_at"))
+            toInstant(rs.getTimestamp("deleted_at")),
+            toInstant(rs.getTimestamp("disabled_at"))
         );
     }
 

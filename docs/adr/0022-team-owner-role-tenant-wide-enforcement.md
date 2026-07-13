@@ -1,3 +1,5 @@
+> **Superseded by ADR-0025**: `TEAM_OWNER` was removed rather than tightened; authorization is now a live `team_members` check.
+
 # TEAM_OWNER role enforced tenant-wide until team membership exists
 
 The `TEAM_OWNER` role is semantically intended to permit editing only services owned by the user's team. However, the current data model has no user-team membership table and no team IDs in the JWT. Rather than build team membership as a side effect of the service profile editing feature, we enforce `TEAM_OWNER` as a tenant-wide privilege for now: any user with the role can edit any service in their tenant.

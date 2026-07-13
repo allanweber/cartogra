@@ -36,7 +36,8 @@ public class TenantController {
         }
         String traceId = traceContext.currentTraceId();
         Tenant tenant = tenantService.getTenant(principal.getTenantId());
-        TenantResponse result = TenantResponse.from(tenant, billingPlanService.getBySlug(tenant.plan()));
+        long usersUsed = tenantService.countUsers(principal.getTenantId());
+        TenantResponse result = TenantResponse.from(tenant, billingPlanService.getBySlug(tenant.plan()), usersUsed);
         return ResponseEntity.ok()
             .header("X-Trace-Id", traceId)
             .body(new ApiResponse<>(result, traceId));

@@ -31,6 +31,7 @@ interface TenantInfo {
   name: string
   slug: string
   plan: PlanInfo
+  usersUsed: number
   createdAt: string
 }
 
@@ -51,15 +52,18 @@ function TenantPage() {
 
   const servicesUsage = useQuery({
     queryKey: ['tenant-usage', 'services'],
-    queryFn: () => apiFetch<PageResult<unknown>>('/v1/registry/services?limit=1'),
+    queryFn: () =>
+      apiFetch<PageResult<unknown>>('/v1/registry/services?limit=1'),
   })
   const scmConnectionsUsage = useQuery({
     queryKey: ['tenant-usage', 'scm-connections'],
-    queryFn: () => apiFetch<PageResult<unknown>>('/v1/ingestion/scm-connections?limit=1'),
+    queryFn: () =>
+      apiFetch<PageResult<unknown>>('/v1/ingestion/scm-connections?limit=1'),
   })
   const k8sClustersUsage = useQuery({
     queryKey: ['tenant-usage', 'k8s-clusters'],
-    queryFn: () => apiFetch<PageResult<unknown>>('/v1/ingestion/k8s/clusters?limit=1'),
+    queryFn: () =>
+      apiFetch<PageResult<unknown>>('/v1/ingestion/k8s/clusters?limit=1'),
   })
 
   return (
@@ -68,7 +72,9 @@ function TenantPage() {
 
       {error && (
         <Alert variant="destructive">
-          <AlertDescription>Failed to load tenant information.</AlertDescription>
+          <AlertDescription>
+            Failed to load tenant information.
+          </AlertDescription>
         </Alert>
       )}
 
@@ -87,13 +93,17 @@ function TenantPage() {
             <div className="flex items-center justify-between rounded-lg bg-muted/50 px-4 py-3">
               <div>
                 <p className="text-sm font-medium">Slug</p>
-                <p className="font-mono text-xs text-muted-foreground">{data.slug}</p>
+                <p className="font-mono text-xs text-muted-foreground">
+                  {data.slug}
+                </p>
               </div>
             </div>
             <div className="flex items-center justify-between rounded-lg bg-muted/50 px-4 py-3">
               <div>
                 <p className="text-sm font-medium">Plan</p>
-                <p className="text-xs text-muted-foreground">{data.plan.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {data.plan.name}
+                </p>
               </div>
               <Badge variant="outline">{data.plan.name}</Badge>
             </div>
@@ -101,7 +111,9 @@ function TenantPage() {
               <div>
                 <p className="text-sm font-medium">Created</p>
                 <p className="text-xs text-muted-foreground">
-                  {new Date(data.createdAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                  {new Date(data.createdAt).toLocaleDateString(undefined, {
+                    dateStyle: 'medium',
+                  })}
                 </p>
               </div>
             </div>
@@ -119,32 +131,49 @@ function TenantPage() {
               <div className="rounded-lg bg-muted/50 px-4 py-3">
                 <dt className="text-xs text-muted-foreground">Services</dt>
                 <dd className="text-sm font-medium">
-                  {formatUsage(servicesUsage.data?.total, data.plan.maxServices)}
+                  {formatUsage(
+                    servicesUsage.data?.total,
+                    data.plan.maxServices,
+                  )}
                 </dd>
               </div>
               <div className="rounded-lg bg-muted/50 px-4 py-3">
                 <dt className="text-xs text-muted-foreground">Users</dt>
-                <dd className="text-sm font-medium">{formatLimit(data.plan.maxUsers)}</dd>
+                <dd className="text-sm font-medium">
+                  {formatUsage(data.usersUsed, data.plan.maxUsers)}
+                </dd>
               </div>
               <div className="rounded-lg bg-muted/50 px-4 py-3">
                 <dt className="text-xs text-muted-foreground">API Keys</dt>
-                <dd className="text-sm font-medium">{formatLimit(data.plan.maxApiKeys)}</dd>
+                <dd className="text-sm font-medium">
+                  {formatLimit(data.plan.maxApiKeys)}
+                </dd>
               </div>
               <div className="rounded-lg bg-muted/50 px-4 py-3">
-                <dt className="text-xs text-muted-foreground">SCM Connections</dt>
+                <dt className="text-xs text-muted-foreground">
+                  SCM Connections
+                </dt>
                 <dd className="text-sm font-medium">
-                  {formatUsage(scmConnectionsUsage.data?.total, data.plan.maxScmConnections)}
+                  {formatUsage(
+                    scmConnectionsUsage.data?.total,
+                    data.plan.maxScmConnections,
+                  )}
                 </dd>
               </div>
               <div className="rounded-lg bg-muted/50 px-4 py-3">
                 <dt className="text-xs text-muted-foreground">K8s Clusters</dt>
                 <dd className="text-sm font-medium">
-                  {formatUsage(k8sClustersUsage.data?.total, data.plan.maxK8sClusters)}
+                  {formatUsage(
+                    k8sClustersUsage.data?.total,
+                    data.plan.maxK8sClusters,
+                  )}
                 </dd>
               </div>
               <div className="rounded-lg bg-muted/50 px-4 py-3">
                 <dt className="text-xs text-muted-foreground">SSO / OIDC</dt>
-                <dd className="text-sm font-medium">{data.plan.ssoEnabled ? 'Included' : 'Not included'}</dd>
+                <dd className="text-sm font-medium">
+                  {data.plan.ssoEnabled ? 'Included' : 'Not included'}
+                </dd>
               </div>
             </dl>
           </CardContent>

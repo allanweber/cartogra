@@ -10,6 +10,7 @@ const TABS = [
   { label: 'Connections', to: '/settings/connections' },
   { label: 'Notifications', to: '/settings/notifications' },
   { label: 'API Keys', to: '/settings/api-keys' },
+  { label: 'Users', to: '/settings/users' },
   { label: 'Tenant', to: '/settings/tenant' },
 ] as const
 

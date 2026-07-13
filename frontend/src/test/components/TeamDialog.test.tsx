@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TeamDialog } from '#/components/TeamDialog'
 import { apiFetch, ApiError } from '#/lib/api'
 
-import type { PageResult, RegistryService, RegistryTeam } from '#/lib/registry-types'
+import type { PageResult, RegistryService, RegistryTeam, TenantUser } from '#/lib/registry-types'
 
 vi.mock('#/lib/api', () => ({
   apiFetch: vi.fn(),
@@ -17,6 +17,13 @@ vi.mock('#/lib/api', () => ({
       this.traceId = traceId
     }
   },
+}))
+
+let mockRoles = ['ADMIN']
+
+vi.mock('#/stores/useAuthStore', () => ({
+  useAuthStore: (selector: (s: { user: { roles: string[] } }) => unknown) =>
+    selector({ user: { roles: mockRoles } }),
 }))
 
 const MOCK_TEAM: RegistryTeam = {
@@ -75,12 +82,21 @@ const WITH_SERVICES: PageResult<RegistryService> = {
   offset: 0,
 }
 
+const TENANT_USERS: TenantUser[] = [
+  { id: 'user-1', email: 'ada@cartogra.io', name: 'Ada Lovelace', roles: ['MEMBER'], disabled: false },
+  { id: 'user-2', email: 'grace@cartogra.io', name: null, roles: ['VIEWER'], disabled: false },
+]
+
 function mockEditFetch(
   services: PageResult<RegistryService> = EMPTY_SERVICES,
   teamResult: RegistryTeam = UPDATED_TEAM,
 ) {
-  vi.mocked(apiFetch).mockImplementation((_path: string, init?: RequestInit) => {
-    if (!init?.method || init.method === 'GET') return Promise.resolve(services)
+  vi.mocked(apiFetch).mockImplementation((path: string, init?: RequestInit) => {
+    if (!init?.method || init.method === 'GET') {
+      if (path.includes('/members')) return Promise.resolve([])
+      if (path.includes('/admin/users')) return Promise.resolve(TENANT_USERS)
+      return Promise.resolve(services)
+    }
     return Promise.resolve(teamResult)
   })
 }
@@ -199,7 +215,10 @@ describe('TeamDialog — create mode', () => {
 // ─── Edit mode ────────────────────────────────────────────────────────────────
 
 describe('TeamDialog — edit mode', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockRoles = ['ADMIN']
+  })
 
   it('shows team name as title', () => {
     mockEditFetch()
@@ -326,8 +345,10 @@ describe('TeamDialog — edit mode', () => {
   })
 
   it('shows error alert with traceId on save failure', async () => {
-    vi.mocked(apiFetch).mockImplementation((_path: string, init?: RequestInit) => {
-      if (!init?.method || init.method === 'GET') return Promise.resolve(EMPTY_SERVICES)
+    vi.mocked(apiFetch).mockImplementation((path: string, init?: RequestInit) => {
+      if (!init?.method || init.method === 'GET') {
+        return Promise.resolve(path.includes('/members') ? [] : EMPTY_SERVICES)
+      }
       return Promise.reject(new ApiError('CONFLICT', 'Name already taken', 'trace-e1'))
     })
     renderDialog({ team: MOCK_TEAM })
@@ -339,8 +360,10 @@ describe('TeamDialog — edit mode', () => {
   })
 
   it('shows pending state while saving', async () => {
-    vi.mocked(apiFetch).mockImplementation((_path: string, init?: RequestInit) => {
-      if (!init?.method || init.method === 'GET') return Promise.resolve(EMPTY_SERVICES)
+    vi.mocked(apiFetch).mockImplementation((path: string, init?: RequestInit) => {
+      if (!init?.method || init.method === 'GET') {
+        return Promise.resolve(path.includes('/members') ? [] : EMPTY_SERVICES)
+      }
       return new Promise(() => {})
     })
     renderDialog({ team: MOCK_TEAM })
@@ -358,8 +381,10 @@ describe('TeamDialog — edit mode', () => {
   })
 
   it('DELETE /v1/registry/teams/:id on confirmed delete', async () => {
-    vi.mocked(apiFetch).mockImplementation((_path: string, init?: RequestInit) => {
-      if (!init?.method || init.method === 'GET') return Promise.resolve(EMPTY_SERVICES)
+    vi.mocked(apiFetch).mockImplementation((path: string, init?: RequestInit) => {
+      if (!init?.method || init.method === 'GET') {
+        return Promise.resolve(path.includes('/members') ? [] : EMPTY_SERVICES)
+      }
       return Promise.resolve(undefined)
     })
     renderDialog({ team: MOCK_TEAM })
@@ -377,8 +402,10 @@ describe('TeamDialog — edit mode', () => {
   })
 
   it('calls onDeleted after successful delete', async () => {
-    vi.mocked(apiFetch).mockImplementation((_path: string, init?: RequestInit) => {
-      if (!init?.method || init.method === 'GET') return Promise.resolve(EMPTY_SERVICES)
+    vi.mocked(apiFetch).mockImplementation((path: string, init?: RequestInit) => {
+      if (!init?.method || init.method === 'GET') {
+        return Promise.resolve(path.includes('/members') ? [] : EMPTY_SERVICES)
+      }
       return Promise.resolve(undefined)
     })
     const { onDeleted } = renderDialog({ team: MOCK_TEAM })
@@ -409,5 +436,157 @@ describe('TeamDialog — edit mode', () => {
     const { onOpenChange } = renderDialog({ team: MOCK_TEAM })
     fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }))
     expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
+  it('shows "Invite user" button in Members section for admins', async () => {
+    mockEditFetch()
+    renderDialog({ team: MOCK_TEAM })
+    expect(await screen.findByRole('button', { name: /invite user/i })).toBeInTheDocument()
+  })
+
+  it('hides "Invite user" button for non-admins', async () => {
+    mockRoles = ['MEMBER']
+    mockEditFetch()
+    renderDialog({ team: MOCK_TEAM })
+    await screen.findByText('Members')
+    expect(screen.queryByRole('button', { name: /invite user/i })).not.toBeInTheDocument()
+  })
+
+  it('opens the invite dialog pre-locked to this team', async () => {
+    mockEditFetch()
+    renderDialog({ team: MOCK_TEAM })
+
+    fireEvent.click(await screen.findByRole('button', { name: /invite user/i }))
+
+    await screen.findByText('Users')
+    expect(screen.getAllByText('Platform').length).toBeGreaterThanOrEqual(2)
+    expect(screen.queryByLabelText(/team \(optional\)/i)).not.toBeInTheDocument()
+  })
+
+  it('stages an existing user as "will add" without calling the API until save', async () => {
+    mockEditFetch()
+    renderDialog({ team: MOCK_TEAM })
+
+    const search = await screen.findByPlaceholderText(/add existing user by email/i)
+    fireEvent.change(search, { target: { value: 'ada' } })
+
+    const result = await screen.findByRole('button', { name: /ada lovelace.*ada@cartogra\.io/i })
+    fireEvent.click(result)
+
+    expect(await screen.findByText(/ada lovelace/i)).toBeInTheDocument()
+    expect(screen.getByText('will add')).toBeInTheDocument()
+    expect(apiFetch).not.toHaveBeenCalledWith(
+      '/v1/registry/teams/team-1/members',
+      expect.objectContaining({ method: 'POST' }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+
+    await waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/v1/registry/teams/team-1/members',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ userId: 'user-1' }),
+        }),
+      ),
+    )
+  })
+
+  it('staged member removal only calls the API after save', async () => {
+    vi.mocked(apiFetch).mockImplementation((path: string, init?: RequestInit) => {
+      if (!init?.method || init.method === 'GET') {
+        if (path.includes('/members')) {
+          return Promise.resolve([
+            { id: 'm1', teamId: 'team-1', userId: 'user-1', createdAt: '2024-01-01T00:00:00Z' },
+          ])
+        }
+        if (path.includes('/admin/users')) return Promise.resolve(TENANT_USERS)
+        return Promise.resolve(EMPTY_SERVICES)
+      }
+      return Promise.resolve(UPDATED_TEAM)
+    })
+    renderDialog({ team: MOCK_TEAM })
+
+    const removeBtn = await screen.findByRole('button', { name: /remove member/i })
+    fireEvent.click(removeBtn)
+
+    expect(screen.queryByText(/ada lovelace/i)).not.toBeInTheDocument()
+    expect(apiFetch).not.toHaveBeenCalledWith(
+      '/v1/registry/teams/team-1/members/user-1',
+      expect.objectContaining({ method: 'DELETE' }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+
+    await waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/v1/registry/teams/team-1/members/user-1',
+        expect.objectContaining({ method: 'DELETE' }),
+      ),
+    )
+  })
+
+  it('hides the "add existing user" search for non-admins', async () => {
+    mockRoles = ['MEMBER']
+    mockEditFetch()
+    renderDialog({ team: MOCK_TEAM })
+    await screen.findByText('Members')
+    expect(
+      screen.queryByPlaceholderText(/add existing user by email/i),
+    ).not.toBeInTheDocument()
+  })
+
+  it('lets a non-admin team member see members (by email) but not remove them', async () => {
+    mockRoles = ['MEMBER']
+    vi.mocked(apiFetch).mockImplementation((path: string, init?: RequestInit) => {
+      if (!init?.method || init.method === 'GET') {
+        if (path.includes('/members')) {
+          return Promise.resolve([
+            { id: 'm1', teamId: 'team-1', userId: 'user-1', createdAt: '2024-01-01T00:00:00Z' },
+          ])
+        }
+        if (path.includes('/auth/users?ids=')) return Promise.resolve(TENANT_USERS)
+        return Promise.resolve(EMPTY_SERVICES)
+      }
+      return Promise.resolve(UPDATED_TEAM)
+    })
+    renderDialog({ team: MOCK_TEAM })
+
+    expect(await screen.findByText(/ada lovelace/i)).toBeInTheDocument()
+    expect(screen.queryByText('user-1')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /remove member/i }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('a team owner sees the "add existing user" search and can remove members', async () => {
+    mockRoles = ['TEAM_OWNER']
+    vi.mocked(apiFetch).mockImplementation((path: string, init?: RequestInit) => {
+      if (!init?.method || init.method === 'GET') {
+        if (path.includes('/members')) {
+          return Promise.resolve([
+            { id: 'm1', teamId: 'team-1', userId: 'user-1', createdAt: '2024-01-01T00:00:00Z' },
+          ])
+        }
+        if (path.includes('/admin/users')) return Promise.resolve(TENANT_USERS)
+        return Promise.resolve(EMPTY_SERVICES)
+      }
+      return Promise.resolve(UPDATED_TEAM)
+    })
+    renderDialog({ team: MOCK_TEAM })
+
+    expect(
+      await screen.findByPlaceholderText(/add existing user by email/i),
+    ).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /remove member/i })).toBeInTheDocument()
+  })
+
+  it('hides "Invite user" for a team owner (invite stays admin-only)', async () => {
+    mockRoles = ['TEAM_OWNER']
+    mockEditFetch()
+    renderDialog({ team: MOCK_TEAM })
+    await screen.findByText('Members')
+    expect(screen.queryByRole('button', { name: /invite user/i })).not.toBeInTheDocument()
   })
 })

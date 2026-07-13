@@ -20,4 +20,9 @@ public class NoOpEmailSender implements EmailSender {
     public void sendPasswordReset(String toEmail, String resetToken) {
         log.info("[TEST MODE] Password reset for {} — token: {}", toEmail, resetToken);
     }
+
+    @Override
+    public void sendInvite(String toEmail, String tenantName, String inviteToken) {
+        log.info("[TEST MODE] Invite for {} to tenant {} — token: {}", toEmail, tenantName, inviteToken);
+    }
 }

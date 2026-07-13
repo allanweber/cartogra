@@ -1,5 +1,8 @@
 package io.cartogra.gateway.domain;
 
+import io.cartogra.gateway.api.dto.AcceptInviteRequest;
+import io.cartogra.gateway.api.dto.InviteUserRequest;
+import io.cartogra.gateway.api.dto.InviteUserResponse;
 import io.cartogra.gateway.api.dto.RegisterRequest;
 import io.cartogra.gateway.api.dto.RegisterResponse;
 import io.cartogra.gateway.api.dto.TokenResponse;
@@ -7,10 +10,14 @@ import io.cartogra.gateway.api.dto.UserInfoResponse;
 import io.cartogra.gateway.config.JwtConfig;
 import io.cartogra.gateway.domain.exception.ConflictException;
 import io.cartogra.gateway.domain.exception.InvalidOtpException;
+import io.cartogra.gateway.domain.exception.NotFoundException;
+import io.cartogra.gateway.domain.exception.PlanLimitExceededException;
 import io.cartogra.gateway.domain.exception.UnauthorizedException;
 import io.cartogra.gateway.domain.exception.UnverifiedEmailException;
 import io.cartogra.gateway.infrastructure.email.EmailSender;
+import io.cartogra.gateway.repository.InvitationRepository;
 import io.cartogra.gateway.repository.RefreshTokenRepository;
+import io.cartogra.gateway.repository.TeamMembershipRepository;
 import io.cartogra.gateway.repository.TenantRepository;
 import io.cartogra.gateway.repository.UserRepository;
 import io.cartogra.gateway.infrastructure.jwt.JwtClaims;
@@ -23,8 +30,10 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -36,30 +45,40 @@ public class AuthService {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final long OTP_TTL_SECONDS = 900;
+    static final long INVITE_TOKEN_TTL_SECONDS = 7 * 24 * 3600;
     private static final ExecutorService EMAIL_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
 
     private final UserRepository userRepository;
     private final TenantRepository tenantRepository;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final TeamMembershipRepository teamMembershipRepository;
+    private final InvitationRepository invitationRepository;
     private final EmailSender emailSender;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final JwtConfig jwtConfig;
+    private final BillingPlanService billingPlanService;
 
     public AuthService(UserRepository userRepository,
                        TenantRepository tenantRepository,
                        RefreshTokenRepository refreshTokenRepository,
+                       TeamMembershipRepository teamMembershipRepository,
+                       InvitationRepository invitationRepository,
                        EmailSender emailSender,
                        PasswordEncoder passwordEncoder,
                        JwtTokenProvider jwtTokenProvider,
-                       JwtConfig jwtConfig) {
+                       JwtConfig jwtConfig,
+                       BillingPlanService billingPlanService) {
         this.userRepository = userRepository;
         this.tenantRepository = tenantRepository;
         this.refreshTokenRepository = refreshTokenRepository;
+        this.teamMembershipRepository = teamMembershipRepository;
+        this.invitationRepository = invitationRepository;
         this.emailSender = emailSender;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenProvider = jwtTokenProvider;
         this.jwtConfig = jwtConfig;
+        this.billingPlanService = billingPlanService;
     }
 
     public RegisterResponse register(RegisterRequest request) {
@@ -83,7 +102,7 @@ public class AuthService {
         String hash = passwordEncoder.encode(request.password());
 
         User user = new User(null, tenant.id(), request.email(), null, "local", null, hash,
-            false, List.of("ADMIN"), otp, otpExp, null, null, null, null, null);
+            false, List.of("ADMIN"), otp, otpExp, null, null, null, null, null, null);
         userRepository.save(user);
 
         EMAIL_EXECUTOR.submit(() -> emailSender.sendVerification(request.email(), otp));
@@ -105,7 +124,7 @@ public class AuthService {
         User verified = new User(user.id(), user.tenantId(), user.email(), user.name(),
             user.authProvider(), user.authSubject(), user.passwordHash(), true, user.roles(),
             null, null, user.passwordResetToken(), user.passwordResetTokenExp(),
-            user.createdAt(), user.updatedAt(), user.deletedAt());
+            user.createdAt(), user.updatedAt(), user.deletedAt(), user.disabledAt());
         userRepository.save(verified);
     }
 
@@ -120,7 +139,7 @@ public class AuthService {
             User updated = new User(user.id(), user.tenantId(), user.email(), user.name(),
                 user.authProvider(), user.authSubject(), user.passwordHash(), user.emailVerified(),
                 user.roles(), otp, exp, user.passwordResetToken(), user.passwordResetTokenExp(),
-                user.createdAt(), user.updatedAt(), user.deletedAt());
+                user.createdAt(), user.updatedAt(), user.deletedAt(), user.disabledAt());
             userRepository.save(updated);
 
             EMAIL_EXECUTOR.submit(() -> emailSender.sendVerification(email, otp));
@@ -140,6 +159,9 @@ public class AuthService {
         if (!user.emailVerified()) {
             throw new UnverifiedEmailException();
         }
+        if (user.disabledAt() != null) {
+            throw new UnauthorizedException("This account has been disabled. Contact your administrator.");
+        }
 
         return issueTokens(user);
     }
@@ -153,6 +175,10 @@ public class AuthService {
 
         User user = userRepository.findById(token.userId())
             .orElseThrow(() -> new UnauthorizedException("User not found"));
+
+        if (user.disabledAt() != null) {
+            throw new UnauthorizedException("This account has been disabled. Contact your administrator.");
+        }
 
         return issueTokens(user);
     }
@@ -175,7 +201,7 @@ public class AuthService {
             User updated = new User(user.id(), user.tenantId(), user.email(), user.name(),
                 user.authProvider(), user.authSubject(), user.passwordHash(), user.emailVerified(),
                 user.roles(), user.emailVerificationToken(), user.emailVerificationTokenExp(),
-                token, exp, user.createdAt(), user.updatedAt(), user.deletedAt());
+                token, exp, user.createdAt(), user.updatedAt(), user.deletedAt(), user.disabledAt());
             userRepository.save(updated);
 
             EMAIL_EXECUTOR.submit(() -> emailSender.sendPasswordReset(email, token));
@@ -194,8 +220,132 @@ public class AuthService {
         User updated = new User(user.id(), user.tenantId(), user.email(), user.name(),
             user.authProvider(), user.authSubject(), newHash, user.emailVerified(), user.roles(),
             user.emailVerificationToken(), user.emailVerificationTokenExp(),
-            null, null, user.createdAt(), user.updatedAt(), user.deletedAt());
+            null, null, user.createdAt(), user.updatedAt(), user.deletedAt(), user.disabledAt());
         userRepository.save(updated);
+    }
+
+    public List<User> listUsers(UUID tenantId) {
+        return userRepository.findAllByTenant(tenantId);
+    }
+
+    public List<User> listUsersByIds(UUID tenantId, Set<UUID> ids) {
+        return userRepository.findByIds(tenantId, ids);
+    }
+
+    public User updateUserRole(UUID tenantId, UUID targetUserId, String role) {
+        User user = userRepository.findById(targetUserId)
+            .filter(u -> u.tenantId().equals(tenantId))
+            .orElseThrow(() -> new NotFoundException("User not found: " + targetUserId));
+
+        if (user.roles().contains("ADMIN") && !"ADMIN".equals(role) && countAdmins(tenantId) <= 1) {
+            throw new IllegalArgumentException("Cannot change role: this is the tenant's last admin.");
+        }
+
+        User updated = new User(user.id(), user.tenantId(), user.email(), user.name(),
+            user.authProvider(), user.authSubject(), user.passwordHash(), user.emailVerified(),
+            List.of(role), user.emailVerificationToken(), user.emailVerificationTokenExp(),
+            user.passwordResetToken(), user.passwordResetTokenExp(),
+            user.createdAt(), user.updatedAt(), user.deletedAt(), user.disabledAt());
+        return userRepository.save(updated);
+    }
+
+    public void removeUser(UUID tenantId, UUID requestingUserId, UUID targetUserId) {
+        if (requestingUserId.equals(targetUserId)) {
+            throw new IllegalArgumentException("Cannot remove your own account.");
+        }
+        User user = userRepository.findById(targetUserId)
+            .filter(u -> u.tenantId().equals(tenantId))
+            .orElseThrow(() -> new NotFoundException("User not found: " + targetUserId));
+
+        if (user.roles().contains("ADMIN") && countAdmins(tenantId) <= 1) {
+            throw new IllegalArgumentException("Cannot remove the tenant's last admin.");
+        }
+
+        userRepository.softDelete(tenantId, targetUserId);
+    }
+
+    public User setUserDisabled(UUID tenantId, UUID requestingUserId, UUID targetUserId, boolean disabled) {
+        if (disabled && requestingUserId.equals(targetUserId)) {
+            throw new IllegalArgumentException("Cannot disable your own account.");
+        }
+        User user = userRepository.findById(targetUserId)
+            .filter(u -> u.tenantId().equals(tenantId))
+            .orElseThrow(() -> new NotFoundException("User not found: " + targetUserId));
+
+        if (disabled && user.roles().contains("ADMIN") && countAdmins(tenantId) <= 1) {
+            throw new IllegalArgumentException("Cannot disable the tenant's last admin.");
+        }
+
+        User updated = new User(user.id(), user.tenantId(), user.email(), user.name(),
+            user.authProvider(), user.authSubject(), user.passwordHash(), user.emailVerified(),
+            user.roles(), user.emailVerificationToken(), user.emailVerificationTokenExp(),
+            user.passwordResetToken(), user.passwordResetTokenExp(),
+            user.createdAt(), user.updatedAt(), user.deletedAt(),
+            disabled ? Instant.now() : null);
+        return userRepository.save(updated);
+    }
+
+    private long countAdmins(UUID tenantId) {
+        return userRepository.findAllByTenant(tenantId).stream()
+            .filter(u -> u.roles().contains("ADMIN"))
+            .count();
+    }
+
+    public InviteUserResponse inviteUser(UUID tenantId, UUID invitedBy, InviteUserRequest request) {
+        userRepository.findByTenantAndEmail(tenantId, request.email()).ifPresent(_ -> {
+            throw new ConflictException("An account with this email already exists in this tenant.");
+        });
+
+        Tenant tenant = tenantRepository.findByTenantId(tenantId)
+            .orElseThrow(() -> new NotFoundException("Tenant not found: " + tenantId));
+        int maxUsers = billingPlanService.getBySlug(tenant.plan()).maxUsers();
+        if (maxUsers != BillingPlan.UNLIMITED && userRepository.count(tenantId) >= maxUsers) {
+            throw new PlanLimitExceededException("users", maxUsers);
+        }
+
+        if (request.teamId() != null && !teamMembershipRepository.teamExists(tenantId, request.teamId())) {
+            throw new NotFoundException("Team not found: " + request.teamId());
+        }
+
+        String inviteToken = generateInviteToken();
+        Instant inviteExp = Instant.now().plusSeconds(INVITE_TOKEN_TTL_SECONDS);
+
+        Invitation invitation = new Invitation(null, tenantId, request.email(), request.role(),
+            invitedBy, request.teamId(), inviteToken, inviteExp, "PENDING", null, null);
+        Invitation saved = invitationRepository.save(invitation);
+
+        EMAIL_EXECUTOR.submit(() -> emailSender.sendInvite(request.email(), tenant.name(), inviteToken));
+
+        return new InviteUserResponse(saved.id(), saved.email());
+    }
+
+    public TokenResponse acceptInvite(AcceptInviteRequest request) {
+        Invitation invitation = invitationRepository.findByToken(request.token())
+            .orElseThrow(() -> new InvalidOtpException("Invalid or expired invite token"));
+
+        if (!"PENDING".equals(invitation.status())) {
+            throw new InvalidOtpException("Invite has already been used");
+        }
+        if (invitation.tokenExp() == null || invitation.tokenExp().isBefore(Instant.now())) {
+            throw new InvalidOtpException("Invite token has expired");
+        }
+
+        userRepository.findByTenantAndEmail(invitation.tenantId(), invitation.email()).ifPresent(_ -> {
+            throw new ConflictException("An account with this email already exists in this tenant.");
+        });
+
+        String hash = passwordEncoder.encode(request.password());
+        User user = new User(null, invitation.tenantId(), invitation.email(), null, "local", null,
+            hash, true, List.of(invitation.role()), null, null, null, null, null, null, null, null);
+        User saved = userRepository.save(user);
+
+        if (invitation.teamId() != null) {
+            teamMembershipRepository.addMember(saved.tenantId(), invitation.teamId(), saved.id());
+        }
+
+        invitationRepository.markAccepted(invitation.id());
+
+        return issueTokens(saved);
     }
 
     public UpdateUserInfoResult updateUserInfo(UUID userId, String rawName, String rawEmail) {
@@ -230,7 +380,7 @@ public class AuthService {
             user.authSubject(), user.passwordHash(), emailVerified,
             user.roles(), verificationToken, verificationTokenExp,
             user.passwordResetToken(), user.passwordResetTokenExp(),
-            user.createdAt(), user.updatedAt(), user.deletedAt());
+            user.createdAt(), user.updatedAt(), user.deletedAt(), user.disabledAt());
         userRepository.save(updated);
 
         long expiresIn = jwtConfig.accessTokenExpirySeconds();
@@ -261,6 +411,12 @@ public class AuthService {
 
     private static String generateOtp() {
         return String.format("%06d", SECURE_RANDOM.nextInt(1_000_000));
+    }
+
+    static String generateInviteToken() {
+        byte[] bytes = new byte[32];
+        SECURE_RANDOM.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
     static String sha256(String input) {

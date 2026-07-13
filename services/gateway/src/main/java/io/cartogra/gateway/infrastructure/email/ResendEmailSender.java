@@ -1,5 +1,6 @@
 package io.cartogra.gateway.infrastructure.email;
 
+import io.cartogra.gateway.config.FrontendProperties;
 import io.cartogra.gateway.config.ResendConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,10 +19,12 @@ public class ResendEmailSender implements EmailSender {
 
     private final RestClient restClient;
     private final ResendConfig config;
+    private final FrontendProperties frontendProperties;
 
-    public ResendEmailSender(RestClient.Builder builder, ResendConfig config) {
+    public ResendEmailSender(RestClient.Builder builder, ResendConfig config, FrontendProperties frontendProperties) {
         this.restClient = builder.build();
         this.config = config;
+        this.frontendProperties = frontendProperties;
     }
 
     @Override
@@ -47,6 +50,20 @@ public class ResendEmailSender implements EmailSender {
               "html": "<p>Your password reset token is: <strong>%s</strong></p><p>This token expires in 15 minutes.</p>"
             }
             """.formatted(config.fromAddress(), toEmail, resetToken);
+        send(body, toEmail);
+    }
+
+    @Override
+    public void sendInvite(String toEmail, String tenantName, String inviteToken) {
+        String acceptUrl = frontendProperties.baseUrl() + "/accept-invite?token=" + inviteToken;
+        String body = """
+            {
+              "from": "%s",
+              "to": ["%s"],
+              "subject": "You're invited to join Cartogra",
+              "html": "<p>You've been invited to join a Cartogra - %s. <a href=\\"%s\\">Accept your invite</a></p><p>This link expires in 7 days.</p>"
+            }
+            """.formatted(config.fromAddress(), toEmail, tenantName, acceptUrl);
         send(body, toEmail);
     }
 

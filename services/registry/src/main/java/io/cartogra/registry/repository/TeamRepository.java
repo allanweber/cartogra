@@ -1,9 +1,11 @@
 package io.cartogra.registry.repository;
 
 import io.cartogra.registry.domain.Team;
+import io.cartogra.registry.domain.TeamMember;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 public interface TeamRepository {
@@ -21,4 +23,14 @@ public interface TeamRepository {
     boolean existsByName(UUID tenantId, String name, UUID excludeId);
 
     Optional<Team> findByTenantAndName(UUID tenantId, String name);
+
+    boolean isMember(UUID tenantId, UUID teamId, UUID userId);
+
+    Set<UUID> findTeamIdsByMember(UUID tenantId, UUID userId);
+
+    List<TeamMember> findMembers(UUID tenantId, UUID teamId);
+
+    TeamMember addMember(TeamMember member);
+
+    void removeMember(UUID tenantId, UUID teamId, UUID userId);
 }
