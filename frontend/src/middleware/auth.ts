@@ -8,8 +8,6 @@ const GATEWAY_URL =
     ? (process.env['GATEWAY_INTERNAL_URL'] ?? 'http://localhost:8080')
     : ''
 
-const SESSION_COOKIE = 'user_session'
-
 async function fetchUserInfo(jwt: string): Promise<AuthUser | null> {
   try {
     const res = await fetch(`${GATEWAY_URL}/api/auth/userinfo`, {
@@ -85,17 +83,6 @@ export const sessionMiddleware = createMiddleware({ type: 'function' }).server(a
         if (user) {
           tokenExpiresAt = Math.floor(Date.now() / 1000) + tokens.expiresIn
         }
-      }
-    }
-  }
-
-  if (!user) {
-    const encoded = getCookie(SESSION_COOKIE)
-    if (encoded) {
-      try {
-        user = JSON.parse(atob(encoded)) as AuthUser
-      } catch {
-        // ignore malformed cookie
       }
     }
   }
