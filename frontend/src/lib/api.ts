@@ -1,3 +1,4 @@
+import { clearSessionCookie } from '#/lib/session'
 import { useAuthStore } from '#/stores/useAuthStore'
 import { useTenantStore } from '#/stores/useTenantStore'
 
@@ -46,6 +47,7 @@ export async function tryRefresh(baseUrl: string): Promise<RefreshResult> {
 function redirectToLogin() {
   if (typeof window === 'undefined') return
   useAuthStore.getState().clearAuth()
+  clearSessionCookie()
   const redirect = encodeURIComponent(window.location.pathname + window.location.search)
   window.location.href = `/login?redirect=${redirect}`
 }
