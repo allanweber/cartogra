@@ -8,7 +8,7 @@ import { KubernetesClusterDialog } from '#/components/KubernetesClusterDialog'
 import type { ScmConnection } from '#/components/ScmConnectionDialog'
 import { ScmConnectionDialog } from '#/components/ScmConnectionDialog'
 import { Button } from '#/components/ui/button'
-import { Dialog, DialogContent } from '#/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '#/components/ui/dialog'
 import { apiFetch } from '#/lib/api'
 import type { PageResult } from '#/lib/registry-types'
 import { useWizardStore } from '#/stores/useWizardStore'
@@ -162,8 +162,11 @@ export function OnboardingWizard() {
           showCloseButton={false}
           onInteractOutside={(e) => e.preventDefault()}
         >
+          <DialogDescription className="sr-only">
+            Connect your source control and infrastructure providers to set up Cartogra.
+          </DialogDescription>
           <div className="flex items-center justify-between border-b px-6 py-4">
-            <p className="text-sm font-semibold">Get started</p>
+            <DialogTitle className="text-sm font-semibold">Get started</DialogTitle>
             <Button
               variant="ghost"
               size="icon-sm"

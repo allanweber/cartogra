@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { ApiError, apiFetch } from '#/lib/api'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
-import { Dialog, DialogContent, DialogTitle } from '#/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
 
 import type { PageResult, RegistryTeam } from '#/lib/registry-types'
@@ -99,6 +99,9 @@ export function InviteUserDialog({
           <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             Users
           </p>
+          <DialogDescription className="sr-only">
+            Invite a new user to this tenant.
+          </DialogDescription>
           <div className="mt-1 flex items-start justify-between gap-4">
             <DialogTitle className="text-2xl font-bold">
               Invite user

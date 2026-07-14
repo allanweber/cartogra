@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { ApiError, apiFetch } from '#/lib/api'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
-import { Dialog, DialogContent, DialogTitle } from '#/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
 import { TagsInput } from '#/components/TagsInput'
 import type { PageResult, RegistryService, RegistryTeam } from '#/lib/registry-types'
@@ -109,6 +109,9 @@ export function RegisterServiceDrawer({ open, onOpenChange }: RegisterServiceDra
       >
         <div className="border-b px-6 py-5">
           <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Service Catalog</p>
+          <DialogDescription className="sr-only">
+            Register a new service in the catalog.
+          </DialogDescription>
           <div className="mt-1 flex items-start justify-between gap-4">
             <DialogTitle className="text-2xl font-bold">Register service</DialogTitle>
             <Button

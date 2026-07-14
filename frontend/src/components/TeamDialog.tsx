@@ -14,7 +14,7 @@ import { normalizeHealth } from '#/lib/registry-types'
 import { useAuthStore } from '#/stores/useAuthStore'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
-import { Dialog, DialogContent, DialogTitle } from '#/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
 import { InviteUserDialog } from '#/components/InviteUserDialog'
 import { cn } from '#/lib/utils'
@@ -312,6 +312,9 @@ export function TeamDialog({
             <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
               {isEdit ? 'Manage team' : 'Teams'}
             </p>
+            <DialogDescription className="sr-only">
+              {isEdit ? 'Manage this team and its members.' : 'Create a new team.'}
+            </DialogDescription>
             <div className="mt-1 flex items-start justify-between gap-4">
               <DialogTitle className="text-2xl font-bold">
                 {isEdit ? team.name : 'Add team'}

@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
-import { Dialog, DialogContent, DialogTitle } from '#/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
 import { ApiError, apiFetch, apiMutate } from '#/lib/api'
@@ -137,6 +137,9 @@ export function ScmConnectionDialog({ open, onOpenChange, provider, connection, 
           <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             {isEdit ? 'Manage' : 'Connect'} · Source Control
           </p>
+          <DialogDescription className="sr-only">
+            {isEdit ? 'Manage this source control connection.' : 'Connect a source control provider.'}
+          </DialogDescription>
           <div className="mt-1 flex items-start justify-between gap-4">
             <DialogTitle className="text-2xl font-bold">{providerLabel}</DialogTitle>
             <Button

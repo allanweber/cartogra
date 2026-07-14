@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
-import { Dialog, DialogContent, DialogTitle } from '#/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
 import { ApiError, apiFetch, apiMutate } from '#/lib/api'
@@ -141,6 +141,9 @@ export function KubernetesClusterDialog({ open, onOpenChange, cluster, onSuccess
           <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             {isEdit ? 'Manage' : 'Connect'} · Kubernetes
           </p>
+          <DialogDescription className="sr-only">
+            {isEdit ? 'Manage this Kubernetes cluster connection.' : 'Connect a Kubernetes cluster.'}
+          </DialogDescription>
           <div className="mt-1 flex items-start justify-between gap-4">
             <DialogTitle className="text-2xl font-bold">Cluster</DialogTitle>
             <Button
