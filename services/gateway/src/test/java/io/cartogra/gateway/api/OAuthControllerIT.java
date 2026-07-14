@@ -134,4 +134,76 @@ class OAuthControllerIT extends AbstractGatewayIT {
             new MapSqlParameterSource("email", email), String.class);
         assertThat(name).isEqualTo("My Custom Name");
     }
+
+    @Test
+    void oauthCallback_newTenant_doesNotBindToUnverifiedLocalAccount() throws Exception {
+        String email = "unverified-new-" + UUID.randomUUID() + "@test.com";
+        insertUnverifiedLocalUser(insertTenant(), email);
+
+        String state = UUID.randomUUID().toString().replace("-", "");
+        redis.opsForValue().set("oauth:state:" + state, "new");
+
+        when(githubOAuthProvider.exchangeCodeForAccessToken(any(), any())).thenReturn("gh-token-new");
+        when(githubOAuthProvider.fetchProfile("gh-token-new"))
+            .thenReturn(new OAuthProfile("gh-attacker-new", email, "Attacker Controlled Name"));
+
+        mockMvc.perform(get("/api/auth/oauth/github/callback")
+                .param("code", "authcode")
+                .param("state", state))
+            .andExpect(status().is3xxRedirection())
+            .andExpect(header().string("Location", containsString("error=oauth_failed")));
+
+        String authProvider = jdbc.queryForObject(
+            "SELECT auth_provider FROM users WHERE email = :email AND deleted_at IS NULL",
+            new MapSqlParameterSource("email", email), String.class);
+        assertThat(authProvider).isEqualTo("local");
+    }
+
+    @Test
+    void oauthCallback_existingTenant_doesNotBindToUnverifiedLocalAccount() throws Exception {
+        String email = "unverified-existing-" + UUID.randomUUID() + "@test.com";
+        UUID tenantId = insertTenant();
+        insertUnverifiedLocalUser(tenantId, email);
+
+        String state = UUID.randomUUID().toString().replace("-", "");
+        redis.opsForValue().set("oauth:state:" + state, tenantId.toString());
+
+        when(githubOAuthProvider.exchangeCodeForAccessToken(any(), any())).thenReturn("gh-token-existing");
+        when(githubOAuthProvider.fetchProfile("gh-token-existing"))
+            .thenReturn(new OAuthProfile("gh-attacker-existing", email, "Attacker Controlled Name"));
+
+        mockMvc.perform(get("/api/auth/oauth/github/callback")
+                .param("code", "authcode")
+                .param("state", state))
+            .andExpect(status().is3xxRedirection())
+            .andExpect(header().string("Location", containsString("error=oauth_failed")));
+
+        String authProvider = jdbc.queryForObject(
+            "SELECT auth_provider FROM users WHERE email = :email AND deleted_at IS NULL",
+            new MapSqlParameterSource("email", email), String.class);
+        assertThat(authProvider).isEqualTo("local");
+    }
+
+    private UUID insertTenant() {
+        UUID tenantId = UUID.randomUUID();
+        jdbc.update(
+            "INSERT INTO tenants (id, tenant_id, name, slug, plan_id) VALUES (:id, :tid, :name, :slug, (SELECT id FROM billing_plans WHERE slug = 'free'))",
+            new MapSqlParameterSource()
+                .addValue("id", UUID.randomUUID())
+                .addValue("tid", tenantId)
+                .addValue("name", "Test Tenant")
+                .addValue("slug", "test-tenant-" + tenantId));
+        return tenantId;
+    }
+
+    private void insertUnverifiedLocalUser(UUID tenantId, String email) {
+        jdbc.update("""
+            INSERT INTO users (tenant_id, email, auth_provider, password_hash,
+                               email_verified, roles, created_at, updated_at)
+            VALUES (:tenantId, :email, 'local', 'irrelevant-hash', false, '{ADMIN}', now(), now())
+            """,
+            new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("email", email));
+    }
 }

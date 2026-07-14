@@ -1,5 +1,6 @@
 package io.cartogra.registry.domain;
 
+import io.cartogra.common.identity.SystemActors;
 import io.cartogra.registry.api.dto.CreateServiceRequest;
 import io.cartogra.registry.api.dto.UpdateServiceRequest;
 import io.cartogra.registry.domain.event.OwnershipResolvedPayload;
@@ -240,6 +241,61 @@ class ServiceServiceTest {
         verifyNoInteractions(eventProducer);
     }
 
+    @Test
+    void deleteByOwningTeamMemberSucceeds() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new TestingAuthenticationToken("user", null, new SimpleGrantedAuthority("ROLE_VIEWER")));
+        UUID tenantId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        Service existing = serviceWithTeam(tenantId, serviceId, "payments", teamId);
+        when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.of(existing));
+        when(teamRepository.isMember(tenantId, teamId, userId)).thenReturn(true);
+
+        serviceService.delete(tenantId, serviceId, userId);
+
+        verify(serviceRepository).softDelete(tenantId, serviceId);
+        verify(eventProducer).publishDeleted(eq(existing), any());
+    }
+
+    @Test
+    void deleteByNonMemberIsDenied() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new TestingAuthenticationToken("user", null, new SimpleGrantedAuthority("ROLE_VIEWER")));
+        UUID tenantId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        Service existing = serviceWithTeam(tenantId, serviceId, "payments", teamId);
+        when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.of(existing));
+        when(teamRepository.isMember(tenantId, teamId, userId)).thenReturn(false);
+
+        assertThatThrownBy(() -> serviceService.delete(tenantId, serviceId, userId))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+        verify(serviceRepository, never()).softDelete(any(), any());
+        verifyNoInteractions(eventProducer);
+    }
+
+    @Test
+    void deleteByUnauthenticatedNonMemberIsDenied() {
+        // requestedBy = null with no team membership — this used to be the unauthorized bypass.
+        SecurityContextHolder.getContext().setAuthentication(
+                new TestingAuthenticationToken("user", null, new SimpleGrantedAuthority("ROLE_VIEWER")));
+        UUID tenantId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        Service existing = serviceWithTeam(tenantId, serviceId, "payments", teamId);
+        when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> serviceService.delete(tenantId, serviceId, null))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+        verify(serviceRepository, never()).softDelete(any(), any());
+        verifyNoInteractions(eventProducer);
+    }
+
     // ── get ───────────────────────────────────────────────────────────────────
 
     @Test
@@ -298,6 +354,85 @@ class ServiceServiceTest {
                 .isInstanceOf(TeamNotFoundException.class);
 
         verifyNoInteractions(eventProducer);
+    }
+
+    @Test
+    void assignOwnerByOwningTeamMemberSucceeds() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new TestingAuthenticationToken("user", null, new SimpleGrantedAuthority("ROLE_VIEWER")));
+        UUID tenantId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID currentTeamId = UUID.randomUUID();
+        UUID newTeamId = UUID.randomUUID();
+        Service existing = serviceWithTeam(tenantId, serviceId, "payments", currentTeamId);
+        Service saved = serviceWithTeam(tenantId, serviceId, "payments", newTeamId);
+        when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.of(existing));
+        when(teamRepository.isMember(tenantId, currentTeamId, userId)).thenReturn(true);
+        when(teamRepository.findById(tenantId, newTeamId)).thenReturn(Optional.of(team(tenantId, newTeamId)));
+        when(serviceRepository.save(any())).thenReturn(saved);
+
+        serviceService.assignOwner(tenantId, serviceId, newTeamId, userId);
+
+        verify(eventProducer).publishUpdated(any());
+    }
+
+    @Test
+    void assignOwnerByNonMemberIsDenied() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new TestingAuthenticationToken("user", null, new SimpleGrantedAuthority("ROLE_VIEWER")));
+        UUID tenantId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        UUID newTeamId = UUID.randomUUID();
+        Service existing = serviceWithTeam(tenantId, serviceId, "payments", teamId);
+        when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.of(existing));
+        when(teamRepository.isMember(tenantId, teamId, userId)).thenReturn(false);
+
+        assertThatThrownBy(() -> serviceService.assignOwner(tenantId, serviceId, newTeamId, userId))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+        verify(serviceRepository, never()).save(any());
+        verifyNoInteractions(eventProducer);
+    }
+
+    @Test
+    void assignOwnerByUnauthenticatedNonMemberIsDenied() {
+        // requestedBy = null with no team membership — this used to be the unauthorized bypass.
+        SecurityContextHolder.getContext().setAuthentication(
+                new TestingAuthenticationToken("user", null, new SimpleGrantedAuthority("ROLE_VIEWER")));
+        UUID tenantId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        Service existing = serviceWithTeam(tenantId, serviceId, "payments", teamId);
+        when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> serviceService.assignOwner(tenantId, serviceId, UUID.randomUUID(), null))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+        verify(serviceRepository, never()).save(any());
+        verifyNoInteractions(eventProducer);
+    }
+
+    @Test
+    void assignOwnerBySystemActorBypassesAuthCheckEvenWithoutAuthentication() {
+        // Simulates the Kafka-consumer-triggered CODEOWNERS auto-assignment path
+        // (resolveOwnership -> assignOwner(..., SystemActors.SYSTEM)), where the
+        // listener thread has no SecurityContextHolder authentication at all.
+        SecurityContextHolder.clearContext();
+        UUID tenantId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        Service existing = service(tenantId, serviceId, "payments");
+        Service saved = serviceWithTeam(tenantId, serviceId, "payments", teamId);
+        when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.of(existing));
+        when(teamRepository.findById(tenantId, teamId)).thenReturn(Optional.of(team(tenantId, teamId)));
+        when(serviceRepository.save(any())).thenReturn(saved);
+
+        serviceService.assignOwner(tenantId, serviceId, teamId, SystemActors.SYSTEM);
+
+        verify(eventProducer).publishUpdated(any());
     }
 
     // ── resolveOwnership ──────────────────────────────────────────────────────

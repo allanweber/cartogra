@@ -10,6 +10,7 @@ import io.cartogra.ingestion.infrastructure.registry.RegistryPlanLimitClient;
 import io.cartogra.ingestion.infrastructure.registry.RegistryPlanLimits;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
@@ -29,6 +30,7 @@ public class ScmConnectionService {
     private static final int DEFAULT_POLL_INTERVAL_MINUTES = 15;
     private static final Set<String> SECRET_KEYS = Set.of("token", "pat", "webhookSecret");
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final TypeReference<Map<String, Object>> CONFIG_MAP_TYPE = new TypeReference<>() {};
 
     private final ScmConnectionRepository repository;
     private final SyncCommandProducer syncCommandProducer;
@@ -56,13 +58,17 @@ public class ScmConnectionService {
         boolean scheduler = Boolean.TRUE.equals(req.syncScheduler());
         int interval = req.pollIntervalMinutes() != null ? req.pollIntervalMinutes() : DEFAULT_POLL_INTERVAL_MINUTES;
         boolean webhook = Boolean.TRUE.equals(req.webhookEnabled());
+        String config = req.config() != null ? req.config() : "{}";
+        if (webhook && !hasWebhookSecret(config)) {
+            throw new IllegalArgumentException("webhookSecret is required in config when webhookEnabled is true");
+        }
         Instant nextSyncAt = scheduler ? now.plus(interval, ChronoUnit.MINUTES) : null;
 
         ScmConnection connection = repository.save(new ScmConnection(
                 UUID.randomUUID(),
                 tenantId,
                 req.provider(),
-                req.config() != null ? req.config() : "{}",
+                config,
                 scheduler,
                 interval,
                 nextSyncAt,
@@ -86,6 +92,10 @@ public class ScmConnectionService {
         String provider = req.provider() != null ? req.provider() : existing.provider();
         String config = req.config() != null ? preserveSecrets(req.config(), existing.config()) : existing.config();
         boolean configChanged = !config.equals(existing.config());
+
+        if (webhook && !hasWebhookSecret(config)) {
+            throw new IllegalArgumentException("webhookSecret is required in config when webhookEnabled is true");
+        }
 
         boolean changed = !provider.equals(existing.provider())
                 || configChanged
@@ -144,6 +154,17 @@ public class ScmConnectionService {
             return MAPPER.writeValueAsString(incoming);
         } catch (Exception _) {
             return incomingConfig;
+        }
+    }
+
+    /** Returns true if the given config JSON contains a non-blank "webhookSecret" value. */
+    private static boolean hasWebhookSecret(String config) {
+        try {
+            Map<String, Object> parsed = MAPPER.readValue(config, CONFIG_MAP_TYPE);
+            Object secret = parsed.get("webhookSecret");
+            return secret instanceof String s && !s.isBlank();
+        } catch (Exception _) {
+            return false;
         }
     }
 

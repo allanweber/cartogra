@@ -174,6 +174,7 @@ public class ServiceService {
     public void delete(UUID tenantId, UUID serviceId, @Nullable UUID requestedBy) {
         Service existing = serviceRepository.findById(tenantId, serviceId)
                 .orElseThrow(() -> new ServiceNotFoundException(serviceId));
+        requireAdminOrOwningTeamMember(tenantId, existing.teamId(), requestedBy);
 
         serviceRepository.softDelete(tenantId, serviceId);
 
@@ -214,6 +215,9 @@ public class ServiceService {
     public Service assignOwner(UUID tenantId, UUID serviceId, @Nullable UUID teamId, @Nullable UUID requestedBy) {
         Service existing = serviceRepository.findById(tenantId, serviceId)
                 .orElseThrow(() -> new ServiceNotFoundException(serviceId));
+        if (!SystemActors.SYSTEM.equals(requestedBy)) {
+            requireAdminOrOwningTeamMember(tenantId, existing.teamId(), requestedBy);
+        }
 
         if (teamId != null) {
             teamRepository.findById(tenantId, teamId)

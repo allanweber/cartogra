@@ -6,6 +6,7 @@ import io.cartogra.gateway.config.OAuthConfig;
 import io.cartogra.gateway.domain.exception.InvalidOAuthStateException;
 import io.cartogra.gateway.domain.exception.PlanLimitExceededException;
 import io.cartogra.gateway.domain.exception.UnauthorizedException;
+import io.cartogra.gateway.domain.exception.UnverifiedEmailException;
 import io.cartogra.gateway.repository.RefreshTokenRepository;
 import io.cartogra.gateway.repository.TenantRepository;
 import io.cartogra.gateway.repository.UserRepository;
@@ -102,7 +103,12 @@ public class OAuthService {
     }
 
     private User resolveNewTenantUser(String provider, OAuthProfile profile) {
-        return userRepository.findByEmail(profile.email()).orElseGet(() -> {
+        return userRepository.findByEmail(profile.email()).map(existing -> {
+            if ("local".equals(existing.authProvider()) && !existing.emailVerified()) {
+                throw new UnverifiedEmailException();
+            }
+            return existing;
+        }).orElseGet(() -> {
             Tenant tenant = tenantRepository.save(
                 new Tenant(null, null, profile.email(), null, "free", null, null, null));
             return userRepository.save(new User(null, tenant.id(), profile.email(), profile.name(),
@@ -114,6 +120,9 @@ public class OAuthService {
     private User resolveExistingTenantUser(UUID tenantId, String provider, OAuthProfile profile) {
         return userRepository.findByTenantAndEmail(tenantId, profile.email())
             .map(existing -> {
+                if ("local".equals(existing.authProvider()) && !existing.emailVerified()) {
+                    throw new UnverifiedEmailException();
+                }
                 if (provider.equals(existing.authProvider()) && !profile.subject().equals(existing.authSubject())) {
                     return new User(existing.id(), existing.tenantId(), existing.email(),
                         existing.name(), provider, profile.subject(), existing.passwordHash(),

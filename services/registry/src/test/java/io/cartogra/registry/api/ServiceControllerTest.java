@@ -13,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -192,6 +193,33 @@ class ServiceControllerTest {
     }
 
     @Test
+    void deleteAsOwningTeamMemberReturns204() throws Exception {
+        UUID id = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+
+        mockMvc.perform(delete("/services/{id}", id)
+                        .header("X-Tenant-Id", TENANT)
+                        .header("X-User-Id", userId))
+                .andExpect(status().isNoContent());
+
+        verify(serviceService).delete(eq(TENANT), eq(id), eq(userId));
+    }
+
+    @Test
+    void deleteReturns403WhenServiceDeniesAccess() throws Exception {
+        UUID id = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        doThrow(new AccessDeniedException("Only ADMIN or a member of the owning team may edit this service"))
+                .when(serviceService).delete(eq(TENANT), eq(id), eq(userId));
+
+        mockMvc.perform(delete("/services/{id}", id)
+                        .header("X-Tenant-Id", TENANT)
+                        .header("X-User-Id", userId))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
+    }
+
+    @Test
     void assignOwnerReturns200() throws Exception {
         UUID id = UUID.randomUUID();
         UUID teamId = UUID.randomUUID();
@@ -217,6 +245,43 @@ class ServiceControllerTest {
                 .andExpect(jsonPath("$.data.name").value("payments"));
 
         verify(serviceService).assignOwner(eq(TENANT), eq(id), isNull(), isNull());
+    }
+
+    @Test
+    void assignOwnerAsOwningTeamMemberReturns200() throws Exception {
+        UUID id = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        when(serviceService.assignOwner(eq(TENANT), eq(id), eq(teamId), eq(userId))).thenReturn(service("payments"));
+
+        mockMvc.perform(patch("/services/{id}/owner", id)
+                        .header("X-Tenant-Id", TENANT)
+                        .header("X-User-Id", userId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"teamId":"%s"}""".formatted(teamId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.name").value("payments"));
+
+        verify(serviceService).assignOwner(eq(TENANT), eq(id), eq(teamId), eq(userId));
+    }
+
+    @Test
+    void assignOwnerReturns403WhenServiceDeniesAccess() throws Exception {
+        UUID id = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        when(serviceService.assignOwner(eq(TENANT), eq(id), eq(teamId), eq(userId)))
+                .thenThrow(new AccessDeniedException("Only ADMIN or a member of the owning team may edit this service"));
+
+        mockMvc.perform(patch("/services/{id}/owner", id)
+                        .header("X-Tenant-Id", TENANT)
+                        .header("X-User-Id", userId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"teamId":"%s"}""".formatted(teamId)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
     }
 
     @Test

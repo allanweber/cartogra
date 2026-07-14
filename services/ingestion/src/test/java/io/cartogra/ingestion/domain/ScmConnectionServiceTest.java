@@ -16,7 +16,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -98,5 +100,70 @@ class ScmConnectionServiceTest {
         service.update(TENANT, CONN_ID, req);
 
         verifyNoInteractions(syncCommandProducer);
+    }
+
+    @Test
+    void createWithWebhookEnabledAndNoSecretThrows() {
+        lenient().when(planLimitClient.fetchLimits(TENANT)).thenReturn(Optional.empty());
+
+        ScmConnectionRequest req = new ScmConnectionRequest("github", "{\"org\":\"acme\"}", null, null, true);
+
+        assertThatThrownBy(() -> service.create(TENANT, req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("webhookSecret");
+    }
+
+    @Test
+    void createWithWebhookEnabledAndSecretSucceeds() {
+        when(planLimitClient.fetchLimits(TENANT)).thenReturn(Optional.empty());
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        ScmConnectionRequest req = new ScmConnectionRequest(
+                "github", "{\"org\":\"acme\",\"webhookSecret\":\"whsec_123\"}", null, null, true);
+
+        ScmConnection result = service.create(TENANT, req);
+
+        assertThat(result.webhookEnabled()).isTrue();
+        assertThat(result.config()).contains("\"webhookSecret\":\"whsec_123\"");
+    }
+
+    @Test
+    void createWithWebhookDisabledAndNoSecretSucceeds() {
+        when(planLimitClient.fetchLimits(TENANT)).thenReturn(Optional.empty());
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        ScmConnectionRequest req = new ScmConnectionRequest("github", "{\"org\":\"acme\"}", null, null, null);
+
+        ScmConnection result = service.create(TENANT, req);
+
+        assertThat(result.webhookEnabled()).isFalse();
+    }
+
+    @Test
+    void updateEnablingWebhookWithoutSecretThrows() {
+        when(repository.findById(TENANT, CONN_ID))
+                .thenReturn(Optional.of(existing("{\"org\":\"acme\",\"token\":\"ghp_old\"}")));
+
+        ScmConnectionRequest req = new ScmConnectionRequest(null, null, null, null, true);
+
+        assertThatThrownBy(() -> service.update(TENANT, CONN_ID, req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("webhookSecret");
+    }
+
+    @Test
+    void updateOnAlreadyWebhookEnabledConnectionChangingOnlyPollIntervalSucceeds() {
+        ScmConnection existingWithWebhook = new ScmConnection(CONN_ID, TENANT, "github",
+                "{\"org\":\"acme\",\"token\":\"ghp_old\",\"webhookSecret\":\"whsec_123\"}", true, 15,
+                null, null, "FAILED", "GitHub API error listing repos: 401 UNAUTHORIZED",
+                true, Instant.now(), Instant.now(), null);
+        when(repository.findById(TENANT, CONN_ID)).thenReturn(Optional.of(existingWithWebhook));
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        ScmConnectionRequest req = new ScmConnectionRequest(null, null, null, 30, null);
+        ScmConnection result = service.update(TENANT, CONN_ID, req);
+
+        assertThat(result.pollIntervalMinutes()).isEqualTo(30);
+        assertThat(result.webhookEnabled()).isTrue();
     }
 }
