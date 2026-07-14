@@ -48,6 +48,10 @@ public class WebhookService {
         ScmConnection connection = connectionRepository.findByIdForWebhook(connectionId)
                 .orElseThrow(() -> new WebhookConnectionNotFoundException(connectionId.toString()));
 
+        if (!provider.providerType().equals(connection.provider())) {
+            throw new WebhookConnectionNotFoundException(connectionId.toString());
+        }
+
         String webhookSecret = extractWebhookSecret(connection.config());
 
         if (!provider.verifyWebhookSignature(rawBody, headers, webhookSecret)) {
