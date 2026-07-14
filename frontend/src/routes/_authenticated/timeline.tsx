@@ -59,7 +59,7 @@ function TimelinePage() {
               onClick={() => setFilter(f.value)}
               aria-pressed={filter === f.value}
               className={cn(
-                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors pointer-coarse:px-4 pointer-coarse:py-2.5',
                 filter === f.value
                   ? 'border-primary bg-primary text-primary-foreground'
                   : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground',
@@ -92,7 +92,7 @@ function TimelinePage() {
                       config.color,
                     )}
                   >
-                    <span className="text-[9px] font-bold text-primary-foreground uppercase">
+                    <span className="text-xs font-bold text-primary-foreground uppercase">
                       {TYPE_ABBR[event.type]}
                     </span>
                   </div>
@@ -108,7 +108,7 @@ function TimelinePage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge
                           variant="outline"
-                          className="text-[10px] font-semibold uppercase"
+                          className="text-xs font-semibold uppercase"
                         >
                           {config.label}
                         </Badge>

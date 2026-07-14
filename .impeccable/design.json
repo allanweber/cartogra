@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-13T00:00:00Z",
+  "title": "Design System: Cartogra",
+  "extensions": {
+    "colorMeta": {
+      "signal-blue": { "role": "primary", "displayName": "Signal Blue", "canonical": "oklch(0.50 0.20 218)", "tonalRamp": ["oklch(0.18 0.09 218)", "oklch(0.28 0.13 218)", "oklch(0.38 0.17 218)", "oklch(0.50 0.20 218)", "oklch(0.63 0.18 218)", "oklch(0.72 0.16 218)", "oklch(0.83 0.10 218)", "oklch(0.93 0.04 218)"] },
+      "instrument-white": { "role": "neutral", "displayName": "Instrument White", "canonical": "oklch(0.985 0.006 220)", "tonalRamp": ["oklch(0.20 0.02 220)", "oklch(0.32 0.02 220)", "oklch(0.46 0.02 220)", "oklch(0.60 0.015 220)", "oklch(0.75 0.012 220)", "oklch(0.86 0.01 220)", "oklch(0.94 0.008 220)", "oklch(0.985 0.006 220)"] },
+      "deep-slate-ink": { "role": "neutral", "displayName": "Deep Slate Ink", "canonical": "oklch(0.215 0.030 220)", "tonalRamp": ["oklch(0.15 0.03 220)", "oklch(0.215 0.03 220)", "oklch(0.30 0.028 220)", "oklch(0.42 0.025 220)", "oklch(0.55 0.02 220)", "oklch(0.68 0.018 220)", "oklch(0.82 0.012 220)", "oklch(0.94 0.008 220)"] },
+      "critical-red": { "role": "status", "displayName": "Critical Red", "canonical": "oklch(0.52 0.20 28)", "tonalRamp": ["oklch(0.20 0.09 28)", "oklch(0.30 0.14 28)", "oklch(0.40 0.18 28)", "oklch(0.52 0.20 28)", "oklch(0.63 0.19 28)", "oklch(0.72 0.17 28)", "oklch(0.84 0.09 28)", "oklch(0.96 0.04 28)"] },
+      "caution-amber": { "role": "status", "displayName": "Caution Amber", "canonical": "oklch(0.50 0.13 65)", "tonalRamp": ["oklch(0.20 0.06 65)", "oklch(0.30 0.09 65)", "oklch(0.40 0.11 65)", "oklch(0.50 0.13 65)", "oklch(0.62 0.13 65)", "oklch(0.78 0.13 70)", "oklch(0.88 0.08 72)", "oklch(0.96 0.05 75)"] },
+      "healthy-green": { "role": "status", "displayName": "Healthy Green", "canonical": "oklch(0.48 0.15 145)", "tonalRamp": ["oklch(0.18 0.07 145)", "oklch(0.28 0.10 145)", "oklch(0.38 0.13 145)", "oklch(0.48 0.15 145)", "oklch(0.60 0.15 145)", "oklch(0.74 0.15 145)", "oklch(0.86 0.08 145)", "oklch(0.96 0.04 145)"] },
+      "info-indigo": { "role": "status", "displayName": "Info Indigo", "canonical": "oklch(0.52 0.15 245)", "tonalRamp": ["oklch(0.20 0.07 245)", "oklch(0.30 0.10 245)", "oklch(0.40 0.13 245)", "oklch(0.52 0.15 245)", "oklch(0.62 0.15 245)", "oklch(0.72 0.15 245)", "oklch(0.85 0.08 245)", "oklch(0.96 0.04 245)"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Card and section titles only; the largest text in the product, no marketing hero scale." },
+      "body": { "displayName": "Body", "purpose": "Default UI text — labels, table cells, descriptions, form values." },
+      "label": { "displayName": "Label", "purpose": "Metadata and badge text; medium weight carries emphasis, not letter-spacing." },
+      "mono": { "displayName": "Mono", "purpose": "Service IDs, hashes, ports, trace IDs, log lines, generated SQL." }
+    },
+    "shadows": [
+      { "name": "resting", "value": "none (ring-1 ring-foreground/10 instead)", "purpose": "Cards, inputs, sidebar, app shell — flat at rest." },
+      { "name": "floating-menu", "value": "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1)", "purpose": "Dropdown and context menus, combined with ring-1 ring-foreground/10." },
+      { "name": "floating-modal", "value": "0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1)", "purpose": "Dialogs, sheets, command palette, combined with ring-1 ring-foreground/10." }
+    ],
+    "motion": [
+      { "name": "duration-fast", "value": "100ms", "purpose": "Dropdown/menu open-close transitions." },
+      { "name": "duration-standard", "value": "200ms", "purpose": "Sheet slide-in, dialog fade/zoom." },
+      { "name": "ease-standard", "value": "ease-in-out", "purpose": "Default easing for floating-layer transitions." }
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Default action button — Signal Blue fill, white text, 32px height.",
+      "html": "<button class=\"ds-btn-primary\">Register service</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; height: 32px; padding: 0 10px; gap: 6px; border-radius: 16px; border: 1px solid transparent; background: oklch(0.50 0.20 218); color: oklch(0.985 0.006 220); font-family: 'Geist Variable', sans-serif; font-size: 14px; font-weight: 500; white-space: nowrap; cursor: pointer; transition: background 0.15s, transform 0.1s; } .ds-btn-primary:hover { background: color-mix(in oklch, oklch(0.50 0.20 218) 80%, transparent); } .ds-btn-primary:focus-visible { outline: none; border-color: oklch(0.60 0.175 218); box-shadow: 0 0 0 3px oklch(0.60 0.175 218 / 50%); } .ds-btn-primary:active { transform: translateY(1px); } .ds-btn-primary:disabled { opacity: 0.5; pointer-events: none; }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Secondary action — hairline border, transparent fill.",
+      "html": "<button class=\"ds-btn-outline\">Cancel</button>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; justify-content: center; height: 32px; padding: 0 10px; gap: 6px; border-radius: 16px; border: 1px solid oklch(0.904 0.010 220); background: oklch(0.985 0.006 220); color: oklch(0.215 0.030 220); font-family: 'Geist Variable', sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.15s, color 0.15s; } .ds-btn-outline:hover { background: oklch(0.945 0.012 220); } .ds-btn-outline:focus-visible { outline: none; border-color: oklch(0.60 0.175 218); box-shadow: 0 0 0 3px oklch(0.60 0.175 218 / 50%); }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge-default",
+      "description": "Severity/status pill — outline variant, text and border share the status color, background stays neutral.",
+      "html": "<span class=\"ds-badge-critical\"><span class=\"ds-badge-dot\"></span>Breaking change</span>",
+      "css": ".ds-badge-critical { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 2px 8px; border-radius: 9999px; border: 1px solid currentColor; color: oklch(0.52 0.20 28); font-family: 'Geist Variable', sans-serif; font-size: 11px; font-weight: 600; text-transform: uppercase; } .ds-badge-dot { width: 6px; height: 6px; border-radius: 9999px; background: currentColor; flex-shrink: 0; }"
+    },
+    {
+      "name": "Service Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Primary container for service metrics — flat, ring-bordered, no shadow.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-header\"><div class=\"ds-card-title\">payments-api</div><span class=\"ds-badge-healthy\">Healthy</span></div><div class=\"ds-card-body\">Owned by Platform Team &middot; 12 dependents</div></div>",
+      "css": ".ds-card { display: flex; flex-direction: column; gap: 12px; background: oklch(1 0.003 220); border-radius: 22.4px; box-shadow: 0 0 0 1px oklch(0.215 0.03 220 / 10%); padding: 16px; font-family: 'Geist Variable', sans-serif; } .ds-card-header { display: flex; align-items: center; justify-content: space-between; } .ds-card-title { font-size: 16px; font-weight: 500; color: oklch(0.215 0.030 220); } .ds-card-body { font-size: 14px; color: oklch(0.458 0.022 220); } .ds-badge-healthy { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 2px 8px; border-radius: 9999px; background: oklch(0.96 0.04 145); color: oklch(0.48 0.15 145); font-size: 11px; font-weight: 600; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Standard form field — hairline border, blue focus ring, matches button focus language.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"you@company.com\" />",
+      "css": ".ds-input { display: block; width: 100%; height: 32px; padding: 4px 10px; border-radius: 16px; border: 1px solid oklch(0.904 0.010 220); background: transparent; font-family: 'Geist Variable', sans-serif; font-size: 14px; color: oklch(0.215 0.030 220); transition: border-color 0.15s; } .ds-input::placeholder { color: oklch(0.458 0.022 220); } .ds-input:focus-visible { outline: none; border-color: oklch(0.60 0.175 218); box-shadow: 0 0 0 3px oklch(0.60 0.175 218 / 50%); } .ds-input[aria-invalid='true'] { border-color: oklch(0.577 0.233 28); box-shadow: 0 0 0 3px oklch(0.577 0.233 28 / 20%); }"
+    },
+    {
+      "name": "Dropdown Menu",
+      "kind": "nav",
+      "refersTo": "dropdown-menu",
+      "description": "Floating layer — the only surface type that combines a hairline ring with a soft shadow.",
+      "html": "<div class=\"ds-dropdown\"><div class=\"ds-dropdown-item\">View details</div><div class=\"ds-dropdown-item\">Edit ownership</div><div class=\"ds-dropdown-item ds-dropdown-item--danger\">Remove service</div></div>",
+      "css": ".ds-dropdown { display: flex; flex-direction: column; min-width: 180px; padding: 4px; border-radius: 16px; background: oklch(1 0.003 220); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1), 0 0 0 1px oklch(0.215 0.03 220 / 10%); font-family: 'Geist Variable', sans-serif; font-size: 14px; } .ds-dropdown-item { padding: 6px 8px; border-radius: 10px; color: oklch(0.215 0.030 220); cursor: pointer; } .ds-dropdown-item:hover, .ds-dropdown-item:focus-visible { background: oklch(0.945 0.012 220); outline: none; } .ds-dropdown-item--danger { color: oklch(0.577 0.233 28); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Control Tower",
+    "overview": "Cartogra puts an operator in front of a live system, not a marketing surface. The visual language is built for someone who needs to answer \"is this safe to ship\" in seconds: a single UI family (Geist Variable, used for headings, body, and labels alike — no display/body pairing), a restrained blue accent reserved for action and selection, and a flat, ring-bordered surface system that reads as instrument-panel calm rather than dashboard clutter. Depth appears only where it's functional — floating layers (menus, dialogs) lift off the canvas with a soft shadow; everything at rest stays flat, separated by hairline rings instead of shadows. This system explicitly rejects the three anti-references named in PRODUCT.md: it does not sugarcoat complexity with a gimmicky, overly-friendly tone; it is not a generic, checkbox-driven enterprise dashboard; and it does not spend visual budget on decoration that doesn't change a decision. Status color (critical / warning / success / info) is the one place saturation is allowed to run high, because status is the one thing that must be recognized instantly and without ambiguity.",
+    "keyCharacteristics": [
+      "One typeface family (Geist Variable) across every text role; JetBrains Mono reserved strictly for IDs, hashes, and machine-generated data.",
+      "Restrained color: neutral cool-blue surfaces, one signal-blue accent for actions and selection, four non-negotiable status hues for health/severity.",
+      "Flat-at-rest, ring-bordered surfaces; shadow appears only on floating/overlay layers (dropdowns, dialogs, sheets).",
+      "Generous corner radii (16-22px) on containers read as considered rather than sharp, without tipping into playful."
+    ],
+    "rules": [
+      { "name": "The Single Source Rule", "body": "Every status color in the codebase resolves through exactly four CSS custom properties (--critical, --warning, --success, --info), each with a -subtle wash. No component defines its own status oklch literal.", "section": "colors" },
+      { "name": "The Rarity Rule", "body": "Signal Blue appears on primary buttons, active selection, links, and focus rings only. If an element isn't one of those four things, it doesn't get the accent color.", "section": "colors" },
+      { "name": "The One-Voice Rule", "body": "No display/body font pairing. Geist Variable is the UI font for every text role; JetBrains Mono is the only second family, reserved strictly for machine-readable data.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "If it's not floating above the page (menu, dialog, sheet, toast), it does not get a box-shadow. Depth at rest is a hairline ring, never a shadow.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep every text role in Geist Variable; reach for JetBrains Mono only for IDs, hashes, ports, and log/trace output.",
+      "Do resolve every health/severity color through the four semantic tokens (--critical, --warning, --success, --info) and their -subtle washes.",
+      "Do pair every status color with a shape or icon, never color alone.",
+      "Do keep resting surfaces flat (ring only); reserve shadow for dropdowns, dialogs, and sheets.",
+      "Do use the same focus treatment (Signal Blue border + 3px ring) on every interactive control.",
+      "Do size every interactive element for a 44px touch target on coarse-pointer devices while keeping dense desktop sizing on fine-pointer devices."
+    ],
+    "donts": [
+      "Don't add a colored border-left/border-right stripe to cards, list rows, or alerts as a severity accent.",
+      "Don't introduce a second UI typeface for visual interest.",
+      "Don't add a drop shadow to a resting card, table, or panel.",
+      "Don't use Signal Blue for anything other than primary actions, selection, active nav state, links, and focus rings.",
+      "Don't sugarcoat empty/error states with cute illustrations or gimmicky copy.",
+      "Don't ship a checkbox-driven, bloated settings screen.",
+      "Don't reach for a modal as the first solution."
+    ]
+  }
+}

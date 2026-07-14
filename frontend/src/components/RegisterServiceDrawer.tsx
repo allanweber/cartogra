@@ -111,13 +111,15 @@ export function RegisterServiceDrawer({ open, onOpenChange }: RegisterServiceDra
           <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Service Catalog</p>
           <div className="mt-1 flex items-start justify-between gap-4">
             <DialogTitle className="text-2xl font-bold">Register service</DialogTitle>
-            <button
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={handleClose}
-              className="mt-1 rounded-sm text-muted-foreground opacity-70 hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="mt-1 text-muted-foreground opacity-70 hover:opacity-100"
             >
               <X className="size-4" />
               <span className="sr-only">Close</span>
-            </button>
+            </Button>
           </div>
         </div>
 

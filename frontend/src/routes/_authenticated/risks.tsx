@@ -83,18 +83,18 @@ function SummaryCard({
       onClick={onClick}
       className={cn(
         'rounded-xl border p-4 text-left transition-all',
-        active && variant === 'critical' && 'border-[oklch(0.70_0.15_28)] bg-[oklch(0.97_0.05_28)] dark:border-[oklch(0.55_0.18_28)] dark:bg-[oklch(0.27_0.05_28)]',
-        active && variant === 'warning' && 'border-[oklch(0.72_0.14_60)] bg-[oklch(0.97_0.06_80)] dark:border-[oklch(0.60_0.15_60)] dark:bg-[oklch(0.27_0.06_80)]',
-        active && variant === 'info' && 'border-[oklch(0.65_0.12_240)] bg-[oklch(0.96_0.04_240)] dark:border-[oklch(0.55_0.14_240)] dark:bg-[oklch(0.26_0.04_240)]',
+        active && variant === 'critical' && 'border-critical bg-critical-subtle',
+        active && variant === 'warning' && 'border-warning bg-warning-subtle',
+        active && variant === 'info' && 'border-info bg-info-subtle',
         !active && 'border-border bg-card hover:bg-muted/50',
       )}
     >
       <p
         className={cn(
           'text-2xl font-bold',
-          variant === 'critical' && 'text-[oklch(0.58_0.23_28)] dark:text-[oklch(0.72_0.18_28)]',
-          variant === 'warning' && 'text-[oklch(0.65_0.18_60)] dark:text-[oklch(0.78_0.14_60)]',
-          variant === 'info' && 'text-[oklch(0.60_0.18_240)] dark:text-[oklch(0.70_0.16_240)]',
+          variant === 'critical' && 'text-critical',
+          variant === 'warning' && 'text-warning',
+          variant === 'info' && 'text-info',
         )}
       >
         {count}
@@ -107,38 +107,25 @@ function SummaryCard({
 function RiskCard({ risk }: { risk: (typeof MOCK_RISKS)[number] }) {
   const [expanded, setExpanded] = useState(false)
 
-  const severityConfig = {
-    critical: {
-      border: 'border-l-[oklch(0.58_0.23_28)]',
-      bg: 'bg-[oklch(0.97_0.05_28)] dark:bg-[oklch(0.27_0.05_28)]',
-      badge: 'bg-severity-critical border-current',
-    },
-    warning: {
-      border: 'border-l-[oklch(0.65_0.18_60)]',
-      bg: 'bg-[oklch(0.97_0.06_80)] dark:bg-[oklch(0.27_0.06_80)]',
-      badge: 'bg-severity-warning border-current',
-    },
-    info: {
-      border: 'border-l-[oklch(0.60_0.18_240)]',
-      bg: 'bg-[oklch(0.96_0.04_240)] dark:bg-[oklch(0.26_0.04_240)]',
-      badge: 'bg-severity-info border-current',
-    },
-  }
-
-  const config = severityConfig[risk.severity]
-
   return (
-    <Card className={cn('overflow-hidden border-l-4', config.border)}>
+    <Card className="overflow-hidden">
       <button
         className="w-full text-left"
         onClick={() => setExpanded((e) => !e)}
         aria-expanded={expanded}
       >
-        <CardContent className={cn('flex items-start gap-3 p-4', config.bg)}>
+        <CardContent className="flex items-start gap-3 p-4">
+          <span
+            aria-hidden
+            className={cn('mt-1.5 size-2 shrink-0 rounded-full bg-current', `severity-${risk.severity}`)}
+          />
           <div className="flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <p className="font-semibold">{risk.title}</p>
-              <Badge variant="outline" className={cn('text-[10px] font-bold uppercase', config.badge)}>
+              <Badge
+                variant="outline"
+                className={cn('border-current text-xs font-semibold uppercase', `severity-${risk.severity}`)}
+              >
                 {risk.severity}
               </Badge>
             </div>
@@ -146,7 +133,7 @@ function RiskCard({ risk }: { risk: (typeof MOCK_RISKS)[number] }) {
               {risk.services.map((s) => (
                 <span
                   key={s}
-                  className="rounded-md bg-background/60 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground"
+                  className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground"
                 >
                   {s}
                 </span>

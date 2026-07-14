@@ -143,7 +143,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               placeholder="Search pages, services, teams…"
               className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />
-            <kbd className="hidden rounded border border-border bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground sm:block">
+            <kbd className="hidden rounded border border-border bg-muted px-1.5 py-0.5 text-xs text-muted-foreground sm:block">
               ESC
             </kbd>
           </div>
@@ -157,7 +157,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             ) : (
               Object.entries(grouped).map(([group, items]) => (
                 <div key={group}>
-                  <p className="px-4 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  <p className="px-4 pb-1 pt-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                     {group}
                   </p>
                   {items.map((item) => {
@@ -206,7 +206,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           </div>
 
           <div className="border-t border-border px-4 py-2.5">
-            <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
                 <kbd className="rounded border border-border bg-muted px-1.5 py-0.5">↑↓</kbd> navigate
               </span>

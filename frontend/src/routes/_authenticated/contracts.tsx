@@ -92,11 +92,11 @@ function ContractStatusBadge({ status }: { status: ContractStatus }) {
       className={cn(
         'capitalize',
         status === 'compatible' &&
-          'border-[oklch(0.70_0.15_145)] bg-[oklch(0.96_0.05_145)] text-[oklch(0.38_0.14_145)] dark:border-[oklch(0.45_0.12_145)] dark:bg-[oklch(0.25_0.06_145)] dark:text-[oklch(0.72_0.16_145)]',
+          'border-success bg-success-subtle text-success',
         status === 'breaking' &&
-          'border-[oklch(0.70_0.15_28)] bg-[oklch(0.97_0.05_28)] text-[oklch(0.50_0.20_28)] dark:border-[oklch(0.55_0.15_28)] dark:bg-[oklch(0.27_0.05_28)] dark:text-[oklch(0.72_0.18_28)]',
+          'border-critical bg-critical-subtle text-critical',
         status === 'warning' &&
-          'border-[oklch(0.72_0.14_60)] bg-[oklch(0.97_0.06_80)] text-[oklch(0.50_0.15_60)] dark:border-[oklch(0.60_0.15_60)] dark:bg-[oklch(0.27_0.06_80)] dark:text-[oklch(0.78_0.14_60)]',
+          'border-warning bg-warning-subtle text-warning',
         status === 'stale' && 'text-muted-foreground',
       )}
     >
@@ -118,18 +118,18 @@ function SummaryChip({
     <div
       className={cn(
         'rounded-xl border p-4 text-center',
-        variant === 'breaking' && 'border-[oklch(0.70_0.15_28)] bg-[oklch(0.97_0.05_28)] dark:border-[oklch(0.45_0.15_28)] dark:bg-[oklch(0.27_0.05_28)]',
-        variant === 'compatible' && 'border-[oklch(0.70_0.15_145)] bg-[oklch(0.96_0.05_145)] dark:border-[oklch(0.45_0.12_145)] dark:bg-[oklch(0.25_0.06_145)]',
-        variant === 'warning' && 'border-[oklch(0.72_0.14_60)] bg-[oklch(0.97_0.06_80)] dark:border-[oklch(0.50_0.12_60)] dark:bg-[oklch(0.27_0.06_80)]',
+        variant === 'breaking' && 'border-critical bg-critical-subtle',
+        variant === 'compatible' && 'border-success bg-success-subtle',
+        variant === 'warning' && 'border-warning bg-warning-subtle',
         variant === 'stale' && 'border-border bg-muted/50',
       )}
     >
       <p
         className={cn(
           'text-2xl font-bold',
-          variant === 'breaking' && 'text-[oklch(0.50_0.20_28)] dark:text-[oklch(0.72_0.18_28)]',
-          variant === 'compatible' && 'text-[oklch(0.38_0.14_145)] dark:text-[oklch(0.72_0.16_145)]',
-          variant === 'warning' && 'text-[oklch(0.50_0.15_60)] dark:text-[oklch(0.78_0.14_60)]',
+          variant === 'breaking' && 'text-critical',
+          variant === 'compatible' && 'text-success',
+          variant === 'warning' && 'text-warning',
           variant === 'stale' && 'text-muted-foreground',
         )}
       >

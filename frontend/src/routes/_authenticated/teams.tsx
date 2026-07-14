@@ -313,7 +313,7 @@ function TeamRow({
                   to="/catalog/$serviceId"
                   params={{ serviceId: s.id }}
                   onClick={(e) => e.stopPropagation()}
-                  className="flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+                  className="flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted/70 hover:text-foreground"
                 >
                   <HealthDot health={normalizeHealth(s.healthStatus)} />
                   {s.name}
@@ -333,7 +333,7 @@ function TeamRow({
             onClick={onManage}
             aria-label={`Manage ${team.name}`}
             data-testid={`manage-btn-${team.id}`}
-            className="ml-1 shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="ml-1 flex shrink-0 items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring pointer-coarse:size-11"
           >
             <Settings2 className="size-4" aria-hidden="true" />
           </button>
@@ -382,7 +382,7 @@ function TeamDetailPanel({
           </div>
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+            className="flex items-center justify-center rounded-md p-1 text-muted-foreground hover:bg-muted pointer-coarse:size-11"
             aria-label="Close panel"
           >
             <X className="size-4" />
@@ -420,7 +420,7 @@ function TeamDetailPanel({
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{s.name}</p>
                       {deploy && (
-                        <p className="text-[11px] text-muted-foreground">Deploy: {deploy}</p>
+                        <p className="text-xs text-muted-foreground">Deploy: {deploy}</p>
                       )}
                     </div>
                     <div className="flex shrink-0 items-center gap-2 pl-2">

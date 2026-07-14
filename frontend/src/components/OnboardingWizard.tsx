@@ -164,13 +164,15 @@ export function OnboardingWizard() {
         >
           <div className="flex items-center justify-between border-b px-6 py-4">
             <p className="text-sm font-semibold">Get started</p>
-            <button
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={dismiss}
-              className="rounded-sm text-muted-foreground opacity-70 hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="text-muted-foreground opacity-70 hover:opacity-100"
             >
               <X className="size-4" />
               <span className="sr-only">Close</span>
-            </button>
+            </Button>
           </div>
 
           {step > 0 && (
@@ -252,7 +254,7 @@ export function OnboardingWizard() {
                 <ol className="space-y-2 rounded-lg bg-muted/50 px-4 py-3">
                   {currentStep.instructions.map((instruction, i) => (
                     <li key={i} className="flex gap-2.5 text-xs text-muted-foreground">
-                      <span className="mt-px flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-foreground">
+                      <span className="mt-px flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
                         {i + 1}
                       </span>
                       {instruction}

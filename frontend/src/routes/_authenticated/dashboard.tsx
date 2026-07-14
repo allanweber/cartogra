@@ -43,7 +43,7 @@ function DashboardPage() {
           <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:gap-6">
             {/* Health score — primary signal */}
             <div className="shrink-0">
-              <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+              <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
                 Health Score
               </p>
               <p className={cn('mt-1 text-4xl font-semibold tabular-nums leading-none', healthScoreClass)}>
@@ -64,22 +64,22 @@ function DashboardPage() {
                 aria-label={`Health: ${healthyCount} healthy, ${degradedCount} degraded, ${downCount} down`}
               >
                 <div
-                  className="bg-[oklch(0.55_0.18_145)] transition-all"
+                  className="bg-success transition-all"
                   style={{ width: `${(healthyCount / totalServices) * 100}%` }}
                 />
                 <div
-                  className="bg-[oklch(0.65_0.18_60)] transition-all"
+                  className="bg-warning transition-all"
                   style={{ width: `${(degradedCount / totalServices) * 100}%` }}
                 />
                 <div
-                  className="bg-[oklch(0.58_0.23_28)] transition-all"
+                  className="bg-critical transition-all"
                   style={{ width: `${(downCount / totalServices) * 100}%` }}
                 />
               </div>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                <LegendItem colorClass="bg-[oklch(0.55_0.18_145)]" label="Healthy" count={healthyCount} />
-                <LegendItem colorClass="bg-[oklch(0.65_0.18_60)]" label="Degraded" count={degradedCount} />
-                <LegendItem colorClass="bg-[oklch(0.58_0.23_28)]" label="Down" count={downCount} />
+                <LegendItem colorClass="bg-success" label="Healthy" count={healthyCount} />
+                <LegendItem colorClass="bg-warning" label="Degraded" count={degradedCount} />
+                <LegendItem colorClass="bg-critical" label="Down" count={downCount} />
                 <Link
                   to="/catalog"
                   className="ml-auto flex items-center gap-1 text-primary hover:underline"
@@ -129,10 +129,7 @@ function DashboardPage() {
               {MOCK_RISKS.slice(0, 4).map((risk) => (
                 <div
                   key={risk.id}
-                  className={cn(
-                    'flex items-start gap-3 rounded-lg border-l-2 p-3',
-                    `bg-severity-${risk.severity}`,
-                  )}
+                  className="flex items-start gap-3 rounded-lg bg-muted/40 p-3"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium leading-tight">{risk.title}</p>
@@ -220,7 +217,7 @@ function StatStrip({
           <span className={cn('text-base font-semibold tabular-nums', valueClass)}>{value}</span>
           <span className="text-xs text-muted-foreground">{label}</span>
         </div>
-        <p className="truncate text-[11px] text-muted-foreground">{sub}</p>
+        <p className="truncate text-xs text-muted-foreground">{sub}</p>
       </div>
     </div>
   )
@@ -233,7 +230,7 @@ function StaleServiceRow({ service }: { service: Service }) {
         <p className="text-sm font-medium">{service.name}</p>
         <p className="text-xs text-muted-foreground">{service.owner ?? 'No owner'}</p>
       </div>
-      <div className="flex items-center gap-1 text-xs text-[oklch(0.65_0.18_60)] dark:text-[oklch(0.78_0.14_60)]">
+      <div className="flex items-center gap-1 text-xs text-warning">
         <Clock className="size-3" />
         {service.lastDeploy}
       </div>
@@ -243,11 +240,11 @@ function StaleServiceRow({ service }: { service: Service }) {
 
 function ActivityList({ events }: { events: TimelineEvent[] }) {
   const typeColors: Record<string, string> = {
-    deploy: 'bg-[oklch(0.55_0.18_145)]',
-    contract: 'bg-[oklch(0.55_0.18_260)]',
-    risk: 'bg-[oklch(0.58_0.23_28)]',
-    ownership: 'bg-[oklch(0.65_0.18_60)]',
-    dependency: 'bg-[oklch(0.60_0.18_240)]',
+    deploy: 'bg-success',
+    contract: 'bg-info',
+    risk: 'bg-critical',
+    ownership: 'bg-warning',
+    dependency: 'bg-info',
   }
 
   return (
@@ -274,12 +271,7 @@ function SeverityBadge({ severity }: { severity: string }) {
   return (
     <Badge
       variant="outline"
-      className={cn(
-        'shrink-0 text-[10px] font-semibold uppercase',
-        severity === 'critical' && 'border-[oklch(0.58_0.23_28)] text-[oklch(0.58_0.23_28)] dark:border-[oklch(0.68_0.18_28)] dark:text-[oklch(0.68_0.18_28)]',
-        severity === 'warning' && 'border-[oklch(0.65_0.18_60)] text-[oklch(0.65_0.18_60)] dark:border-[oklch(0.75_0.16_60)] dark:text-[oklch(0.75_0.16_60)]',
-        severity === 'info' && 'border-[oklch(0.60_0.18_240)] text-[oklch(0.60_0.18_240)] dark:border-[oklch(0.70_0.16_240)] dark:text-[oklch(0.70_0.16_240)]',
-      )}
+      className={cn('shrink-0 border-current text-xs font-semibold uppercase', `severity-${severity}`)}
     >
       {severity}
     </Badge>

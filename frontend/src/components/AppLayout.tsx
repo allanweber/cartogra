@@ -158,7 +158,7 @@ export function AppLayout({
 
           <div className="min-w-0 flex-1">
             {eyebrow && (
-              <p className="mb-0.5 text-[11px] font-medium tracking-[0.18em] text-muted-foreground uppercase">
+              <p className="mb-0.5 text-xs font-medium tracking-widest text-muted-foreground uppercase">
                 {eyebrow}
               </p>
             )}
@@ -184,7 +184,7 @@ export function AppLayout({
                 >
                   <Search className="size-3.5 shrink-0" />
                   <span className="hidden flex-1 text-left text-xs sm:block">Search…</span>
-                  <kbd className="hidden shrink-0 rounded border border-border bg-background px-1 py-0.5 text-[10px] sm:block">
+                  <kbd className="hidden shrink-0 rounded border border-border bg-background px-1 py-0.5 text-xs sm:block">
                     ⌘K
                   </kbd>
                 </button>
@@ -216,7 +216,7 @@ function TenantSelect({ collapsed }: { collapsed: boolean }) {
       <Tooltip>
         <TooltipTrigger asChild>
           <button
-            className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground pointer-coarse:size-11"
             aria-label="Switch tenant"
           >
             <Building2 className="size-4" />
@@ -293,7 +293,7 @@ function SidebarContent({
         )}
         <button
           onClick={onToggleCollapse}
-          className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground pointer-coarse:size-11"
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {collapsed ? (

@@ -316,13 +316,15 @@ export function TeamDialog({
               <DialogTitle className="text-2xl font-bold">
                 {isEdit ? team.name : 'Add team'}
               </DialogTitle>
-              <button
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onClick={handleClose}
-                className="mt-1 rounded-sm text-muted-foreground opacity-70 hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="mt-1 text-muted-foreground opacity-70 hover:opacity-100"
               >
                 <X className="size-4" />
                 <span className="sr-only">Close</span>
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -444,7 +446,7 @@ export function TeamDialog({
                                     : user.email
                                   : userId}
                                 {isPendingAdd && (
-                                  <span className="shrink-0 text-[10px] text-muted-foreground">
+                                  <span className="shrink-0 text-xs text-muted-foreground">
                                     will add
                                   </span>
                                 )}
@@ -454,7 +456,7 @@ export function TeamDialog({
                                   type="button"
                                   onClick={() => removeMemberLocal(userId)}
                                   aria-label="Remove member"
-                                  className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                  className="flex shrink-0 items-center justify-center rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive pointer-coarse:size-11"
                                 >
                                   <UserMinus className="size-3.5" />
                                 </button>
@@ -521,12 +523,12 @@ export function TeamDialog({
                                   {svc.name}
                                 </span>
                                 {checked && svc.teamId === null && (
-                                  <span className="text-[10px] text-muted-foreground">
+                                  <span className="text-xs text-muted-foreground">
                                     will assign
                                   </span>
                                 )}
                                 {!checked && svc.teamId === team.id && (
-                                  <span className="text-[10px] text-muted-foreground">
+                                  <span className="text-xs text-muted-foreground">
                                     will orphan
                                   </span>
                                 )}

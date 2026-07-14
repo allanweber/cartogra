@@ -216,7 +216,7 @@ function ServiceDetailPage() {
                 {service.tier && (
                   <span
                     className={cn(
-                      'rounded border px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide',
+                      'rounded border px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide',
                       tierBadgeClass(service.tier),
                     )}
                   >
@@ -350,7 +350,7 @@ function ServiceDetailPage() {
                       {service.slaTarget != null && <MetaField label="SLA Target" value={`${service.slaTarget}%`} />}
                       {teamName && (
                         <div className="space-y-0.5">
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Owner Team</p>
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">Owner Team</p>
                           <Link to="/teams" className="block font-medium hover:text-primary hover:underline">
                             {teamName}
                           </Link>
@@ -358,7 +358,7 @@ function ServiceDetailPage() {
                       )}
                       {service.tags && service.tags.length > 0 && (
                         <div className="col-span-2 space-y-1.5">
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Tags</p>
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">Tags</p>
                           <div className="flex flex-wrap gap-1.5">
                             {service.tags.map((tag) => (
                               <span key={tag} className="rounded-md border border-border bg-background px-2 py-0.5 text-xs font-medium text-foreground">
@@ -379,7 +379,7 @@ function ServiceDetailPage() {
                       )}
                       {service.healthEndpoint && (
                         <div className="col-span-2 space-y-0.5">
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Health Endpoint</p>
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">Health Endpoint</p>
                           <a
                             href={service.healthEndpoint}
                             target="_blank"
@@ -401,7 +401,7 @@ function ServiceDetailPage() {
                         {service.lastCommitSha && <MetaField label="Commit SHA" value={service.lastCommitSha.slice(0, 7)} mono />}
                         {service.repositoryUrl && (
                           <div className="col-span-2 space-y-0.5">
-                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Repository</p>
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">Repository</p>
                             <a
                               href={service.repositoryUrl}
                               target="_blank"
@@ -430,7 +430,7 @@ function ServiceDetailPage() {
                       <MetaSection label="Links">
                         {service.documentationUrl && (
                           <div className="space-y-0.5">
-                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Documentation</p>
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">Documentation</p>
                             <a href={service.documentationUrl} target="_blank" rel="noopener noreferrer" className="block truncate text-xs text-primary hover:underline">
                               {service.documentationUrl}
                             </a>
@@ -438,7 +438,7 @@ function ServiceDetailPage() {
                         )}
                         {service.runbookUrl && (
                           <div className="space-y-0.5">
-                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Runbook</p>
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">Runbook</p>
                             <a href={service.runbookUrl} target="_blank" rel="noopener noreferrer" className="block truncate text-xs text-primary hover:underline">
                               {service.runbookUrl}
                             </a>
@@ -558,7 +558,7 @@ function InsightCard({ insight }: { insight: Insight }) {
 function MetaSection({ label, children }: { label?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-3">
-      {label && <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/60">{label}</p>}
+      {label && <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">{label}</p>}
       <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
         {children}
       </div>
@@ -579,7 +579,7 @@ function MetaField({
 }) {
   return (
     <div className="space-y-0.5">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className={cn('font-medium', mono && 'font-mono text-xs', capitalize && 'capitalize')}>{value}</p>
     </div>
   )
@@ -600,7 +600,7 @@ function HealthHistoryBar({ health }: { health: ServiceHealth }) {
           <div key={i} className={cn('h-7 flex-1 rounded-sm', colorClass, 'opacity-80')} />
         ))}
       </div>
-      <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+      <div className="mt-1 flex justify-between text-xs text-muted-foreground">
         <span>7d ago</span>
         <span>Today</span>
       </div>

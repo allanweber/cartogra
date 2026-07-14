@@ -3,23 +3,11 @@
 
 ## Phase 1 — Gateway MVP auth + Registry
 
-### Production hardening
-
-- [ ] Add web hooks, configure scm
-
 ### Phase 1 Gate
 
-- [ ] [GATE] Registry CRUD, history, ownership, orphan detection, local auth, at least one OAuth provider, and Bearer auth are working.
-- [ ] [GATE] Tenant OIDC is either working or explicitly deferred with a public note that preserves scope discipline.
-- [ ] [GATE] Service auto-discovery: SCM and K8s syncs create `services` rows automatically with detected `tech_stack`, repository/commit metadata, K8s metadata, and initial `health_status`. The OwnershipResolvedConsumer no longer warns about missing services on the happy path.
-- [ ] [GATE] Health: K8s pods set `health_status` on ADDED/MODIFIED; periodic prober updates `health_status` for services with `health_endpoint`. Catalog `health` filter returns non-empty results.
-- [ ] [GATE] K8s, scheduler-driven, and webhook-driven SCM sync all succeed end-to-end; `last_sync_status` is reflected in the UI; Kafka events visible.
-- [ ] [GATE] Password reset, route guards, sign out, profile management, Catalog (incl. service profile editing)/Teams/SCM-connections UIs operate against real APIs.
-- [ ] [GATE] Per-tenant rate limits (429 + `Retry-After`), graceful shutdown, circuit breakers, and root error boundary all demonstrably in place.
-- [ ] [GATE] Gateway proxies registry via Spring Cloud Gateway with trace propagation; gateway/registry/ingestion OpenAPI match the implemented envelope and auth behavior.
-- [ ] [GATE] Phase 1 screens have passed `/impeccable audit`.
-- [ ] [GATE] Minimum BIP set shipped: two ADR/design notes, two deep-dive writeups, and two short-form technical threads.
 
+- [ ] [GATE] Phase 1 screens have passed `/impeccable audit`.
+- [ ] [GATE] Phase 1 screens have passed `/improve`.
 ---
 
 ## Phase 2 — Topology service
@@ -82,6 +70,7 @@
 - [ ] [GATE] Audit events captured across registry + topology mutating operations; admin endpoint paginated.
 - [ ] [GATE] Consumer lag, MV refresh, and graph latency visible in Grafana.
 - [ ] [GATE] Phase 2 screens have passed `/impeccable audit`.
+- [ ] [GATE] Phase 2 screens have passed `/improve`.
 - [ ] [GATE] Minimum BIP set shipped: one ADR/design note, two deep-dive posts, three short-form technical posts.
 
 ---
@@ -158,6 +147,7 @@
 - [ ] [GATE] Contract + audit (cross-service) flows: every mutating contract use case writes an audit event consumed by the registry.
 - [ ] [GATE] Contract OpenAPI + CI-extension docs + Stripe runbook current.
 - [ ] [GATE] Phase 3 screens have passed `/impeccable audit`.
+- [ ] [GATE] Phase 3 screens have passed `/improve`.
 - [ ] [GATE] Minimum BIP set shipped: one ADR, three substantive posts, three short-form updates; marketplace publish completed or publicly blocked with explanation.
 
 ---
@@ -213,6 +203,7 @@
 - [ ] [GATE] Health score + digest available via API and visible in the UI.
 - [ ] [GATE] Token usage, latency, and quota behavior observable.
 - [ ] [GATE] Phase 4 screens have passed `/impeccable audit`.
+- [ ] [GATE] Phase 4 screens have passed `/improve`.
 - [ ] [GATE] Minimum BIP set shipped: one ADR/design note, two substantive articles, two short-form posts.
 
 ---
@@ -277,6 +268,7 @@
 - [ ] [GATE] NetworkPolicy + gateway service-token validation verified end-to-end.
 - [ ] [GATE] DLQ replay flow audited end-to-end.
 - [ ] [GATE] Phase 5 screens have passed `/impeccable audit`.
+- [ ] [GATE] Phase 5 screens have passed `/improve`.
 - [ ] [GATE] Minimum BIP set shipped: observability writeup, data-architecture retrospective, launch post, and at least one retrospective artifact.
 
 ---
@@ -315,6 +307,7 @@ Research tasks (if we decide to pursue):
 
 - [ ] [GATE] Each research item produces either a rejected ADR (with documented reasoning) or an accepted ADR with a concrete implementation plan for a future phase.
 
-### Phase Future
+## Phase Future
 
 - Users with multiple tenants
+- OIDC

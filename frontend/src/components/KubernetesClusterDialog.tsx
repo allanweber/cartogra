@@ -143,13 +143,15 @@ export function KubernetesClusterDialog({ open, onOpenChange, cluster, onSuccess
           </p>
           <div className="mt-1 flex items-start justify-between gap-4">
             <DialogTitle className="text-2xl font-bold">Cluster</DialogTitle>
-            <button
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={handleClose}
-              className="mt-1 rounded-sm text-muted-foreground opacity-70 hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="mt-1 text-muted-foreground opacity-70 hover:opacity-100"
             >
               <X className="size-4" />
               <span className="sr-only">Close</span>
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -291,12 +293,18 @@ export function KubernetesClusterDialog({ open, onOpenChange, cluster, onSuccess
                   />
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div
+                  className="flex cursor-pointer items-center gap-3 pointer-coarse:py-2"
+                  onClick={() => setSkipTlsVerify((v) => !v)}
+                >
                   <button
                     type="button"
                     role="switch"
                     aria-checked={skipTlsVerify}
-                    onClick={() => setSkipTlsVerify((v) => !v)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSkipTlsVerify((v) => !v)
+                    }}
                     className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${skipTlsVerify ? 'bg-primary' : 'bg-input'}`}
                   >
                     <span

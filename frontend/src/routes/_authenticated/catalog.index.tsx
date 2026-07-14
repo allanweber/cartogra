@@ -66,15 +66,15 @@ function computeRiskScore(service: RegistryService): number {
 }
 
 function riskColorClass(score: number): string {
-  if (score >= 70) return 'text-[oklch(0.50_0.23_28)]'
-  if (score >= 35) return 'text-[oklch(0.52_0.18_60)]'
-  return 'text-[oklch(0.42_0.18_145)]'
+  if (score >= 70) return 'text-critical'
+  if (score >= 35) return 'text-warning'
+  return 'text-success'
 }
 
 function riskBarClass(score: number): string {
-  if (score >= 70) return 'bg-[oklch(0.58_0.23_28)]'
-  if (score >= 35) return 'bg-[oklch(0.65_0.18_60)]'
-  return 'bg-[oklch(0.55_0.18_145)]'
+  if (score >= 70) return 'bg-critical'
+  if (score >= 35) return 'bg-warning'
+  return 'bg-success'
 }
 
 function CatalogPage() {
@@ -309,7 +309,7 @@ function CatalogPage() {
             <button
               onClick={() => setView('grid')}
               className={cn(
-                'flex items-center px-2.5 py-2 transition-colors focus-visible:outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-ring',
+                'flex items-center px-2.5 py-2 transition-colors focus-visible:outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:px-3.5 pointer-coarse:py-3',
                 view === 'grid' ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-muted',
               )}
               aria-label="Grid view"
@@ -320,7 +320,7 @@ function CatalogPage() {
             <button
               onClick={() => setView('list')}
               className={cn(
-                'flex items-center px-2.5 py-2 transition-colors focus-visible:outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-ring',
+                'flex items-center px-2.5 py-2 transition-colors focus-visible:outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:px-3.5 pointer-coarse:py-3',
                 view === 'list' ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-muted',
               )}
               aria-label="List view"
@@ -356,9 +356,9 @@ function CatalogPage() {
               <span
                 className={cn(
                   'size-1.5 rounded-full',
-                  value === 'healthy' && 'bg-[oklch(0.55_0.18_145)]',
-                  value === 'degraded' && 'bg-[oklch(0.65_0.18_60)]',
-                  value === 'down' && 'bg-[oklch(0.58_0.23_28)]',
+                  value === 'healthy' && 'bg-success',
+                  value === 'degraded' && 'bg-warning',
+                  value === 'down' && 'bg-critical',
                 )}
               />
               {value.charAt(0).toUpperCase() + value.slice(1)} ({healthCounts[value]})
@@ -448,13 +448,13 @@ function ServiceCard({ service, teamName }: { service: RegistryService; teamName
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="font-semibold leading-tight group-hover:text-primary">{service.name}</span>
               {service.tier === 'CRITICAL' && (
-                <span className="text-[10px] font-bold uppercase tracking-wide text-[oklch(0.55_0.20_28)]">CRITICAL</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-critical">CRITICAL</span>
               )}
             </div>
             <p className="mt-0.5 text-xs text-muted-foreground">
               Team:{' '}
               {isOrphan ? (
-                <span className="inline-flex items-center gap-0.5 text-[oklch(0.55_0.18_60)] dark:text-[oklch(0.78_0.14_60)]">
+                <span className="inline-flex items-center gap-0.5 text-warning">
                   <AlertTriangle className="size-3" aria-hidden="true" />
                   No owner
                 </span>
@@ -470,7 +470,7 @@ function ServiceCard({ service, teamName }: { service: RegistryService; teamName
         {tech.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {tech.map((t) => (
-              <span key={t} className="rounded-md border border-border bg-background px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+              <span key={t} className="rounded-md border border-border bg-background px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
                 {t}
               </span>
             ))}
@@ -484,7 +484,7 @@ function ServiceCard({ service, teamName }: { service: RegistryService; teamName
               {deploy ? `Deploy: ${deploy}` : 'Never deployed'}
             </span>
             {service.source && (
-              <span className="text-[10px] text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 {SCM_LABEL[service.source] ?? service.source}
               </span>
             )}
@@ -512,7 +512,7 @@ const LIST_COLS = 'grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minm
 function ServiceListTable({ services, teamMap }: { services: RegistryService[]; teamMap: Map<string, string> }) {
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
-      <div className={cn('grid gap-x-4 border-b border-border bg-muted/50 px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground', LIST_COLS)}>
+      <div className={cn('grid gap-x-4 border-b border-border bg-muted/50 px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground', LIST_COLS)}>
         <span>Service</span>
         <span>Health</span>
         <span>Source</span>
@@ -543,7 +543,7 @@ function ServiceListRow({ service, teamName }: { service: RegistryService; teamN
         <div className="min-w-0">
           <p className="truncate font-medium group-hover:text-primary">{service.name}</p>
           {service.tier === 'CRITICAL' && (
-            <span className="text-[10px] font-bold uppercase tracking-wide text-[oklch(0.55_0.20_28)]">CRITICAL</span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-critical">CRITICAL</span>
           )}
         </div>
         <div className="flex items-center">
@@ -556,7 +556,7 @@ function ServiceListRow({ service, teamName }: { service: RegistryService; teamN
         </div>
         <div className="flex items-center">
           {isOrphan ? (
-            <span className="inline-flex items-center gap-0.5 text-sm text-[oklch(0.55_0.18_60)] dark:text-[oklch(0.78_0.14_60)]">
+            <span className="inline-flex items-center gap-0.5 text-sm text-warning">
               No owner
             </span>
           ) : (
@@ -565,12 +565,12 @@ function ServiceListRow({ service, teamName }: { service: RegistryService; teamN
         </div>
         <div className="flex flex-wrap items-center gap-1">
           {tech.slice(0, 2).map((t) => (
-            <span key={t} className="rounded-md border border-border bg-background px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+            <span key={t} className="rounded-md border border-border bg-background px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
               {t}
             </span>
           ))}
           {tech.length > 2 && (
-            <span className="text-[11px] text-muted-foreground">+{tech.length - 2}</span>
+            <span className="text-xs text-muted-foreground">+{tech.length - 2}</span>
           )}
         </div>
         <div className="flex items-center">
@@ -599,9 +599,9 @@ function HealthDot({ health }: { health: ServiceHealth }) {
       aria-label={`${health} health`}
       className={cn(
         'inline-block size-2 shrink-0 rounded-full',
-        health === 'healthy' && 'bg-[oklch(0.55_0.18_145)]',
-        health === 'degraded' && 'bg-[oklch(0.65_0.18_60)]',
-        health === 'down' && 'bg-[oklch(0.58_0.23_28)]',
+        health === 'healthy' && 'bg-success',
+        health === 'degraded' && 'bg-warning',
+        health === 'down' && 'bg-critical',
       )}
     />
   )
@@ -612,9 +612,9 @@ function HealthLabel({ health }: { health: ServiceHealth }) {
     <span
       className={cn(
         'flex shrink-0 items-center gap-1 text-xs font-medium',
-        health === 'healthy' && 'text-[oklch(0.45_0.18_145)]',
-        health === 'degraded' && 'text-[oklch(0.52_0.18_60)]',
-        health === 'down' && 'text-[oklch(0.45_0.23_28)]',
+        health === 'healthy' && 'text-success',
+        health === 'degraded' && 'text-warning',
+        health === 'down' && 'text-critical',
       )}
     >
       <HealthDot health={health} />
@@ -628,9 +628,9 @@ function HealthCell({ health }: { health: ServiceHealth }) {
     <div
       className={cn(
         'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium',
-        health === 'healthy' && 'text-[oklch(0.40_0.18_145)]',
-        health === 'degraded' && 'text-[oklch(0.45_0.18_60)]',
-        health === 'down' && 'text-[oklch(0.42_0.23_28)]',
+        health === 'healthy' && 'text-success',
+        health === 'degraded' && 'text-warning',
+        health === 'down' && 'text-critical',
       )}
     >
       <HealthDot health={health} />
@@ -641,7 +641,7 @@ function HealthCell({ health }: { health: ServiceHealth }) {
 
 function WarningTag({ label }: { label: string }) {
   return (
-    <span className="flex items-center gap-0.5 rounded border border-[oklch(0.72_0.14_60)] bg-[oklch(0.97_0.06_80)] px-1.5 py-0.5 text-[10px] font-medium text-[oklch(0.50_0.15_60)] dark:border-[oklch(0.60_0.15_60)] dark:bg-[oklch(0.27_0.06_80)] dark:text-[oklch(0.78_0.14_60)]">
+    <span className="flex items-center gap-0.5 rounded border border-warning bg-warning-subtle px-1.5 py-0.5 text-xs font-medium text-warning">
       <AlertTriangle className="size-2.5" aria-hidden="true" />
       {label}
     </span>

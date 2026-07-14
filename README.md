@@ -181,6 +181,13 @@ Milestones map to development phases: Phase 0 (Foundation) through Phase 5 (Inge
 
 Java 25 · Spring Boot 4 · Spring Data JDBC · PostgreSQL · Apache Kafka · Redis · OpenTelemetry · TanStack Start · shadcn/ui · D3
 
+## Skills
+
+```bash
+npx impeccable install
+npx skills add shadcn/improve
+```
+
 ---
 
 ## License

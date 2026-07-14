@@ -77,7 +77,7 @@ export function NotificationBell() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="relative flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="relative flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:size-11"
           aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
         >
           {unreadCount > 0 ? (
@@ -86,7 +86,7 @@ export function NotificationBell() {
             <Bell className="size-4" />
           )}
           {unreadCount > 0 && (
-            <span className="absolute right-1.5 top-1.5 flex size-2 items-center justify-center rounded-full bg-[oklch(0.58_0.23_28)]" />
+            <span className="absolute right-1.5 top-1.5 flex size-2 items-center justify-center rounded-full bg-critical" />
           )}
         </button>
       </DropdownMenuTrigger>
@@ -96,7 +96,7 @@ export function NotificationBell() {
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold">Notifications</span>
             {unreadCount > 0 && (
-              <Badge variant="secondary" className="h-5 px-1.5 text-[11px]">
+              <Badge variant="secondary" className="h-5 px-1.5 text-xs">
                 {unreadCount}
               </Badge>
             )}
@@ -144,9 +144,9 @@ export function NotificationBell() {
                       {n.title}
                     </p>
                     <div className="mt-0.5 flex items-center gap-1.5">
-                      <span className="text-[11px] text-muted-foreground">{n.subtitle}</span>
-                      <span className="text-[11px] text-muted-foreground">·</span>
-                      <span className="text-[11px] text-muted-foreground">{n.time}</span>
+                      <span className="text-xs text-muted-foreground">{n.subtitle}</span>
+                      <span className="text-xs text-muted-foreground">·</span>
+                      <span className="text-xs text-muted-foreground">{n.time}</span>
                     </div>
                   </div>
                 </button>

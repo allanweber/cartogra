@@ -56,6 +56,14 @@ body {
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
+  --color-critical: var(--critical);
+  --color-critical-subtle: var(--critical-subtle);
+  --color-warning: var(--warning);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-success: var(--success);
+  --color-success-subtle: var(--success-subtle);
+  --color-info: var(--info);
+  --color-info-subtle: var(--info-subtle);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -72,7 +80,7 @@ body {
   --card-foreground: oklch(0.215 0.030 220);
   --popover: oklch(1 0.003 220);
   --popover-foreground: oklch(0.215 0.030 220);
-  --primary: oklch(0.52 0.20 218);
+  --primary: oklch(0.50 0.20 218);
   --primary-foreground: oklch(0.985 0.006 220);
   --secondary: oklch(0.55 0.14 218);
   --secondary-foreground: oklch(0.985 0.006 220);
@@ -92,12 +100,24 @@ body {
   --radius: 1rem;
   --sidebar: oklch(0.960 0.012 220);
   --sidebar-foreground: oklch(0.215 0.030 220);
-  --sidebar-primary: oklch(0.52 0.20 218);
+  --sidebar-primary: oklch(0.50 0.20 218);
   --sidebar-primary-foreground: oklch(0.985 0.006 220);
   --sidebar-accent: oklch(0.922 0.018 220);
   --sidebar-accent-foreground: oklch(0.215 0.030 220);
   --sidebar-border: oklch(0.887 0.015 220);
   --sidebar-ring: oklch(0.60 0.175 218);
+
+  /* Semantic status scale — foreground (text/border/dot) + subtle wash.
+     Single source of truth for critical / warning / success / info; every
+     status color in the app resolves here, no per-component oklch literals. */
+  --critical: oklch(0.52 0.20 28);
+  --critical-subtle: oklch(0.96 0.04 28);
+  --warning: oklch(0.50 0.13 65);
+  --warning-subtle: oklch(0.96 0.05 75);
+  --success: oklch(0.48 0.15 145);
+  --success-subtle: oklch(0.96 0.04 145);
+  --info: oklch(0.52 0.15 245);
+  --info-subtle: oklch(0.96 0.04 245);
 }
 
 .dark {
@@ -132,6 +152,15 @@ body {
   --sidebar-accent-foreground: oklch(0.964 0.010 218);
   --sidebar-border: oklch(1 0 0 / 12%);
   --sidebar-ring: oklch(0.72 0.16 218);
+
+  --critical: oklch(0.72 0.17 28);
+  --critical-subtle: oklch(0.27 0.05 28);
+  --warning: oklch(0.78 0.13 70);
+  --warning-subtle: oklch(0.27 0.05 75);
+  --success: oklch(0.74 0.15 145);
+  --success-subtle: oklch(0.26 0.05 145);
+  --info: oklch(0.72 0.15 245);
+  --info-subtle: oklch(0.26 0.04 245);
 }
 
 @layer base {
@@ -146,30 +175,26 @@ body {
   }
 }
 
-/* Health status colors */
-.health-healthy { color: oklch(0.55 0.18 145); }
-.health-degraded { color: oklch(0.65 0.18 60); }
-.health-down { color: oklch(0.58 0.23 28); }
-.bg-health-healthy { background-color: oklch(0.96 0.05 145); color: oklch(0.38 0.14 145); }
-.bg-health-degraded { background-color: oklch(0.97 0.06 80); color: oklch(0.50 0.15 60); }
-.bg-health-down { background-color: oklch(0.97 0.05 28); color: oklch(0.50 0.20 28); }
-.dark .bg-health-healthy { background-color: oklch(0.25 0.06 145); color: oklch(0.72 0.16 145); }
-.dark .bg-health-degraded { background-color: oklch(0.27 0.06 80); color: oklch(0.78 0.14 60); }
-.dark .bg-health-down { background-color: oklch(0.27 0.05 28); color: oklch(0.72 0.18 28); }
+/* Health status — resolves to the semantic status tokens above */
+.health-healthy { color: var(--success); }
+.health-degraded { color: var(--warning); }
+.health-down { color: var(--critical); }
+.bg-health-healthy { background-color: var(--success-subtle); color: var(--success); }
+.bg-health-degraded { background-color: var(--warning-subtle); color: var(--warning); }
+.bg-health-down { background-color: var(--critical-subtle); color: var(--critical); }
 
-/* Severity colors */
-.bg-severity-critical { background-color: oklch(0.97 0.05 28); color: oklch(0.50 0.20 28); border-left-color: oklch(0.58 0.23 28); }
-.bg-severity-warning { background-color: oklch(0.97 0.06 80); color: oklch(0.50 0.15 60); border-left-color: oklch(0.65 0.18 60); }
-.bg-severity-info { background-color: oklch(0.96 0.04 240); color: oklch(0.45 0.14 240); border-left-color: oklch(0.60 0.18 240); }
-.dark .bg-severity-critical { background-color: oklch(0.27 0.05 28); color: oklch(0.72 0.18 28); border-left-color: oklch(0.68 0.18 28); }
-.dark .bg-severity-warning { background-color: oklch(0.27 0.06 80); color: oklch(0.78 0.14 60); border-left-color: oklch(0.75 0.16 60); }
-.dark .bg-severity-info { background-color: oklch(0.26 0.04 240); color: oklch(0.72 0.14 240); border-left-color: oklch(0.70 0.16 240); }
+/* Severity foreground — drives badge text/border and status dots.
+   Colored side-borders and full-bleed severity backgrounds are intentionally
+   absent; severity reads from a single badge + dot, not from row chrome. */
+.severity-critical { color: var(--critical); }
+.severity-warning  { color: var(--warning); }
+.severity-info     { color: var(--info); }
 
-/* Contract status */
-.status-breaking { color: oklch(0.58 0.23 28); }
-.status-compatible { color: oklch(0.55 0.18 145); }
-.status-warning { color: oklch(0.65 0.18 60); }
-.status-stale { color: oklch(0.55 0.04 264); }
+/* Contract status — resolves to the semantic status tokens above */
+.status-breaking { color: var(--critical); }
+.status-compatible { color: var(--success); }
+.status-warning { color: var(--warning); }
+.status-stale { color: var(--muted-foreground); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
