@@ -49,11 +49,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private String extractRawToken(HttpServletRequest request) {
         if (request.getCookies() != null) {
-            return Arrays.stream(request.getCookies())
+            String cookieToken = Arrays.stream(request.getCookies())
                 .filter(c -> "jwt".equals(c.getName()))
                 .map(Cookie::getValue)
                 .findFirst()
                 .orElse(null);
+            if (cookieToken != null) {
+                return cookieToken;
+            }
         }
         String bearer = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (bearer != null && bearer.startsWith("Bearer ")) {

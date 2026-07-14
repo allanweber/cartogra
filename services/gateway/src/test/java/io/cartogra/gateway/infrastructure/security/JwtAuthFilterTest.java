@@ -86,6 +86,21 @@ class JwtAuthFilterTest {
     }
 
     @Test
+    void cookiesPresentButNoJwtCookieFallsThroughToBearerHeader() throws Exception {
+        when(jwtTokenProvider.decode("bearer-token")).thenReturn(claims);
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setCookies(new jakarta.servlet.http.Cookie("session_id", "abc"));
+        request.addHeader("Authorization", "Bearer bearer-token");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, filterChain);
+
+        verify(jwtTokenProvider).decode("bearer-token");
+        verify(filterChain).doFilter(any(), any());
+    }
+
+    @Test
     void missingTokenProceedsWithoutPrincipal() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest();
         MockHttpServletResponse response = new MockHttpServletResponse();
