@@ -53,10 +53,10 @@ function buildNotifications(): Notification[] {
 
 
 const severityConfig: Record<Notification['severity'], { dot: string; text: string }> = {
-  critical: { dot: 'bg-[oklch(0.58_0.23_28)]', text: 'text-[oklch(0.58_0.23_28)]' },
-  warning: { dot: 'bg-[oklch(0.65_0.18_60)]', text: 'text-[oklch(0.65_0.18_60)]' },
-  info: { dot: 'bg-[oklch(0.60_0.18_240)]', text: 'text-[oklch(0.60_0.18_240)]' },
-  success: { dot: 'bg-[oklch(0.55_0.18_145)]', text: 'text-[oklch(0.55_0.18_145)]' },
+  critical: { dot: 'bg-critical', text: 'text-critical' },
+  warning: { dot: 'bg-warning', text: 'text-warning' },
+  info: { dot: 'bg-info', text: 'text-info' },
+  success: { dot: 'bg-success', text: 'text-success' },
 }
 
 export function NotificationBell() {

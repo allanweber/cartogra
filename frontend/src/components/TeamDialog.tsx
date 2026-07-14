@@ -510,12 +510,9 @@ export function TeamDialog({
                                 <span
                                   className={cn(
                                     'size-2 shrink-0 rounded-full',
-                                    health === 'healthy' &&
-                                      'bg-[oklch(0.55_0.18_145)]',
-                                    health === 'degraded' &&
-                                      'bg-[oklch(0.65_0.18_60)]',
-                                    health === 'down' &&
-                                      'bg-[oklch(0.58_0.23_28)]',
+                                    health === 'healthy' && 'bg-success',
+                                    health === 'degraded' && 'bg-warning',
+                                    health === 'down' && 'bg-critical',
                                   )}
                                   aria-hidden="true"
                                 />

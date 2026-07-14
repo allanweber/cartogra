@@ -35,10 +35,10 @@ const typeConfig: Record<
   TimelineEventType,
   { color: string; bgColor: string; label: string }
 > = {
-  deploy: { color: 'bg-[oklch(0.55_0.18_145)]', bgColor: 'bg-[oklch(0.96_0.05_145)] dark:bg-[oklch(0.25_0.06_145)]', label: 'Deploy' },
+  deploy: { color: 'bg-success', bgColor: 'bg-success-subtle', label: 'Deploy' },
   contract: { color: 'bg-[oklch(0.55_0.18_260)]', bgColor: 'bg-[oklch(0.96_0.04_260)] dark:bg-[oklch(0.25_0.05_260)]', label: 'Contract' },
-  risk: { color: 'bg-[oklch(0.58_0.23_28)]', bgColor: 'bg-[oklch(0.97_0.05_28)] dark:bg-[oklch(0.27_0.05_28)]', label: 'Risk' },
-  ownership: { color: 'bg-[oklch(0.65_0.18_60)]', bgColor: 'bg-[oklch(0.97_0.06_80)] dark:bg-[oklch(0.27_0.06_80)]', label: 'Ownership' },
+  risk: { color: 'bg-critical', bgColor: 'bg-critical-subtle', label: 'Risk' },
+  ownership: { color: 'bg-warning', bgColor: 'bg-warning-subtle', label: 'Ownership' },
   dependency: { color: 'bg-[oklch(0.60_0.18_240)]', bgColor: 'bg-[oklch(0.96_0.04_240)] dark:bg-[oklch(0.26_0.04_240)]', label: 'Dependency' },
 }
 

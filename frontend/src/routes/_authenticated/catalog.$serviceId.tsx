@@ -52,28 +52,25 @@ function computeRiskScore(service: RegistryService): number {
 }
 
 function riskRingClass(score: number): string {
-  if (score >= 70)
-    return 'border-[oklch(0.70_0.15_28)] text-[oklch(0.50_0.20_28)] dark:border-[oklch(0.55_0.15_28)] dark:text-[oklch(0.72_0.18_28)]'
-  if (score >= 35)
-    return 'border-[oklch(0.72_0.14_60)] text-[oklch(0.60_0.14_60)] dark:border-[oklch(0.60_0.15_60)] dark:text-[oklch(0.78_0.14_60)]'
-  return 'border-[oklch(0.55_0.15_145)] text-[oklch(0.45_0.15_145)] dark:border-[oklch(0.50_0.14_145)] dark:text-[oklch(0.70_0.14_145)]'
+  if (score >= 70) return 'border-critical text-critical'
+  if (score >= 35) return 'border-warning text-warning'
+  return 'border-success text-success'
 }
 
 function healthDotClass(health: ServiceHealth): string {
-  if (health === 'down') return 'bg-[oklch(0.55_0.22_28)]'
-  if (health === 'degraded') return 'bg-[oklch(0.65_0.18_60)]'
-  return 'bg-[oklch(0.55_0.18_145)]'
+  if (health === 'down') return 'bg-critical'
+  if (health === 'degraded') return 'bg-warning'
+  return 'bg-success'
 }
 
 function healthTextClass(health: ServiceHealth): string {
-  if (health === 'down') return 'text-[oklch(0.50_0.20_28)] dark:text-[oklch(0.72_0.18_28)]'
-  if (health === 'degraded') return 'text-[oklch(0.60_0.14_60)] dark:text-[oklch(0.78_0.14_60)]'
-  return 'text-[oklch(0.45_0.15_145)] dark:text-[oklch(0.70_0.14_145)]'
+  if (health === 'down') return 'text-critical'
+  if (health === 'degraded') return 'text-warning'
+  return 'text-success'
 }
 
 function tierBadgeClass(tier: string): string {
-  if (tier === 'CRITICAL')
-    return 'border-[oklch(0.70_0.15_28)] text-[oklch(0.50_0.20_28)] bg-[oklch(0.97_0.05_28)] dark:border-[oklch(0.55_0.15_28)] dark:text-[oklch(0.72_0.18_28)] dark:bg-[oklch(0.27_0.05_28)]'
+  if (tier === 'CRITICAL') return 'border-critical text-critical bg-critical-subtle'
   return 'border-border text-muted-foreground bg-transparent'
 }
 
@@ -524,18 +521,16 @@ function InsightCard({ insight }: { insight: Insight }) {
     <div
       className={cn(
         'rounded-lg border p-4',
-        isCritical &&
-          'border-[oklch(0.70_0.15_28)] bg-[oklch(0.97_0.05_28)] dark:border-[oklch(0.55_0.15_28)] dark:bg-[oklch(0.22_0.05_28)]',
-        isWarning &&
-          'border-[oklch(0.72_0.14_60)] bg-[oklch(0.97_0.06_80)] dark:border-[oklch(0.60_0.15_60)] dark:bg-[oklch(0.22_0.06_80)]',
+        isCritical && 'border-critical bg-critical-subtle',
+        isWarning && 'border-warning bg-warning-subtle',
         !isCritical && !isWarning && 'border-border bg-muted/40',
       )}
     >
       <div
         className={cn(
           'mb-1',
-          isCritical && 'text-[oklch(0.50_0.20_28)] dark:text-[oklch(0.72_0.18_28)]',
-          isWarning && 'text-[oklch(0.60_0.14_60)] dark:text-[oklch(0.78_0.14_60)]',
+          isCritical && 'text-critical',
+          isWarning && 'text-warning',
           !isCritical && !isWarning && 'text-muted-foreground',
         )}
       >
@@ -544,8 +539,8 @@ function InsightCard({ insight }: { insight: Insight }) {
       <p
         className={cn(
           'text-sm font-semibold',
-          isCritical && 'text-[oklch(0.50_0.20_28)] dark:text-[oklch(0.72_0.18_28)]',
-          isWarning && 'text-[oklch(0.60_0.14_60)] dark:text-[oklch(0.78_0.14_60)]',
+          isCritical && 'text-critical',
+          isWarning && 'text-warning',
         )}
       >
         {insight.label}
@@ -587,11 +582,7 @@ function MetaField({
 
 function HealthHistoryBar({ health }: { health: ServiceHealth }) {
   const colorClass =
-    health === 'down'
-      ? 'bg-[oklch(0.70_0.15_28)]'
-      : health === 'degraded'
-        ? 'bg-[oklch(0.72_0.14_60)]'
-        : 'bg-[oklch(0.55_0.18_145)]'
+    health === 'down' ? 'bg-critical' : health === 'degraded' ? 'bg-warning' : 'bg-success'
 
   return (
     <div>

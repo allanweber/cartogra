@@ -68,9 +68,9 @@ function teamColor(name: string): string {
 }
 
 function riskColorClass(score: number): string {
-  if (score >= 70) return 'text-[oklch(0.50_0.23_28)]'
-  if (score >= 35) return 'text-[oklch(0.52_0.18_60)]'
-  return 'text-[oklch(0.42_0.18_145)]'
+  if (score >= 70) return 'text-critical'
+  if (score >= 35) return 'text-warning'
+  return 'text-success'
 }
 
 function TeamsPage() {
@@ -240,8 +240,8 @@ function StatCard({
         <span
           className={cn(
             'text-2xl font-bold',
-            variant === 'critical' && 'text-[oklch(0.58_0.23_28)] dark:text-[oklch(0.72_0.18_28)]',
-            variant === 'warning' && 'text-[oklch(0.65_0.18_60)] dark:text-[oklch(0.78_0.14_60)]',
+            variant === 'critical' && 'text-critical',
+            variant === 'warning' && 'text-warning',
           )}
         >
           {value}
@@ -457,9 +457,9 @@ function HealthDot({ health }: { health: ServiceHealth }) {
       aria-hidden="true"
       className={cn(
         'inline-block size-1.5 shrink-0 rounded-full',
-        health === 'healthy' && 'bg-[oklch(0.55_0.18_145)]',
-        health === 'degraded' && 'bg-[oklch(0.65_0.18_60)]',
-        health === 'down' && 'bg-[oklch(0.58_0.23_28)]',
+        health === 'healthy' && 'bg-success',
+        health === 'degraded' && 'bg-warning',
+        health === 'down' && 'bg-critical',
       )}
     />
   )
@@ -471,9 +471,9 @@ function HealthBadge({ health }: { health: ServiceHealth }) {
       variant="outline"
       className={cn(
         'capitalize border-current gap-1',
-        health === 'healthy' && 'border-[oklch(0.55_0.15_145)] text-[oklch(0.45_0.15_145)] bg-[oklch(0.97_0.04_145)] dark:text-[oklch(0.70_0.14_145)]',
-        health === 'degraded' && 'border-[oklch(0.72_0.14_60)] text-[oklch(0.52_0.18_60)] bg-[oklch(0.97_0.06_80)] dark:text-[oklch(0.78_0.14_60)]',
-        health === 'down' && 'border-[oklch(0.70_0.15_28)] text-[oklch(0.50_0.20_28)] bg-[oklch(0.97_0.05_28)] dark:text-[oklch(0.72_0.18_28)]',
+        health === 'healthy' && 'border-success bg-success-subtle text-success',
+        health === 'degraded' && 'border-warning bg-warning-subtle text-warning',
+        health === 'down' && 'border-critical bg-critical-subtle text-critical',
       )}
     >
       <HealthDot health={health} />
@@ -489,9 +489,9 @@ function RiskExposureBadge({ exposure }: { exposure: RiskExposure }) {
       className={cn(
         'capitalize',
         exposure === 'low' && 'text-muted-foreground',
-        exposure === 'medium' && 'border-[oklch(0.72_0.14_60)] bg-[oklch(0.97_0.06_80)] text-[oklch(0.50_0.15_60)] dark:border-[oklch(0.55_0.14_60)] dark:text-[oklch(0.78_0.14_60)]',
+        exposure === 'medium' && 'border-warning bg-warning-subtle text-warning',
         exposure === 'high' && 'border-[oklch(0.68_0.14_40)] bg-[oklch(0.97_0.05_40)] text-[oklch(0.52_0.18_40)] dark:border-[oklch(0.55_0.14_40)] dark:text-[oklch(0.76_0.16_40)]',
-        exposure === 'critical' && 'border-[oklch(0.70_0.15_28)] bg-[oklch(0.97_0.05_28)] text-[oklch(0.50_0.20_28)] dark:border-[oklch(0.55_0.18_28)] dark:bg-[oklch(0.27_0.05_28)] dark:text-[oklch(0.72_0.18_28)]',
+        exposure === 'critical' && 'border-critical bg-critical-subtle text-critical',
       )}
     >
       {exposure} risk
