@@ -1,6 +1,7 @@
 package io.cartogra.ingestion.domain;
 
 import io.cartogra.ingestion.api.dto.ScmConnectionRequest;
+import io.cartogra.ingestion.infrastructure.k8s.CredentialEncryptor;
 import io.cartogra.ingestion.infrastructure.kafka.SyncCommandProducer;
 import io.cartogra.ingestion.infrastructure.registry.RegistryPlanLimitClient;
 import io.cartogra.ingestion.repository.ScmConnectionRepository;
@@ -10,14 +11,17 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -32,15 +36,39 @@ class ScmConnectionServiceTest {
     SyncCommandProducer syncCommandProducer;
     @Mock
     RegistryPlanLimitClient planLimitClient;
+    @Mock
+    CredentialEncryptor credentialEncryptor;
 
     ScmConnectionService service;
 
     private static final UUID TENANT = UUID.randomUUID();
     private static final UUID CONN_ID = UUID.randomUUID();
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
-        service = new ScmConnectionService(repository, syncCommandProducer, planLimitClient);
+        // Reversible fake cipher: proves the service actually calls encrypt()/decrypt() on the
+        // secret keys, without needing a real AES key/IV round-trip in a unit test.
+        lenient().when(credentialEncryptor.encrypt(anyString()))
+                .thenAnswer(inv -> "enc:" + inv.getArgument(0));
+        lenient().when(credentialEncryptor.decrypt(anyString()))
+                .thenAnswer(inv -> {
+                    String s = inv.getArgument(0);
+                    return s.startsWith("enc:") ? s.substring("enc:".length()) : s;
+                });
+        service = new ScmConnectionService(repository, syncCommandProducer, planLimitClient, credentialEncryptor);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String secretValue(String configJson, String key) {
+        Map<String, Object> parsed = MAPPER.readValue(configJson, Map.class);
+        return (String) parsed.get(key);
+    }
+
+    /** Mirrors the fake cipher stubbed onto {@code credentialEncryptor} in setUp(), without
+     * invoking the mock directly from an assertion. */
+    private static String decryptForTest(String value) {
+        return value.startsWith("enc:") ? value.substring("enc:".length()) : value;
     }
 
     private ScmConnection existing(String config) {
@@ -75,7 +103,9 @@ class ScmConnectionServiceTest {
 
         ArgumentCaptor<ScmConnection> captor = ArgumentCaptor.forClass(ScmConnection.class);
         verify(repository).save(captor.capture());
-        assertThat(captor.getValue().config()).contains("\"token\":\"ghp_new\"");
+        String storedToken = secretValue(captor.getValue().config(), "token");
+        assertThat(storedToken).isNotEqualTo("ghp_new");
+        assertThat(decryptForTest(storedToken)).isEqualTo("ghp_new");
     }
 
     @Test
@@ -124,7 +154,41 @@ class ScmConnectionServiceTest {
         ScmConnection result = service.create(TENANT, req);
 
         assertThat(result.webhookEnabled()).isTrue();
-        assertThat(result.config()).contains("\"webhookSecret\":\"whsec_123\"");
+        String storedSecret = secretValue(result.config(), "webhookSecret");
+        assertThat(storedSecret).isNotEqualTo("whsec_123");
+        assertThat(decryptForTest(storedSecret)).isEqualTo("whsec_123");
+    }
+
+    @Test
+    void createEncryptsTokenBeforeSendingToRepository() {
+        when(planLimitClient.fetchLimits(TENANT)).thenReturn(Optional.empty());
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        ScmConnectionRequest req = new ScmConnectionRequest(
+                "github", "{\"org\":\"acme\",\"token\":\"plaintext-value\"}", null, null, null);
+
+        service.create(TENANT, req);
+
+        ArgumentCaptor<ScmConnection> captor = ArgumentCaptor.forClass(ScmConnection.class);
+        verify(repository).save(captor.capture());
+        String storedToken = secretValue(captor.getValue().config(), "token");
+        assertThat(storedToken).isNotEqualTo("plaintext-value");
+        assertThat(decryptForTest(storedToken)).isEqualTo("plaintext-value");
+    }
+
+    @Test
+    void createPropagatesEncryptorFailureInsteadOfPersistingPlaintext() {
+        when(planLimitClient.fetchLimits(TENANT)).thenReturn(Optional.empty());
+        when(credentialEncryptor.encrypt(anyString())).thenThrow(new RuntimeException("encryption key missing"));
+
+        ScmConnectionRequest req = new ScmConnectionRequest(
+                "github", "{\"org\":\"acme\",\"token\":\"plaintext-value\"}", null, null, null);
+
+        assertThatThrownBy(() -> service.create(TENANT, req))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("encryption key missing");
+
+        verifyNoInteractions(repository);
     }
 
     @Test

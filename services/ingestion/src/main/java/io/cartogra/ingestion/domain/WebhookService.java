@@ -2,6 +2,7 @@ package io.cartogra.ingestion.domain;
 
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
+import io.cartogra.ingestion.infrastructure.k8s.CredentialEncryptor;
 import io.cartogra.ingestion.infrastructure.kafka.SyncCommandProducer;
 import io.cartogra.ingestion.infrastructure.scm.ScmProvider;
 import io.cartogra.ingestion.repository.ScmConnectionRepository;
@@ -26,17 +27,20 @@ public class WebhookService {
     private final ScmConnectionRepository connectionRepository;
     private final SyncCommandProducer syncCommandProducer;
     private final ObjectMapper objectMapper;
+    private final CredentialEncryptor credentialEncryptor;
 
     public WebhookService(
             List<ScmProvider> providers,
             ScmConnectionRepository connectionRepository,
             SyncCommandProducer syncCommandProducer,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            CredentialEncryptor credentialEncryptor) {
         this.providers = providers.stream()
                 .collect(Collectors.toMap(ScmProvider::providerType, Function.identity()));
         this.connectionRepository = connectionRepository;
         this.syncCommandProducer = syncCommandProducer;
         this.objectMapper = objectMapper;
+        this.credentialEncryptor = credentialEncryptor;
     }
 
     public void process(String providerType, UUID connectionId, byte[] rawBody, Map<String, String> headers) {
@@ -70,7 +74,7 @@ public class WebhookService {
         try {
             Map<String, Object> config = objectMapper.readValue(configJson, new TypeReference<>() {});
             Object secret = config.get("webhookSecret");
-            return secret instanceof String s ? s : null;
+            return secret instanceof String s ? credentialEncryptor.decrypt(s) : null;
         } catch (Exception _) {
             return null;
         }

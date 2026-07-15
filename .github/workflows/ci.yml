@@ -144,7 +144,6 @@ jobs:
           retention-days: 14
 
       - name: Trivy vulnerability scan — fail on CRITICAL or HIGH (unfixed suppressed)
-        if: steps.changes.outputs.any == 'true'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: 'fs'
@@ -156,7 +155,7 @@ jobs:
           output: 'trivy-report.txt'
 
       - name: Upload Trivy report
-        if: steps.changes.outputs.any == 'true' && always()
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: trivy-report
@@ -313,17 +312,61 @@ jobs:
         if: steps.changes.outputs.registry == 'true'
         run: docker build -f infra/docker/registry/Dockerfile -t cartogra/registry:ci .
 
+      - name: Scan registry image — fail on CRITICAL or HIGH (unfixed suppressed)
+        if: steps.changes.outputs.registry == 'true'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: 'image'
+          image-ref: 'cartogra/registry:ci'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+          format: 'table'
+
       - name: Build gateway image
         if: steps.changes.outputs.gateway == 'true'
         run: docker build -f infra/docker/gateway/Dockerfile -t cartogra/gateway:ci .
+
+      - name: Scan gateway image — fail on CRITICAL or HIGH (unfixed suppressed)
+        if: steps.changes.outputs.gateway == 'true'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: 'image'
+          image-ref: 'cartogra/gateway:ci'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+          format: 'table'
 
       - name: Build ingestion image
         if: steps.changes.outputs.ingestion == 'true'
         run: docker build -f infra/docker/ingestion/Dockerfile -t cartogra/ingestion:ci .
 
+      - name: Scan ingestion image — fail on CRITICAL or HIGH (unfixed suppressed)
+        if: steps.changes.outputs.ingestion == 'true'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: 'image'
+          image-ref: 'cartogra/ingestion:ci'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+          format: 'table'
+
       - name: Build frontend image
         if: steps.changes.outputs.frontend == 'true'
         run: docker build -f infra/docker/frontend/Dockerfile -t cartogra/frontend:ci .
+
+      - name: Scan frontend image — fail on CRITICAL or HIGH (unfixed suppressed)
+        if: steps.changes.outputs.frontend == 'true'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: 'image'
+          image-ref: 'cartogra/frontend:ci'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+          format: 'table'
 
       - name: Write job summary
         if: always()

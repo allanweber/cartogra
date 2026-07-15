@@ -5,11 +5,13 @@ import io.cartogra.ingestion.api.dto.ScmConnectionRequest;
 import io.cartogra.ingestion.domain.exception.PlanLimitExceededException;
 import io.cartogra.ingestion.repository.ScmConnectionRepository;
 import io.cartogra.ingestion.domain.exception.ScmConnectionNotFoundException;
+import io.cartogra.ingestion.infrastructure.k8s.CredentialEncryptor;
 import io.cartogra.ingestion.infrastructure.kafka.SyncCommandProducer;
 import io.cartogra.ingestion.infrastructure.registry.RegistryPlanLimitClient;
 import io.cartogra.ingestion.infrastructure.registry.RegistryPlanLimits;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
@@ -28,19 +30,21 @@ import java.util.UUID;
 public class ScmConnectionService {
 
     private static final int DEFAULT_POLL_INTERVAL_MINUTES = 15;
-    private static final Set<String> SECRET_KEYS = Set.of("token", "pat", "webhookSecret");
+    static final Set<String> SECRET_KEYS = Set.of("token", "pat", "webhookSecret");
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, Object>> CONFIG_MAP_TYPE = new TypeReference<>() {};
 
     private final ScmConnectionRepository repository;
     private final SyncCommandProducer syncCommandProducer;
     private final RegistryPlanLimitClient planLimitClient;
+    private final CredentialEncryptor credentialEncryptor;
 
     public ScmConnectionService(ScmConnectionRepository repository, SyncCommandProducer syncCommandProducer,
-                                RegistryPlanLimitClient planLimitClient) {
+                                RegistryPlanLimitClient planLimitClient, CredentialEncryptor credentialEncryptor) {
         this.repository = repository;
         this.syncCommandProducer = syncCommandProducer;
         this.planLimitClient = planLimitClient;
+        this.credentialEncryptor = credentialEncryptor;
     }
 
     @Transactional
@@ -62,6 +66,7 @@ public class ScmConnectionService {
         if (webhook && !hasWebhookSecret(config)) {
             throw new IllegalArgumentException("webhookSecret is required in config when webhookEnabled is true");
         }
+        config = encryptFreshSecrets(config, config);
         Instant nextSyncAt = scheduler ? now.plus(interval, ChronoUnit.MINUTES) : null;
 
         ScmConnection connection = repository.save(new ScmConnection(
@@ -95,6 +100,14 @@ public class ScmConnectionService {
 
         if (webhook && !hasWebhookSecret(config)) {
             throw new IllegalArgumentException("webhookSecret is required in config when webhookEnabled is true");
+        }
+
+        // Encrypt after the presence check above so hasWebhookSecret validates the plaintext
+        // value the caller actually supplied, not ciphertext. Only keys the caller freshly
+        // supplied in req.config() are encrypted here — keys preserveSecrets copied over from
+        // existing.config() are already ciphertext and must not be re-encrypted.
+        if (req.config() != null) {
+            config = encryptFreshSecrets(config, req.config());
         }
 
         boolean changed = !provider.equals(existing.provider())
@@ -141,20 +154,48 @@ public class ScmConnectionService {
     }
 
     /** Re-injects any secret keys the request omitted, so a config-only edit (e.g. poll interval) doesn't wipe stored credentials. */
-    @SuppressWarnings("unchecked")
     private static String preserveSecrets(String incomingConfig, String existingConfig) {
         try {
-            Map<String, Object> incoming = new LinkedHashMap<>(MAPPER.readValue(incomingConfig, Map.class));
-            Map<String, Object> existing = MAPPER.readValue(existingConfig, Map.class);
+            Map<String, Object> incoming = new LinkedHashMap<>(MAPPER.readValue(incomingConfig, CONFIG_MAP_TYPE));
+            Map<String, Object> existing = MAPPER.readValue(existingConfig, CONFIG_MAP_TYPE);
             for (String key : SECRET_KEYS) {
                 if (!incoming.containsKey(key) && existing.containsKey(key)) {
                     incoming.put(key, existing.get(key));
                 }
             }
             return MAPPER.writeValueAsString(incoming);
-        } catch (Exception _) {
+        } catch (JacksonException _) {
             return incomingConfig;
         }
+    }
+
+    /**
+     * Encrypts SECRET_KEYS values in {@code config} that were freshly supplied by the caller in
+     * {@code rawIncoming} (the request's own config JSON, pre-preserveSecrets). Values preserveSecrets
+     * copied over from a stored connection are already ciphertext and are left untouched — only keys
+     * present in rawIncoming are (re-)encrypted, so an already-encrypted preserved value is never
+     * double-encrypted.
+     *
+     * <p>Only malformed-JSON failures are swallowed (config falls back to the caller's raw JSON, same
+     * as before encryption existed). A {@code credentialEncryptor.encrypt(...)} failure — e.g. a
+     * missing/malformed key — is NOT swallowed here: it must propagate and fail the write, not
+     * silently persist the secret in plaintext.
+     */
+    private String encryptFreshSecrets(String config, String rawIncoming) {
+        Map<String, Object> parsed;
+        Map<String, Object> incoming;
+        try {
+            parsed = new LinkedHashMap<>(MAPPER.readValue(config, CONFIG_MAP_TYPE));
+            incoming = MAPPER.readValue(rawIncoming, CONFIG_MAP_TYPE);
+        } catch (JacksonException _) {
+            return config;
+        }
+        for (String key : SECRET_KEYS) {
+            if (incoming.containsKey(key) && parsed.get(key) instanceof String s && !s.isBlank()) {
+                parsed.put(key, credentialEncryptor.encrypt(s));
+            }
+        }
+        return MAPPER.writeValueAsString(parsed);
     }
 
     /** Returns true if the given config JSON contains a non-blank "webhookSecret" value. */

@@ -1,6 +1,7 @@
 package io.cartogra.ingestion.domain;
 
 import io.cartogra.common.event.SyncCommandPayload;
+import io.cartogra.ingestion.infrastructure.k8s.CredentialEncryptor;
 import io.cartogra.ingestion.repository.ScmConnectionRepository;
 import io.cartogra.ingestion.infrastructure.scm.ScmProvider;
 import io.cartogra.ingestion.domain.exception.ScmProviderException;
@@ -13,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -43,6 +45,7 @@ public class SyncExecutionService {
     private final OwnershipResolvedProducer ownershipProducer;
     private final TechStackDetector techStackDetector;
     private final ServiceDiscoveredProducer serviceDiscoveredProducer;
+    private final CredentialEncryptor credentialEncryptor;
 
     public SyncExecutionService(
             List<ScmProvider> providers,
@@ -51,7 +54,8 @@ public class SyncExecutionService {
             SyncResultProducer resultProducer,
             OwnershipResolvedProducer ownershipProducer,
             TechStackDetector techStackDetector,
-            ServiceDiscoveredProducer serviceDiscoveredProducer) {
+            ServiceDiscoveredProducer serviceDiscoveredProducer,
+            CredentialEncryptor credentialEncryptor) {
         this.providers = providers.stream()
                 .collect(Collectors.toMap(ScmProvider::providerType, Function.identity()));
         this.syncJobRepository = syncJobRepository;
@@ -60,6 +64,7 @@ public class SyncExecutionService {
         this.ownershipProducer = ownershipProducer;
         this.techStackDetector = techStackDetector;
         this.serviceDiscoveredProducer = serviceDiscoveredProducer;
+        this.credentialEncryptor = credentialEncryptor;
     }
 
     public SyncJob execute(SyncCommandPayload command) {
@@ -87,7 +92,7 @@ public class SyncExecutionService {
                 command.connectionId(),
                 command.tenantId(),
                 command.providerType(),
-                command.connectionConfig()
+                decryptSecrets(command.connectionConfig())
         );
 
         try {
@@ -167,6 +172,21 @@ public class SyncExecutionService {
         }
         OwnershipMap ownership = provider.resolveOwnership(connectionConfig, repo);
         ownershipProducer.publish(command.tenantId(), command.connectionId(), repo, ownership);
+    }
+
+    /**
+     * The Kafka sync-command payload carries {@code ScmConnection.config} verbatim, so any
+     * {@link ScmConnectionService#SECRET_KEYS} value in it is still ciphertext at this point —
+     * decrypt before handing the config to a {@link ScmProvider} REST client.
+     */
+    private Map<String, Object> decryptSecrets(Map<String, Object> config) {
+        Map<String, Object> decrypted = new LinkedHashMap<>(config);
+        for (String key : ScmConnectionService.SECRET_KEYS) {
+            if (decrypted.get(key) instanceof String s) {
+                decrypted.put(key, credentialEncryptor.decrypt(s));
+            }
+        }
+        return decrypted;
     }
 
     /** Best-effort feedback write; a stale connection row must not fail the sync. */

@@ -2,6 +2,7 @@ package io.cartogra.ingestion.domain;
 
 import io.cartogra.ingestion.domain.exception.WebhookConnectionNotFoundException;
 import io.cartogra.ingestion.domain.exception.WebhookSignatureInvalidException;
+import io.cartogra.ingestion.infrastructure.k8s.CredentialEncryptor;
 import io.cartogra.ingestion.infrastructure.kafka.SyncCommandProducer;
 import io.cartogra.ingestion.infrastructure.scm.ScmProvider;
 import io.cartogra.ingestion.repository.ScmConnectionRepository;
@@ -20,6 +21,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -34,6 +36,8 @@ class WebhookServiceTest {
     ScmConnectionRepository connectionRepository;
     @Mock
     SyncCommandProducer syncCommandProducer;
+    @Mock
+    CredentialEncryptor credentialEncryptor;
 
     WebhookService service;
 
@@ -44,11 +48,15 @@ class WebhookServiceTest {
     @BeforeEach
     void setUp() {
         lenient().when(githubProvider.providerType()).thenReturn("github");
+        // Identity pass-through: these tests exercise provider-mismatch and signature-verification
+        // behavior, not encryption itself, so decrypt() just returns whatever was stored ("s3cr3t").
+        lenient().when(credentialEncryptor.decrypt(any())).thenAnswer(inv -> inv.getArgument(0));
         service = new WebhookService(
                 List.of(githubProvider),
                 connectionRepository,
                 syncCommandProducer,
-                new ObjectMapper());
+                new ObjectMapper(),
+                credentialEncryptor);
     }
 
     private ScmConnection connection(String provider) {
@@ -90,5 +98,22 @@ class WebhookServiceTest {
 
         assertThatThrownBy(() -> service.process("github", CONN_ID, BODY, HEADERS))
                 .isInstanceOf(WebhookSignatureInvalidException.class);
+    }
+
+    @Test
+    void extractsAndDecryptsEncryptedWebhookSecretBeforeVerifying() {
+        ScmConnection conn = new ScmConnection(CONN_ID, UUID.randomUUID(), "github",
+                "{\"webhookSecret\":\"enc:ciphertext-value\"}",
+                false, 15, null, null, null, null, true,
+                Instant.now(), Instant.now(), null);
+        when(connectionRepository.findByIdForWebhook(CONN_ID)).thenReturn(Optional.of(conn));
+        when(credentialEncryptor.decrypt("enc:ciphertext-value")).thenReturn("s3cr3t");
+        when(githubProvider.verifyWebhookSignature(any(), any(), eq("s3cr3t"))).thenReturn(true);
+        when(githubProvider.isRelevantWebhookEvent(any(), any())).thenReturn(true);
+
+        service.process("github", CONN_ID, BODY, HEADERS);
+
+        verify(githubProvider).verifyWebhookSignature(any(), any(), eq("s3cr3t"));
+        verify(syncCommandProducer).publish(conn);
     }
 }
