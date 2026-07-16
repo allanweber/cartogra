@@ -23,6 +23,11 @@ FROM node:22-slim AS runtime
 # Phase 0 stub image for the frontend SSR runtime.
 WORKDIR /app
 
+# Runtime only ever runs `node dist/server/server.js` — strip npm/corepack/npx
+# and their bundled deps (e.g. picomatch, sigstore) to shrink the CVE surface.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
+
 COPY --from=builder --chown=node:node /app/frontend/dist ./dist
 
 USER node
