@@ -2,6 +2,7 @@ package io.cartogra.registry.domain;
 
 import io.cartogra.common.api.PageResult;
 import io.cartogra.registry.infrastructure.kafka.TeamLifecycleEventProducer;
+import io.cartogra.registry.repository.AdvisoryLockRepository;
 import io.cartogra.registry.repository.TeamRepository;
 import io.cartogra.registry.domain.exception.DuplicateTeamNameException;
 import io.cartogra.registry.domain.exception.PlanLimitExceededException;
@@ -24,12 +25,14 @@ public class TeamService {
     private final TeamRepository teamRepository;
     private final TeamLifecycleEventProducer eventProducer;
     private final PlanLimitService planLimitService;
+    private final AdvisoryLockRepository advisoryLockRepository;
 
     public TeamService(TeamRepository teamRepository, TeamLifecycleEventProducer eventProducer,
-                        PlanLimitService planLimitService) {
+                        PlanLimitService planLimitService, AdvisoryLockRepository advisoryLockRepository) {
         this.teamRepository = teamRepository;
         this.eventProducer = eventProducer;
         this.planLimitService = planLimitService;
+        this.advisoryLockRepository = advisoryLockRepository;
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'TEAM_OWNER')")
@@ -38,17 +41,25 @@ public class TeamService {
         if (teamRepository.existsByName(tenantId, name, null)) {
             throw new DuplicateTeamNameException(name);
         }
-        int maxTeams = planLimitService.getLimits(tenantId).maxTeams();
-        if (maxTeams != PlanLimits.UNLIMITED && teamRepository.count(tenantId) >= maxTeams) {
-            throw new PlanLimitExceededException("teams", maxTeams);
+        long lockKey = AdvisoryLockRepository.lockKey("cartogra.registry.team-create", tenantId);
+        if (!advisoryLockRepository.tryAcquireLock(lockKey)) {
+            throw new IllegalStateException("Could not acquire plan-limit lock for tenant " + tenantId);
         }
-        Instant now = Instant.now();
-        Team saved = teamRepository.save(new Team(UUID.randomUUID(), tenantId, name, now, now, null));
-        eventProducer.publishCreated(saved);
-        if (requestedBy != null && !isAdmin()) {
-            teamRepository.addMember(new TeamMember(UUID.randomUUID(), tenantId, saved.id(), requestedBy, now));
+        try {
+            int maxTeams = planLimitService.getLimits(tenantId).maxTeams();
+            if (maxTeams != PlanLimits.UNLIMITED && teamRepository.count(tenantId) >= maxTeams) {
+                throw new PlanLimitExceededException("teams", maxTeams);
+            }
+            Instant now = Instant.now();
+            Team saved = teamRepository.save(new Team(UUID.randomUUID(), tenantId, name, now, now, null));
+            eventProducer.publishCreated(saved);
+            if (requestedBy != null && !isAdmin()) {
+                teamRepository.addMember(new TeamMember(UUID.randomUUID(), tenantId, saved.id(), requestedBy, now));
+            }
+            return saved;
+        } finally {
+            advisoryLockRepository.releaseLock(lockKey);
         }
-        return saved;
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'TEAM_OWNER')")

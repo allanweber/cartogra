@@ -15,6 +15,7 @@ import io.cartogra.registry.domain.exception.DuplicateServiceNameException;
 import io.cartogra.registry.domain.exception.PlanLimitExceededException;
 import io.cartogra.registry.domain.exception.ServiceNotFoundException;
 import io.cartogra.registry.domain.exception.TeamNotFoundException;
+import io.cartogra.registry.repository.AdvisoryLockRepository;
 import io.cartogra.registry.infrastructure.kafka.ServiceLifecycleEventProducer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -48,6 +49,7 @@ public class ServiceService {
     private final ServiceLifecycleEventProducer eventProducer;
     private final HealthEndpointValidator healthEndpointValidator;
     private final PlanLimitService planLimitService;
+    private final AdvisoryLockRepository advisoryLockRepository;
 
     public ServiceService(ServiceRepository serviceRepository,
                           ServiceHistoryRepository historyRepository,
@@ -55,7 +57,8 @@ public class ServiceService {
                           ObjectMapper objectMapper,
                           ServiceLifecycleEventProducer eventProducer,
                           HealthEndpointValidator healthEndpointValidator,
-                          PlanLimitService planLimitService) {
+                          PlanLimitService planLimitService,
+                          AdvisoryLockRepository advisoryLockRepository) {
         this.serviceRepository = serviceRepository;
         this.historyRepository = historyRepository;
         this.teamRepository = teamRepository;
@@ -63,6 +66,7 @@ public class ServiceService {
         this.eventProducer = eventProducer;
         this.healthEndpointValidator = healthEndpointValidator;
         this.planLimitService = planLimitService;
+        this.advisoryLockRepository = advisoryLockRepository;
     }
 
     @Transactional
@@ -70,32 +74,40 @@ public class ServiceService {
         if (serviceRepository.existsByName(tenantId, req.name(), null)) {
             throw new DuplicateServiceNameException(req.name());
         }
-        int maxServices = planLimitService.getLimits(tenantId).maxServices();
-        if (maxServices != PlanLimits.UNLIMITED
-                && serviceRepository.count(tenantId, ServiceFilter.empty()) >= maxServices) {
-            throw new PlanLimitExceededException("services", maxServices);
+        long lockKey = AdvisoryLockRepository.lockKey("cartogra.registry.service-create", tenantId);
+        if (!advisoryLockRepository.tryAcquireLock(lockKey)) {
+            throw new IllegalStateException("Could not acquire plan-limit lock for tenant " + tenantId);
         }
-        if (req.teamId() != null) {
-            teamRepository.findById(tenantId, req.teamId())
-                    .orElseThrow(() -> new TeamNotFoundException(req.teamId()));
-        }
-        if (req.healthEndpoint() != null) {
-            healthEndpointValidator.validate(req.healthEndpoint());
-        }
+        try {
+            int maxServices = planLimitService.getLimits(tenantId).maxServices();
+            if (maxServices != PlanLimits.UNLIMITED
+                    && serviceRepository.count(tenantId, ServiceFilter.empty()) >= maxServices) {
+                throw new PlanLimitExceededException("services", maxServices);
+            }
+            if (req.teamId() != null) {
+                teamRepository.findById(tenantId, req.teamId())
+                        .orElseThrow(() -> new TeamNotFoundException(req.teamId()));
+            }
+            if (req.healthEndpoint() != null) {
+                healthEndpointValidator.validate(req.healthEndpoint());
+            }
 
-        Instant now = Instant.now();
-        var service = new Service(
-                UUID.randomUUID(), tenantId, req.name(), req.description(),
-                req.teamId(), req.repositoryUrl(), req.techStack(), req.metadata(),
-                ServiceHealthStatus.UNKNOWN, null, now, now, null,
-                null, null, null, null, null, null, null, req.healthEndpoint(), null, null, null,
-                null, null, null, null, null
-        );
+            Instant now = Instant.now();
+            var service = new Service(
+                    UUID.randomUUID(), tenantId, req.name(), req.description(),
+                    req.teamId(), req.repositoryUrl(), req.techStack(), req.metadata(),
+                    ServiceHealthStatus.UNKNOWN, null, now, now, null,
+                    null, null, null, null, null, null, null, req.healthEndpoint(), null, null, null,
+                    null, null, null, null, null
+            );
 
-        Service saved = serviceRepository.save(service);
-        historyRepository.save(snapshot(saved, requestedBy));
-        eventProducer.publishRegistered(saved);
-        return saved;
+            Service saved = serviceRepository.save(service);
+            historyRepository.save(snapshot(saved, requestedBy));
+            eventProducer.publishRegistered(saved);
+            return saved;
+        } finally {
+            advisoryLockRepository.releaseLock(lockKey);
+        }
     }
 
     @Transactional

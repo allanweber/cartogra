@@ -9,6 +9,7 @@ import io.cartogra.registry.domain.exception.ServiceNotFoundException;
 import io.cartogra.registry.domain.exception.TeamNotFoundException;
 import io.cartogra.registry.infrastructure.kafka.ServiceLifecycleEventProducer;
 import io.cartogra.registry.infrastructure.validation.HealthEndpointValidator;
+import io.cartogra.registry.repository.AdvisoryLockRepository;
 import io.cartogra.registry.repository.ServiceDiscoveryCommand;
 import io.cartogra.registry.repository.ServiceHistoryRepository;
 import io.cartogra.registry.repository.ServiceRepository;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.TestingAuthenticationToken;
@@ -34,6 +36,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -45,6 +48,7 @@ class ServiceServiceTest {
     @Mock ServiceLifecycleEventProducer eventProducer;
     @Mock HealthEndpointValidator healthEndpointValidator;
     @Mock PlanLimitService planLimitService;
+    @Mock AdvisoryLockRepository advisoryLockRepository;
 
     private ServiceService serviceService;
 
@@ -52,9 +56,11 @@ class ServiceServiceTest {
     void setUp() {
         lenient().when(planLimitService.getLimits(any()))
                 .thenReturn(new PlanLimits(PlanLimits.UNLIMITED, PlanLimits.UNLIMITED, PlanLimits.UNLIMITED, PlanLimits.UNLIMITED));
+        lenient().when(advisoryLockRepository.tryAcquireLock(anyLong())).thenReturn(true);
         serviceService = new ServiceService(
                 serviceRepository, historyRepository, teamRepository,
-                new ObjectMapper(), eventProducer, healthEndpointValidator, planLimitService);
+                new ObjectMapper(), eventProducer, healthEndpointValidator, planLimitService,
+                advisoryLockRepository);
         SecurityContextHolder.getContext().setAuthentication(
                 new TestingAuthenticationToken("admin", null, new SimpleGrantedAuthority("ROLE_ADMIN")));
     }
@@ -110,6 +116,58 @@ class ServiceServiceTest {
 
         verify(serviceRepository, never()).save(any());
         verifyNoInteractions(eventProducer);
+    }
+
+    @Test
+    void createAcquiresAndReleasesPlanLimitLockAroundCountCheckAndSave() {
+        UUID tenantId = UUID.randomUUID();
+        var req = new CreateServiceRequest("payments", null, null, null, null, null, null);
+        Service saved = service(tenantId, "payments");
+        when(serviceRepository.existsByName(tenantId, "payments", null)).thenReturn(false);
+        // Finite limit so the count-check isn't short-circuited by PlanLimits.UNLIMITED.
+        when(planLimitService.getLimits(tenantId))
+                .thenReturn(new PlanLimits(10, PlanLimits.UNLIMITED, PlanLimits.UNLIMITED, PlanLimits.UNLIMITED));
+        when(serviceRepository.count(eq(tenantId), any())).thenReturn(0L);
+        when(serviceRepository.save(any())).thenReturn(saved);
+
+        serviceService.create(tenantId, req, null);
+
+        InOrder inOrder = inOrder(advisoryLockRepository, serviceRepository);
+        inOrder.verify(advisoryLockRepository).tryAcquireLock(anyLong());
+        inOrder.verify(serviceRepository).count(eq(tenantId), any());
+        inOrder.verify(serviceRepository).save(any());
+        inOrder.verify(advisoryLockRepository).releaseLock(anyLong());
+    }
+
+    @Test
+    void createReleasesLockWhenPlanLimitExceeded() {
+        UUID tenantId = UUID.randomUUID();
+        var req = new CreateServiceRequest("payments", null, null, null, null, null, null);
+        when(serviceRepository.existsByName(tenantId, "payments", null)).thenReturn(false);
+        when(planLimitService.getLimits(tenantId))
+                .thenReturn(new PlanLimits(0, PlanLimits.UNLIMITED, PlanLimits.UNLIMITED, PlanLimits.UNLIMITED));
+        when(serviceRepository.count(eq(tenantId), any())).thenReturn(5L);
+
+        assertThatThrownBy(() -> serviceService.create(tenantId, req, null))
+                .isInstanceOf(io.cartogra.registry.domain.exception.PlanLimitExceededException.class);
+
+        verify(advisoryLockRepository).tryAcquireLock(anyLong());
+        verify(advisoryLockRepository).releaseLock(anyLong());
+        verify(serviceRepository, never()).save(any());
+    }
+
+    @Test
+    void createThrowsWhenPlanLimitLockCannotBeAcquired() {
+        UUID tenantId = UUID.randomUUID();
+        var req = new CreateServiceRequest("payments", null, null, null, null, null, null);
+        when(serviceRepository.existsByName(tenantId, "payments", null)).thenReturn(false);
+        when(advisoryLockRepository.tryAcquireLock(anyLong())).thenReturn(false);
+
+        assertThatThrownBy(() -> serviceService.create(tenantId, req, null))
+                .isInstanceOf(IllegalStateException.class);
+
+        verify(advisoryLockRepository, never()).releaseLock(anyLong());
+        verify(serviceRepository, never()).save(any());
     }
 
     @Test

@@ -3,12 +3,14 @@ package io.cartogra.registry.domain;
 import io.cartogra.registry.domain.exception.DuplicateTeamNameException;
 import io.cartogra.registry.domain.exception.TeamNotFoundException;
 import io.cartogra.registry.infrastructure.kafka.TeamLifecycleEventProducer;
+import io.cartogra.registry.repository.AdvisoryLockRepository;
 import io.cartogra.registry.repository.TeamRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.TestingAuthenticationToken;
@@ -22,6 +24,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -30,12 +33,14 @@ class TeamServiceTest {
     @Mock TeamRepository teamRepository;
     @Mock TeamLifecycleEventProducer eventProducer;
     @Mock PlanLimitService planLimitService;
+    @Mock AdvisoryLockRepository advisoryLockRepository;
 
     private TeamService teamService;
 
     @BeforeEach
     void setUp() {
-        teamService = new TeamService(teamRepository, eventProducer, planLimitService);
+        lenient().when(advisoryLockRepository.tryAcquireLock(anyLong())).thenReturn(true);
+        teamService = new TeamService(teamRepository, eventProducer, planLimitService, advisoryLockRepository);
         SecurityContextHolder.getContext().setAuthentication(
                 new TestingAuthenticationToken("admin", null, new SimpleGrantedAuthority("ROLE_ADMIN")));
     }
@@ -141,6 +146,53 @@ class TeamServiceTest {
                 .isInstanceOf(io.cartogra.registry.domain.exception.PlanLimitExceededException.class);
 
         verifyNoInteractions(eventProducer);
+    }
+
+    @Test
+    void createAcquiresAndReleasesPlanLimitLockAroundCountCheckAndSave() {
+        UUID tenantId = UUID.randomUUID();
+        Team saved = team(tenantId, "platform");
+        when(teamRepository.existsByName(tenantId, "platform", null)).thenReturn(false);
+        // Finite limit so the count-check isn't short-circuited by PlanLimits.UNLIMITED.
+        when(planLimitService.getLimits(tenantId)).thenReturn(new PlanLimits(-1, -1, -1, 10));
+        when(teamRepository.count(tenantId)).thenReturn(0L);
+        when(teamRepository.save(any())).thenReturn(saved);
+
+        teamService.create(tenantId, "platform", null);
+
+        InOrder inOrder = inOrder(advisoryLockRepository, teamRepository);
+        inOrder.verify(advisoryLockRepository).tryAcquireLock(anyLong());
+        inOrder.verify(teamRepository).count(tenantId);
+        inOrder.verify(teamRepository).save(any());
+        inOrder.verify(advisoryLockRepository).releaseLock(anyLong());
+    }
+
+    @Test
+    void createReleasesLockWhenPlanLimitExceeded() {
+        UUID tenantId = UUID.randomUUID();
+        when(teamRepository.existsByName(tenantId, "platform", null)).thenReturn(false);
+        when(planLimitService.getLimits(tenantId)).thenReturn(new PlanLimits(-1, -1, -1, 2));
+        when(teamRepository.count(tenantId)).thenReturn(2L);
+
+        assertThatThrownBy(() -> teamService.create(tenantId, "platform", null))
+                .isInstanceOf(io.cartogra.registry.domain.exception.PlanLimitExceededException.class);
+
+        verify(advisoryLockRepository).tryAcquireLock(anyLong());
+        verify(advisoryLockRepository).releaseLock(anyLong());
+        verify(teamRepository, never()).save(any());
+    }
+
+    @Test
+    void createThrowsWhenPlanLimitLockCannotBeAcquired() {
+        UUID tenantId = UUID.randomUUID();
+        when(teamRepository.existsByName(tenantId, "platform", null)).thenReturn(false);
+        when(advisoryLockRepository.tryAcquireLock(anyLong())).thenReturn(false);
+
+        assertThatThrownBy(() -> teamService.create(tenantId, "platform", null))
+                .isInstanceOf(IllegalStateException.class);
+
+        verify(advisoryLockRepository, never()).releaseLock(anyLong());
+        verify(teamRepository, never()).save(any());
     }
 
     @Test
