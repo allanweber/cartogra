@@ -13,7 +13,7 @@ import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
 import { Skeleton } from '#/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '#/components/ui/tooltip'
-import { apiFetch } from '#/lib/api'
+import { ApiError, apiFetch } from '#/lib/api'
 import type { PageResult, TenantInfo } from '#/lib/registry-types'
 import { useWizardStore } from '#/stores/useWizardStore'
 import { createFileRoute } from '@tanstack/react-router'
@@ -168,7 +168,10 @@ function ConnectionsPage() {
 
         {error && (
           <Alert variant="destructive">
-            <AlertDescription>Failed to load connections.</AlertDescription>
+            <AlertDescription>
+              {error.message}
+              {error instanceof ApiError && ` (trace: ${error.traceId})`}
+            </AlertDescription>
           </Alert>
         )}
 

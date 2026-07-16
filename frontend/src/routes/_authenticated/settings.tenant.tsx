@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Badge } from '#/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
 import { Skeleton } from '#/components/ui/skeleton'
-import { apiFetch } from '#/lib/api'
+import { ApiError, apiFetch } from '#/lib/api'
 import type { PageResult, TenantInfo } from '#/lib/registry-types'
 
 export const Route = createFileRoute('/_authenticated/settings/tenant')({
@@ -54,7 +54,8 @@ function TenantPage() {
       {error && (
         <Alert variant="destructive">
           <AlertDescription>
-            Failed to load tenant information.
+            {error.message}
+            {error instanceof ApiError && ` (trace: ${error.traceId})`}
           </AlertDescription>
         </Alert>
       )}

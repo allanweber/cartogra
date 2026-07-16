@@ -219,6 +219,16 @@ describe('ConnectionsPage', () => {
   it('shows error alert when connections query fails', async () => {
     vi.mocked(apiFetch).mockRejectedValue(new Error('network error'))
     renderPage()
-    expect(await screen.findByText(/failed to load connections/i)).toBeInTheDocument()
+    expect(await screen.findByText(/network error/i)).toBeInTheDocument()
+  })
+
+  it('shows traceId in error alert when connections query fails with ApiError', async () => {
+    const { ApiError } = await import('#/lib/api')
+    vi.mocked(apiFetch).mockRejectedValue(
+      new ApiError('INTERNAL_ERROR', 'Failed to load connections', 'abc123traceid'),
+    )
+    renderPage()
+    expect(await screen.findByText(/Failed to load connections/i)).toBeInTheDocument()
+    expect(await screen.findByText(/abc123traceid/)).toBeInTheDocument()
   })
 })
