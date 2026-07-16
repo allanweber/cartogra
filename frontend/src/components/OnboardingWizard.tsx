@@ -10,7 +10,7 @@ import { ScmConnectionDialog } from '#/components/ScmConnectionDialog'
 import { Button } from '#/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '#/components/ui/dialog'
 import { apiFetch } from '#/lib/api'
-import type { PageResult } from '#/lib/registry-types'
+import type { PageResult, TenantInfo } from '#/lib/registry-types'
 import { useWizardStore } from '#/stores/useWizardStore'
 
 function GitHubIcon() {
@@ -90,8 +90,20 @@ export function OnboardingWizard() {
     queryFn: () => apiFetch<PageResult<KubernetesCluster>>('/v1/ingestion/k8s/clusters'),
   })
 
+  const { data: tenantData } = useQuery({
+    queryKey: ['tenant-info'],
+    queryFn: () => apiFetch<TenantInfo>('/auth/tenant'),
+  })
+
   const connections = connectionsData?.items ?? []
   const clusters = clustersData?.items ?? []
+
+  const maxScmConnections = tenantData?.plan.maxScmConnections
+  const maxK8sClusters = tenantData?.plan.maxK8sClusters
+  const scmLimitReached =
+    maxScmConnections !== undefined && maxScmConnections !== -1 && connections.length >= maxScmConnections
+  const k8sLimitReached =
+    maxK8sClusters !== undefined && maxK8sClusters !== -1 && clusters.length >= maxK8sClusters
 
   const isLoading = loadingConnections || loadingClusters
   const isOnboarded = connections.length > 0 || clusters.length > 0
@@ -120,7 +132,22 @@ export function OnboardingWizard() {
     return false
   }
 
+  function isStepLimited(s: number) {
+    if (s === 1 || s === 2) return scmLimitReached
+    if (s === 3) return k8sLimitReached
+    return false
+  }
+
   const connected = !isDoneStep && isStepConnected(step)
+  const limited = !isDoneStep && !connected && isStepLimited(step)
+  const limitMessage =
+    step === 3
+      ? maxK8sClusters === 0
+        ? 'Kubernetes connections are not included in your plan.'
+        : "You have reached your plan's Kubernetes cluster limit. Upgrade to connect more."
+      : maxScmConnections === 0
+        ? 'Source control connections are not included in your plan.'
+        : "You have reached your plan's source control connection limit. Upgrade to connect more."
 
   function advance() {
     setStep((s) => Math.min(s + 1, TOTAL_STEPS))
@@ -147,6 +174,7 @@ export function OnboardingWizard() {
       navigate({ to: '/dashboard' })
       return
     }
+    if (limited) return
     if (step === 3) {
       setK8sOpen(true)
     } else {
@@ -251,27 +279,41 @@ export function OnboardingWizard() {
                         Connected
                       </span>
                     )}
+                    {limited && (
+                      <span className="flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                        <span className="size-1.5 rounded-full bg-amber-500" />
+                        Not available on your plan
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm text-muted-foreground">{currentStep.description}</p>
                 </div>
-                <ol className="space-y-2 rounded-lg bg-muted/50 px-4 py-3">
-                  {currentStep.instructions.map((instruction, i) => (
-                    <li key={i} className="flex gap-2.5 text-xs text-muted-foreground">
-                      <span className="mt-px flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
-                        {i + 1}
-                      </span>
-                      {instruction}
-                    </li>
-                  ))}
-                </ol>
+                {limited ? (
+                  <p className="rounded-lg bg-muted/50 px-4 py-3 text-xs text-muted-foreground">
+                    {limitMessage}
+                  </p>
+                ) : (
+                  <ol className="space-y-2 rounded-lg bg-muted/50 px-4 py-3">
+                    {currentStep.instructions.map((instruction, i) => (
+                      <li key={i} className="flex gap-2.5 text-xs text-muted-foreground">
+                        <span className="mt-px flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
+                          {i + 1}
+                        </span>
+                        {instruction}
+                      </li>
+                    ))}
+                  </ol>
+                )}
                 <div className="flex items-center gap-2 pt-2">
-                  <Button className="flex-1" variant={connected ? 'outline' : 'default'} onClick={handleCta}>
-                    {connected ? 'Manage' : currentStep.cta}
-                  </Button>
+                  {!limited && (
+                    <Button className="flex-1" variant={connected ? 'outline' : 'default'} onClick={handleCta}>
+                      {connected ? 'Manage' : currentStep.cta}
+                    </Button>
+                  )}
                   <Button variant="outline" onClick={back}>
                     Back
                   </Button>
-                  <Button variant="ghost" onClick={advance}>
+                  <Button variant="ghost" className={limited ? 'flex-1' : undefined} onClick={advance}>
                     {connected ? 'Next' : 'Skip'}
                   </Button>
                 </div>

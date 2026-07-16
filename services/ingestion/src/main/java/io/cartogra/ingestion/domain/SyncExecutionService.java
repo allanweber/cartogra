@@ -12,6 +12,8 @@ import io.cartogra.ingestion.infrastructure.kafka.SyncResultProducer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -37,6 +39,7 @@ public class SyncExecutionService {
 
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String STATUS_FAILED = "FAILED";
+    private static final TypeReference<Map<String, Object>> CONFIG_MAP_TYPE = new TypeReference<>() {};
 
     private final Map<String, ScmProvider> providers;
     private final SyncJobRepository syncJobRepository;
@@ -46,6 +49,7 @@ public class SyncExecutionService {
     private final TechStackDetector techStackDetector;
     private final ServiceDiscoveredProducer serviceDiscoveredProducer;
     private final CredentialEncryptor credentialEncryptor;
+    private final ObjectMapper objectMapper;
 
     public SyncExecutionService(
             List<ScmProvider> providers,
@@ -55,7 +59,8 @@ public class SyncExecutionService {
             OwnershipResolvedProducer ownershipProducer,
             TechStackDetector techStackDetector,
             ServiceDiscoveredProducer serviceDiscoveredProducer,
-            CredentialEncryptor credentialEncryptor) {
+            CredentialEncryptor credentialEncryptor,
+            ObjectMapper objectMapper) {
         this.providers = providers.stream()
                 .collect(Collectors.toMap(ScmProvider::providerType, Function.identity()));
         this.syncJobRepository = syncJobRepository;
@@ -65,14 +70,27 @@ public class SyncExecutionService {
         this.techStackDetector = techStackDetector;
         this.serviceDiscoveredProducer = serviceDiscoveredProducer;
         this.credentialEncryptor = credentialEncryptor;
+        this.objectMapper = objectMapper;
     }
 
-    public SyncJob execute(SyncCommandPayload command) {
+    public Optional<SyncJob> execute(SyncCommandPayload command) {
+        // The Kafka payload carries only an id (plan 013 — never ship secrets over Kafka), so
+        // fetch-and-decrypt the connection's config from the source of truth at execution time.
+        // The connection may have been deleted between publish and consume; skip gracefully.
+        Optional<ScmConnection> connectionOpt =
+                scmConnectionRepository.findById(command.tenantId(), command.connectionId());
+        if (connectionOpt.isEmpty()) {
+            log.warn("Skipping sync command: connection={} (tenant={}) no longer exists",
+                    command.connectionId(), command.tenantId());
+            return Optional.empty();
+        }
+        ScmConnection connection = connectionOpt.get();
+
         var running = syncJobRepository.findRunningForConnection(command.tenantId(), command.connectionId());
         if (running.isPresent()) {
             log.warn("Dropping duplicate sync command: a RUNNING job already exists for connection={}",
                     command.connectionId());
-            return running.get();
+            return Optional.of(running.get());
         }
 
         SyncJob job = syncJobRepository.save(
@@ -92,7 +110,7 @@ public class SyncExecutionService {
                 command.connectionId(),
                 command.tenantId(),
                 command.providerType(),
-                decryptSecrets(command.connectionConfig())
+                decryptSecrets(connection.config())
         );
 
         try {
@@ -128,7 +146,7 @@ public class SyncExecutionService {
             resultProducer.publishSuccess(job, count);
             recordResult(command.connectionId(), STATUS_SUCCESS, null);
             log.info("Sync completed for connection={} repos={}", command.connectionId(), count);
-            return syncJobRepository.findById(command.tenantId(), job.id()).orElse(job);
+            return Optional.of(syncJobRepository.findById(command.tenantId(), job.id()).orElse(job));
         } catch (ScmProviderException ex) {
             log.error("Sync failed for connection={}: {}", command.connectionId(), ex.getMessage());
             syncJobRepository.markFailed(job.id(), ex.getMessage());
@@ -175,12 +193,13 @@ public class SyncExecutionService {
     }
 
     /**
-     * The Kafka sync-command payload carries {@code ScmConnection.config} verbatim, so any
-     * {@link ScmConnectionService#SECRET_KEYS} value in it is still ciphertext at this point —
-     * decrypt before handing the config to a {@link ScmProvider} REST client.
+     * Parses the connection's {@code config} JSON (fetched fresh from {@link ScmConnectionRepository}
+     * at execution time — plan 013 stopped shipping it over Kafka) and decrypts any
+     * {@link ScmConnectionService#SECRET_KEYS} value, which is still ciphertext at rest, before
+     * handing the config to a {@link ScmProvider} REST client.
      */
-    private Map<String, Object> decryptSecrets(Map<String, Object> config) {
-        Map<String, Object> decrypted = new LinkedHashMap<>(config);
+    private Map<String, Object> decryptSecrets(String rawConfig) {
+        Map<String, Object> decrypted = new LinkedHashMap<>(objectMapper.readValue(rawConfig, CONFIG_MAP_TYPE));
         for (String key : ScmConnectionService.SECRET_KEYS) {
             if (decrypted.get(key) instanceof String s) {
                 decrypted.put(key, credentialEncryptor.decrypt(s));

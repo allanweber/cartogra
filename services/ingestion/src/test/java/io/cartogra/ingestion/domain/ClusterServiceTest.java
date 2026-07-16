@@ -75,18 +75,27 @@ class ClusterServiceTest {
     }
 
     @Test
-    void create_manual_nullCredentials_savedAsNull() {
-        when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
-
+    void create_manual_nullSaToken_throws() {
         var req = new KubernetesClusterRequest("local", ClusterSource.MANUAL,
                 null, "https://127.0.0.1:6443", null, null, true);
 
-        Cluster result = service.create(TENANT_ID, req);
+        assertThatThrownBy(() -> service.create(TENANT_ID, req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("saToken is required");
 
-        assertThat(result.caCertPem()).isNull();
-        assertThat(result.saToken()).isNull();
-        assertThat(result.skipTlsVerify()).isTrue();
-        verify(encryptor, never()).encrypt(any());
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void create_manual_blankSaToken_throws() {
+        var req = new KubernetesClusterRequest("local", ClusterSource.MANUAL,
+                null, "https://127.0.0.1:6443", null, "  ", true);
+
+        assertThatThrownBy(() -> service.create(TENANT_ID, req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("saToken is required");
+
+        verify(repository, never()).save(any());
     }
 
     @Test

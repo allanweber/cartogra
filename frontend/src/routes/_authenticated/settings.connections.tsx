@@ -11,8 +11,9 @@ import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Skeleton } from '#/components/ui/skeleton'
+import { Tooltip, TooltipContent, TooltipTrigger } from '#/components/ui/tooltip'
 import { apiFetch } from '#/lib/api'
-import type { PageResult } from '#/lib/registry-types'
+import type { PageResult, TenantInfo } from '#/lib/registry-types'
 import { useWizardStore } from '#/stores/useWizardStore'
 import { createFileRoute } from '@tanstack/react-router'
 
@@ -101,9 +102,21 @@ function ConnectionsPage() {
       query.state.data?.items.some((c) => c.status === 'CONNECTING') ? 2000 : false,
   })
 
+  const { data: tenantData } = useQuery({
+    queryKey: ['tenant-info'],
+    queryFn: () => apiFetch<TenantInfo>('/auth/tenant'),
+  })
+
   const connections = data?.items ?? []
   const clusters = clustersData?.items ?? []
   const failedConnections = connections.filter((c) => c.lastSyncStatus === 'FAILED')
+
+  const maxScmConnections = tenantData?.plan.maxScmConnections
+  const maxK8sClusters = tenantData?.plan.maxK8sClusters
+  const scmLimitReached =
+    maxScmConnections !== undefined && maxScmConnections !== -1 && connections.length >= maxScmConnections
+  const k8sLimitReached =
+    maxK8sClusters !== undefined && maxK8sClusters !== -1 && clusters.length >= maxK8sClusters
 
   function openCreate(key: string) {
     if (key === 'kubernetes') {
@@ -214,6 +227,21 @@ function ConnectionsPage() {
                           Manage
                         </Button>
                       </div>
+                    ) : k8sLimitReached ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span>
+                            <Button size="sm" disabled>
+                              Connect
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {maxK8sClusters === 0
+                            ? 'Not included in your plan'
+                            : 'Plan limit reached — upgrade to connect more clusters'}
+                        </TooltipContent>
+                      </Tooltip>
                     ) : (
                       <Button size="sm" onClick={() => openCreate(p.key)}>
                         Connect
@@ -269,6 +297,21 @@ function ConnectionsPage() {
                         Manage
                       </Button>
                     </div>
+                  ) : scmLimitReached ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span>
+                          <Button size="sm" disabled>
+                            Connect
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {maxScmConnections === 0
+                          ? 'Not included in your plan'
+                          : 'Plan limit reached — upgrade to connect more providers'}
+                      </TooltipContent>
+                    </Tooltip>
                   ) : (
                     <Button size="sm" onClick={() => openCreate(p.key)}>
                       Connect

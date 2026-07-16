@@ -114,6 +114,6 @@ class ClusterServiceSecurityTest {
 
     private static KubernetesClusterRequest manualRequest() {
         return new KubernetesClusterRequest("my-cluster", ClusterSource.MANUAL,
-                null, "https://1.2.3.4:6443", null, null, false);
+                null, "https://1.2.3.4:6443", null, "my-token", false);
     }
 }

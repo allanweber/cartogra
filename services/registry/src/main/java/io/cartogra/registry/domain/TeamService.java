@@ -53,7 +53,7 @@ public class TeamService {
 
     @Transactional
     public Team update(UUID tenantId, UUID teamId, String name, @Nullable UUID requestedBy) {
-        requireAdminOrMember(tenantId, teamId, requestedBy);
+        requireAdminOrTeamOwner();
         Team existing = teamRepository.findById(tenantId, teamId)
                 .orElseThrow(() -> new TeamNotFoundException(teamId));
 
@@ -74,7 +74,7 @@ public class TeamService {
 
     @Transactional
     public void delete(UUID tenantId, UUID teamId, @Nullable UUID requestedBy) {
-        requireAdminOrMember(tenantId, teamId, requestedBy);
+        requireAdminOrTeamOwner();
         Team existing = teamRepository.findById(tenantId, teamId)
                 .orElseThrow(() -> new TeamNotFoundException(teamId));
         Instant deletedAt = Instant.now();
@@ -86,7 +86,7 @@ public class TeamService {
 
     @Transactional
     public TeamMember addMember(UUID tenantId, UUID teamId, UUID userId, @Nullable UUID requestedBy) {
-        requireAdminOrMember(tenantId, teamId, requestedBy);
+        requireAdminOrTeamOwner();
         teamRepository.findById(tenantId, teamId).orElseThrow(() -> new TeamNotFoundException(teamId));
         if (teamRepository.isMember(tenantId, teamId, userId)) {
             return teamRepository.findMembers(tenantId, teamId).stream()
@@ -99,7 +99,7 @@ public class TeamService {
 
     @Transactional
     public void removeMember(UUID tenantId, UUID teamId, UUID userId, @Nullable UUID requestedBy) {
-        requireAdminOrMember(tenantId, teamId, requestedBy);
+        requireAdminOrTeamOwner();
         teamRepository.findById(tenantId, teamId).orElseThrow(() -> new TeamNotFoundException(teamId));
         teamRepository.removeMember(tenantId, teamId, userId);
     }

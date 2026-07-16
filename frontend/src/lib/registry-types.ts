@@ -57,6 +57,28 @@ export interface TenantUser {
   disabled: boolean
 }
 
+export interface PlanInfo {
+  name: string
+  slug: string
+  maxServices: number
+  maxUsers: number
+  maxApiKeys: number
+  maxScmConnections: number
+  maxK8sClusters: number
+  ssoEnabled: boolean
+  rateLimitReplenish: number
+  rateLimitBurst: number
+}
+
+export interface TenantInfo {
+  id: string
+  name: string
+  slug: string
+  plan: PlanInfo
+  usersUsed: number
+  createdAt: string
+}
+
 export interface PageResult<T> {
   items: T[]
   total: number

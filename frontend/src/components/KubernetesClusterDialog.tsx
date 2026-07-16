@@ -159,18 +159,18 @@ export function KubernetesClusterDialog({ open, onOpenChange, cluster, onSuccess
         </div>
 
         <form
-          className="flex flex-col"
+          className="flex min-w-0 flex-col"
           onSubmit={(e) => { e.preventDefault(); saveMutation.mutate() }}
         >
           <div className="space-y-5 px-6 py-6">
             {clusterStatus && (
-              <div className="flex items-center justify-between rounded-lg bg-muted/60 px-4 py-2.5">
-                <span className={`flex items-center gap-1.5 text-xs font-medium ${clusterStatus.text}`}>
+              <div className="flex flex-col gap-1 rounded-lg bg-muted/60 px-4 py-2.5">
+                <span className={`flex shrink-0 items-center gap-1.5 text-xs font-medium ${clusterStatus.text}`}>
                   <span className={`size-1.5 rounded-full ${clusterStatus.dot}`} />
                   {clusterStatus.label}
                 </span>
                 {cluster?.statusMessage && (
-                  <span className="truncate text-xs text-muted-foreground ml-3">{cluster.statusMessage}</span>
+                  <span className="min-w-0 break-words text-xs text-muted-foreground">{cluster.statusMessage}</span>
                 )}
               </div>
             )}

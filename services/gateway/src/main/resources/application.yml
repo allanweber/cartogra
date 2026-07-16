@@ -129,3 +129,4 @@ app:
     default-burst-capacity: ${RATE_LIMIT_DEFAULT_BURST:40}
     auth-replenish-rate: ${RATE_LIMIT_AUTH_REPLENISH:5}
     auth-burst-capacity: ${RATE_LIMIT_AUTH_BURST:10}
+    fail-closed-on-auth-routes: ${RATE_LIMIT_FAIL_CLOSED_ON_AUTH_ROUTES:true}

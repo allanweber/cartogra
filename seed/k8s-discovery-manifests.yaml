@@ -24,7 +24,7 @@ metadata:
   name: prod
   labels:
     app.kubernetes.io/managed-by: cartogra-seed
-    cartogra.io/tenant-id: "3986e535-2760-43e7-b173-aea898a6b7b0"
+    cartogra.io/tenant-id: "99a77115-ce6f-4939-82ba-79a1ee5aa4cf"
 
 ---
 # ── trade-service  (Java / Spring Boot, team: trading-core, logical port: 8090)

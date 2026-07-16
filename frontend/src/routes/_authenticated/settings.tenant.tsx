@@ -7,40 +7,21 @@ import { Badge } from '#/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
 import { Skeleton } from '#/components/ui/skeleton'
 import { apiFetch } from '#/lib/api'
-import type { PageResult } from '#/lib/registry-types'
+import type { PageResult, TenantInfo } from '#/lib/registry-types'
 
 export const Route = createFileRoute('/_authenticated/settings/tenant')({
   component: TenantPage,
 })
 
-interface PlanInfo {
-  name: string
-  slug: string
-  maxServices: number
-  maxUsers: number
-  maxApiKeys: number
-  maxScmConnections: number
-  maxK8sClusters: number
-  ssoEnabled: boolean
-  rateLimitReplenish: number
-  rateLimitBurst: number
-}
-
-interface TenantInfo {
-  id: string
-  name: string
-  slug: string
-  plan: PlanInfo
-  usersUsed: number
-  createdAt: string
-}
-
 function formatLimit(value: number): string {
-  return value === -1 ? 'Unlimited' : String(value)
+  if (value === -1) return 'Unlimited'
+  if (value === 0) return 'Not included'
+  return String(value)
 }
 
 function formatUsage(used: number | undefined, limit: number): string {
   const limitLabel = formatLimit(limit)
+  if (limit === 0) return limitLabel
   return used === undefined ? limitLabel : `${used} / ${limitLabel}`
 }
 

@@ -13,6 +13,8 @@ import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import io.cartogra.common.event.EventEnvelope;
 import io.cartogra.common.event.SyncCommandPayload;
 import io.cartogra.ingestion.IngestionApplication;
+import io.cartogra.ingestion.domain.ScmConnection;
+import io.cartogra.ingestion.repository.ScmConnectionRepository;
 import io.cartogra.test.KafkaTestSupport;
 import io.cartogra.test.PostgresTestSupport;
 import java.time.Duration;
@@ -81,10 +83,17 @@ class GracefulShutdownIT {
                         "--spring.kafka.bootstrap-servers=" + KafkaTestSupport.KAFKA.getBootstrapServers());
 
         ObjectMapper objectMapper = context.getBean(ObjectMapper.class);
+        ScmConnectionRepository scmConnectionRepository = context.getBean(ScmConnectionRepository.class);
 
-        var payload = new SyncCommandPayload(connectionId, tenantId, "github",
-                Map.of("token", "test-token", "org", "acme",
-                        "apiBaseUrl", wireMock.baseUrl()));
+        String config = objectMapper.writeValueAsString(Map.of(
+                "token", "test-token", "org", "acme", "apiBaseUrl", wireMock.baseUrl()));
+        var now = Instant.now();
+        scmConnectionRepository.save(new ScmConnection(
+                connectionId, tenantId, "github", config,
+                false, 15, null, null, null, null, false,
+                now, now, null));
+
+        var payload = new SyncCommandPayload(connectionId, tenantId, "github");
         var envelope = EventEnvelope.of("sync.command", connectionId, tenantId, 1, payload);
         String json = objectMapper.writeValueAsString(envelope);
 

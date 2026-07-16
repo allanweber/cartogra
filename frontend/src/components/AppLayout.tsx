@@ -210,6 +210,7 @@ export function AppLayout({
 function TenantSelect({ collapsed }: { collapsed: boolean }) {
   const currentTenant = useCurrentTenant()
   const { setTenant } = useTenantStore()
+  const queryClient = useQueryClient()
 
   if (collapsed) {
     return (
@@ -249,7 +250,10 @@ function TenantSelect({ collapsed }: { collapsed: boolean }) {
         {TENANTS.map((t) => (
           <DropdownMenuItem
             key={t.id}
-            onClick={() => setTenant(t.id)}
+            onClick={() => {
+              setTenant(t.id)
+              queryClient.clear()
+            }}
             className="flex items-center gap-2"
           >
             <div className="flex size-6 items-center justify-center rounded bg-muted text-xs font-bold">

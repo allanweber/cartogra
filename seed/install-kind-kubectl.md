@@ -109,4 +109,6 @@ kubectl describe pod <pod-name>
 
 kubectl -n kubernetes-dashboard create token admin-user
 kubectl -n kubernetes-dashboard port-forward svc/kubernetes-dashboard 8443:443
+
+kind get kubeconfig --name cartogra > /tmp/cartogra-kubeconfig.yaml
 ```

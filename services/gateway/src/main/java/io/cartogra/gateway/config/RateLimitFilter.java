@@ -93,6 +93,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return !"0".equals(result);
         } catch (Exception e) {
             log.error("Rate limit Redis error for bucket '{}': {}", bucket, e.getMessage());
+            if (isAuthPath && props.failClosedOnAuthRoutes()) {
+                return false;
+            }
             return true;
         }
     }

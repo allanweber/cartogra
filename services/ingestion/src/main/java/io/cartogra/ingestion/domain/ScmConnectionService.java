@@ -9,6 +9,7 @@ import io.cartogra.ingestion.infrastructure.k8s.CredentialEncryptor;
 import io.cartogra.ingestion.infrastructure.kafka.SyncCommandProducer;
 import io.cartogra.ingestion.infrastructure.registry.RegistryPlanLimitClient;
 import io.cartogra.ingestion.infrastructure.registry.RegistryPlanLimits;
+import io.cartogra.ingestion.infrastructure.validation.ScmApiBaseUrlValidator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
@@ -38,13 +39,16 @@ public class ScmConnectionService {
     private final SyncCommandProducer syncCommandProducer;
     private final RegistryPlanLimitClient planLimitClient;
     private final CredentialEncryptor credentialEncryptor;
+    private final ScmApiBaseUrlValidator scmApiBaseUrlValidator;
 
     public ScmConnectionService(ScmConnectionRepository repository, SyncCommandProducer syncCommandProducer,
-                                RegistryPlanLimitClient planLimitClient, CredentialEncryptor credentialEncryptor) {
+                                RegistryPlanLimitClient planLimitClient, CredentialEncryptor credentialEncryptor,
+                                ScmApiBaseUrlValidator scmApiBaseUrlValidator) {
         this.repository = repository;
         this.syncCommandProducer = syncCommandProducer;
         this.planLimitClient = planLimitClient;
         this.credentialEncryptor = credentialEncryptor;
+        this.scmApiBaseUrlValidator = scmApiBaseUrlValidator;
     }
 
     @Transactional
@@ -66,6 +70,7 @@ public class ScmConnectionService {
         if (webhook && !hasWebhookSecret(config)) {
             throw new IllegalArgumentException("webhookSecret is required in config when webhookEnabled is true");
         }
+        validateApiBaseUrl(config);
         config = encryptFreshSecrets(config, config);
         Instant nextSyncAt = scheduler ? now.plus(interval, ChronoUnit.MINUTES) : null;
 
@@ -101,6 +106,7 @@ public class ScmConnectionService {
         if (webhook && !hasWebhookSecret(config)) {
             throw new IllegalArgumentException("webhookSecret is required in config when webhookEnabled is true");
         }
+        validateApiBaseUrl(config);
 
         // Encrypt after the presence check above so hasWebhookSecret validates the plaintext
         // value the caller actually supplied, not ciphertext. Only keys the caller freshly
@@ -206,6 +212,26 @@ public class ScmConnectionService {
             return secret instanceof String s && !s.isBlank();
         } catch (Exception _) {
             return false;
+        }
+    }
+
+    /**
+     * SSRF guard: if the config JSON carries a non-blank "apiBaseUrl", validates it before any
+     * credential is ever attached to a request against that URL (called before encryption, so a
+     * rejection fails fast without touching the encryption path). No-op if "apiBaseUrl" is absent
+     * or the config JSON is malformed — malformed config is handled elsewhere (e.g. it fails to
+     * round-trip through {@code encryptFreshSecrets}/{@code hasWebhookSecret} the same way).
+     */
+    private void validateApiBaseUrl(String config) {
+        Map<String, Object> parsed;
+        try {
+            parsed = MAPPER.readValue(config, CONFIG_MAP_TYPE);
+        } catch (JacksonException _) {
+            return;
+        }
+        Object apiBaseUrl = parsed.get("apiBaseUrl");
+        if (apiBaseUrl instanceof String s && !s.isBlank()) {
+            scmApiBaseUrlValidator.validate(s);
         }
     }
 

@@ -8,5 +8,6 @@ public record RateLimitProperties(
     int defaultReplenishRate,
     int defaultBurstCapacity,
     int authReplenishRate,
-    int authBurstCapacity
+    int authBurstCapacity,
+    boolean failClosedOnAuthRoutes
 ) {}

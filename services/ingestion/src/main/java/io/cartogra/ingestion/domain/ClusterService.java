@@ -74,6 +74,9 @@ public class ClusterService {
             if (req.apiServerUrl() == null || req.apiServerUrl().isBlank()) {
                 throw new IllegalArgumentException("apiServerUrl is required when source is MANUAL");
             }
+            if (req.saToken() == null || req.saToken().isBlank()) {
+                throw new IllegalArgumentException("saToken is required when source is MANUAL");
+            }
             apiServerUrl = req.apiServerUrl();
             caCertPem = req.caCertPem();
             saToken = req.saToken();
@@ -125,7 +128,7 @@ public class ClusterService {
         } else {
             if (req.apiServerUrl() != null && !req.apiServerUrl().isBlank()) apiServerUrl = req.apiServerUrl();
             if (req.caCertPem() != null) caCertPem = encryptor.encrypt(req.caCertPem());
-            if (req.saToken() != null) saToken = encryptor.encrypt(req.saToken());
+            if (req.saToken() != null && !req.saToken().isBlank()) saToken = encryptor.encrypt(req.saToken());
             if (req.skipTlsVerify() != null) skipTlsVerify = req.skipTlsVerify();
         }
 

@@ -2,7 +2,9 @@ package io.cartogra.ingestion;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import io.cartogra.common.event.SyncCommandPayload;
+import io.cartogra.ingestion.domain.ScmConnection;
 import io.cartogra.ingestion.domain.SyncExecutionService;
+import io.cartogra.ingestion.repository.ScmConnectionRepository;
 import io.cartogra.test.KafkaTestSupport;
 import io.cartogra.test.PostgresTestSupport;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -57,6 +59,9 @@ class ServiceDiscoveryFlowIT {
     SyncExecutionService syncExecutionService;
 
     @Autowired
+    ScmConnectionRepository scmConnectionRepository;
+
+    @Autowired
     ObjectMapper objectMapper;
 
     @Test
@@ -104,9 +109,15 @@ class ServiceDiscoveryFlowIT {
         wireMock.stubFor(get(urlPathMatching("/repos/test-org/payments-service/contents/.*CODEOWNERS.*"))
                 .willReturn(notFound()));
 
-        var payload = new SyncCommandPayload(connectionId, tenantId, "github",
-                Map.of("token", "test-token", "org", "test-org",
-                        "apiBaseUrl", wireMock.baseUrl()));
+        String config = objectMapper.writeValueAsString(Map.of(
+                "token", "test-token", "org", "test-org", "apiBaseUrl", wireMock.baseUrl()));
+        java.time.Instant now = java.time.Instant.now();
+        scmConnectionRepository.save(new ScmConnection(
+                connectionId, tenantId, "github", config,
+                false, 15, null, null, null, null, false,
+                now, now, null));
+
+        var payload = new SyncCommandPayload(connectionId, tenantId, "github");
 
         syncExecutionService.execute(payload);
 

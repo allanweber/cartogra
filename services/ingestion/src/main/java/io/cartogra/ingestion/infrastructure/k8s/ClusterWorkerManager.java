@@ -111,12 +111,18 @@ public class ClusterWorkerManager {
             client.getKubernetesVersion();
 
             KubernetesWorker worker = new KubernetesWorker(client, producer, cluster.name());
+            try {
+                log.info("Running initial resync for K8s cluster '{}' ({})", cluster.name(), cluster.id());
+                worker.resync();
+            } catch (Exception ex) {
+                client.close();
+                throw ex;
+            }
+
             workers.put(cluster.id(), worker);
             worker.start();
-
             clusterRepository.updateStatus(cluster.id(), ClusterStatus.ACTIVE, null);
-            log.info("K8s worker active for cluster '{}' ({}), running initial resync", cluster.name(), cluster.id());
-            worker.resync();
+            log.info("K8s worker active for cluster '{}' ({})", cluster.name(), cluster.id());
         } catch (Exception ex) {
             log.error("Failed to connect to K8s cluster '{}' ({}): {}", cluster.name(), cluster.id(), ex.getMessage());
             clusterRepository.updateStatus(cluster.id(), ClusterStatus.ERROR, ex.getMessage());
