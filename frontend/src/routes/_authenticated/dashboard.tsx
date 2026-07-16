@@ -1,35 +1,52 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
 import { Activity, AlertTriangle, ArrowRight, Clock, Server, Users } from 'lucide-react'
 
 import { AppLayout } from '#/components/AppLayout'
+import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Badge } from '#/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
+import { Skeleton } from '#/components/ui/skeleton'
+import { ApiError, apiFetch } from '#/lib/api'
 import {
   MOCK_RISKS,
-  MOCK_SERVICES,
   MOCK_TIMELINE,
 } from '#/lib/mock-data'
+import { normalizeHealth } from '#/lib/registry-types'
 import { cn } from '#/lib/utils'
 
-import type { Service, TimelineEvent } from '#/lib/mock-data'
+import type { TimelineEvent } from '#/lib/mock-data'
+import type { PageResult, RegistryService } from '#/lib/registry-types'
 
 export const Route = createFileRoute('/_authenticated/dashboard')({
   component: DashboardPage,
 })
 
+// Mirrors catalog.index.tsx's isStale — not exported there, so duplicated here per convention.
+function isStale(dateStr: string | null): boolean {
+  if (!dateStr) return false
+  return Date.now() - new Date(dateStr).getTime() > 14 * 86400 * 1000
+}
+
 function DashboardPage() {
-  const totalServices = MOCK_SERVICES.length
-  const criticalTier = MOCK_SERVICES.filter((s) => s.tier === 'critical').length
-  const staleServices = MOCK_SERVICES.filter((s) => s.warnings.includes('stale'))
-  const orphanServices = MOCK_SERVICES.filter((s) => s.owner === null)
+  const { data: servicesPage, isLoading, error } = useQuery({
+    queryKey: ['services', 'all'],
+    queryFn: () => apiFetch<PageResult<RegistryService>>('/v1/registry/services?limit=200'),
+  })
+
+  const services = servicesPage?.items ?? []
+  const totalServices = servicesPage?.total ?? 0
+  const criticalTier = services.filter((s) => s.tier === 'CRITICAL').length
+  const staleServices = services.filter((s) => isStale(s.lastDeployedAt))
+  const orphanServices = services.filter((s) => s.teamId === null)
   const criticalRisks = MOCK_RISKS.filter((r) => r.severity === 'critical').length
   const warningRisks = MOCK_RISKS.filter((r) => r.severity === 'warning').length
 
-  const healthyCount = MOCK_SERVICES.filter((s) => s.health === 'healthy').length
-  const degradedCount = MOCK_SERVICES.filter((s) => s.health === 'degraded').length
-  const downCount = MOCK_SERVICES.filter((s) => s.health === 'down').length
+  const healthyCount = services.filter((s) => normalizeHealth(s.healthStatus) === 'healthy').length
+  const degradedCount = services.filter((s) => normalizeHealth(s.healthStatus) === 'degraded').length
+  const downCount = services.filter((s) => normalizeHealth(s.healthStatus) === 'down').length
 
-  const healthScore = Math.round((healthyCount / totalServices) * 100)
+  const healthScore = services.length > 0 ? Math.round((healthyCount / services.length) * 100) : 0
 
   const healthScoreClass = cn(
     healthScore >= 80 ? 'health-healthy' : healthScore >= 60 ? 'health-degraded' : 'health-down',
@@ -39,80 +56,91 @@ function DashboardPage() {
     <AppLayout title="Dashboard" description="Architecture health overview">
       <div className="space-y-4">
         {/* Health overview panel — health score primary, secondary metrics compact strip */}
-        <Card className="gap-0 overflow-hidden rounded-xl py-0">
-          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:gap-6">
-            {/* Health score — primary signal */}
-            <div className="shrink-0">
-              <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-                Health Score
-              </p>
-              <p className={cn('mt-1 text-4xl font-semibold tabular-nums leading-none', healthScoreClass)}>
-                {healthScore}%
-              </p>
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                {healthyCount} of {totalServices} healthy
-              </p>
-            </div>
-
-            <div className="hidden h-16 w-px shrink-0 bg-border sm:block" />
-
-            {/* Health bar + legend */}
-            <div className="flex flex-1 flex-col gap-2.5">
-              <div
-                className="flex h-2.5 overflow-hidden rounded-full bg-muted"
-                role="img"
-                aria-label={`Health: ${healthyCount} healthy, ${degradedCount} degraded, ${downCount} down`}
-              >
-                <div
-                  className="bg-success transition-all"
-                  style={{ width: `${(healthyCount / totalServices) * 100}%` }}
-                />
-                <div
-                  className="bg-warning transition-all"
-                  style={{ width: `${(degradedCount / totalServices) * 100}%` }}
-                />
-                <div
-                  className="bg-critical transition-all"
-                  style={{ width: `${(downCount / totalServices) * 100}%` }}
-                />
+        {isLoading ? (
+          <Skeleton className="h-44 w-full rounded-xl" />
+        ) : error ? (
+          <Alert variant="destructive">
+            <AlertDescription>
+              {error.message}
+              {error instanceof ApiError && ` (trace: ${error.traceId})`}
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <Card className="gap-0 overflow-hidden rounded-xl py-0">
+            <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:gap-6">
+              {/* Health score — primary signal */}
+              <div className="shrink-0">
+                <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                  Health Score
+                </p>
+                <p className={cn('mt-1 text-4xl font-semibold tabular-nums leading-none', healthScoreClass)}>
+                  {healthScore}%
+                </p>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  {healthyCount} of {services.length} healthy
+                </p>
               </div>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                <LegendItem colorClass="bg-success" label="Healthy" count={healthyCount} />
-                <LegendItem colorClass="bg-warning" label="Degraded" count={degradedCount} />
-                <LegendItem colorClass="bg-critical" label="Down" count={downCount} />
-                <Link
-                  to="/catalog"
-                  className="ml-auto flex items-center gap-1 text-primary hover:underline"
+
+              <div className="hidden h-16 w-px shrink-0 bg-border sm:block" />
+
+              {/* Health bar + legend */}
+              <div className="flex flex-1 flex-col gap-2.5">
+                <div
+                  className="flex h-2.5 overflow-hidden rounded-full bg-muted"
+                  role="img"
+                  aria-label={`Health: ${healthyCount} healthy, ${degradedCount} degraded, ${downCount} down`}
                 >
-                  View all <ArrowRight className="size-3" />
-                </Link>
+                  <div
+                    className="bg-success transition-all"
+                    style={{ width: `${services.length > 0 ? (healthyCount / services.length) * 100 : 0}%` }}
+                  />
+                  <div
+                    className="bg-warning transition-all"
+                    style={{ width: `${services.length > 0 ? (degradedCount / services.length) * 100 : 0}%` }}
+                  />
+                  <div
+                    className="bg-critical transition-all"
+                    style={{ width: `${services.length > 0 ? (downCount / services.length) * 100 : 0}%` }}
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                  <LegendItem colorClass="bg-success" label="Healthy" count={healthyCount} />
+                  <LegendItem colorClass="bg-warning" label="Degraded" count={degradedCount} />
+                  <LegendItem colorClass="bg-critical" label="Down" count={downCount} />
+                  <Link
+                    to="/catalog"
+                    className="ml-auto flex items-center gap-1 text-primary hover:underline"
+                  >
+                    View all <ArrowRight className="size-3" />
+                  </Link>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Secondary metrics strip */}
-          <div className="grid grid-cols-3 divide-x divide-border border-t border-border">
-            <StatStrip
-              icon={<Server className="size-3.5" />}
-              value={String(totalServices)}
-              label="services"
-              sub={`${criticalTier} critical tier`}
-            />
-            <StatStrip
-              icon={<AlertTriangle className="size-3.5" />}
-              value={String(criticalRisks + warningRisks)}
-              label="risks"
-              sub={`${criticalRisks} critical · ${warningRisks} warning`}
-              valueClass={criticalRisks > 0 ? 'health-down' : 'health-healthy'}
-            />
-            <StatStrip
-              icon={<Users className="size-3.5" />}
-              value="5"
-              label="teams"
-              sub={`${orphanServices.length} unowned`}
-            />
-          </div>
-        </Card>
+            {/* Secondary metrics strip */}
+            <div className="grid grid-cols-3 divide-x divide-border border-t border-border">
+              <StatStrip
+                icon={<Server className="size-3.5" />}
+                value={String(totalServices)}
+                label="services"
+                sub={`${criticalTier} critical tier`}
+              />
+              <StatStrip
+                icon={<AlertTriangle className="size-3.5" />}
+                value={String(criticalRisks + warningRisks)}
+                label="risks"
+                sub={`${criticalRisks} critical · ${warningRisks} warning`}
+                valueClass={criticalRisks > 0 ? 'health-down' : 'health-healthy'}
+              />
+              <StatStrip
+                icon={<Users className="size-3.5" />}
+                value="5"
+                label="teams"
+                sub={`${orphanServices.length} unowned`}
+              />
+            </div>
+          </Card>
+        )}
 
         <div className="grid gap-4 md:grid-cols-2">
           {/* Active risks */}
@@ -154,7 +182,20 @@ function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-2">
-              {staleServices.length === 0 ? (
+              {isLoading ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <Skeleton key={i} className="h-10 w-full" />
+                  ))}
+                </div>
+              ) : error ? (
+                <Alert variant="destructive">
+                  <AlertDescription>
+                    {error.message}
+                    {error instanceof ApiError && ` (trace: ${error.traceId})`}
+                  </AlertDescription>
+                </Alert>
+              ) : staleServices.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No stale services.</p>
               ) : (
                 staleServices.map((svc) => <StaleServiceRow key={svc.id} service={svc} />)
@@ -223,16 +264,16 @@ function StatStrip({
   )
 }
 
-function StaleServiceRow({ service }: { service: Service }) {
+function StaleServiceRow({ service }: { service: RegistryService }) {
   return (
     <div className="flex items-center gap-3 rounded-lg bg-muted/50 px-3 py-2">
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">{service.name}</p>
-        <p className="text-xs text-muted-foreground">{service.owner ?? 'No owner'}</p>
+        <p className="text-xs text-muted-foreground">{service.teamId ? 'Owned' : 'No owner'}</p>
       </div>
       <div className="flex items-center gap-1 text-xs text-warning">
         <Clock className="size-3" />
-        {service.lastDeploy}
+        {service.lastDeployedAt ? new Date(service.lastDeployedAt).toLocaleDateString() : 'Never deployed'}
       </div>
     </div>
   )

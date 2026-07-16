@@ -14,12 +14,17 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
 
 import { Button } from '#/components/ui/button'
 
 import { Input } from '#/components/ui/input'
-import { MOCK_SERVICES, MOCK_TEAMS } from '#/lib/mock-data'
+import { apiFetch } from '#/lib/api'
+import { MOCK_TEAMS } from '#/lib/mock-data'
+import { normalizeHealth } from '#/lib/registry-types'
 import { cn } from '#/lib/utils'
+
+import type { PageResult, RegistryService } from '#/lib/registry-types'
 
 interface CommandItem {
   id: string
@@ -60,6 +65,11 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     setActiveIdx(0)
   }
 
+  const { data: servicesPage } = useQuery({
+    queryKey: ['services', 'all'],
+    queryFn: () => apiFetch<PageResult<RegistryService>>('/v1/registry/services?limit=200'),
+  })
+
   const allItems = useMemo<CommandItem[]>(() => {
     const pages: CommandItem[] = PAGE_ITEMS.map((p) => ({
       id: `page-${p.to}`,
@@ -70,10 +80,10 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       group: 'Pages',
     }))
 
-    const services: CommandItem[] = MOCK_SERVICES.map((s) => ({
+    const services: CommandItem[] = (servicesPage?.items ?? []).map((s) => ({
       id: `svc-${s.id}`,
       label: s.name,
-      subtitle: `${s.owner ?? 'Unowned'} · ${s.health}`,
+      subtitle: `${s.teamId ? 'Owned' : 'Unowned'} · ${normalizeHealth(s.healthStatus)}`,
       icon: <FolderKanban className="size-4" />,
       action: () => { navigate({ to: '/catalog/$serviceId', params: { serviceId: s.id } }); close() },
       group: 'Services',
@@ -89,7 +99,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     }))
 
     return [...pages, ...services, ...teams]
-  }, [])
+  }, [servicesPage])
 
   const filtered = query.trim()
     ? allItems.filter(
