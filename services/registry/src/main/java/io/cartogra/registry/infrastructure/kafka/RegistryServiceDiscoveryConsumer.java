@@ -88,11 +88,11 @@ public class RegistryServiceDiscoveryConsumer {
             serviceService.upsertDiscovered(command);
             log.info("Upserted discovered service externalId={} source={} health={} tenant={}",
                     payload.externalId(), payload.source(), payload.healthStatus(), payload.tenantId());
+            ack.acknowledge();
         } catch (Exception e) {
             log.warn("Failed to process service.discovered event key={} partition={} offset={}: {}",
                     record.key(), record.partition(), record.offset(), e.getMessage(), e);
-        } finally {
-            ack.acknowledge();
+            throw e;
         }
     }
 }

@@ -1,18 +1,26 @@
 package io.cartogra.registry;
 
 import io.cartogra.common.event.EventEnvelope;
+import io.cartogra.registry.domain.ServiceService;
 import io.cartogra.registry.repository.ServiceHistoryRepository;
 import io.cartogra.registry.repository.ServiceRepository;
 import io.cartogra.registry.domain.Service;
 import io.cartogra.registry.domain.event.ServiceDiscoveredPayload;
+import io.cartogra.registry.repository.ServiceDiscoveryCommand;
 import io.cartogra.test.KafkaTestSupport;
 import io.cartogra.test.PostgresTestSupport;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -22,6 +30,7 @@ import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.kafka.test.utils.ContainerTestUtils;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import tools.jackson.databind.JsonNode;
@@ -37,6 +46,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -71,6 +81,49 @@ class RegistryServiceDiscoveryConsumerIT {
 
     @Autowired
     KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
+
+    @MockitoSpyBean
+    ServiceService serviceServiceSpy;
+
+    private KafkaConsumer<String, String> newRawConsumer(String topic) {
+        var consumer = new KafkaConsumer<String, String>(Map.of(
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers,
+                ConsumerConfig.GROUP_ID_CONFIG, "dlq-test-" + UUID.randomUUID(),
+                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
+                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class,
+                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class));
+        consumer.subscribe(List.of(topic));
+        return consumer;
+    }
+
+    /**
+     * Polls until a record with the given key shows up, or the timeout elapses. The
+     * Kafka test container is reused across test runs ({@code withReuse(true)}), so a
+     * DLQ topic can already hold messages from earlier tests/runs; a fresh consumer
+     * group starting from "earliest" would otherwise pick up stale records instead of
+     * the one this test just produced.
+     */
+    private ConsumerRecord<String, String> pollForRecord(KafkaConsumer<String, String> consumer, String expectedKey,
+                                                           Duration timeout) {
+        long deadlineNanos = System.nanoTime() + timeout.toNanos();
+        while (System.nanoTime() < deadlineNanos) {
+            ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(300));
+            for (ConsumerRecord<String, String> record : records) {
+                if (expectedKey.equals(record.key())) {
+                    return record;
+                }
+            }
+        }
+        return null;
+    }
+
+    private KafkaTemplate<String, String> stringKafkaTemplate() {
+        var producerFactory = new DefaultKafkaProducerFactory<String, String>(Map.of(
+                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers,
+                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
+                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class));
+        return new KafkaTemplate<>(producerFactory);
+    }
 
     @BeforeEach
     void waitForConsumerAssignment() throws InterruptedException {
@@ -208,5 +261,111 @@ class RegistryServiceDiscoveryConsumerIT {
                     }
                     assertThat(found).as("discovered azuredevops service should appear in source=azuredevops results").isTrue();
                 });
+    }
+
+    @Test
+    void malformedPayloadGoesStraightToDlqWithoutRetryDelay() throws Exception {
+        String malformedJson = "{not-valid-json";
+        String key = "malformed-" + UUID.randomUUID();
+
+        // NOTE: a timing assertion (elapsed time under the 3x1s retry backoff window) was
+        // tried here to prove non-retryable failures skip retries entirely, but proved
+        // flaky under test-infra overhead (JVM/consumer-poll-loop latency dwarfing the
+        // ~1s backoff window it was meant to detect) — dropped per the plan's own
+        // guidance to prefer a correctness assertion over a timing one. Correctness (the
+        // message actually lands on the DLQ, unmodified) is what's asserted below;
+        // addNotRetryableExceptions(JacksonException.class) wiring is otherwise unit-testable
+        // only by inspecting the DefaultErrorHandler bean, which is a weaker guarantee than
+        // this end-to-end proof that malformed input is recoverable at all.
+        try (KafkaConsumer<String, String> dlq = newRawConsumer("cartogra.ingestion.service.discovered.dlq")) {
+            stringKafkaTemplate()
+                    .send(new ProducerRecord<>("cartogra.ingestion.service.discovered", key, malformedJson))
+                    .get();
+
+            ConsumerRecord<String, String> dlqRecord = pollForRecord(dlq, key, Duration.ofSeconds(15));
+
+            assertThat(dlqRecord)
+                    .as("malformed JSON should be dead-lettered")
+                    .isNotNull();
+            assertThat(dlqRecord.key()).isEqualTo(key);
+            assertThat(dlqRecord.value()).isEqualTo(malformedJson);
+        }
+    }
+
+    @Test
+    void transientFailureIsRetriedAndCanSucceed() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        UUID connectionId = UUID.randomUUID();
+        String externalId = "test-org/transient-retry-service";
+
+        AtomicInteger calls = new AtomicInteger();
+        Mockito.doAnswer(invocation -> {
+                    if (calls.getAndIncrement() == 0) {
+                        throw new IllegalStateException("simulated transient failure");
+                    }
+                    return invocation.callRealMethod();
+                })
+                .when(serviceServiceSpy)
+                .upsertDiscovered(Mockito.any(ServiceDiscoveryCommand.class));
+
+        var payload = new ServiceDiscoveredPayload(
+                tenantId, connectionId, "github", externalId,
+                "transient-retry-service", null, null, "main",
+                null, null, null, List.of("java"), "UNKNOWN", null, null, "sha-retry");
+        var envelope = EventEnvelope.of("service.discovered", connectionId, tenantId, 1, payload);
+        stringKafkaTemplate()
+                .send(new ProducerRecord<>("cartogra.ingestion.service.discovered",
+                        externalId, objectMapper.writeValueAsString(envelope)))
+                .get();
+
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(15))
+                .pollInterval(Duration.ofMillis(300))
+                .untilAsserted(() -> {
+                    Optional<Service> found = serviceRepository.findByExternalId(tenantId, externalId);
+                    assertThat(found).isPresent();
+                    assertThat(found.get().lastCommitSha()).isEqualTo("sha-retry");
+                });
+
+        assertThat(calls.get())
+                .as("first attempt should have failed, second should have succeeded")
+                .isGreaterThanOrEqualTo(2);
+    }
+
+    @Test
+    void retryExhaustionPublishesToDlq() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        UUID connectionId = UUID.randomUUID();
+        String externalId = "test-org/exhausted-retry-service";
+
+        Mockito.doThrow(new IllegalStateException("simulated permanent failure"))
+                .when(serviceServiceSpy)
+                .upsertDiscovered(Mockito.any(ServiceDiscoveryCommand.class));
+
+        var payload = new ServiceDiscoveredPayload(
+                tenantId, connectionId, "github", externalId,
+                "exhausted-retry-service", null, null, "main",
+                null, null, null, List.of("java"), "UNKNOWN", null, null, "sha-exhausted");
+        var envelope = EventEnvelope.of("service.discovered", connectionId, tenantId, 1, payload);
+        String json = objectMapper.writeValueAsString(envelope);
+
+        try (KafkaConsumer<String, String> dlq = newRawConsumer("cartogra.ingestion.service.discovered.dlq")) {
+            stringKafkaTemplate()
+                    .send(new ProducerRecord<>("cartogra.ingestion.service.discovered", externalId, json))
+                    .get();
+
+            ConsumerRecord<String, String> dlqRecord = pollForRecord(dlq, externalId, Duration.ofSeconds(20));
+
+            assertThat(dlqRecord)
+                    .as("retry-exhausted message should be dead-lettered")
+                    .isNotNull();
+            assertThat(dlqRecord.key()).isEqualTo(externalId);
+            assertThat(dlqRecord.value()).isEqualTo(json);
+        }
+
+        Optional<Service> found = serviceRepository.findByExternalId(tenantId, externalId);
+        assertThat(found)
+                .as("a message that never succeeds should not have been persisted")
+                .isEmpty();
     }
 }

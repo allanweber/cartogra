@@ -59,10 +59,10 @@ public class OwnershipResolvedConsumer {
                     record.value(),
                     new TypeReference<EventEnvelope<OwnershipResolvedPayload>>() {});
             serviceService.resolveOwnership(envelope.payload());
+            ack.acknowledge();
         } catch (Exception e) {
             log.error("Failed to process ownership.resolved event key={}: {}", record.key(), e.getMessage(), e);
-        } finally {
-            ack.acknowledge();
+            throw e;
         }
     }
 }
