@@ -99,7 +99,7 @@
 
 ### CI surface (E2E)
 
-- [ ] 3.9 [CODE] Tenant API keys. Migration in gateway (hashed at rest, per-key scopes `ci:check`, `webhooks:push`, `catalog:read`, etc.). Gateway admin endpoints to issue/list/revoke keys with scope selection. UI: API key management page (list + create with scope selector + revoke with confirmation). Scope validation enforced at every API-key-authenticated endpoint. ITs cover happy + insufficient-scope paths.
+- [ ] 3.9 [CODE] Tenant API keys. Migration in gateway (hashed at rest, per-key scopes `ci:check`, `webhooks:push`, `catalog:read`, etc.). Gateway admin endpoints to issue/list/revoke keys with scope selection. UI: API key management page (list + create with scope selector + revoke with confirmation). Scope validation enforced at every API-key-authenticated endpoint. ITs cover happy + insufficient-scope paths. ADR written and accepted inline documenting the hashing/revocation design — replaces the phantom "ADR-0011" reference in `docs/bip/1.48-gateway-auth-rationale.md` (that number was cited as already written but no such file exists under `docs/adr/`; use the next available number, not 0011).
 - [ ] 3.10 [CODE] `POST /ci/check`. API-key-only auth via `X-Cartogra-Api-Key`, envelope responses, documented blocking/passing semantics, scope `ci:check` required. Runs the breaking-change engine from 3.5. ITs cover compatible + breaking inputs and missing/expired/wrong-scope keys.
 - [ ] 3.11 [CODE] GitHub Action + Azure Pipelines task against `/ci/check`. Both extensions live under `ci-extensions/`, accept tenant API key from the platform secret store, block merges on breaking changes, pass on compatible ones. Smoke tests run against example repos in both ecosystems.
 

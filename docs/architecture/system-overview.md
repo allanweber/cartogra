@@ -85,7 +85,7 @@ Cartogra is a **multi-tenant service intelligence platform**. It auto-discovers 
 |------------|-----------|
 | Browser | httpOnly JWT cookie (gateway-issued) |
 | Non-browser API | `Authorization: Bearer <token>` |
-| CI/automation | `X-Cartogra-Api-Key: <key>` (tenant-scoped) |
+| CI/automation | `X-Cartogra-Api-Key: <key>` (tenant-scoped) — **planned, not yet implemented** (see `docs/execution-checklist.md` items 3.9-3.10) |
 
 Auth flows: local email+password with Resend OTP, Google OAuth, GitHub OAuth, per-tenant OIDC. All token issuance in the gateway — no separate auth service.
 

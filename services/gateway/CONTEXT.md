@@ -22,7 +22,7 @@ The Gateway is Cartogra's single entry point and the sole issuer of identity tok
 | **Rate limit** | Redis token-bucket, scoped per Tenant when a request carries a valid JWT, else per IP; auth routes: 5 req/s burst 10; default: 20 req/s burst 40 (same numeric limits for both scopes — no per-tenant override yet) |
 | **OTP** | One-time 6-digit email code used to verify a new account (sent via Resend) |
 | **OIDC** | Per-tenant SSO config (discovery URI + client credentials) |
-| **API Key** | Tenant-scoped `X-Cartogra-Api-Key` for CI/automation; never HMAC |
+| **API Key** | Tenant-scoped `X-Cartogra-Api-Key` for CI/automation; never HMAC — **planned, not yet implemented** (see `docs/execution-checklist.md` items 3.9-3.10) |
 | **Circuit Breaker** | Resilience4j gate on a proxied route; after repeated failures (5xx or exception/timeout) it opens and short-circuits to a fallback instead of calling the downstream. One breaker instance per downstream, named identically to its Spring Cloud Gateway route id (`registry`, `ingestion`) |
 | **Downstream Service Name** | The single identifier shared across a route id, its circuit breaker instance name, its fallback path segment, and the value carried on `ServiceUnavailableException` — never diverges per use site |
 | **ServiceUnavailableException** | Domain exception thrown by the fallback handler when a breaker is open; carries the Downstream Service Name; mapped by `GlobalExceptionHandler` to HTTP 503 + `ErrorCodes.SERVICE_UNAVAILABLE` |

@@ -8,7 +8,8 @@ info:
     **Authentication:** All endpoints require a valid JWT (cookie or Bearer token issued by the Gateway).
     The Gateway injects `X-Tenant-Id` — clients must not set this header.
 
-    **CI endpoints** (`/ci/*`) accept `X-Cartogra-Api-Key` instead of JWT.
+    **CI endpoints** (`/ci/*`) are planned to accept `X-Cartogra-Api-Key` instead of JWT — not yet
+    implemented (see `docs/execution-checklist.md` items 3.9-3.10).
 
     **Response envelope**:
     - Success: `{ "data": <T>, "traceId": "<32-hex>" }`
@@ -440,6 +441,7 @@ paths:
     post:
       summary: Submit a contract check from CI pipeline
       description: |
+        **Planned — not yet implemented** (see `docs/execution-checklist.md` item 3.10).
         Used by GitHub Action and Azure DevOps task. Authenticated with `X-Cartogra-Api-Key`.
         **Not wrapped in the standard envelope** — responds with a flat `CiCheckResult` for easy
         CI script parsing. The `traceId` field is included at the top level of the result itself.
@@ -517,6 +519,7 @@ components:
       type: apiKey
       in: header
       name: X-Cartogra-Api-Key
+      description: Tenant-scoped API key for CI/automation (x-planned — see docs/execution-checklist.md items 3.9-3.10; not yet implemented)
 
   headers:
     XTraceId:
