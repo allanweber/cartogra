@@ -169,7 +169,8 @@ describe('EditServiceDrawer', () => {
 
     await screen.findByText('Platform')
     const select = screen.getAllByRole('combobox')[0]
-    fireEvent.change(select, { target: { value: 'team-1' } })
+    fireEvent.click(select)
+    fireEvent.click(await screen.findByRole('option', { name: 'Platform' }))
 
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
 

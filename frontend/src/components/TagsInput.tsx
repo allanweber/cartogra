@@ -1,6 +1,7 @@
 import { useState, type KeyboardEvent } from 'react'
 import { X } from 'lucide-react'
 import { Badge } from '#/components/ui/badge'
+import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 
 interface TagsInputProps {
@@ -41,14 +42,16 @@ export function TagsInput({ value, onChange, maxTags = 20, placeholder = 'Add ta
       {value.map((tag) => (
         <Badge key={tag} variant="secondary" className="gap-1 pr-1">
           {tag}
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-xs"
             onClick={() => removeTag(tag)}
-            className="ml-0.5 rounded-full hover:bg-muted-foreground/20"
+            className="ml-0.5 size-4 rounded-full hover:bg-muted-foreground/20"
             aria-label={`Remove ${tag}`}
           >
             <X className="size-3" />
-          </button>
+          </Button>
         </Badge>
       ))}
       <Input

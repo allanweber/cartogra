@@ -179,24 +179,9 @@ class TeamServiceTest {
     }
 
     @Test
-    void updateByNonAdminNonMemberIsDenied() {
+    void updateByTeamOwnerSucceeds() {
         SecurityContextHolder.getContext().setAuthentication(
-                new TestingAuthenticationToken("user", null, new SimpleGrantedAuthority("ROLE_VIEWER")));
-        UUID tenantId = UUID.randomUUID();
-        UUID teamId = UUID.randomUUID();
-        UUID userId = UUID.randomUUID();
-        when(teamRepository.isMember(tenantId, teamId, userId)).thenReturn(false);
-
-        assertThatThrownBy(() -> teamService.update(tenantId, teamId, "new-name", userId))
-                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
-
-        verifyNoInteractions(eventProducer);
-    }
-
-    @Test
-    void updateByNonAdminTeamMemberSucceeds() {
-        SecurityContextHolder.getContext().setAuthentication(
-                new TestingAuthenticationToken("user", null, new SimpleGrantedAuthority("ROLE_VIEWER")));
+                new TestingAuthenticationToken("owner", null, new SimpleGrantedAuthority("ROLE_TEAM_OWNER")));
         UUID tenantId = UUID.randomUUID();
         UUID teamId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();

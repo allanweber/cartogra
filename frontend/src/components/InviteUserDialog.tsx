@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#/components/ui/select'
 
 import type { PageResult, RegistryTeam } from '#/lib/registry-types'
 
@@ -19,6 +20,10 @@ interface InviteUserDialogProps {
 }
 
 const ROLES = ['VIEWER', 'MEMBER', 'TEAM_OWNER', 'ADMIN'] as const
+
+// Radix Select.Item forbids an empty string value, so "no team" is represented
+// with this sentinel and translated to/from '' at the onValueChange boundary.
+const NO_TEAM_VALUE = '__none__'
 
 export function InviteUserDialog({
   open,
@@ -163,21 +168,23 @@ export function InviteUserDialog({
                   <label className="text-sm font-medium text-foreground">
                     Role
                   </label>
-                  <select
+                  <Select
                     value={field.state.value}
-                    onChange={(e) =>
-                      field.handleChange(
-                        e.target.value as (typeof ROLES)[number],
-                      )
+                    onValueChange={(value) =>
+                      field.handleChange(value as (typeof ROLES)[number])
                     }
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
                   >
-                    {ROLES.map((role) => (
-                      <option key={role} value={role}>
-                        {role}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ROLES.map((role) => (
+                        <SelectItem key={role} value={role}>
+                          {role}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
             </form.Field>
@@ -198,18 +205,24 @@ export function InviteUserDialog({
                     <label className="text-sm font-medium text-foreground">
                       Team (optional)
                     </label>
-                    <select
-                      value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
+                    <Select
+                      value={field.state.value === '' ? NO_TEAM_VALUE : field.state.value}
+                      onValueChange={(value) =>
+                        field.handleChange(value === NO_TEAM_VALUE ? '' : value)
+                      }
                     >
-                      <option value="">No team</option>
-                      {teams.map((team) => (
-                        <option key={team.id} value={team.id}>
-                          {team.name}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="No team" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NO_TEAM_VALUE}>No team</SelectItem>
+                        {teams.map((team) => (
+                          <SelectItem key={team.id} value={team.id}>
+                            {team.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 )}
               </form.Field>

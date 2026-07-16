@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 
 import { Badge } from '#/components/ui/badge'
+import { Button } from '#/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -76,8 +77,10 @@ export function NotificationBell() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
-          className="relative flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:size-11"
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
           aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
         >
           {unreadCount > 0 ? (
@@ -88,7 +91,7 @@ export function NotificationBell() {
           {unreadCount > 0 && (
             <span className="absolute right-1.5 top-1.5 flex size-2 items-center justify-center rounded-full bg-critical" />
           )}
-        </button>
+        </Button>
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" className="w-80 p-0">
@@ -102,13 +105,15 @@ export function NotificationBell() {
             )}
           </div>
           {unreadCount > 0 && (
-            <button
+            <Button
+              variant="ghost"
+              size="xs"
               onClick={markAllRead}
-              className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+              className="h-auto gap-1 px-0 text-xs font-normal text-muted-foreground hover:bg-transparent hover:text-foreground"
             >
               <CheckCheck className="size-3" />
               Mark all read
-            </button>
+            </Button>
           )}
         </div>
 
@@ -123,11 +128,12 @@ export function NotificationBell() {
           <ScrollArea className="max-h-95">
             <div className="py-1">
               {notifications.map((n) => (
-                <button
+                <Button
                   key={n.id}
+                  variant="ghost"
                   onClick={() => markRead(n.id)}
                   className={cn(
-                    'flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60',
+                    'h-auto w-full items-start justify-start gap-3 rounded-none px-4 py-3 text-left font-normal hover:bg-muted/60',
                     n.read && 'opacity-60',
                   )}
                 >
@@ -149,7 +155,7 @@ export function NotificationBell() {
                       <span className="text-xs text-muted-foreground">{n.time}</span>
                     </div>
                   </div>
-                </button>
+                </Button>
               ))}
             </div>
           </ScrollArea>

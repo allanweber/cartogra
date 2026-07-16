@@ -1,5 +1,7 @@
 import { Compass } from 'lucide-react'
 
+import { Card } from '#/components/ui/card'
+
 interface AuthFormShellProps {
   children: React.ReactNode
 }
@@ -18,9 +20,7 @@ export function AuthFormShell({ children }: AuthFormShellProps) {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-          {children}
-        </div>
+        <Card className="rounded-2xl px-6 shadow-sm">{children}</Card>
       </div>
     </div>
   )

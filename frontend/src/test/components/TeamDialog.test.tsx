@@ -22,8 +22,8 @@ vi.mock('#/lib/api', () => ({
 let mockRoles = ['ADMIN']
 
 vi.mock('#/stores/useAuthStore', () => ({
-  useAuthStore: (selector: (s: { user: { roles: string[] } }) => unknown) =>
-    selector({ user: { roles: mockRoles } }),
+  useAuthStore: (selector: (s: { user: { id: string; roles: string[] } }) => unknown) =>
+    selector({ user: { id: 'user-1', roles: mockRoles } }),
 }))
 
 const MOCK_TEAM: RegistryTeam = {

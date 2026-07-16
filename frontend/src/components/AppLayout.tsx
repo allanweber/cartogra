@@ -177,9 +177,10 @@ export function AppLayout({
             {/* Command search button */}
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
+                <Button
+                  variant="ghost"
                   onClick={() => setCmdOpen(true)}
-                  className="flex h-9 w-48 items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-64 md:w-80 lg:w-96"
+                  className="h-9 w-48 justify-start gap-2 rounded-lg border border-border bg-muted/50 px-3 text-sm font-normal text-muted-foreground hover:bg-muted hover:text-foreground sm:w-64 md:w-80 lg:w-96"
                   aria-label="Search"
                 >
                   <Search className="size-3.5 shrink-0" />
@@ -187,7 +188,7 @@ export function AppLayout({
                   <kbd className="hidden shrink-0 rounded border border-border bg-background px-1 py-0.5 text-xs sm:block">
                     ⌘K
                   </kbd>
-                </button>
+                </Button>
               </TooltipTrigger>
               <TooltipContent>Command palette (⌘K)</TooltipContent>
             </Tooltip>
@@ -216,12 +217,14 @@ function TenantSelect({ collapsed }: { collapsed: boolean }) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <button
-            className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground pointer-coarse:size-11"
+          <Button
+            variant="ghost"
+            size="icon"
+            className="rounded-lg text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             aria-label="Switch tenant"
           >
             <Building2 className="size-4" />
-          </button>
+          </Button>
         </TooltipTrigger>
         <TooltipContent side="right">{currentTenant.name}</TooltipContent>
       </Tooltip>
@@ -231,7 +234,10 @@ function TenantSelect({ collapsed }: { collapsed: boolean }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-sidebar-accent">
+        <Button
+          variant="ghost"
+          className="h-auto w-full items-center justify-start gap-2.5 rounded-lg px-2.5 py-2 text-left font-normal hover:bg-sidebar-accent"
+        >
           <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <Building2 className="size-4" />
           </div>
@@ -240,7 +246,7 @@ function TenantSelect({ collapsed }: { collapsed: boolean }) {
             <p className="truncate text-xs text-muted-foreground">{currentTenant.plan}</p>
           </div>
           <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
-        </button>
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-52">
         <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
@@ -295,9 +301,11 @@ function SidebarContent({
         {!collapsed && (
           <span className="flex-1 text-sm font-semibold tracking-tight">Cartogra</span>
         )}
-        <button
+        <Button
+          variant="ghost"
+          size="icon-sm"
           onClick={onToggleCollapse}
-          className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground pointer-coarse:size-11"
+          className="rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {collapsed ? (
@@ -305,7 +313,7 @@ function SidebarContent({
           ) : (
             <ChevronLeft className="size-4" />
           )}
-        </button>
+        </Button>
       </div>
 
       {/* Nav items */}
@@ -357,10 +365,11 @@ function SidebarContent({
         {/* Theme toggle */}
         <Tooltip>
           <TooltipTrigger asChild>
-            <button
+            <Button
+              variant="ghost"
               onClick={toggleTheme}
               className={cn(
-                'flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                'h-auto w-full items-center justify-start gap-3 rounded-lg px-2.5 py-2 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
                 collapsed && 'justify-center px-0',
               )}
               aria-label="Toggle theme"
@@ -373,7 +382,7 @@ function SidebarContent({
               {!collapsed && (
                 <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
               )}
-            </button>
+            </Button>
           </TooltipTrigger>
           {collapsed && (
             <TooltipContent side="right">
@@ -421,12 +430,13 @@ function UserMenu({ collapsed }: { collapsed: boolean }) {
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button
-            className="flex w-full justify-center rounded-lg py-1 hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          <Button
+            variant="ghost"
+            className="h-auto w-full justify-center rounded-lg py-1 hover:bg-sidebar-accent"
             aria-label="User menu"
           >
             {avatar}
-          </button>
+          </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="right" align="end" className="w-44">
           <DropdownMenuLabel className="truncate text-xs text-muted-foreground">{user?.name ?? user?.email }</DropdownMenuLabel>
@@ -450,14 +460,17 @@ function UserMenu({ collapsed }: { collapsed: boolean }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-sidebar-accent">
+        <Button
+          variant="ghost"
+          className="h-auto w-full items-center justify-start gap-2.5 rounded-lg px-2.5 py-2 text-left font-normal hover:bg-sidebar-accent"
+        >
           {avatar}
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{user?.name ?? user?.email ?? '—'}</p>
             <p className="truncate text-xs text-muted-foreground capitalize">{user?.roles[0] ?? 'user'}</p>
           </div>
           <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
-        </button>
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-52">
         <DropdownMenuLabel className="truncate text-xs text-muted-foreground">{user?.name ?? user?.email}</DropdownMenuLabel>

@@ -3,6 +3,7 @@ import { useState } from 'react'
 
 import { AppLayout } from '#/components/AppLayout'
 import { Badge } from '#/components/ui/badge'
+import { Button } from '#/components/ui/button'
 import { MOCK_TIMELINE } from '#/lib/mock-data'
 import { cn } from '#/lib/utils'
 
@@ -54,12 +55,13 @@ function TimelinePage() {
         {/* Type filter buttons */}
         <div className="flex flex-wrap gap-2">
           {TYPE_FILTERS.map((f) => (
-            <button
+            <Button
               key={f.value}
+              variant="ghost"
               onClick={() => setFilter(f.value)}
               aria-pressed={filter === f.value}
               className={cn(
-                'rounded-full border px-3 py-1 text-xs font-medium transition-colors pointer-coarse:px-4 pointer-coarse:py-2.5',
+                'h-auto rounded-full border px-3 py-1 text-xs font-medium transition-colors pointer-coarse:px-4 pointer-coarse:py-2.5',
                 filter === f.value
                   ? 'border-primary bg-primary text-primary-foreground'
                   : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground',
@@ -74,7 +76,7 @@ function TimelinePage() {
                 />
               )}
               {f.label}
-            </button>
+            </Button>
           ))}
         </div>
 

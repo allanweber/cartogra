@@ -8,6 +8,7 @@ import { AppLayout } from '#/components/AppLayout'
 import { RegisterServiceDrawer } from '#/components/RegisterServiceDrawer'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
+import { Card } from '#/components/ui/card'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '#/components/ui/dropdown-menu'
 import { Input } from '#/components/ui/input'
 import { Skeleton } from '#/components/ui/skeleton'
@@ -189,16 +190,17 @@ function CatalogPage() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button
+              <Button
+                variant="outline"
                 className={cn(
-                  'flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                  'h-auto gap-1.5 px-3 py-2 text-sm shadow-sm',
                   teamFilter ? 'border-primary bg-primary/5 text-foreground' : 'border-input bg-background text-foreground',
                 )}
                 aria-label="Filter by team"
               >
                 {selectedTeamName}
                 <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden="true" />
-              </button>
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
               <DropdownMenuItem onSelect={() => { setTeamFilter(''); resetPage() }} className="flex items-center gap-2">
@@ -221,16 +223,17 @@ function CatalogPage() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button
+              <Button
+                variant="outline"
                 className={cn(
-                  'flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                  'h-auto gap-1.5 px-3 py-2 text-sm shadow-sm',
                   healthFilter !== 'all' ? 'border-primary bg-primary/5 text-foreground' : 'border-input bg-background text-foreground',
                 )}
                 aria-label="Filter by health"
               >
                 {selectedHealthLabel}
                 <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden="true" />
-              </button>
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
               {HEALTH_OPTIONS.map((opt) => (
@@ -244,16 +247,17 @@ function CatalogPage() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button
+              <Button
+                variant="outline"
                 className={cn(
-                  'flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                  'h-auto gap-1.5 px-3 py-2 text-sm shadow-sm',
                   sourceFilter !== 'all' ? 'border-primary bg-primary/5 text-foreground' : 'border-input bg-background text-foreground',
                 )}
                 aria-label="Filter by source"
               >
                 {selectedSourceLabel}
                 <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden="true" />
-              </button>
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
               {SOURCE_OPTIONS.map((opt) => (
@@ -267,16 +271,17 @@ function CatalogPage() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button
+              <Button
+                variant="outline"
                 className={cn(
-                  'flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                  'h-auto gap-1.5 px-3 py-2 text-sm shadow-sm',
                   techFilter.size > 0 ? 'border-primary bg-primary/5 text-foreground' : 'border-input bg-background text-foreground',
                 )}
                 aria-label="Filter by tech stack"
               >
                 {selectedTechLabel}
                 <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden="true" />
-              </button>
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
               {techFilter.size > 0 && (
@@ -306,50 +311,54 @@ function CatalogPage() {
           </DropdownMenu>
 
           <div className="ml-auto flex overflow-hidden rounded-md border border-border">
-            <button
+            <Button
+              variant="ghost"
               onClick={() => setView('grid')}
               className={cn(
-                'flex items-center px-2.5 py-2 transition-colors focus-visible:outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:px-3.5 pointer-coarse:py-3',
-                view === 'grid' ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-muted',
+                'h-auto rounded-none px-2.5 py-2 pointer-coarse:px-3.5 pointer-coarse:py-3',
+                view === 'grid' ? 'bg-primary text-primary-foreground hover:bg-primary' : 'bg-background text-muted-foreground hover:bg-muted',
               )}
               aria-label="Grid view"
               aria-pressed={view === 'grid'}
             >
               <LayoutGrid className="size-4" aria-hidden="true" />
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
               onClick={() => setView('list')}
               className={cn(
-                'flex items-center px-2.5 py-2 transition-colors focus-visible:outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:px-3.5 pointer-coarse:py-3',
-                view === 'list' ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-muted',
+                'h-auto rounded-none px-2.5 py-2 pointer-coarse:px-3.5 pointer-coarse:py-3',
+                view === 'list' ? 'bg-primary text-primary-foreground hover:bg-primary' : 'bg-background text-muted-foreground hover:bg-muted',
               )}
               aria-label="List view"
               aria-pressed={view === 'list'}
             >
               <List className="size-4" aria-hidden="true" />
-            </button>
+            </Button>
           </div>
 
           {hasActiveFilters && (
-            <button
+            <Button
+              variant="outline"
               onClick={clearAllFilters}
-              className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
+              className="h-auto px-3 py-2 text-sm text-muted-foreground hover:border-destructive hover:text-destructive"
             >
               Clear filters
-            </button>
+            </Button>
           )}
         </div>
 
         {/* Health quick-filter chips */}
         <div className="flex flex-wrap gap-2">
           {(['healthy', 'degraded', 'down'] as ServiceHealth[]).map((value) => (
-            <button
+            <Button
               key={value}
+              variant="ghost"
               onClick={() => { setHealthFilter(healthFilter === value ? 'all' : value); resetPage() }}
               className={cn(
-                'flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'h-auto gap-1.5 rounded-full border px-3 py-1 text-xs font-medium',
                 healthFilter === value
-                  ? 'border-primary bg-primary text-primary-foreground'
+                  ? 'border-primary bg-primary text-primary-foreground hover:bg-primary'
                   : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground',
               )}
             >
@@ -362,7 +371,7 @@ function CatalogPage() {
                 )}
               />
               {value.charAt(0).toUpperCase() + value.slice(1)} ({healthCounts[value]})
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -403,22 +412,24 @@ function CatalogPage() {
               Page {page + 1} of {totalPages}
             </p>
             <div className="flex gap-2">
-              <button
+              <Button
+                variant="outline"
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={page === 0}
-                className="flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                className="h-auto gap-1 px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed"
               >
                 <ChevronLeft className="size-3.5" aria-hidden="true" />
                 Previous
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="outline"
                 onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                 disabled={page >= totalPages - 1}
-                className="flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                className="h-auto gap-1 px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed"
               >
                 Next
                 <ChevronRight className="size-3.5" aria-hidden="true" />
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -441,7 +452,7 @@ function ServiceCard({ service, teamName }: { service: RegistryService; teamName
 
   return (
     <Link to="/catalog/$serviceId" params={{ serviceId: service.id }}>
-      <div className="group flex h-full cursor-pointer flex-col gap-3 rounded-xl border border-border bg-card p-4 transition-all hover:shadow-md">
+      <Card className="group h-full cursor-pointer gap-3 rounded-xl p-4 py-4 transition-all hover:shadow-md">
         {/* Header */}
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
@@ -502,7 +513,7 @@ function ServiceCard({ service, teamName }: { service: RegistryService; teamName
             {isOrphan && <WarningTag label="orphan" />}
           </div>
         )}
-      </div>
+      </Card>
     </Link>
   )
 }
@@ -511,7 +522,7 @@ const LIST_COLS = 'grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minm
 
 function ServiceListTable({ services, teamMap }: { services: RegistryService[]; teamMap: Map<string, string> }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-card">
+    <Card className="gap-0 overflow-hidden rounded-xl py-0">
       <div className={cn('grid gap-x-4 border-b border-border bg-muted/50 px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground', LIST_COLS)}>
         <span>Service</span>
         <span>Health</span>
@@ -526,7 +537,7 @@ function ServiceListTable({ services, teamMap }: { services: RegistryService[]; 
           <ServiceListRow key={svc.id} service={svc} teamName={teamMap.get(svc.teamId ?? '') ?? null} />
         ))}
       </div>
-    </div>
+    </Card>
   )
 }
 

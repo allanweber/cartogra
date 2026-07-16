@@ -94,10 +94,10 @@ function TeamsPage() {
   const { data: myTeamIds } = useQuery({
     queryKey: ['teams', 'mine'],
     queryFn: () => apiFetch<string[]>('/v1/registry/teams/mine'),
-    enabled: !isAdmin,
+    enabled: isTeamOwner && !isAdmin,
   })
   const myTeamIdSet = new Set(myTeamIds ?? [])
-  const canManage = (teamId: string) => isAdmin || myTeamIdSet.has(teamId)
+  const canManage = (teamId: string) => isAdmin || (isTeamOwner && myTeamIdSet.has(teamId))
 
   const teams = teamsPage?.items ?? []
   const totalTeams = teamsPage?.total ?? 0
@@ -329,14 +329,16 @@ function TeamRow({
         </div>
 
         {canManage && (
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={onManage}
             aria-label={`Manage ${team.name}`}
             data-testid={`manage-btn-${team.id}`}
-            className="ml-1 flex shrink-0 items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring pointer-coarse:size-11"
+            className="ml-1 shrink-0 rounded-md p-1.5 text-muted-foreground pointer-coarse:size-11"
           >
             <Settings2 className="size-4" aria-hidden="true" />
-          </button>
+          </Button>
         )}
       </div>
     </div>
@@ -380,13 +382,15 @@ function TeamDetailPanel({
               </div>
             </div>
           </div>
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={onClose}
-            className="flex items-center justify-center rounded-md p-1 text-muted-foreground hover:bg-muted pointer-coarse:size-11"
+            className="rounded-md p-1 text-muted-foreground pointer-coarse:size-11"
             aria-label="Close panel"
           >
             <X className="size-4" />
-          </button>
+          </Button>
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-3">

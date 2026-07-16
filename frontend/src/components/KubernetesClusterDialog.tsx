@@ -7,6 +7,8 @@ import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
+import { Switch } from '#/components/ui/switch'
+import { Textarea } from '#/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
 import { ApiError, apiFetch, apiMutate } from '#/lib/api'
 
@@ -36,8 +38,7 @@ const statusConfig = {
   ERROR: { dot: 'bg-red-500', label: 'Error', text: 'text-red-600 dark:text-red-400' },
 }
 
-const textareaClass =
-  'w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 font-mono resize-none'
+const textareaClass = 'font-mono resize-none'
 
 export function KubernetesClusterDialog({ open, onOpenChange, cluster, onSuccess }: Props) {
   const isEdit = !!cluster
@@ -224,7 +225,7 @@ export function KubernetesClusterDialog({ open, onOpenChange, cluster, onSuccess
                   </label>
                   <label className="cursor-pointer inline-flex items-center gap-1 rounded-md border border-input bg-transparent px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted">
                     Upload file
-                    <input
+                    <Input
                       type="file"
                       accept=".yaml,.yml,.kubeconfig,.conf,"
                       className="sr-only"
@@ -239,7 +240,7 @@ export function KubernetesClusterDialog({ open, onOpenChange, cluster, onSuccess
                     />
                   </label>
                 </div>
-                <textarea
+                <Textarea
                   className={textareaClass}
                   rows={8}
                   placeholder={isEdit ? '••••••• (leave blank to keep)' : 'Paste your kubeconfig YAML here…'}
@@ -270,7 +271,7 @@ export function KubernetesClusterDialog({ open, onOpenChange, cluster, onSuccess
 
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-foreground">CA certificate (PEM)</label>
-                  <textarea
+                  <Textarea
                     className={textareaClass}
                     rows={5}
                     placeholder={isEdit ? '••••••• (leave blank to keep)' : '-----BEGIN CERTIFICATE-----\n…\n-----END CERTIFICATE-----'}
@@ -300,20 +301,11 @@ export function KubernetesClusterDialog({ open, onOpenChange, cluster, onSuccess
                   className="flex cursor-pointer items-center gap-3 pointer-coarse:py-2"
                   onClick={() => setSkipTlsVerify((v) => !v)}
                 >
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={skipTlsVerify}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setSkipTlsVerify((v) => !v)
-                    }}
-                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${skipTlsVerify ? 'bg-primary' : 'bg-input'}`}
-                  >
-                    <span
-                      className={`pointer-events-none inline-block size-4 rounded-full bg-white shadow-lg ring-0 transition-transform ${skipTlsVerify ? 'translate-x-4' : 'translate-x-0'}`}
-                    />
-                  </button>
+                  <Switch
+                    checked={skipTlsVerify}
+                    onCheckedChange={setSkipTlsVerify}
+                    onClick={(e) => e.stopPropagation()}
+                  />
                   <span className="text-sm font-medium text-foreground">Skip TLS verification</span>
                   {skipTlsVerify && (
                     <span className="text-xs text-amber-600 dark:text-amber-400">Not recommended for production</span>

@@ -4,6 +4,7 @@ import { useState } from 'react'
 
 import { AppLayout } from '#/components/AppLayout'
 import { Badge } from '#/components/ui/badge'
+import { Button } from '#/components/ui/button'
 import { Card, CardContent } from '#/components/ui/card'
 import { MOCK_RISKS } from '#/lib/mock-data'
 import { cn } from '#/lib/utils'
@@ -79,10 +80,11 @@ function SummaryCard({
   variant: 'critical' | 'warning' | 'info'
 }) {
   return (
-    <button
+    <Button
+      variant="ghost"
       onClick={onClick}
       className={cn(
-        'rounded-xl border p-4 text-left transition-all',
+        'h-auto rounded-xl border p-4 text-left transition-all',
         active && variant === 'critical' && 'border-critical bg-critical-subtle',
         active && variant === 'warning' && 'border-warning bg-warning-subtle',
         active && variant === 'info' && 'border-info bg-info-subtle',
@@ -100,7 +102,7 @@ function SummaryCard({
         {count}
       </p>
       <p className="mt-1 text-xs font-medium text-muted-foreground">{label}</p>
-    </button>
+    </Button>
   )
 }
 
@@ -109,8 +111,9 @@ function RiskCard({ risk }: { risk: (typeof MOCK_RISKS)[number] }) {
 
   return (
     <Card className="overflow-hidden">
-      <button
-        className="w-full text-left"
+      <Button
+        variant="ghost"
+        className="h-auto w-full justify-start rounded-none p-0 text-left hover:bg-transparent"
         onClick={() => setExpanded((e) => !e)}
         aria-expanded={expanded}
       >
@@ -144,7 +147,7 @@ function RiskCard({ risk }: { risk: (typeof MOCK_RISKS)[number] }) {
             {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
           </div>
         </CardContent>
-      </button>
+      </Button>
 
       {expanded && (
         <CardContent className="space-y-3 border-t border-border p-4">

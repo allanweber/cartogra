@@ -101,7 +101,8 @@ describe('UsersPage', () => {
     renderPage()
     await screen.findByText('other@acme.com')
     const selects = screen.getAllByRole('combobox')
-    fireEvent.change(selects[1], { target: { value: 'ADMIN' } })
+    fireEvent.click(selects[1])
+    fireEvent.click(await screen.findByRole('option', { name: 'ADMIN' }))
     await waitFor(() =>
       expect(apiMutate).toHaveBeenCalledWith('/auth/admin/users/user-other/role', { role: 'ADMIN' }, 'PATCH'),
     )
@@ -125,7 +126,8 @@ describe('UsersPage', () => {
     renderPage()
     await screen.findByText('other@acme.com')
     const selects = screen.getAllByRole('combobox')
-    fireEvent.change(selects[1], { target: { value: 'ADMIN' } })
+    fireEvent.click(selects[1])
+    fireEvent.click(await screen.findByRole('option', { name: 'ADMIN' }))
     await waitFor(() => expect(mockToastError).toHaveBeenCalled())
   })
 

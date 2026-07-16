@@ -14,6 +14,7 @@ import { normalizeHealth } from '#/lib/registry-types'
 import { useAuthStore } from '#/stores/useAuthStore'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
+import { Checkbox } from '#/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
 import { InviteUserDialog } from '#/components/InviteUserDialog'
@@ -41,9 +42,9 @@ export function TeamDialog({
   onDeleted,
 }: TeamDialogProps) {
   const queryClient = useQueryClient()
+  const currentUserId = useAuthStore((s) => s.user?.id)
   const isAdmin = useAuthStore((s) => s.user?.roles.includes('ADMIN') ?? false)
   const isTeamOwner = useAuthStore((s) => s.user?.roles.includes('TEAM_OWNER') ?? false)
-  const canManageMembers = isAdmin || isTeamOwner
   const isEdit = team !== undefined
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [serviceSearch, setServiceSearch] = useState('')
@@ -69,6 +70,10 @@ export function TeamDialog({
       apiFetch<RegistryTeamMember[]>(`/v1/registry/teams/${team!.id}/members`),
     enabled: isEdit && open,
   })
+
+  const isMemberOfThisTeam = members?.some((m) => m.userId === currentUserId) ?? false
+  const canManageMembers =
+    isAdmin || (isTeamOwner && (!isEdit || isMemberOfThisTeam))
 
   const { data: tenantUsers } = useQuery({
     queryKey: ['tenant-users'],
@@ -410,16 +415,17 @@ export function TeamDialog({
                           ) : (
                             addableUsers.map((u) => (
                               <li key={u.id}>
-                                <button
+                                <Button
                                   type="button"
+                                  variant="ghost"
                                   onClick={() => addMemberLocal(u.id)}
-                                  className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs hover:bg-muted"
+                                  className="h-auto w-full justify-between gap-2 rounded-none px-3 py-2 text-left text-xs font-normal"
                                 >
                                   <span className="truncate">
                                     {u.name ? `${u.name} — ${u.email}` : u.email}
                                   </span>
                                   <UserPlus className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                                </button>
+                                </Button>
                               </li>
                             ))
                           )}
@@ -455,14 +461,16 @@ export function TeamDialog({
                                 )}
                               </span>
                               {canManageMembers && (
-                                <button
+                                <Button
                                   type="button"
+                                  variant="ghost"
+                                  size="icon-xs"
                                   onClick={() => removeMemberLocal(userId)}
                                   aria-label="Remove member"
-                                  className="flex shrink-0 items-center justify-center rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive pointer-coarse:size-11"
+                                  className="shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive pointer-coarse:size-11"
                                 >
                                   <UserMinus className="size-3.5" />
-                                </button>
+                                </Button>
                               )}
                             </li>
                           )
@@ -503,11 +511,9 @@ export function TeamDialog({
                           return (
                             <li key={svc.id}>
                               <label className="flex cursor-pointer items-center gap-3 px-3 py-2.5 hover:bg-muted/50">
-                                <input
-                                  type="checkbox"
+                                <Checkbox
                                   checked={checked}
-                                  onChange={() => toggleService(svc.id)}
-                                  className="size-4 rounded accent-primary"
+                                  onCheckedChange={() => toggleService(svc.id)}
                                   aria-label={svc.name}
                                 />
                                 <span

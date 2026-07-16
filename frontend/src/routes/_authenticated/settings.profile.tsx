@@ -222,30 +222,32 @@ function ProfilePage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-3">
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => setTheme('light')}
                 className={cn(
-                  'flex flex-col items-center gap-2 rounded-xl border p-4 text-sm font-medium transition-all',
+                  'h-auto flex flex-col items-center gap-2 rounded-xl border p-4 text-sm font-medium transition-all',
                   theme === 'light'
-                    ? 'border-primary bg-primary/5 text-primary'
-                    : 'border-border bg-background text-muted-foreground hover:bg-muted',
+                    ? 'border-primary bg-primary/5 text-primary hover:bg-primary/5 hover:text-primary'
+                    : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-muted-foreground',
                 )}
               >
                 <Sun className="size-4" />
                 Light
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="ghost"
                 onClick={() => setTheme('dark')}
                 className={cn(
-                  'flex flex-col items-center gap-2 rounded-xl border p-4 text-sm font-medium transition-all',
+                  'h-auto flex flex-col items-center gap-2 rounded-xl border p-4 text-sm font-medium transition-all',
                   theme === 'dark'
-                    ? 'border-primary bg-primary/5 text-primary'
-                    : 'border-border bg-background text-muted-foreground hover:bg-muted',
+                    ? 'border-primary bg-primary/5 text-primary hover:bg-primary/5 hover:text-primary'
+                    : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-muted-foreground',
                 )}
               >
                 <Moon className="size-4" />
                 Dark
-              </button>
+              </Button>
             </div>
           </CardContent>
         </Card>

@@ -51,9 +51,10 @@ public class TeamService {
         return saved;
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEAM_OWNER')")
     @Transactional
     public Team update(UUID tenantId, UUID teamId, String name, @Nullable UUID requestedBy) {
-        requireAdminOrTeamOwner();
+        requireAdminOrOwningTeamOwner(tenantId, teamId, requestedBy);
         Team existing = teamRepository.findById(tenantId, teamId)
                 .orElseThrow(() -> new TeamNotFoundException(teamId));
 
@@ -72,9 +73,10 @@ public class TeamService {
         return saved;
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEAM_OWNER')")
     @Transactional
     public void delete(UUID tenantId, UUID teamId, @Nullable UUID requestedBy) {
-        requireAdminOrTeamOwner();
+        requireAdminOrOwningTeamOwner(tenantId, teamId, requestedBy);
         Team existing = teamRepository.findById(tenantId, teamId)
                 .orElseThrow(() -> new TeamNotFoundException(teamId));
         Instant deletedAt = Instant.now();
@@ -84,9 +86,10 @@ public class TeamService {
                 existing.createdAt(), existing.updatedAt(), deletedAt));
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEAM_OWNER')")
     @Transactional
     public TeamMember addMember(UUID tenantId, UUID teamId, UUID userId, @Nullable UUID requestedBy) {
-        requireAdminOrTeamOwner();
+        requireAdminOrOwningTeamOwner(tenantId, teamId, requestedBy);
         teamRepository.findById(tenantId, teamId).orElseThrow(() -> new TeamNotFoundException(teamId));
         if (teamRepository.isMember(tenantId, teamId, userId)) {
             return teamRepository.findMembers(tenantId, teamId).stream()
@@ -97,9 +100,10 @@ public class TeamService {
         return teamRepository.addMember(new TeamMember(UUID.randomUUID(), tenantId, teamId, userId, Instant.now()));
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEAM_OWNER')")
     @Transactional
     public void removeMember(UUID tenantId, UUID teamId, UUID userId, @Nullable UUID requestedBy) {
-        requireAdminOrTeamOwner();
+        requireAdminOrOwningTeamOwner(tenantId, teamId, requestedBy);
         teamRepository.findById(tenantId, teamId).orElseThrow(() -> new TeamNotFoundException(teamId));
         teamRepository.removeMember(tenantId, teamId, userId);
     }
@@ -127,12 +131,13 @@ public class TeamService {
         return PageResult.of(items, total, limit, offset);
     }
 
-    private void requireAdminOrMember(UUID tenantId, UUID teamId, @Nullable UUID requestedBy) {
+    private void requireAdminOrOwningTeamOwner(UUID tenantId, UUID teamId, @Nullable UUID requestedBy) {
         if (isAdmin()) {
             return;
         }
         if (requestedBy == null || !teamRepository.isMember(tenantId, teamId, requestedBy)) {
-            throw new AccessDeniedException("Only ADMIN or a member of this team may perform this action");
+            throw new AccessDeniedException(
+                    "Only ADMIN or an owner who is a member of this team may perform this action");
         }
     }
 

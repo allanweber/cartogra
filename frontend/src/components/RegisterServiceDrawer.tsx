@@ -8,7 +8,10 @@ import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#/components/ui/select'
+import { Textarea } from '#/components/ui/textarea'
 import { TagsInput } from '#/components/TagsInput'
+import { useAuthStore } from '#/stores/useAuthStore'
 import type { PageResult, RegistryService, RegistryTeam } from '#/lib/registry-types'
 
 interface RegisterServiceDrawerProps {
@@ -41,6 +44,7 @@ function Field({ children }: { children: React.ReactNode }) {
 
 export function RegisterServiceDrawer({ open, onOpenChange }: RegisterServiceDrawerProps) {
   const queryClient = useQueryClient()
+  const isAdmin = useAuthStore((s) => s.user?.roles.includes('ADMIN') ?? false)
 
   const { data: teamsPage } = useQuery({
     queryKey: ['teams'],
@@ -48,6 +52,13 @@ export function RegisterServiceDrawer({ open, onOpenChange }: RegisterServiceDra
     enabled: open,
   })
   const teams = teamsPage?.items ?? []
+
+  const { data: myTeamIds } = useQuery({
+    queryKey: ['teams', 'mine'],
+    queryFn: () => apiFetch<string[]>('/v1/registry/teams/mine'),
+    enabled: open && !isAdmin,
+  })
+  const myTeamId = !isAdmin ? (myTeamIds?.[0] ?? '') : ''
 
   const mutation = useMutation({
     mutationFn: (payload: CreateServicePayload) =>
@@ -95,6 +106,12 @@ export function RegisterServiceDrawer({ open, onOpenChange }: RegisterServiceDra
     mutation.reset()
     form.reset()
   }, [open])
+
+  useEffect(() => {
+    if (open && myTeamId) {
+      form.setFieldValue('teamId', myTeamId)
+    }
+  }, [open, myTeamId])
 
   function handleClose() {
     onOpenChange(false)
@@ -160,14 +177,14 @@ export function RegisterServiceDrawer({ open, onOpenChange }: RegisterServiceDra
               {(field) => (
                 <Field>
                   <Label optional>Description</Label>
-                  <textarea
+                  <Textarea
                     value={field.state.value}
                     onChange={(e) => field.handleChange(e.target.value)}
                     onBlur={field.handleBlur}
                     placeholder="What does this service do?"
                     maxLength={1000}
                     rows={3}
-                    className="flex w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    className="resize-none"
                   />
                 </Field>
               )}
@@ -177,17 +194,21 @@ export function RegisterServiceDrawer({ open, onOpenChange }: RegisterServiceDra
               <form.Field name="teamId">
                 {(field) => (
                   <Field>
-                    <Label optional>Owner team</Label>
-                    <select
+                    <Label optional={isAdmin}>Owner team</Label>
+                    <Select
                       value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      onValueChange={field.handleChange}
+                      disabled={!isAdmin}
                     >
-                      <option value="">-- None --</option>
-                      {teams.map((t) => (
-                        <option key={t.id} value={t.id}>{t.name}</option>
-                      ))}
-                    </select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="-- None --" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {teams.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </Field>
                 )}
               </form.Field>

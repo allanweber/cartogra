@@ -15,6 +15,9 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 
+import { Button } from '#/components/ui/button'
+
+import { Input } from '#/components/ui/input'
 import { MOCK_SERVICES, MOCK_TEAMS } from '#/lib/mock-data'
 import { cn } from '#/lib/utils'
 
@@ -136,12 +139,12 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           {/* Search input */}
           <div className="flex items-center gap-3 border-b border-border px-4 py-3.5">
             <Search className="size-4 shrink-0 text-muted-foreground" />
-            <input
+            <Input
               ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search pages, services, teams…"
-              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              className="h-auto flex-1 border-0 bg-transparent p-0 text-sm shadow-none outline-none focus-visible:ring-0 placeholder:text-muted-foreground"
             />
             <kbd className="hidden rounded border border-border bg-muted px-1.5 py-0.5 text-xs text-muted-foreground sm:block">
               ESC
@@ -163,14 +166,15 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                   {items.map((item) => {
                     const globalIdx = flatFiltered.indexOf(item)
                     return (
-                      <button
+                      <Button
                         key={item.id}
+                        variant="ghost"
                         onClick={item.action}
                         onMouseEnter={() => setActiveIdx(globalIdx)}
                         className={cn(
-                          'flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors',
+                          'h-auto w-full items-center justify-start gap-3 rounded-none px-4 py-2.5 text-left text-sm font-normal',
                           globalIdx === activeIdx
-                            ? 'bg-primary text-primary-foreground'
+                            ? 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground'
                             : 'text-foreground hover:bg-muted',
                         )}
                       >
@@ -197,7 +201,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                             {item.subtitle}
                           </span>
                         )}
-                      </button>
+                      </Button>
                     )
                   })}
                 </div>

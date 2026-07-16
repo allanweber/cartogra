@@ -278,22 +278,23 @@ function ServiceDetailPage() {
             {/* Tab bar */}
             <div role="tablist" className="flex border-b border-border">
               {TABS.map((t) => (
-                <button
+                <Button
                   key={t.id}
+                  variant="ghost"
                   id={`tab-${t.id}`}
                   role="tab"
                   aria-selected={tab === t.id}
                   aria-controls={`panel-${t.id}`}
                   onClick={() => setTab(t.id)}
                   className={cn(
-                    'px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                    'h-auto rounded-none px-4 py-2.5 text-sm font-medium transition-colors hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                     tab === t.id
                       ? '-mb-px border-b-2 border-primary text-foreground'
                       : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
                   {t.label}
-                </button>
+                </Button>
               ))}
             </div>
 

@@ -10,6 +10,7 @@ import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#/components/ui/select'
 import { Skeleton } from '#/components/ui/skeleton'
 import { ApiError, apiFetch, apiMutate } from '#/lib/api'
 import type { TenantUser } from '#/lib/registry-types'
@@ -125,20 +126,22 @@ function UsersPage() {
                 </div>
 
                 <div className="flex shrink-0 items-center gap-2">
-                  <select
+                  <Select
                     value={user.roles[0] ?? 'MEMBER'}
                     disabled={isSelf || roleMutation.isPending}
-                    onChange={(e) =>
-                      roleMutation.mutate({ id: user.id, role: e.target.value })
-                    }
-                    className="flex h-8 rounded-md border border-input bg-transparent px-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+                    onValueChange={(role) => roleMutation.mutate({ id: user.id, role })}
                   >
-                    {ROLES.map((role) => (
-                      <option key={role} value={role}>
-                        {role}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger size="sm" className="w-auto">
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ROLES.map((role) => (
+                        <SelectItem key={role} value={role}>
+                          {role}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
 
                   {isConfirming ? (
                     <div className="flex items-center gap-1.5">

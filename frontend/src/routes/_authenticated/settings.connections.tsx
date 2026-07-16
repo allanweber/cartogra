@@ -10,6 +10,7 @@ import { SettingsTabsLayout } from '#/components/SettingsTabsLayout'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
+import { Card } from '#/components/ui/card'
 import { Skeleton } from '#/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '#/components/ui/tooltip'
 import { apiFetch } from '#/lib/api'
@@ -184,7 +185,7 @@ function ConnectionsPage() {
         )}
 
         {!isLoading && !error && (
-          <div className="rounded-lg border border-border bg-card divide-y divide-border">
+          <Card className="gap-0 rounded-lg py-0 divide-y divide-border">
             {PROVIDERS.map((p) => {
               if (p.key === 'kubernetes') {
                 const clusterCount = clusters.length
@@ -320,7 +321,7 @@ function ConnectionsPage() {
                 </div>
               )
             })}
-          </div>
+          </Card>
         )}
       </div>
 

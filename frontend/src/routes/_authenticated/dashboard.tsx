@@ -39,7 +39,7 @@ function DashboardPage() {
     <AppLayout title="Dashboard" description="Architecture health overview">
       <div className="space-y-4">
         {/* Health overview panel — health score primary, secondary metrics compact strip */}
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <Card className="gap-0 overflow-hidden rounded-xl py-0">
           <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:gap-6">
             {/* Health score — primary signal */}
             <div className="shrink-0">
@@ -112,7 +112,7 @@ function DashboardPage() {
               sub={`${orphanServices.length} unowned`}
             />
           </div>
-        </div>
+        </Card>
 
         <div className="grid gap-4 md:grid-cols-2">
           {/* Active risks */}

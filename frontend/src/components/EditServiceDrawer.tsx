@@ -8,6 +8,8 @@ import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#/components/ui/select'
+import { Textarea } from '#/components/ui/textarea'
 import { TagsInput } from '#/components/TagsInput'
 import type { PageResult, RegistryService, RegistryTeam } from '#/lib/registry-types'
 
@@ -53,23 +55,29 @@ function Field({ children }: { children: React.ReactNode }) {
   return <div className="space-y-1.5">{children}</div>
 }
 
+// Radix Select.Item forbids an empty string value, so the "-- None --" option
+// is represented with this sentinel and translated to/from '' at the
+// onValueChange boundary.
+const NONE_VALUE = '__none__'
+
 function NativeSelect({
   value,
   onChange,
+  placeholder,
   children,
 }: {
   value: string
   onChange: (v: string) => void
+  placeholder?: string
   children: React.ReactNode
 }) {
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-    >
-      {children}
-    </select>
+    <Select value={value} onValueChange={(v) => onChange(v === NONE_VALUE ? '' : v)}>
+      <SelectTrigger>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>{children}</SelectContent>
+    </Select>
   )
 }
 
@@ -276,13 +284,13 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
               {(field) => (
                 <Field>
                   <Label optional>Description</Label>
-                  <textarea
+                  <Textarea
                     value={field.state.value}
                     onChange={(e) => field.handleChange(e.target.value)}
                     onBlur={field.handleBlur}
                     maxLength={1000}
                     rows={3}
-                    className="flex w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    className="resize-none"
                   />
                 </Field>
               )}
@@ -293,12 +301,15 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
                 {(field) => (
                   <Field>
                     <Label optional>Owner team</Label>
-                    <NativeSelect value={field.state.value} onChange={field.handleChange}>
-                      <option value="">-- None --</option>
+                    <NativeSelect
+                      value={field.state.value}
+                      onChange={field.handleChange}
+                      placeholder="-- None --"
+                    >
                       {teams.map((t) => (
-                        <option key={t.id} value={t.id}>
+                        <SelectItem key={t.id} value={t.id}>
                           {t.name}
-                        </option>
+                        </SelectItem>
                       ))}
                     </NativeSelect>
                   </Field>
@@ -309,11 +320,15 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
                 {(field) => (
                   <Field>
                     <Label optional>Tier</Label>
-                    <NativeSelect value={field.state.value} onChange={field.handleChange}>
-                      <option value="">-- None --</option>
-                      <option value="CRITICAL">Critical</option>
-                      <option value="STANDARD">Standard</option>
-                      <option value="EXPERIMENTAL">Experimental</option>
+                    <NativeSelect
+                      value={field.state.value}
+                      onChange={field.handleChange}
+                      placeholder="-- None --"
+                    >
+                      <SelectItem value={NONE_VALUE}>-- None --</SelectItem>
+                      <SelectItem value="CRITICAL">Critical</SelectItem>
+                      <SelectItem value="STANDARD">Standard</SelectItem>
+                      <SelectItem value="EXPERIMENTAL">Experimental</SelectItem>
                     </NativeSelect>
                   </Field>
                 )}
@@ -325,12 +340,16 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
                 {(field) => (
                   <Field>
                     <Label optional>Health</Label>
-                    <NativeSelect value={field.state.value} onChange={field.handleChange}>
-                      <option value="">-- None --</option>
-                      <option value="HEALTHY">Healthy</option>
-                      <option value="DEGRADED">Degraded</option>
-                      <option value="UNHEALTHY">Unhealthy</option>
-                      <option value="UNKNOWN">Unknown</option>
+                    <NativeSelect
+                      value={field.state.value}
+                      onChange={field.handleChange}
+                      placeholder="-- None --"
+                    >
+                      <SelectItem value={NONE_VALUE}>-- None --</SelectItem>
+                      <SelectItem value="HEALTHY">Healthy</SelectItem>
+                      <SelectItem value="DEGRADED">Degraded</SelectItem>
+                      <SelectItem value="UNHEALTHY">Unhealthy</SelectItem>
+                      <SelectItem value="UNKNOWN">Unknown</SelectItem>
                     </NativeSelect>
                   </Field>
                 )}
