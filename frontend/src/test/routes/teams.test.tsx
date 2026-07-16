@@ -274,16 +274,16 @@ describe('TeamsPage', () => {
     expect(screen.queryByRole('button', { name: /add team/i })).not.toBeInTheDocument()
   })
 
-  it('non-admin user who is not a team member does not see its manage button', async () => {
-    mockRoles = []
+  it('team owner who is not a member of this team does not see its manage button', async () => {
+    mockRoles = ['TEAM_OWNER']
     mockApiFetch({ items: [MOCK_TEAM], total: 1, limit: 200, offset: 0 }, EMPTY_SERVICES, [])
     renderPage()
     await screen.findByText('Platform')
     expect(screen.queryByTestId('manage-btn-team-1')).not.toBeInTheDocument()
   })
 
-  it('non-admin user who is a team member sees its manage button', async () => {
-    mockRoles = []
+  it('team owner who is a member of this team sees its manage button', async () => {
+    mockRoles = ['TEAM_OWNER']
     mockApiFetch({ items: [MOCK_TEAM], total: 1, limit: 200, offset: 0 }, EMPTY_SERVICES, ['team-1'])
     renderPage()
     await screen.findByText('Platform')

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Route } from '#/routes/_authenticated/settings.connections'
 import { apiFetch } from '#/lib/api'
-import type { PageResult } from '#/lib/registry-types'
+import type { PageResult, TenantInfo } from '#/lib/registry-types'
 import type { ScmConnection } from '#/components/ScmConnectionDialog'
 
 vi.mock('#/lib/api', () => ({
@@ -58,6 +58,38 @@ const GITHUB_CONN: ScmConnection = {
 
 const EMPTY_CONNECTIONS: PageResult<ScmConnection> = { items: [], total: 0, limit: 20, offset: 0 }
 const WITH_GITHUB: PageResult<ScmConnection> = { items: [GITHUB_CONN], total: 1, limit: 20, offset: 0 }
+const EMPTY_CLUSTERS = { items: [], total: 0, limit: 20, offset: 0 }
+const MOCK_TENANT: TenantInfo = {
+  id: 'tenant-1',
+  name: 'Acme',
+  slug: 'acme',
+  plan: {
+    name: 'pro',
+    slug: 'pro',
+    maxServices: -1,
+    maxUsers: -1,
+    maxApiKeys: -1,
+    maxScmConnections: -1,
+    maxK8sClusters: -1,
+    ssoEnabled: false,
+    rateLimitReplenish: 100,
+    rateLimitBurst: 200,
+  },
+  usersUsed: 1,
+  createdAt: '2024-01-01T00:00:00Z',
+}
+
+function mockApiFetch(
+  connectionsResponse: PageResult<ScmConnection> = EMPTY_CONNECTIONS,
+  counts: Record<string, number> = {},
+) {
+  vi.mocked(apiFetch).mockImplementation((path: string) => {
+    if (path.includes('/auth/tenant')) return Promise.resolve(MOCK_TENANT)
+    if (path.includes('k8s')) return Promise.resolve(EMPTY_CLUSTERS)
+    if (path.includes('counts-by-connection')) return Promise.resolve({ counts })
+    return Promise.resolve(connectionsResponse)
+  })
+}
 
 function renderPage() {
   const client = new QueryClient({
@@ -75,7 +107,7 @@ describe('ConnectionsPage', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('renders all provider names', async () => {
-    vi.mocked(apiFetch).mockResolvedValue(EMPTY_CONNECTIONS)
+    mockApiFetch(EMPTY_CONNECTIONS)
     renderPage()
     await screen.findByText('GitHub')
     expect(screen.getByText('Azure DevOps')).toBeInTheDocument()
@@ -83,7 +115,7 @@ describe('ConnectionsPage', () => {
   })
 
   it('shows "Coming soon" badge for inactive providers', async () => {
-    vi.mocked(apiFetch).mockResolvedValue(EMPTY_CONNECTIONS)
+    mockApiFetch(EMPTY_CONNECTIONS)
     renderPage()
     await screen.findByText('GitHub')
     const badges = screen.getAllByText('Coming soon')
@@ -91,7 +123,7 @@ describe('ConnectionsPage', () => {
   })
 
   it('shows Connect button for active unconnected providers', async () => {
-    vi.mocked(apiFetch).mockResolvedValue(EMPTY_CONNECTIONS)
+    mockApiFetch(EMPTY_CONNECTIONS)
     renderPage()
     await screen.findByText('GitHub')
     const connectButtons = screen.getAllByRole('button', { name: /^connect$/i })
@@ -99,48 +131,33 @@ describe('ConnectionsPage', () => {
   })
 
   it('shows Connected badge and Manage button when GitHub is connected', async () => {
-    vi.mocked(apiFetch).mockImplementation((path: string) => {
-      if (path.includes('k8s')) return Promise.resolve({ items: [], total: 0, limit: 20, offset: 0 })
-      return Promise.resolve(WITH_GITHUB)
-    })
+    mockApiFetch(WITH_GITHUB)
     renderPage()
     await screen.findByText('Connected')
     expect(screen.getByRole('button', { name: /manage/i })).toBeInTheDocument()
   })
 
   it('shows sync subtitle with date when lastSyncAt is set', async () => {
-    vi.mocked(apiFetch).mockResolvedValue(WITH_GITHUB)
+    mockApiFetch(WITH_GITHUB)
     renderPage()
     expect(await screen.findByText(/synced/i)).toBeInTheDocument()
   })
 
   it('shows service count in sync subtitle', async () => {
-    vi.mocked(apiFetch).mockImplementation((path: string) => {
-      if (path.includes('counts-by-connection'))
-        return Promise.resolve({ counts: { 'conn-gh': 7 } })
-      return Promise.resolve(WITH_GITHUB)
-    })
+    mockApiFetch(WITH_GITHUB, { 'conn-gh': 7 })
     renderPage()
     expect(await screen.findByText(/7 services/i)).toBeInTheDocument()
   })
 
   it('shows singular "service" when count is 1', async () => {
-    vi.mocked(apiFetch).mockImplementation((path: string) => {
-      if (path.includes('counts-by-connection'))
-        return Promise.resolve({ counts: { 'conn-gh': 1 } })
-      return Promise.resolve(WITH_GITHUB)
-    })
+    mockApiFetch(WITH_GITHUB, { 'conn-gh': 1 })
     renderPage()
     expect(await screen.findByText(/\b1 service\b/)).toBeInTheDocument()
     expect(screen.queryByText(/1 services/)).not.toBeInTheDocument()
   })
 
   it('shows "0 services" when connection has no services', async () => {
-    vi.mocked(apiFetch).mockImplementation((path: string) => {
-      if (path.includes('counts-by-connection'))
-        return Promise.resolve({ counts: {} })
-      return Promise.resolve(WITH_GITHUB)
-    })
+    mockApiFetch(WITH_GITHUB, {})
     renderPage()
     expect(await screen.findByText(/0 services/i)).toBeInTheDocument()
   })
@@ -152,7 +169,7 @@ describe('ConnectionsPage', () => {
       limit: 20,
       offset: 0,
     }
-    vi.mocked(apiFetch).mockResolvedValue(noSync)
+    mockApiFetch(noSync)
     renderPage()
     expect(await screen.findByText('Never synced')).toBeInTheDocument()
   })
@@ -164,10 +181,7 @@ describe('ConnectionsPage', () => {
       limit: 20,
       offset: 0,
     }
-    vi.mocked(apiFetch).mockImplementation((path: string) => {
-      if (path.includes('k8s')) return Promise.resolve({ items: [], total: 0, limit: 20, offset: 0 })
-      return Promise.resolve(failed)
-    })
+    mockApiFetch(failed)
     renderPage()
     expect(await screen.findByText('Sync failed')).toBeInTheDocument()
     expect(screen.queryByText('Connected')).not.toBeInTheDocument()
@@ -180,17 +194,14 @@ describe('ConnectionsPage', () => {
       limit: 20,
       offset: 0,
     }
-    vi.mocked(apiFetch).mockImplementation((path: string) => {
-      if (path.includes('k8s')) return Promise.resolve({ items: [], total: 0, limit: 20, offset: 0 })
-      return Promise.resolve(failed)
-    })
+    mockApiFetch(failed)
     renderPage()
     expect(await screen.findByText(/GitHub sync failed/i)).toBeInTheDocument()
     expect(screen.getAllByText(/401 UNAUTHORIZED/).length).toBeGreaterThan(0)
   })
 
   it('opens dialog when Connect is clicked', async () => {
-    vi.mocked(apiFetch).mockResolvedValue(EMPTY_CONNECTIONS)
+    mockApiFetch(EMPTY_CONNECTIONS)
     renderPage()
     await screen.findByText('GitHub')
     fireEvent.click(screen.getAllByRole('button', { name: /^connect$/i })[0])
@@ -198,10 +209,7 @@ describe('ConnectionsPage', () => {
   })
 
   it('opens dialog when Manage is clicked', async () => {
-    vi.mocked(apiFetch).mockImplementation((path: string) => {
-      if (path.includes('k8s')) return Promise.resolve({ items: [], total: 0, limit: 20, offset: 0 })
-      return Promise.resolve(WITH_GITHUB)
-    })
+    mockApiFetch(WITH_GITHUB)
     renderPage()
     await screen.findByText('Connected')
     fireEvent.click(screen.getByRole('button', { name: /manage/i }))
