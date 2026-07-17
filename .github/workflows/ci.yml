@@ -20,10 +20,13 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE="origin/${{ github.base_ref }}"
+            CHANGED=$(git diff $BASE --name-only)
+          elif [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            # First push on a new branch/ref — no prior commit to diff against; treat everything as changed.
+            CHANGED=$(git diff --name-only $(git hash-object -t tree /dev/null))
           else
-            BASE="HEAD~1"
+            CHANGED=$(git diff "${{ github.event.before }}" "${{ github.sha }}" --name-only)
           fi
-          CHANGED=$(git diff $BASE --name-only)
           echo "──────────────────────────────────────"
           echo "Changed files:"
           echo "$CHANGED"
@@ -214,10 +217,13 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE="origin/${{ github.base_ref }}"
+            CHANGED=$(git diff $BASE --name-only)
+          elif [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            # First push on a new branch/ref — no prior commit to diff against; treat everything as changed.
+            CHANGED=$(git diff --name-only $(git hash-object -t tree /dev/null))
           else
-            BASE="HEAD~1"
+            CHANGED=$(git diff "${{ github.event.before }}" "${{ github.sha }}" --name-only)
           fi
-          CHANGED=$(git diff $BASE --name-only)
           echo "──────────────────────────────────────"
           echo "Changed files:"
           echo "$CHANGED"
@@ -283,10 +289,13 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE="origin/${{ github.base_ref }}"
+            CHANGED=$(git diff $BASE --name-only)
+          elif [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            # First push on a new branch/ref — no prior commit to diff against; treat everything as changed.
+            CHANGED=$(git diff --name-only $(git hash-object -t tree /dev/null))
           else
-            BASE="HEAD~1"
+            CHANGED=$(git diff "${{ github.event.before }}" "${{ github.sha }}" --name-only)
           fi
-          CHANGED=$(git diff $BASE --name-only)
           echo "──────────────────────────────────────"
           echo "Changed files:"
           echo "$CHANGED"

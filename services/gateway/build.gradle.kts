@@ -22,6 +22,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-opentelemetry")
     implementation("io.opentelemetry:opentelemetry-exporter-otlp")
+    // alpha dependency, see ADR-0026 — verify log/trace correlation manually on any version bump
     implementation("io.opentelemetry.instrumentation:opentelemetry-logback-appender-1.0:2.20.0-alpha")
     implementation("org.springframework.boot:spring-boot-starter-validation")
 

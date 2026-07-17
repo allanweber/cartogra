@@ -24,14 +24,14 @@ The Shared Kernel contains the narrow set of types that must be identical across
 | Class | Purpose |
 |---|---|
 | `EventEnvelope<P>` | Generic Kafka message wrapper; factory method `of(eventType, entityId, tenantId, version, payload)` generates `eventId` via UUIDv5 |
-| `UuidV5` | Deterministic UUID-v5 generation (SHA-1 namespace + name); used for `eventId` deduplication |
+| `UuidV5` | Deterministic UUID-v5 generation (SHA-1 namespace + name); used to compute `eventId` — suitable as a dedup key but not currently read by any consumer |
 | `SyncCommandPayload` | Payload record for `cartogra.registry.sync.command`; fields: `connectionId`, `tenantId`, `providerType`, `connectionConfig` (Map) |
 
 **`EventEnvelope<P>` fields:**
 
 | Field | Type | Notes |
 |---|---|---|
-| `eventId` | UUID | UUIDv5 — deterministic per entity+type+instant; consumer idempotency key |
+| `eventId` | UUID | UUIDv5 salted with the publish-time instant — unique per `of()` call, but stable across Kafka-level redelivery of the same message (redelivery resends the already-serialized `eventId`, it isn't recomputed). Suitable as a redelivery dedup key, but **no consumer currently reads or checks it** — it is not an active idempotency mechanism today. |
 | `eventType` | String | `domain.entity.action` e.g. `service.registered` |
 | `entityId` | UUID | Primary entity |
 | `tenantId` | UUID | Tenant isolation |

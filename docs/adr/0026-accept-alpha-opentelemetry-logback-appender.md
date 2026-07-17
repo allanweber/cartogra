@@ -1,0 +1,11 @@
+# Accept `opentelemetry-logback-appender-1.0` as a permanently-alpha dependency
+
+All three real backend services (`gateway`, `ingestion`, `registry`) pin the identical line `implementation("io.opentelemetry.instrumentation:opentelemetry-logback-appender-1.0:2.20.0-alpha")`, used to stamp `traceId`/`spanId` onto structured JSON logs for log/trace correlation. It ships in production, not scoped to test-only usage.
+
+Checked Maven Central's `maven-metadata.xml` for this exact artifact (`repo1.maven.org/maven2/io/opentelemetry/instrumentation/opentelemetry-logback-appender-1.0/`) live on 2026-07-16: every release ever published — 61+ versions spanning `1.10.0-alpha` through the current latest, `2.29.0-alpha` — carries the `-alpha` suffix. There is no stable release track for this artifact to bump to; this isn't a lagging pin, it's the only kind of release that exists. This matches the OpenTelemetry Java instrumentation project's broader convention: logging-framework appender bridges instrument third-party internals (Logback's `Appender` SPI here) rather than a stable OTel API surface, so they're kept in the alpha tier indefinitely by design, unlike e.g. the core SDK or the stable semantic-conventions artifacts.
+
+Given that, the only two real options were staying on the current alpha pin or bumping to a newer alpha (`2.29.0-alpha` is available) purely for currency, which trades a known-working pin for an unforced compatibility risk with no stability guarantee either way. We accept the current pin (`2.20.0-alpha`, identical across all three services) as a deliberate, documented tradeoff rather than an unnoticed one, instead of chasing alpha releases for no functional gain.
+
+## Consequences
+
+Any future bump of this specific artifact — including routine-looking Dependabot/Renovate PRs — needs manual verification that structured logs still carry `traceId`/`spanId` correctly, not just a green build, because alpha releases in this instrumentation family have no backward-compatibility guarantee between versions. The `build.gradle.kts` line in all three services carries a comment pointing back to this ADR so a future reviewer doesn't have to rediscover this context. If OpenTelemetry ever ships a stable (non-`-alpha`) release of this artifact, that supersedes this ADR and the pin should move immediately.
