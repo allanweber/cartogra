@@ -1,15 +1,5 @@
 # Cartogra — Execution Checklist
 
-
-## Phase 1 — Gateway MVP auth + Registry
-
-### Phase 1 Gate
-
-
-- [ ] [GATE] Phase 1 screens have passed `/impeccable audit`.
-- [ ] [GATE] Phase 1 screens have passed `/improve`.
----
-
 ## Phase 2 — Topology service
 
 ### System design and UX — Phase 2
