@@ -23,6 +23,11 @@ The Frontend Shell is Cartogra's single-page application. It renders the service
 | **Tenant context** | The `currentTenantId` from `useTenantStore`; injected as `X-Tenant-Id` header on every API call |
 | **Mock data** | Static fixtures in `src/lib/mock-data.ts`; used while real API wiring is pending (task 1.64) |
 | **Command palette** | Keyboard-driven search overlay (cmdk); accessible via `Ctrl+K` / `Cmd+K` |
+| **Inspector panel** | The right-side panel on the Graph page; tabs react to node selection (Details, Blast Radius) plus one tenant-wide tab (Drift) that needs no selection |
+| **Edge mode** | The Graph page's unified edge-visibility control: All / Declared only / Observed only / Drift only — replaces having separate declared-vs-observed and drift toggles |
+| **Standing badge** | A node/edge visual marker (SPOF badge, cycle dashed-edge) that is always rendered when the underlying condition holds — never toggle-gated, unlike Edge mode |
+
+Confirmed Phase 2 design brief: [docs/design/phase-2-dependency-graph.md](../docs/design/phase-2-dependency-graph.md).
 
 ---
 
@@ -61,9 +66,9 @@ All authenticated routes are children of `_authenticated` which calls `fetchSess
 | `/_authenticated/dashboard` | `routes/_authenticated/dashboard.tsx` | Live (mock data) |
 | `/_authenticated/catalog` | `routes/_authenticated/catalog.index.tsx` | Live (mock data) |
 | `/_authenticated/catalog/$serviceId` | `routes/_authenticated/catalog.$serviceId.tsx` | Live (mock data) |
-| `/_authenticated/graph` | Phase placeholder | Planned (Phase 2) |
+| `/_authenticated/graph` | Phase placeholder | Planned (Phase 2) — design brief confirmed, see below |
 | `/_authenticated/contracts` | Phase placeholder | Planned (Phase 3) |
-| `/_authenticated/risks` | Phase placeholder | Planned (Phase 3) |
+| `/_authenticated/risks` | Live (mock data) | Design brief confirmed for real API wiring (Phase 2) |
 | `/_authenticated/intelligence` | Phase placeholder | Planned (Phase 4) |
 | `/_authenticated/teams` | Phase placeholder | Planned (Phase 1+) |
 | `/_authenticated/timeline` | Phase placeholder | Planned (Phase 1+) |

@@ -79,10 +79,10 @@
 | Upstream (U) | Downstream (D) | Relationship | Integration point |
 |---|---|---|---|
 | Identity & Access | Service Catalog | **Open Host Service / Conformist** | Declarative reverse proxy (Spring Cloud Gateway route, circuit-breaker guarded); Gateway forwards `X-Tenant-Id` derived from JWT |
-| Identity & Access | Topology | Open Host Service / Conformist | Declarative reverse proxy (Phase 2 — route not yet created) |
+| Identity & Access | Topology | Open Host Service / Conformist | Declarative reverse proxy (route created 2.2; no endpoints behind it yet — those land in 2.3+) |
 | Identity & Access | Contract | Open Host Service / Conformist | Declarative reverse proxy (Phase 3 — route not yet created) |
 | Identity & Access | Intelligence | Open Host Service / Conformist | Declarative reverse proxy (Phase 4 — route not yet created) |
-| Service Catalog (U) | Topology (D) | **Customer / Supplier** | Kafka `cartogra.registry.service.{registered,updated,deleted}` |
+| Service Catalog (U) | Topology (D) | **Customer / Supplier** | Kafka `cartogra.registry.service.{registered,updated,deleted}`, plus `ownership-changed` (orphan risk flagging only — ADR-0027) |
 | Service Catalog (U) | Contract (D) | Customer / Supplier | Kafka `cartogra.registry.service.deleted` |
 | Service Catalog (U) | Intelligence (D) | Customer / Supplier | Kafka registry events |
 | Ingestion (U) | Service Catalog (D) | **Published Language** | Kafka `cartogra.ingestion.service.discovered`, `ownership.resolved` |
@@ -96,6 +96,7 @@
 - Gateway strips any client-supplied `X-Tenant-Id` / `X-User-Id` before forwarding — protecting all downstream contexts from tenant spoofing.
 - Each Kafka consumer extracts `traceparent` via `W3CTraceContextPropagator` — trace context never bleeds across context boundaries unintentionally.
 - Cross-context references store IDs only (e.g. Topology stores `source_service_id` as a UUID, never a hydrated `Service` object from the Catalog context).
+- Exception: Topology mirrors `team_id` from Registry's `ownership-changed` event solely to flag orphan risk on `/v1/risks` — a narrow, documented deviation (ADR-0027), not a general hydration path.
 
 ---
 

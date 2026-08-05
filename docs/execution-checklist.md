@@ -4,11 +4,11 @@
 
 ### System design and UX — Phase 2
 
-- [ ] 2.1 [UI] Run `/shape dependency graph` to produce a confirmed design brief for the D3 graph view, blast radius panel, SPOF findings, cycle warnings, drift overlay, and Risks page before writing any Phase 2 UI code.
+- [x] 2.1 [UI] Run `/shape dependency graph` to produce a confirmed design brief for the D3 graph view, blast radius panel, SPOF findings, cycle warnings, drift overlay, and Risks page before writing any Phase 2 UI code. See `docs/design/phase-2-dependency-graph.md`.
 
 ### Topology foundation
 
-- [ ] 2.2 [CODE] Topology service skeleton + persistence. Spring Data JDBC, Flyway, OTel, virtual threads. Migrations: `V001__create_dependencies.sql` (declared + observed edges, tenant isolation, self-edge guard, indexes), `V002__create_dependency_drifts.sql` (resolution fields), `V003__create_dependency_graph_view.sql` (materialized view + indexes + documented refresh strategy with debounce + advisory lock). Repositories for insert/update/delete, observed-edge enrichment, drift persistence. Hexagonal layout matching registry.
+- [x] 2.2 [CODE] Topology service skeleton + persistence. Spring Data JDBC, Flyway, OTel, virtual threads. Migrations: `Vxxx__create_dependencies.sql` (declared + observed edges, tenant isolation, self-edge guard, indexes), `Vxxx__create_dependency_drifts.sql` (resolution fields), `Vxxx__create_dependency_graph_view.sql` (materialized view + indexes + documented refresh strategy with debounce + advisory lock). Repositories for insert/update/delete, observed-edge enrichment, drift persistence. Hexagonal layout matching registry.
 
 ### Graph features (each one is a vertical: API + UI + tests + OpenAPI)
 

@@ -40,6 +40,16 @@ spring:
                     id: registry
                     fallbackPath: /internal/fallback/registry
                     statusCodes: 500,501,502,503,504
+            - id: topology
+              uri: ${TOPOLOGY_URI:http://localhost:8082}
+              predicates:
+                - Path=/api/v1/topology/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    id: topology
+                    fallbackPath: /internal/fallback/topology
+                    statusCodes: 500,501,502,503,504
 
 server:
   port: 8080
@@ -94,6 +104,8 @@ resilience4j:
       registry:
         base-config: default
       ingestion:
+        base-config: default
+      topology:
         base-config: default
 
 app:

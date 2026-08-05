@@ -26,5 +26,6 @@ include(
     "shared:test-support",
     "services:gateway",
     "services:registry",
-    "services:ingestion"
+    "services:ingestion",
+    "services:topology"
 )
