@@ -36,7 +36,7 @@ The old checklist broke each of these; that is why it stopped being usable.
 3. **No screen ships on mock data.** A story that adds a screen removes its `MOCK_*` import.
 4. **No topic without a consumer.** Producers are written when the consumer exists, not before.
 5. **No story on data that does not exist.** If a story needs a column, an API, or an event that is not implemented, the story that creates it comes first — explicitly.
-6. **Marketing is not a phase gate.** Content is a separate track (§12); it never blocks a release.
+6. **Content is listed, never gating.** Every phase names the posts worth writing when it ships — as many as the work earns, sometimes none. They sit outside the gate checklist and never block a release.
 7. **Done means demoable.** Every phase ends with a scripted demo a stranger could follow.
 
 ---
@@ -54,6 +54,18 @@ No user-facing value. It exists because the next phases are unverifiable without
 - **0.4 — Docs match code.** `CONTEXT-MAP.md` topology status; `services/registry/CONTEXT.md` (claims V001–V011 and an `application/usecase` layer that no longer exists); `kafka-topics.md` cut to the 8 real topics with the rest moved to a clearly-marked "proposed" appendix; drop the "Notification worker" context that is not a module.
   *Done:* every table, topic, and package named in docs exists in code.
 - **0.5 — Retire the old checklist.** Banner at the top of `docs/execution-checklist.md` pointing here.
+
+**Gate**
+
+- [ ] A deliberate compile error in `services/topology` fails CI; a topology coverage report uploads like registry's.
+- [ ] Every `ADR-00xx` reference in the repo resolves to a file that exists.
+- [ ] Every table, topic, and package named in `CONTEXT-MAP.md`, the service `CONTEXT.md` files, and `kafka-topics.md` exists in code.
+- [ ] `docs/execution-checklist.md` carries the superseded banner.
+
+**Worth writing about**
+
+- *Your backlog is lying to you* — auditing an LLM-written roadmap against the code: items already shipped still open, stories citing APIs that were never written. (article)
+- Deleting ADRs breaks more than docs: 40 dangling references and public posts pointing at files that no longer exist. (short post)
 
 ---
 
@@ -73,6 +85,19 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 **Demo:** register three services, draw two edges, open `/graph`, click a node, see its neighbours.
 
+**Gate**
+
+- [ ] Replaying a `service.registered` envelope is a no-op; `service.deleted` soft-deletes the node — both proven by ITs.
+- [ ] `/graph` renders a 20-service, 30-edge tenant without freezing, on hardware named in the doc.
+- [ ] `MOCK_GRAPH_NODES` and `MOCK_GRAPH_EDGES` are deleted from the repo.
+- [ ] `docs/api/topology.openapi.yaml` matches the implemented routes exactly — no path documented that does not exist.
+
+**Worth writing about**
+
+- Building a read model from Kafka events instead of calling the owning service synchronously. (article)
+- UUIDv5 plus a dedupe table: making a projection survive replay. (thread)
+- A force-directed graph in plain D3, and why we did not reach for Cytoscape. (short post + clip)
+
 ---
 
 ## 5. Phase 2 — Answer impact questions (≈4 weeks)
@@ -89,6 +114,20 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 **Demo:** "if payments-api goes down, what breaks?" answered in one click, with the owning teams listed.
 
+**Gate**
+
+- [ ] Blast radius returns exactly the fixture's known fan-out; a 3-node cycle terminates; depth cap and truncation flag both exercised.
+- [ ] Cycles are rotation-deduplicated; the SPOF threshold and its rationale travel in the response payload.
+- [ ] Risks page runs on `GET /v1/risks`; `MOCK_RISKS` is deleted.
+- [ ] p95 for graph read and blast radius recorded in `topology-performance.md` with the hardware named.
+
+**Worth writing about**
+
+- Blast radius in one recursive CTE: the SQL, the cycle guard, the depth cap. (deep dive)
+- Materialized view + advisory lock + debounce: refreshing a graph without stalling writers. (article)
+- A SPOF score is a heuristic, not a fact — so publish the threshold in the API response. (short post)
+- 60-second clip: click a service, see what breaks. (video)
+
 ---
 
 ## 6. Phase 3 — The map maintains itself (≈5 weeks)
@@ -101,6 +140,19 @@ No user-facing value. It exists because the next phases are unverifiable without
 - **3.4 — Topology events *(only if a consumer exists)*.** `dependency.declared/observed/removed` and `drift.detected` are **deferred to Phase 6**, where Intelligence consumes them. Rule 4.
 
 **Demo:** run the seed traffic generator, watch an edge appear on the graph that nobody declared, resolve the drift.
+
+**Gate**
+
+- [ ] A synthetic span fixture produces an observed edge with no live collector running.
+- [ ] Declared-without-observed and observed-without-declared drift are both raised; accept / remove / dismiss all covered by ITs.
+- [ ] An ownership event updates `graph_nodes.team_id`, and the resulting orphan appears in `GET /v1/risks`.
+- [ ] No new Kafka topic exists without a consumer — topology lifecycle events remain deferred.
+
+**Worth writing about**
+
+- Declared versus observed dependencies: the gap between them *is* the product. (article)
+- Turning OTel spans into graph edges: peer resolution, sampling, and what you deliberately throw away. (deep dive)
+- Drift as a workflow, not an alert. (short post)
 
 ---
 
@@ -115,6 +167,21 @@ No user-facing value. It exists because the next phases are unverifiable without
 - **4.5 — One public environment.** Cheapest thing that holds the demo: the existing `docker-compose.yml` on a single host behind TLS on `cartogra.dev`, documented in `docs/runbooks/deployment.md`. Kubernetes waits for Phase 7 — do not build a cluster to host a demo.
 
 **Demo:** send someone a link. They browse Acme Fintech, run a blast radius, and cannot change anything.
+
+**Gate**
+
+- [ ] A public URL serves the Acme tenant over TLS, and the runbook rebuilds that host from scratch.
+- [ ] Guest token reads succeed and every mutating endpoint returns 403 — the IT enumerates the routes rather than sampling them.
+- [ ] Dashboard and Timeline mocks deleted; `mock-data.ts` retains only fixtures for unshipped screens.
+- [ ] The seed loader run twice leaves identical state.
+- [ ] Audit events are written by both registry and topology mutations; the admin list is paginated.
+
+**Worth writing about**
+
+- A cross-service audit trail through one port and one topic — no shared table. (article)
+- Guest mode without an anonymous auth path. (short post)
+- Seed data as product storytelling: designing a fake company that shows real value. (article)
+- The demo link itself, with the three questions it answers. (launch-ish post)
 
 ---
 
@@ -133,6 +200,23 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 **Demo:** open a PR that deletes a required field; CI fails with the affected consumers named; Slack shows it.
 
+**Gate**
+
+- [ ] A PR deleting a required field fails the GitHub Action; a compatible change passes.
+- [ ] API key scopes enforced (missing `ci:check` → 403); keys hashed at rest; revocation takes effect immediately.
+- [ ] Golden diff tests cover OpenAPI and AsyncAPI, compatible and breaking pairs.
+- [ ] Slack delivery logged with retry and backoff; the failure path is recorded, not silent.
+- [ ] Spec discovery is idempotent on `(tenant_id, file_path, content_sha256)`.
+- [ ] `MOCK_CONTRACTS` is deleted.
+
+**Worth writing about**
+
+- Structured diffs over JSON specs: canonicalization, `spec_hash`, and why text diff fails. (deep dive)
+- The breaking-change rule set, in full, with the cases we chose not to flag. (article)
+- Hashing and scoping tenant API keys. (short post)
+- Shipping a GitHub Action that blocks a merge on your own API. (article)
+- Screen recording: PR blocked, affected consumers named. (video)
+
 ---
 
 ## 9. Phase 6 — Intelligence (≈5 weeks)
@@ -149,6 +233,23 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 **Cut from the old plan, with reasons:** *AI ownership suggestions* assumed `ScmProvider.getCommitHistory` — the interface has `getLastCommit` only, so the prerequisite is a new SCM API and 90 days of commit aggregation; it is not a story until someone builds that. *Anomaly detection* assumed `services.last_deploy_at` history — no such column, no deploy-event ingestion, no history table. Both return as candidates once their data sources exist.
 
+**Demo:** ask "which services have no owner and the most dependents?" in plain English; get the answer, the evidence, and the generated SQL.
+
+**Gate**
+
+- [ ] Three anti-pattern types produce findings with structured evidence on fixtures.
+- [ ] The narrative layer cites only fields present in the evidence payload — a test asserts no invented service or team names.
+- [ ] The NL eval set passes its documented bar; unsafe SQL cases are rejected, not sanitized.
+- [ ] Token count and latency persisted per AI request and visible in Grafana.
+
+**Worth writing about**
+
+- Evidence first, narrative second: letting an LLM explain without letting it invent. (article)
+- Natural language over PostgreSQL with allowlists, bound parameters, row limits and timeouts. (deep dive)
+- Tracking tokens and latency per tenant request. (short post)
+- The trust model users need before they believe an AI finding. (article)
+- NL query demo against the live Acme tenant. (video)
+
 ---
 
 ## 10. Phase 7 — Production hardening (≈5 weeks)
@@ -164,6 +265,23 @@ Triggered by real users, not by a calendar. Before this, Phase 4's single host i
 - **7.7** Playwright E2E (guest browse, graph exploration, contract check, one NL query) + k6 thresholds committed under `perf/results/`.
 - **7.8** Docs site with the ADR index and runbooks.
 
+**Demo:** kill a pod mid-demo; readiness pulls it, Grafana shows it, nothing user-visible breaks.
+
+**Gate**
+
+- [ ] Staging rebuilt from the docs alone, by following the runbook and nothing else.
+- [ ] `:smoke:test` gates the deploy — a failing readiness probe blocks it.
+- [ ] Poison message → DLQ → replay, with audit rows for the replay.
+- [ ] A direct call to a service bypassing the gateway is rejected (NetworkPolicy + service-token IT).
+- [ ] Playwright and k6 thresholds enforced in CI, not advisory.
+
+**Worth writing about**
+
+- Flyway in a multi-service monorepo sharing one Postgres. (article)
+- The observability stack that answers "what is broken" in under a minute. (deep dive)
+- Before/after k6 numbers from index and MV tuning. (short post)
+- A real DLQ incident — only if one happens, and only if the write-up is honest. (post)
+
 ---
 
 ## 11. Phase 8 — Commercial (only when someone wants to pay)
@@ -176,11 +294,25 @@ Partially built already: `billing_plans` (V010/V013), `tenants.plan_id` (V011), 
 
 Moved out of the old Phase 3 because none of it tests the product hypothesis, and all of it blocked contract work behind Stripe.
 
+**Demo:** a new tenant subscribes, exceeds the free service limit, and is upgraded through the portal without support involvement.
+
+**Gate**
+
+- [ ] Checkout → active subscription → portal → webhook update, end to end, with signature verification.
+- [ ] Overage returns 402 in the standard envelope; the cached plan tier invalidates correctly.
+- [ ] GDPR erase produces a signed receipt, anonymizes users and audit events, and schedules the hard delete.
+
+**Worth writing about**
+
+- Metering a B2B platform on plan limits that already existed in the schema. (article)
+- The full data-architecture retrospective: the schema at launch versus the schema on day one. (deep dive)
+- Launch post with the live demo link and the how-to-try-it path. (post)
+
 ---
 
 ## 12. Not in the plan
 
-**Content track (parallel, never blocking).** The old checklist carried 31 build-in-public items — a third of all remaining work — and made phase gates depend on them. Write posts when a phase ships something worth showing; a missed post never blocks a release.
+**Content is inside the phases now, not here.** The old checklist carried 31 build-in-public items as numbered backlog entries and made every phase gate depend on them ("minimum BIP set shipped"). Each phase above ends with *Worth writing about* — as many pieces as that phase actually earns, sometimes four, sometimes two — sitting outside the gate checklist. Items whose subject got cut (dual-marketplace, one-check-two-CI-systems, the marketplace listing) are gone with it.
 
 **Removed as unexecutable or already done:**
 
