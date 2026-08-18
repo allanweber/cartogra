@@ -1,5 +1,9 @@
 # Cartogra — Execution Checklist
 
+> **Superseded.** The plan of record is [`docs/roadmap.md`](roadmap.md).
+> This file is kept for reference: parts of it are stale (items already shipped), and parts
+> reference code, ADR numbers, and APIs that do not exist. Do not plan work from it.
+
 ## Phase 2 — Topology service
 
 ### System design and UX — Phase 2
