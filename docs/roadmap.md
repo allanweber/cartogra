@@ -39,6 +39,28 @@ The old checklist broke each of these; that is why it stopped being usable.
 6. **Content is listed, never gating.** Every phase names the posts worth writing when it ships — as many as the work earns, sometimes none. They sit outside the gate checklist and never block a release.
 7. **Done means demoable.** Every phase ends with a scripted demo a stranger could follow.
 
+### Definition of done
+
+**Every story, before it merges:**
+
+- `/code-review` on the story's diff — every correctness finding fixed, or answered in the PR with a reason.
+- `/security-review` on the same diff — anything above informational fixed before merge, or recorded as an accepted risk naming the compensating control.
+
+**Every phase, before its gate closes:**
+
+- `/impeccable audit` over every screen the phase created or changed. A phase that touched no UI records that fact rather than skipping silently.
+- `/improve` (shadcn) over the services the phase touched. Its plans get triaged into fix-now / next-phase / won't-do — filed and forgotten does not count as run.
+- `/improve-codebase-architecture` over the same scope. Architectural findings are fixed, or written up as an ADR that says why not.
+
+**Tooling provenance**, so these gates are reproducible by anyone:
+
+| Skill | Where it comes from |
+|---|---|
+| `/code-review`, `/security-review` | Ship with Claude Code — nothing to install |
+| `/improve` | Committed in this repo at `.claude/skills/improve/` (shadcn) |
+| `/impeccable`, `/shape` | External: `npx impeccable install` (see README) |
+| `/improve-codebase-architecture` | **Not present in this repo.** Install or author it as part of Phase 0, and pin the install command in `CONTRIBUTING.md` — otherwise this gate cannot be re-run by anyone but the author |
+
 ---
 
 ## 3. Phase 0 — Make the repo honest (≈1 week)
@@ -54,6 +76,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 - **0.4 — Docs match code.** `CONTEXT-MAP.md` topology status; `services/registry/CONTEXT.md` (claims V001–V011 and an `application/usecase` layer that no longer exists); `kafka-topics.md` cut to the 8 real topics with the rest moved to a clearly-marked "proposed" appendix; drop the "Notification worker" context that is not a module.
   *Done:* every table, topic, and package named in docs exists in code.
 - **0.5 — Retire the old checklist.** Banner at the top of `docs/execution-checklist.md` pointing here.
+- **0.6 — Make the gate tooling installable.** `npx impeccable install` and the `/improve-codebase-architecture` source pinned in `CONTRIBUTING.md`, with versions. A gate nobody else can run is not a gate — this story is what makes the standing checks below honest.
 
 **Gate**
 
@@ -61,6 +84,13 @@ No user-facing value. It exists because the next phases are unverifiable without
 - [ ] Every `ADR-00xx` reference in the repo resolves to a file that exists.
 - [ ] Every table, topic, and package named in `CONTEXT-MAP.md`, the service `CONTEXT.md` files, and `kafka-topics.md` exists in code.
 - [ ] `docs/execution-checklist.md` carries the superseded banner.
+
+*Standing checks (§2 — Definition of done):*
+
+- [ ] Every story in this phase passed `/code-review` and `/security-review` before merge.
+- [ ] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
+- [ ] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
+- [ ] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
 
 **Worth writing about**
 
@@ -92,6 +122,13 @@ No user-facing value. It exists because the next phases are unverifiable without
 - [ ] `MOCK_GRAPH_NODES` and `MOCK_GRAPH_EDGES` are deleted from the repo.
 - [ ] `docs/api/topology.openapi.yaml` matches the implemented routes exactly — no path documented that does not exist.
 
+*Standing checks (§2 — Definition of done):*
+
+- [ ] Every story in this phase passed `/code-review` and `/security-review` before merge.
+- [ ] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
+- [ ] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
+- [ ] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
+
 **Worth writing about**
 
 - Building a read model from Kafka events instead of calling the owning service synchronously. (article)
@@ -121,6 +158,13 @@ No user-facing value. It exists because the next phases are unverifiable without
 - [ ] Risks page runs on `GET /v1/risks`; `MOCK_RISKS` is deleted.
 - [ ] p95 for graph read and blast radius recorded in `topology-performance.md` with the hardware named.
 
+*Standing checks (§2 — Definition of done):*
+
+- [ ] Every story in this phase passed `/code-review` and `/security-review` before merge.
+- [ ] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
+- [ ] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
+- [ ] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
+
 **Worth writing about**
 
 - Blast radius in one recursive CTE: the SQL, the cycle guard, the depth cap. (deep dive)
@@ -147,6 +191,13 @@ No user-facing value. It exists because the next phases are unverifiable without
 - [ ] Declared-without-observed and observed-without-declared drift are both raised; accept / remove / dismiss all covered by ITs.
 - [ ] An ownership event updates `graph_nodes.team_id`, and the resulting orphan appears in `GET /v1/risks`.
 - [ ] No new Kafka topic exists without a consumer — topology lifecycle events remain deferred.
+
+*Standing checks (§2 — Definition of done):*
+
+- [ ] Every story in this phase passed `/code-review` and `/security-review` before merge.
+- [ ] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
+- [ ] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
+- [ ] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
 
 **Worth writing about**
 
@@ -175,6 +226,13 @@ No user-facing value. It exists because the next phases are unverifiable without
 - [ ] Dashboard and Timeline mocks deleted; `mock-data.ts` retains only fixtures for unshipped screens.
 - [ ] The seed loader run twice leaves identical state.
 - [ ] Audit events are written by both registry and topology mutations; the admin list is paginated.
+
+*Standing checks (§2 — Definition of done):*
+
+- [ ] Every story in this phase passed `/code-review` and `/security-review` before merge.
+- [ ] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
+- [ ] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
+- [ ] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
 
 **Worth writing about**
 
@@ -209,6 +267,13 @@ No user-facing value. It exists because the next phases are unverifiable without
 - [ ] Spec discovery is idempotent on `(tenant_id, file_path, content_sha256)`.
 - [ ] `MOCK_CONTRACTS` is deleted.
 
+*Standing checks (§2 — Definition of done):*
+
+- [ ] Every story in this phase passed `/code-review` and `/security-review` before merge.
+- [ ] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
+- [ ] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
+- [ ] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
+
 **Worth writing about**
 
 - Structured diffs over JSON specs: canonicalization, `spec_hash`, and why text diff fails. (deep dive)
@@ -241,6 +306,13 @@ No user-facing value. It exists because the next phases are unverifiable without
 - [ ] The narrative layer cites only fields present in the evidence payload — a test asserts no invented service or team names.
 - [ ] The NL eval set passes its documented bar; unsafe SQL cases are rejected, not sanitized.
 - [ ] Token count and latency persisted per AI request and visible in Grafana.
+
+*Standing checks (§2 — Definition of done):*
+
+- [ ] Every story in this phase passed `/code-review` and `/security-review` before merge.
+- [ ] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
+- [ ] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
+- [ ] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
 
 **Worth writing about**
 
@@ -275,6 +347,13 @@ Triggered by real users, not by a calendar. Before this, Phase 4's single host i
 - [ ] A direct call to a service bypassing the gateway is rejected (NetworkPolicy + service-token IT).
 - [ ] Playwright and k6 thresholds enforced in CI, not advisory.
 
+*Standing checks (§2 — Definition of done):*
+
+- [ ] Every story in this phase passed `/code-review` and `/security-review` before merge.
+- [ ] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
+- [ ] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
+- [ ] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
+
 **Worth writing about**
 
 - Flyway in a multi-service monorepo sharing one Postgres. (article)
@@ -302,6 +381,13 @@ Moved out of the old Phase 3 because none of it tests the product hypothesis, an
 - [ ] Overage returns 402 in the standard envelope; the cached plan tier invalidates correctly.
 - [ ] GDPR erase produces a signed receipt, anonymizes users and audit events, and schedules the hard delete.
 
+*Standing checks (§2 — Definition of done):*
+
+- [ ] Every story in this phase passed `/code-review` and `/security-review` before merge.
+- [ ] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
+- [ ] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
+- [ ] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
+
 **Worth writing about**
 
 - Metering a B2B platform on plan limits that already existed in the schema. (article)
@@ -318,7 +404,6 @@ Moved out of the old Phase 3 because none of it tests the product hypothesis, an
 
 | Old item | Why it is gone |
 |---|---|
-| Gate criteria requiring `/impeccable audit`, `/improve`, `/shape` | External npm-installed skills, not committed to the repo; a gate that cannot be re-run is not a gate |
 | "Write ADR-0016…0021" | Those numbers belong to ADRs deleted in `e6f0b45`; new ADRs start at 0028 |
 | 2.10 full-text search, 2.11 pagination | Already shipped — `to_tsvector` + GIN index (V005), `limit`/`offset` on services and teams, `search` wired in `catalog.index.tsx`. Only audit-event pagination remained, and it moved into 4.1 |
 | Gateway-owned Flyway migrations (API keys, billing) | Gateway has no Flyway and shares the `registry` schema; the plan assumed an ownership split that does not exist |
