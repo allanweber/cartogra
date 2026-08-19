@@ -3,7 +3,7 @@ WORKDIR /app/frontend
 
 ENV PNPM_CONFIG_STRICT_DEP_BUILDS=false
 
-RUN corepack enable && corepack prepare pnpm@10.33.4 --activate
+RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
 
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
@@ -29,7 +29,7 @@ ENV PNPM_CONFIG_STRICT_DEP_BUILDS=false
 # like react at runtime — node_modules must be present in the image.
 # Use the same workspace-root layout as the builder stage so pnpm resolves
 # the workspace correctly, and install production deps only.
-RUN corepack enable && corepack prepare pnpm@10.33.4 --activate
+RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
 
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
@@ -37,11 +37,17 @@ RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Runtime only ever runs `node dist/server/server.js` — strip npm/corepack/npx
-# and their bundled deps (e.g. picomatch, sigstore) to shrink the CVE surface.
+# Runtime only ever runs `node dist/server/server.js` — strip npm/corepack/npx,
+# the corepack-downloaded pnpm tarballs, and the pnpm store, to shrink the CVE
+# surface. The corepack cache is the important one: it holds a full pnpm install
+# whose bundled deps (tar, undici, ip-address, brace-expansion) are what Trivy
+# reports against this image, even though nothing at runtime ever executes pnpm.
 # Must happen after the pnpm install above, which needs corepack/npm.
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
-    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
+    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+    /usr/local/bin/pnpm /usr/local/bin/pnpx /usr/local/bin/yarn /usr/local/bin/yarnpkg \
+    /root/.cache/node/corepack /root/.cache/pnpm /root/.local/share/pnpm /root/.npm \
+    /home/node/.cache/node/corepack /home/node/.local/share/pnpm
 
 COPY --from=builder --chown=node:node /app/frontend/dist ./dist
 
