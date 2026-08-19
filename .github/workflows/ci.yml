@@ -112,9 +112,27 @@ jobs:
             services/gateway/build/test-results/
           retention-days: 14
 
-      # - name: Build & test topology
-      #   if: steps.changes.outputs.topology == 'true'
-      #   run: gradle :services:topology:build --no-daemon
+      - name: Build & test topology
+        if: steps.changes.outputs.topology == 'true'
+        run: gradle :services:topology:build --no-daemon
+
+      - name: Upload topology test reports
+        if: steps.changes.outputs.topology == 'true' && always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: test-reports-topology
+          path: |
+            services/topology/build/reports/tests/
+            services/topology/build/test-results/
+          retention-days: 14
+
+      - name: Upload topology coverage report
+        if: steps.changes.outputs.topology == 'true' && always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage-topology
+          path: services/topology/build/reports/jacoco/test/html/
+          retention-days: 14
 
       # - name: Build & test contract
       #   if: steps.changes.outputs.contract == 'true'
@@ -185,13 +203,13 @@ jobs:
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           row registry     "${{ steps.changes.outputs.registry }}"     "$RUN_URL#artifacts"
           row gateway      "${{ steps.changes.outputs.gateway }}"      "—"
-          row topology     "${{ steps.changes.outputs.topology }}"     "—"
+          row topology     "${{ steps.changes.outputs.topology }}"     "$RUN_URL#artifacts"
           row contract     "${{ steps.changes.outputs.contract }}"     "—"
           row intelligence "${{ steps.changes.outputs.intelligence }}" "—"
           row ingestion    "${{ steps.changes.outputs.ingestion }}"    "$RUN_URL#artifacts"
 
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "> Coverage artifacts (JaCoCo HTML) are uploaded for **registry** and **ingestion** when their tests run. Download from the run's Artifacts section." >> $GITHUB_STEP_SUMMARY
+          echo "> Coverage artifacts (JaCoCo HTML) are uploaded for **registry**, **topology**, and **ingestion** when their tests run. Download from the run's Artifacts section." >> $GITHUB_STEP_SUMMARY
 
           if [ -f trivy-report.txt ]; then
             echo "" >> $GITHUB_STEP_SUMMARY

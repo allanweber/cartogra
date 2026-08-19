@@ -53,8 +53,26 @@ jobs:
             services/gateway/build/test-results/
           retention-days: 14
 
-      # - name: Build & test topology
-      #   run: gradle :services:topology:build --no-daemon
+      - name: Build & test topology
+        run: gradle :services:topology:build --no-daemon
+
+      - name: Upload topology test reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: test-reports-topology
+          path: |
+            services/topology/build/reports/tests/
+            services/topology/build/test-results/
+          retention-days: 14
+
+      - name: Upload topology coverage report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage-topology
+          path: services/topology/build/reports/jacoco/test/html/
+          retention-days: 14
 
       # - name: Build & test contract
       #   run: gradle :services:contract:build --no-daemon
