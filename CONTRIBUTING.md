@@ -77,7 +77,7 @@ Every story's definition of done and every phase gate (`docs/roadmap.md` §2) ca
 | `/code-review`, `/security-review` | Ship with Claude Code | nothing to install |
 | `/improve` | Committed at [`.claude/skills/improve/`](.claude/skills/improve/), sourced from `shadcn/improve` | `npx skills add shadcn/improve -a claude-code -y` — integrity pinned by `computedHash` in [`skills-lock.json`](skills-lock.json) |
 | `/impeccable`, `/shape` | External CLI: [`impeccable`](https://www.npmjs.com/package/impeccable) on npm | `npx impeccable@3.6.0 install` |
-| `/improve-codebase-architecture` | Committed at [`.claude/skills/improve-codebase-architecture/`](.claude/skills/improve-codebase-architecture/), sourced from `mattpocock/skills` | `npx skills add https://github.com/mattpocock/skills/tree/v1.2.3 --skill improve-codebase-architecture -a claude-code -y` — integrity pinned by `computedHash` in [`skills-lock.json`](skills-lock.json) |
+| `/improve-codebase-architecture` | External: `mattpocock/skills`, tag `v1.2.3`, not committed — run before use | `npx skills add https://github.com/mattpocock/skills/tree/v1.2.3 --skill improve-codebase-architecture -a claude-code -y` |
 
 Re-running an install command against a newer tag/version is a deliberate act — bump the pin in this table in the same commit, never as a side effect of unrelated work.
 
