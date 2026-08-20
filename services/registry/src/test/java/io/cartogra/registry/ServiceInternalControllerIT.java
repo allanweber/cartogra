@@ -49,7 +49,7 @@ class ServiceInternalControllerIT {
                 """.formatted(name);
         HttpResponse<String> resp = HTTP.send(
                 HttpRequest.newBuilder()
-                        .uri(URI.create("http://localhost:" + port + "/services"))
+                        .uri(URI.create("http://localhost:" + port + "/api/v1/registry/services"))
                         .header("Content-Type", "application/json")
                         .header("X-Tenant-Id", tenantId.toString())
                         .POST(HttpRequest.BodyPublishers.ofString(body))
@@ -69,7 +69,7 @@ class ServiceInternalControllerIT {
 
         HttpResponse<String> resp = HTTP.send(
                 HttpRequest.newBuilder()
-                        .uri(URI.create("http://localhost:" + port + "/internal/services?limit=1000&offset=0"))
+                        .uri(URI.create("http://localhost:" + port + "/api/v1/registry/internal/services?limit=1000&offset=0"))
                         .GET()
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
@@ -99,7 +99,7 @@ class ServiceInternalControllerIT {
     void paginatesWithLimitAndOffset() throws Exception {
         HttpResponse<String> resp = HTTP.send(
                 HttpRequest.newBuilder()
-                        .uri(URI.create("http://localhost:" + port + "/internal/services?limit=1&offset=0"))
+                        .uri(URI.create("http://localhost:" + port + "/api/v1/registry/internal/services?limit=1&offset=0"))
                         .GET()
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
