@@ -33,9 +33,9 @@ removed — "No producer, no consumer, no module. Violates the project's own no-
 
 | Topic | Producer | Consumers today | Description |
 | ----- | -------- | ---------------- | ----------- |
-| `cartogra.registry.service.registered` | Registry (`ServiceLifecycleEventProducer`) | none | New service created |
-| `cartogra.registry.service.updated` | Registry (`ServiceLifecycleEventProducer`) | none | Service metadata changed |
-| `cartogra.registry.service.deleted` | Registry (`ServiceLifecycleEventProducer`) | none | Service soft-deleted |
+| `cartogra.registry.service.registered` | Registry (`ServiceLifecycleEventProducer`) | Topology (`GraphNodeEventConsumer`) | New service created |
+| `cartogra.registry.service.updated` | Registry (`ServiceLifecycleEventProducer`) | Topology (`GraphNodeEventConsumer`) | Service metadata changed |
+| `cartogra.registry.service.deleted` | Registry (`ServiceLifecycleEventProducer`) | Topology (`GraphNodeEventConsumer`) | Service soft-deleted |
 | `cartogra.registry.team.created` | Registry (`TeamLifecycleEventProducer`) | none | New team added |
 | `cartogra.registry.team.updated` | Registry (`TeamLifecycleEventProducer`) | none | Team renamed |
 | `cartogra.registry.team.deleted` | Registry (`TeamLifecycleEventProducer`) | none | Team deleted |
@@ -51,12 +51,16 @@ removed — "No producer, no consumer, no module. Violates the project's own no-
 
 ### Dead-letter topics
 
-Only the two Registry consumers above have DLQ handling configured (`registry/config/KafkaConfig.java`, a
-`DefaultErrorHandler` with a 3-attempt fixed backoff before recovery). The DLQ topic is the source topic with
-a `.dlq` suffix — **not** the `cartogra.dlq.{suffix}` prefix pattern this document used to describe:
+The two Registry consumers and Topology's `GraphNodeEventConsumer` have DLQ handling configured
+(`{registry,topology}/config/KafkaConfig.java`, a `DefaultErrorHandler` with a 3-attempt fixed backoff before
+recovery). The DLQ topic is the source topic with a `.dlq` suffix — **not** the `cartogra.dlq.{suffix}` prefix
+pattern this document used to describe:
 
 - `cartogra.ingestion.service.discovered.dlq`
 - `cartogra.ingestion.ownership.resolved.dlq`
+- `cartogra.registry.service.registered.dlq`
+- `cartogra.registry.service.updated.dlq`
+- `cartogra.registry.service.deleted.dlq`
 
 Ingestion's own consumer (`SyncCommandConsumer`) has no error handler configured at all — no retry, no DLQ.
 A poison `cartogra.registry.sync.command` message currently blocks that consumer's partition rather than

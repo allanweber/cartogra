@@ -200,6 +200,27 @@ public class JdbcServiceRepository implements ServiceRepository {
     }
 
     @Override
+    public List<Service> findAllActive(int limit, int offset) {
+        String sql = """
+                SELECT * FROM services
+                WHERE deleted_at IS NULL
+                ORDER BY tenant_id, id
+                LIMIT :limit OFFSET :offset
+                """;
+        var params = new MapSqlParameterSource()
+                .addValue("limit", limit)
+                .addValue("offset", offset);
+        return jdbc.query(sql, params, SERVICE_MAPPER);
+    }
+
+    @Override
+    public long countActive() {
+        String sql = "SELECT COUNT(*) FROM services WHERE deleted_at IS NULL";
+        Long result = jdbc.queryForObject(sql, Map.of(), Long.class);
+        return result != null ? result : 0L;
+    }
+
+    @Override
     public void updateHealth(UUID tenantId, UUID id, ServiceHealthStatus status, Instant checkedAt) {
         String sql = """
                 UPDATE services
