@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import tools.jackson.databind.JsonNode;
@@ -34,6 +36,9 @@ class ServiceInternalControllerIT {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private NamedParameterJdbcTemplate jdbcTemplate;
+
     @DynamicPropertySource
     static void datasourceProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url",
@@ -43,7 +48,17 @@ class ServiceInternalControllerIT {
         registry.add("spring.kafka.bootstrap-servers", KafkaTestSupport.KAFKA::getBootstrapServers);
     }
 
+    private void seedTenant(UUID tenantId) {
+        jdbcTemplate.update("""
+                INSERT INTO tenants (tenant_id, name, slug, plan_id)
+                SELECT :tenantId, 'Test Tenant', 'test-tenant-' || :tenantId, (SELECT id FROM billing_plans WHERE slug = 'free')
+                WHERE NOT EXISTS (SELECT 1 FROM tenants WHERE tenant_id = :tenantId)
+                """,
+                new MapSqlParameterSource().addValue("tenantId", tenantId));
+    }
+
     private void createService(UUID tenantId, String name) throws Exception {
+        seedTenant(tenantId);
         String body = """
                 {"name":"%s"}
                 """.formatted(name);
