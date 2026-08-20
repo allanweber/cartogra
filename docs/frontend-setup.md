@@ -92,7 +92,7 @@ All frontend features follow this design-first loop before writing production co
 | `DESIGN.md` | Visual tokens — colors, typography, spacing, elevation | Design system changes |
 | `PRODUCT.md` | Strategic register — users, purpose, personality, anti-references | Product positioning changes |
 
-Both files live at the repository root. The `impeccable` skill reads them automatically on every run via `npx skills add pbakaus/impeccable` (already installed).
+Both files live at the repository root. The `impeccable` skill reads them automatically on every run. Install with `npx impeccable install` (pinned version in [`CONTRIBUTING.md`](../CONTRIBUTING.md#gate-tooling)) — not yet installed in this repo; run it before using `/shape` or `/impeccable craft`.
 
 ### The loop: shape → craft
 
