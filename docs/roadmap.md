@@ -58,8 +58,8 @@ The old checklist broke each of these; that is why it stopped being usable.
 |---|---|
 | `/code-review`, `/security-review` | Ship with Claude Code — nothing to install |
 | `/improve` | Committed in this repo at `.claude/skills/improve/` (shadcn) |
-| `/impeccable`, `/shape` | External: `npx impeccable install` (see README) |
-| `/improve-codebase-architecture` | **Not present in this repo.** Install or author it as part of Phase 0, and pin the install command in `CONTRIBUTING.md` — otherwise this gate cannot be re-run by anyone but the author |
+| `/impeccable`, `/shape` | External: `npx impeccable install`, pinned version in `CONTRIBUTING.md` |
+| `/improve-codebase-architecture` | External (mattpocock), pinned version in `CONTRIBUTING.md` — run before use |
 
 ---
 

@@ -186,7 +186,10 @@ Java 25 · Spring Boot 4 · Spring Data JDBC · PostgreSQL · Apache Kafka · Re
 ```bash
 npx impeccable install
 npx skills add shadcn/improve
+npx skills add https://github.com/mattpocock/skills --skill improve-codebase-architecture
 ```
+
+Pinned versions and the full gate-tooling provenance table live in [`CONTRIBUTING.md`](CONTRIBUTING.md#gate-tooling).
 
 ---
 
