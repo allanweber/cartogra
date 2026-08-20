@@ -6,72 +6,92 @@
 
 All topics are created explicitly. No speculative topics — a topic is created only when its first real producer/consumer exists.
 
+This document was last reconciled against code on 2026-08-20 (Phase 0, story 0.4). Ground truth was the
+producer/consumer code itself (`grep` for `@KafkaListener` and topic constants across `services/*/src/main`),
+not the domain descriptions below, which can drift again — re-run that grep before trusting this file blindly.
+
 ---
 
 ## Implementation Status
 
-| Domain |
-| ------ |
-| Ingestion (repository, spec, dependency observed, scm_connection) |
-| Registry (service registered/updated/deleted, team) |
-| Topology (graph updated, drift detected, cycle detected) |
-| Contract (check passed/failed, version published) |
-| Notification (sent) |
-| Intelligence (digest generated, alert raised) |
+| Domain | Real topics today | Notes |
+| ------ | ------------------ | ----- |
+| Registry | 6 (service ×3, team ×3) | All produced; none consumed yet — Topology/Intelligence, the planned consumers, don't exist |
+| Ingestion | 4 (`service.discovered`, `ownership.resolved`, `sync.completed`, `sync.command`) | `service.discovered` and `ownership.resolved` are consumed by Registry; `sync.completed` has no consumer; `sync.command` is produced *and* consumed inside Ingestion itself despite its `registry.` prefix — see below |
+| Topology | 0 | Service has schema + CI + IT harness only (Phase 0); no service class, controller, producer, or consumer exists |
+| Contract, Intelligence | 0 | Empty directories — no code at all |
+
+There is no "Notification" domain and no "Notification worker" module. An earlier version of this document
+carried a Notification domain with a `cartogra.notification.sent` topic; `docs/roadmap.md` §12 records it as
+removed — "No producer, no consumer, no module. Violates the project's own no-speculative-topics rule."
 
 ---
 
-## Topic Catalog
+## Topic Catalog — real (a producer exists in code)
 
 ### Registry domain
 
-| Topic | Producer | Consumers | Description | Consuming ? |
-| ----- | -------- | --------- | ----------- | ----------- |
-| `cartogra.registry.service.registered` | Registry | Topology, Intelligence | New service created | NO |
-| `cartogra.registry.service.updated` | Registry | Topology, Intelligence | Service metadata changed | NO |
-| `cartogra.registry.service.deleted` | Registry | Topology, Contract, Intelligence | Service soft-deleted | NO |
-| `cartogra.registry.team.created` | Registry | — | New team added | NO |
-| `cartogra.registry.team.updated` | Registry | — | Team updated | NO |
-| `cartogra.registry.team.deleted` | Registry | — | Team deleted | NO |
+| Topic | Producer | Consumers today | Description |
+| ----- | -------- | ---------------- | ----------- |
+| `cartogra.registry.service.registered` | Registry (`ServiceLifecycleEventProducer`) | none | New service created |
+| `cartogra.registry.service.updated` | Registry (`ServiceLifecycleEventProducer`) | none | Service metadata changed |
+| `cartogra.registry.service.deleted` | Registry (`ServiceLifecycleEventProducer`) | none | Service soft-deleted |
+| `cartogra.registry.team.created` | Registry (`TeamLifecycleEventProducer`) | none | New team added |
+| `cartogra.registry.team.updated` | Registry (`TeamLifecycleEventProducer`) | none | Team renamed |
+| `cartogra.registry.team.deleted` | Registry (`TeamLifecycleEventProducer`) | none | Team deleted |
 
 ### Ingestion domain
 
-| Topic | Producer | Consumers | Description | Consuming ? |
-| ----- | -------- | --------- | ----------- | ----------- |
-| `cartogra.ingestion.ownership.resolved` | Ingestion | Registry | Ownership of repository detected | YES |
-| `cartogra.ingestion.service.discovered` | Ingestion | Registry | A service discovered either via scm sync job or K8s worker | YES |
-| `cartogra.ingestion.sync.completed` | Ingestion | - | A scheduled sync job was completed | NO |
-| `cartogra.ingestion.spec.updated` | Ingestion | Contract | OpenAPI/AsyncAPI spec file changed | NO |
-| `cartogra.ingestion.dependency.observed` | Ingestion | Topology | OTel-derived dependency edge | NO |
+| Topic | Producer | Consumers today | Description |
+| ----- | -------- | ---------------- | ----------- |
+| `cartogra.ingestion.service.discovered` | Ingestion (`ServiceDiscoveredProducer`) | Registry (`RegistryServiceDiscoveryConsumer`) | Repo or K8s Service warrants a catalog entry |
+| `cartogra.ingestion.ownership.resolved` | Ingestion (`OwnershipResolvedProducer`) | Registry (`OwnershipResolvedConsumer`) | CODEOWNERS/K8s-label ownership resolved for a repo |
+| `cartogra.ingestion.sync.completed` | Ingestion (`SyncResultProducer`) | none (tests subscribe directly; no production consumer) | A Sync Job finished (success or failure) |
+| `cartogra.registry.sync.command` | Ingestion (`SyncCommandProducer`) | Ingestion (`SyncCommandConsumer`) | **Not** a Registry→Ingestion handoff despite the `registry.` prefix. `ScmConnectionService`/`WebhookService`/`ScheduledSyncService` in Ingestion publish this to queue a sync job for its own `SyncCommandConsumer`; the name is a leftover from before SCM Connections moved from Registry to Ingestion (see `services/registry/CONTEXT.md`) |
 
-### Topology domain
+### Dead-letter topics
 
-| Topic | Producer | Consumers | Description | Consuming ? |
-| ----- | -------- | --------- | ----------- | ----------- |
-| `cartogra.topology.graph.updated` | Topology | Intelligence | Graph snapshot after changes | NO |
-| `cartogra.topology.drift.detected` | Topology | Intelligence, Notification | Declared vs observed drift found | NO |
-| `cartogra.topology.cycle.detected` | Topology | Intelligence, Notification | Circular dependency found | NO |
+Only the two Registry consumers above have DLQ handling configured (`registry/config/KafkaConfig.java`, a
+`DefaultErrorHandler` with a 3-attempt fixed backoff before recovery). The DLQ topic is the source topic with
+a `.dlq` suffix — **not** the `cartogra.dlq.{suffix}` prefix pattern this document used to describe:
 
-### Contract domain
+- `cartogra.ingestion.service.discovered.dlq`
+- `cartogra.ingestion.ownership.resolved.dlq`
 
-| Topic | Producer | Consumers | Description | Consuming ? |
-| ----- | -------- | --------- | ----------- | ----------- |
-| `cartogra.contract.check.passed` | Contract | — | Compatibility check clean | NO |
-| `cartogra.contract.check.failed` | Contract | Intelligence, Notification | Breaking change detected | NO |
-| `cartogra.contract.version.published` | Contract | Intelligence | New spec version accepted | NO |
+Ingestion's own consumer (`SyncCommandConsumer`) has no error handler configured at all — no retry, no DLQ.
+A poison `cartogra.registry.sync.command` message currently blocks that consumer's partition rather than
+being recovered.
 
-### Intelligence domain
+DLQ records carry Spring Kafka's standard `DeadLetterPublishingRecoverer` headers
+(`kafka_dlt-exception-fqcn`, `kafka_dlt-exception-message`, `kafka_dlt-original-topic`,
+`kafka_dlt-original-partition`, `kafka_dlt-original-offset`, `kafka_dlt-original-timestamp`) plus the
+propagated `traceparent` — not the custom `dlq-reason`/`dlq-message`/`dlq-attempt`/`dlq-original-topic`
+headers this document used to list; those were never implemented.
 
-| Topic | Producer | Consumers | Description | Consuming ? |
-| ----- | -------- | --------- | ----------- | ----------- |
-| `cartogra.intelligence.digest.generated` | Intelligence | Notification | Weekly architecture digest ready | NO |
-| `cartogra.intelligence.alert.raised` | Intelligence | Notification | Anti-pattern or anomaly detected | NO |
+---
 
-### Notification domain
+## Proposed — no producer or consumer exists; do not build against these names yet
 
-| Topic | Producer | Consumers | Description | Consuming ? |
-| ----- | -------- | --------- | ----------- | ----------- |
-| `cartogra.notification.sent` | Notification worker | — | Outbound Slack/Teams/webhook dispatched | NO |
+Every topic in this section is unimplemented. Each is named in `docs/roadmap.md`; treat the roadmap, not this
+table, as authoritative on exact timing, and re-check the wording there before relying on a name below.
+
+| Topic | Direction | Roadmap story | Status |
+| ----- | --------- | -------------- | ------ |
+| `cartogra.observability.spans` | OTel Collector → Topology (`OtelSpanWorker`) | 3.1 | Replaces an earlier plan where Ingestion forwarded observed dependencies; Ingestion is not on this path |
+| `cartogra.registry.service.ownership-changed` | Registry → Topology, orphan-risk flagging only | ADR-0027 | **Conflicts with roadmap 3.3**, which instead describes Topology consuming the already-real `cartogra.ingestion.ownership.resolved`. See the reconciliation note in `CONTEXT-MAP.md`. Do not implement either side until that's resolved |
+| `cartogra.platform.audit.recorded` | Topology → Registry | 4.1 | Registry writes audit events directly; Topology publishes this for Registry's consumer |
+| `cartogra.ingestion.spec.discovered` | Ingestion → Contract | 5.8 | Named `spec.discovered`, not `spec.updated` as an earlier version of this document had it |
+| `cartogra.platform.dead-letter` | platform-wide DLQ replay | 7.5 | Distinct from the per-service `.dlq` topics above |
+
+Topology's own future producer topics (3.4, deferred to Phase 6 per the roadmap's "no topic without a
+consumer" rule — Intelligence is the consumer and doesn't exist yet): `dependency.declared`,
+`dependency.observed`, `dependency.removed`, `drift.detected`. Exact `cartogra.topology.*` names are not yet
+committed in the roadmap text, so none are asserted here.
+
+No Kafka topic names are committed anywhere in `docs/roadmap.md` for Contract (beyond `spec.discovered`
+above) or for Intelligence. An earlier version of this document speculated `check.passed`/`check.failed`/
+`version.published` for Contract and `digest.generated`/`alert.raised` for Intelligence — those are dropped
+here as unimplemented and unplanned; do not treat them as pending work.
 
 ---
 
@@ -101,27 +121,10 @@ Every Kafka message payload MUST match this structure:
 
 ---
 
-## Dead Letter Queue (DLQ)
-
-Each consumer group publishes unprocessable messages to a corresponding DLQ topic:
-
-`cartogra.dlq.{original-topic-suffix}`
-
-Example: `cartogra.dlq.registry.service.registered`
-
-DLQ messages include the original payload plus headers:
-
-| Header | Value |
-| -------| ------|
-| `dlq-reason` | Exception class name |
-| `dlq-message` | Exception message (truncated to 512 bytes) |
-| `dlq-attempt` | Retry count at time of DLQ |
-| `dlq-original-topic` | Source topic |
-| `traceparent` | Preserved from original message |
-
----
-
 ## Retention & Partitioning
+
+No per-topic retention or partition override exists in this repo's Kafka config today — this table describes
+target defaults, not something applied and verifiable in code yet.
 
 | Category | Default retention | Partitions |
 | ---------| -----------------| -----------|
@@ -137,3 +140,4 @@ Partitions are a starting point; review against throughput at 1k+ tenants.
 
 - [system-overview.md](system-overview.md)
 - [patterns.md — Kafka Producer + Consumer](../../.claude/rules/patterns.md)
+- `docs/roadmap.md` — plan of record for every topic in the "Proposed" section above
