@@ -74,10 +74,15 @@ class GraphNodeEventConsumerIT {
     @MockitoSpyBean
     GraphNodeRepository graphNodeRepositorySpy;
 
+    // 3 — one partition per subscribed topic (registered/updated/deleted), all on the one
+    // listener container. ContainerTestUtils.waitForAssignment requires an exact match, not
+    // "at least" — passing 1 here throws once all 3 partitions land ("Expected 1 but got 3").
+    private static final int SUBSCRIBED_PARTITIONS = 3;
+
     @BeforeEach
     void waitForConsumerAssignment() {
         for (MessageListenerContainer container : kafkaListenerEndpointRegistry.getListenerContainers()) {
-            ContainerTestUtils.waitForAssignment(container, 1);
+            ContainerTestUtils.waitForAssignment(container, SUBSCRIBED_PARTITIONS);
         }
     }
 
