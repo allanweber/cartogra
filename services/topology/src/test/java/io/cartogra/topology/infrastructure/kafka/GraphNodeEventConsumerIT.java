@@ -47,6 +47,13 @@ class GraphNodeEventConsumerIT {
         registry.add("spring.datasource.username", PostgresTestSupport.POSTGRES::getUsername);
         registry.add("spring.datasource.password", PostgresTestSupport.POSTGRES::getPassword);
         registry.add("spring.kafka.bootstrap-servers", KafkaTestSupport.KAFKA::getBootstrapServers);
+        // A unique group id isolates this context's consumer from every other topology
+        // @SpringBootTest context (AbstractTopologyIT's shared context,
+        // BackfillInternalControllerIT's own) — all boot the same GraphNodeEventConsumer
+        // bean; sharing the hardcoded "topology-consumer" group id would split the three
+        // single-partition topics' partitions across whichever contexts are alive at once,
+        // and this class's own container could end up with none of them.
+        registry.add("spring.kafka.consumer.group-id", () -> "graph-node-consumer-it-" + UUID.randomUUID());
     }
 
     @Value("${spring.kafka.bootstrap-servers}")

@@ -56,7 +56,7 @@ public class JdbcGraphNodeRepository implements GraphNodeRepository {
         var params = new MapSqlParameterSource()
                 .addValue("tenantId", tenantId)
                 .addValue("serviceId", serviceId)
-                .addValue("deletedAt", deletedAt);
+                .addValue("deletedAt", java.sql.Timestamp.from(deletedAt));
         jdbc.update(sql, params);
     }
 

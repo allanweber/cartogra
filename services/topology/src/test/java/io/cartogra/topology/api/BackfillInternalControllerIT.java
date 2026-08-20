@@ -64,6 +64,10 @@ class BackfillInternalControllerIT {
         registry.add("spring.datasource.password", PostgresTestSupport.POSTGRES::getPassword);
         registry.add("spring.kafka.bootstrap-servers", KafkaTestSupport.KAFKA::getBootstrapServers);
         registry.add("topology.registry.base-url", () -> "http://localhost:" + WIRE_MOCK.port());
+        // Isolate this context's GraphNodeEventConsumer from every other topology
+        // @SpringBootTest context sharing the hardcoded "topology-consumer" group id — see
+        // GraphNodeEventConsumerIT for why.
+        registry.add("spring.kafka.consumer.group-id", () -> "backfill-controller-it-" + UUID.randomUUID());
     }
 
     @Test
