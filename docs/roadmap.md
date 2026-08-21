@@ -12,13 +12,13 @@ Measured, not claimed:
 | Area | State | Evidence |
 |---|---|---|
 | Gateway (identity, proxy) | **Live** | 111 java / 21 test classes. Local login + OTP, Google/GitHub OAuth, per-tenant OIDC, refresh tokens, invitations, admin user management, Redis rate limit, Spring Cloud Gateway routes with circuit breakers |
-| Registry (catalog) | **Live** | 91 java / 28 test classes, 15 migrations. Service + Team CRUD, team members, ownership assign, history/snapshots, orphan list, health probing (`HealthProbeScheduler`, `RestClientHealthChecker`), plan limits, server-side pagination **and** Postgres FTS (`to_tsvector` + GIN index in V005) |
+| Registry (catalog) | **Live** | 68 java / 28 test classes, 13 migrations. Service + Team CRUD, team members, ownership assign, history/snapshots, orphan list, health probing (`HealthProbeScheduler`, `RestClientHealthChecker`), plan limits, server-side pagination **and** Postgres FTS (`to_tsvector` + GIN index in V005) |
 | Ingestion (discovery) | **Live** | 100 java / 31 test classes, 5 migrations. GitHub + Azure DevOps providers, repo scan, tech-stack detection, CODEOWNERS ownership, webhooks with signature verification, K8s cluster watch, sync jobs + stale-job reaper |
-| Topology | **Skeleton only** | 25 java, 3 migrations, **0 tests**, no service class, no controller, no consumer. `dependencies`, `dependency_drifts`, `dependency_graph_edges` MV + refresh scheduler + advisory lock exist |
+| Topology | **Skeleton + harness** | 25 java, 3 migrations, 4 Testcontainers ITs (added since, story 0.2), no service class, no controller, no consumer. `dependencies`, `dependency_drifts`, `dependency_graph_edges` MV + refresh scheduler + advisory lock exist |
 | Contract, Intelligence | **Empty directories** | 0 files |
 | Frontend | **Partial** | Real data: catalog list/detail, teams, settings (connections, tenant, users). Mock data: dashboard, risks, contracts, timeline. Placeholders: graph, intelligence, ops. Honest stubs: settings/api-keys, settings/notifications |
 | Kafka | **5 real topics** | `registry.service.{registered,updated,deleted}`, `registry.sync.command`, `ingestion.{service.discovered,ownership.resolved,sync.completed}` (+2 DLQs). `docs/architecture/kafka-topics.md` documents ~20 — the rest do not exist |
-| CI | **Gap** | `ci.yml` and `ci-full.yml` have the topology/contract/intelligence build steps **commented out**. The newest code in the repo is never compiled or tested |
+| CI | **Topology enabled** | Topology now builds and tests in CI (story 0.1, commit `40fff29`). Contract and intelligence steps stay commented out until those services exist |
 
 **Velocity:** 64 commits since 2026-06-04. June 24 · July 38 · August 2. Last feature commit 2026-08-05.
 Phases 0+1 (gateway + registry + ingestion + auth/catalog UI) cost roughly 10 weeks at that pace. Every estimate below is calibrated against that, assuming one developer.
@@ -57,7 +57,7 @@ The old checklist broke each of these; that is why it stopped being usable.
 | Skill | Where it comes from |
 |---|---|
 | `/code-review`, `/security-review` | Ship with Claude Code — nothing to install |
-| `/improve` | Committed in this repo at `.claude/skills/improve/` (shadcn) |
+| `/improve` | shadcn's skill — the `.claude/skills/improve` link was removed in `eb74504`, so re-add it via `npx skills add shadcn/improve` (README) |
 | `/impeccable`, `/shape` | External: `npx impeccable install`, pinned version in `CONTRIBUTING.md` |
 | `/improve-codebase-architecture` | External (mattpocock), pinned version in `CONTRIBUTING.md` — run before use |
 
@@ -67,9 +67,9 @@ The old checklist broke each of these; that is why it stopped being usable.
 
 No user-facing value. It exists because the next phases are unverifiable without it.
 
-- **0.1 — Topology enters CI.** Uncomment the topology build steps in `.github/workflows/ci.yml` and `ci-full.yml`; `:services:topology:build` green on every push touching that path.
+- **0.1 — Topology enters CI.** ✅ *Done — `40fff29`.* Uncomment the topology build steps in `.github/workflows/ci.yml` and `ci-full.yml`; `:services:topology:build` green on every push touching that path.
   *Done:* a deliberate compile error in topology fails CI.
-- **0.2 — Topology test harness.** `AbstractTopologyIT` with Testcontainers Postgres, mirroring registry's. ITs for `JdbcDependencyRepository` (insert, soft delete, edge-identity uniqueness), `JdbcDependencyDriftRepository`, and the MV refresh path including advisory-lock contention between two callers.
+- **0.2 — Topology test harness.** ✅ *Done — `18bcce7`.* `AbstractTopologyIT` with Testcontainers Postgres, mirroring registry's. ITs for `JdbcDependencyRepository` (insert, soft delete, edge-identity uniqueness), `JdbcDependencyDriftRepository`, and the MV refresh path including advisory-lock contention between two callers.
   *Done:* topology jacoco report exists and CI uploads it like the other services.
 - **0.3 — Restore the decision record.** `git checkout e6f0b45^ -- docs/adr` brings back ADR-0001…0021 plus README/TEMPLATE (deleted in "clean up", Jun 25, while ~40 references to them remain live in `CONTRIBUTING.md`, `CONTEXT-MAP.md`, six `CONTEXT.md` files, and published BIP posts). New ADRs continue at **0028**.
   *Done:* no dangling `ADR-00xx` reference in the repo.
