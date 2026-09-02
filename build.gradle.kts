@@ -75,6 +75,10 @@ subprojects {
             dependency("org.springframework.data:spring-data-commons:4.0.6") // CVE-2026-41695, CVE-2026-41716
             dependency("org.springframework:spring-expression:7.0.8") // CVE-2026-41850
             dependency("org.springframework:spring-webmvc:7.0.8") // CVE-2026-41842, CVE-2026-41845
+            dependency("io.netty:netty-codec-dns:4.2.15.Final") // CVE-2026-42579, CVE-2026-44249, CVE-2026-45416, CVE-2026-50010
+            dependency("io.netty:netty-handler:4.2.15.Final") // CVE-2026-44249, CVE-2026-45416, CVE-2026-50010
+            dependency("io.netty:netty-resolver-dns:4.2.15.Final") // CVE-2026-45674, CVE-2026-47691
+            dependency("org.bouncycastle:bcprov-jdk18on:1.81.1") // CVE-2025-14813
         }
     }
 
