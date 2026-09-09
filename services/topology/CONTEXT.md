@@ -56,6 +56,8 @@ Cross-context references stored as IDs only — Topology never hydrates a `Servi
 |---|---|
 | `dependencies` | Directional edges; `dependency_type`: declared/observed; `protocol`: http/grpc/kafka/db |
 | `dependency_drifts` | Drift records: `drift_type`: undeclared/missing; `detected_at`/`resolved_at` |
+| `graph_nodes` | Local projection of Registry services (`GraphNodeEventConsumer` — [1.1]); one row per (tenant_id, service_id), soft-deleted on `service.deleted` |
+| `processed_events` | Consumer-side idempotency ledger, keyed `(tenant_id, event_id)` — a replayed envelope is a no-op |
 
 ---
 
@@ -63,6 +65,7 @@ Cross-context references stored as IDs only — Topology never hydrates a `Servi
 
 | Method | Path | Description |
 |---|---|---|
+| POST | `/internal/backfill` | Admin: walk Registry once via `GraphNodeService.backfill()`, seeding `graph_nodes` for tenants that predate `GraphNodeEventConsumer` — [1.1] |
 | POST | `/api/v1/topology/dependencies` | Declare a dependency |
 | GET | `/api/v1/topology/dependencies` | List dependencies for tenant |
 | DELETE | `/api/v1/topology/dependencies/{id}` | Remove a declared dependency |

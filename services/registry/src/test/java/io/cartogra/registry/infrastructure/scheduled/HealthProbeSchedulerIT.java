@@ -25,7 +25,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
-                "registry.health.probe-timeout=PT0.5S",
+                // 2s gives the 200/401/403/503 assertions comfortable headroom against GC pauses
+                // and Testcontainers/JVM warm-up on a loaded CI box (PT0.5S was flaky for that reason).
+                "registry.health.probe-timeout=PT2S",
                 "registry.health.allow-http-endpoints=true",
                 "registry.health.probe-interval=PT999H"
         }
@@ -106,9 +108,9 @@ class HealthProbeSchedulerIT {
 
     @Test
     void timeoutTransitionsToUnhealthy() {
-        // 1000ms delay > 500ms probe timeout
+        // 3000ms delay > 2000ms probe timeout
         wireMock.stubFor(get(urlEqualTo("/health"))
-                .willReturn(aResponse().withStatus(200).withFixedDelay(1000)));
+                .willReturn(aResponse().withStatus(200).withFixedDelay(3000)));
         UUID serviceId = seedService("unknown");
 
         serviceHealthService.probeAll();

@@ -41,6 +41,8 @@ server:
 topology:
   graph-view:
     refresh-interval: ${TOPOLOGY_GRAPH_VIEW_REFRESH_INTERVAL:PT5S}
+  registry:
+    base-url: ${REGISTRY_URI:http://localhost:8081}/api/v1/registry
 
 management:
   endpoints:

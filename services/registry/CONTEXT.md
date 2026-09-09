@@ -107,6 +107,7 @@ The service's own `server.servlet.context-path` is `/api/v1/registry` — paths 
 | POST/GET/GET·`/mine`/GET·`{id}`/PUT·`{id}`/DELETE·`{id}` | `/teams` | Team CRUD — `TeamService` |
 | GET/POST·`/members`/DELETE·`/members/{memberUserId}` | `/teams/{id}/members` | Team membership — `TeamService` |
 | GET | `/internal/plan-limits/{tenantId}` | `PlanLimitInternalController` → `PlanLimitService` |
+| GET | `/internal/services` | `ServiceInternalController` → `ServiceService.listAllActive` — cross-tenant, paginated; no `X-Tenant-Id`. Backs Topology's admin backfill (Topology issue [1.1]) |
 
 There is no `/scm-connections` endpoint in this service — see the SCM Connection note above.
 
