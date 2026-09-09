@@ -64,9 +64,9 @@ subprojects {
             // CVE overrides not yet covered by spring-boot-dependencies:$springBootVersion — recheck on next BOM bump
             dependency("org.postgresql:postgresql:42.7.12") // CVE-2026-54291 (supersedes the 42.7.11 override for CVE-2026-42198)
             dependency("org.springframework.kafka:spring-kafka:4.0.6") // CVE-2026-41731
-            dependency("org.apache.tomcat.embed:tomcat-embed-core:11.0.22") // CVE-2026-41293
-            dependency("org.apache.tomcat.embed:tomcat-embed-el:11.0.22")
-            dependency("org.apache.tomcat.embed:tomcat-embed-websocket:11.0.22")
+            dependency("org.apache.tomcat.embed:tomcat-embed-core:11.0.25") // CVE-2026-65182, CVE-2026-65905, CVE-2026-68525 (supersedes the 11.0.22 override for CVE-2026-41293)
+            dependency("org.apache.tomcat.embed:tomcat-embed-el:11.0.25")
+            dependency("org.apache.tomcat.embed:tomcat-embed-websocket:11.0.25")
             dependency("com.fasterxml.jackson.core:jackson-databind:2.21.4") // CVE-2026-54512, CVE-2026-54513
             dependency("tools.jackson.core:jackson-databind:3.1.4") // CVE-2026-54512, CVE-2026-54513
             dependency("com.fasterxml.jackson.core:jackson-core:2.21.4") // GHSA-r7wm-3cxj-wff9
