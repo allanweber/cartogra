@@ -1,0 +1,62 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Debug Gateway",
+      "request": "launch",
+      "mainClass": "io.cartogra.gateway.GatewayApplication",
+      "projectName": "gateway",
+      "args": "--spring.profiles.active=dev"
+    },
+    {
+      "type": "java",
+      "name": "Debug Registry",
+      "request": "launch",
+      "mainClass": "io.cartogra.registry.RegistryApplication",
+      "projectName": "registry",
+      "args": "--spring.profiles.active=dev"
+    },
+    {
+      "type": "java",
+      "name": "Debug Ingestion",
+      "request": "launch",
+      "mainClass": "io.cartogra.ingestion.IngestionApplication",
+      "projectName": "ingestion",
+      "args": "--spring.profiles.active=dev"
+    },
+    {
+      "type": "java",
+      "name": "Debug Topology",
+      "request": "launch",
+      "mainClass": "io.cartogra.topology.TopologyApplication",
+      "projectName": "topology",
+      "args": "--spring.profiles.active=dev"
+    },
+    {
+      "type": "node-terminal",
+      "name": "Debug Frontend (pnpm dev)",
+      "request": "launch",
+      "command": "pnpm dev",
+      "cwd": "${workspaceFolder}/frontend"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Debug All Backend Services",
+      "configurations": ["Debug Gateway", "Debug Registry", "Debug Ingestion", "Debug Topology"],
+      "stopAll": true
+    },
+    {
+      "name": "Debug All (Backend + Frontend)",
+      "configurations": [
+        "Debug Gateway",
+        "Debug Registry",
+        "Debug Ingestion",
+        "Debug Topology",
+        "Debug Frontend (pnpm dev)"
+      ],
+      "stopAll": true
+    }
+  ]
+}
