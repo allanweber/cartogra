@@ -9,6 +9,7 @@ import net.ltgt.gradle.errorprone.errorprone
 import org.gradle.api.plugins.quality.CheckstyleExtension
 import org.gradle.api.tasks.testing.logging.TestLogEvent
 import io.spring.gradle.dependencymanagement.dsl.DependencyManagementExtension
+import org.springframework.boot.gradle.tasks.run.BootRun
 
 plugins {
     id("org.springframework.boot") apply false
@@ -22,6 +23,15 @@ val springBootVersion: String by project
 val springCloudVersion: String by project
 val testcontainersVersion: String by project
 val javaVersion: String by project
+
+// Fixed local debug ports so all four backend services can be debugged concurrently
+// (VS Code's "Debug All Backend Services" compound attaches to one port per service).
+val debugPorts = mapOf(
+    "gateway" to 5005,
+    "registry" to 5006,
+    "ingestion" to 5007,
+    "topology" to 5008,
+)
 
 subprojects {
     apply(plugin = "java")
@@ -112,5 +122,16 @@ subprojects {
     tasks.withType<Test> {
         useJUnitPlatform()
         testLogging { events(TestLogEvent.PASSED, TestLogEvent.FAILED, TestLogEvent.SKIPPED) }
+    }
+
+    // Applies only where the Spring Boot plugin is actually applied (no-op otherwise).
+    // Local `bootRun` always targets dev — nothing here reaches the production jar/image.
+    tasks.withType<BootRun>().configureEach {
+        args("--spring.profiles.active=dev")
+        // suspend=n: bootRun always starts normally; a debugger can attach on this port
+        // at any time (or never) without needing a special "--debug-jvm" invocation.
+        debugPorts[project.name]?.let { port ->
+            jvmArgs("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:$port")
+        }
     }
 }

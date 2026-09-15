@@ -7,10 +7,6 @@ tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
     archiveFileName.set("${project.name}.jar")
 }
 
-tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
-    args("--spring.profiles.active=dev")
-}
-
 tasks.named<ProcessResources>("processTestResources") {
     from(rootProject.file("docs/api/gateway-errors.openapi.yaml"))
 }
