@@ -50,7 +50,11 @@ RUN pnpm install --frozen-lockfile --prod --ignore-scripts \
     /root/.cache/node/corepack /root/.cache/pnpm /root/.local/share/pnpm /root/.npm \
     /home/node/.cache/node/corepack /home/node/.local/share/pnpm
 
+# --only-upgrade libpcre2-8-0 pulls the Debian 12 security-repo fix (CVE-2026-86145,
+# CVE-2026-89161) for whatever's already on the base image, without a general
+# `apt-get upgrade -y` pulling in unrelated package churn.
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --only-upgrade libpcre2-8-0 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder --chown=node:node /app/frontend/dist ./dist

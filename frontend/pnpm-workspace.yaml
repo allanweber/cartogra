@@ -8,5 +8,8 @@ onlyBuiltDependencies:
   - msw
   - unrs-resolver
 
+# CVE overrides for transitive deps not covered by a direct package.json bump
 overrides:
-  fast-uri: "^3.1.2"
+  fast-uri: "^3.1.6" # CVE-2026-75899, CVE-2026-75931, CVE-2026-75975, CVE-2026-76172 (supersedes the ^3.1.2 override)
+  browserslist: "^4.28.7" # CVE-2026-73088, CVE-2026-73089
+  js-yaml: "^4.3.2" # CVE-2026-84375
