@@ -32,22 +32,26 @@ ENV PNPM_CONFIG_STRICT_DEP_BUILDS=false
 RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
 
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile --prod --ignore-scripts
-
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Runtime only ever runs `node dist/server/server.js` — strip npm/corepack/npx,
-# the corepack-downloaded pnpm tarballs, and the pnpm store, to shrink the CVE
-# surface. The corepack cache is the important one: it holds a full pnpm install
-# whose bundled deps (tar, undici, ip-address, brace-expansion) are what Trivy
-# reports against this image, even though nothing at runtime ever executes pnpm.
-# Must happen after the pnpm install above, which needs corepack/npm.
-RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+# Runtime only ever runs `node dist/server/server.js` — strip npm/corepack/npx, the
+# corepack-downloaded pnpm tarballs, and the pnpm store in the SAME RUN as the install,
+# not a later one. pnpm's store is a global content-addressable cache populated from the
+# whole lockfile graph (not just the --prod subset actually linked into node_modules), so
+# even a --prod install leaves devDependency package contents — e.g. happy-dom's bundled
+# self-signed test TLS cert/key, fixture data, not a real secret — sitting in the store.
+# A separate later `RUN rm -rf` only hides that from the final merged filesystem; the
+# layer that added it is still shipped in the image and its content stays extractable
+# from that layer's history. One RUN means Docker only ever commits the net result, so
+# the store's content is never captured in any shipped layer, closing both the CVE
+# surface (its own goal) and this Trivy secret-scan finding it didn't actually prevent.
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
     /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
     /usr/local/bin/pnpm /usr/local/bin/pnpx /usr/local/bin/yarn /usr/local/bin/yarnpkg \
     /root/.cache/node/corepack /root/.cache/pnpm /root/.local/share/pnpm /root/.npm \
     /home/node/.cache/node/corepack /home/node/.local/share/pnpm
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder --chown=node:node /app/frontend/dist ./dist
 
