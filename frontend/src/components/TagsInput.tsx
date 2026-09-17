@@ -5,6 +5,7 @@ import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 
 interface TagsInputProps {
+  id?: string
   value: string[]
   onChange: (tags: string[]) => void
   maxTags?: number
@@ -13,7 +14,7 @@ interface TagsInputProps {
 
 const TAG_PATTERN = /^[a-zA-Z0-9._:-]+$/
 
-export function TagsInput({ value, onChange, maxTags = 20, placeholder = 'Add tag...' }: TagsInputProps) {
+export function TagsInput({ id, value, onChange, maxTags = 20, placeholder = 'Add tag...' }: TagsInputProps) {
   const [inputValue, setInputValue] = useState('')
 
   function addTag(raw: string) {
@@ -55,11 +56,13 @@ export function TagsInput({ value, onChange, maxTags = 20, placeholder = 'Add ta
         </Badge>
       ))}
       <Input
+        id={id}
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
         onKeyDown={handleKeyDown}
         onBlur={() => addTag(inputValue)}
         placeholder={value.length === 0 ? placeholder : undefined}
+        aria-label={id ? undefined : placeholder}
         className="h-auto min-w-30 flex-1 border-0 p-0 shadow-none focus-visible:ring-0"
         disabled={value.length >= maxTags}
       />

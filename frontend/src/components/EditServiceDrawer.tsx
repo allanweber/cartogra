@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
+import { Label as BaseLabel } from '#/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#/components/ui/select'
 import { Textarea } from '#/components/ui/textarea'
 import { TagsInput } from '#/components/TagsInput'
@@ -34,20 +35,22 @@ interface UpdateServicePayload {
 }
 
 function Label({
+  htmlFor,
   children,
   required,
   optional,
 }: {
+  htmlFor: string
   children: React.ReactNode
   required?: boolean
   optional?: boolean
 }) {
   return (
-    <label className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+    <BaseLabel htmlFor={htmlFor}>
       {children}
       {required && <span className="text-destructive">*</span>}
       {optional && <span className="text-sm font-normal text-muted-foreground">optional</span>}
-    </label>
+    </BaseLabel>
   )
 }
 
@@ -61,11 +64,13 @@ function Field({ children }: { children: React.ReactNode }) {
 const NONE_VALUE = '__none__'
 
 function NativeSelect({
+  id,
   value,
   onChange,
   placeholder,
   children,
 }: {
+  id?: string
   value: string
   onChange: (v: string) => void
   placeholder?: string
@@ -73,7 +78,7 @@ function NativeSelect({
 }) {
   return (
     <Select value={value} onValueChange={(v) => onChange(v === NONE_VALUE ? '' : v)}>
-      <SelectTrigger>
+      <SelectTrigger id={id}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>{children}</SelectContent>
@@ -268,8 +273,9 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
             <form.Field name="name">
               {(field) => (
                 <Field>
-                  <Label required>Service name</Label>
+                  <Label htmlFor="edit-service-name" required>Service name</Label>
                   <Input
+                    id="edit-service-name"
                     value={field.state.value}
                     onChange={(e) => field.handleChange(e.target.value)}
                     onBlur={field.handleBlur}
@@ -283,8 +289,9 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
             <form.Field name="description">
               {(field) => (
                 <Field>
-                  <Label optional>Description</Label>
+                  <Label htmlFor="edit-service-description" optional>Description</Label>
                   <Textarea
+                    id="edit-service-description"
                     value={field.state.value}
                     onChange={(e) => field.handleChange(e.target.value)}
                     onBlur={field.handleBlur}
@@ -300,8 +307,9 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
               <form.Field name="teamId">
                 {(field) => (
                   <Field>
-                    <Label optional>Owner team</Label>
+                    <Label htmlFor="edit-service-team" optional>Owner team</Label>
                     <NativeSelect
+                      id="edit-service-team"
                       value={field.state.value}
                       onChange={field.handleChange}
                       placeholder="-- None --"
@@ -319,8 +327,9 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
               <form.Field name="tier">
                 {(field) => (
                   <Field>
-                    <Label optional>Tier</Label>
+                    <Label htmlFor="edit-service-tier" optional>Tier</Label>
                     <NativeSelect
+                      id="edit-service-tier"
                       value={field.state.value}
                       onChange={field.handleChange}
                       placeholder="-- None --"
@@ -339,8 +348,9 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
               <form.Field name="healthStatus">
                 {(field) => (
                   <Field>
-                    <Label optional>Health</Label>
+                    <Label htmlFor="edit-service-health" optional>Health</Label>
                     <NativeSelect
+                      id="edit-service-health"
                       value={field.state.value}
                       onChange={field.handleChange}
                       placeholder="-- None --"
@@ -358,8 +368,9 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
               <form.Field name="repositoryUrl">
                 {(field) => (
                   <Field>
-                    <Label optional>Repository URL</Label>
+                    <Label htmlFor="edit-service-repository-url" optional>Repository URL</Label>
                     <Input
+                      id="edit-service-repository-url"
                       value={field.state.value}
                       onChange={(e) => field.handleChange(e.target.value)}
                       onBlur={field.handleBlur}
@@ -374,8 +385,9 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
             <form.Field name="healthEndpoint">
               {(field) => (
                 <Field>
-                  <Label optional>Health endpoint</Label>
+                  <Label htmlFor="edit-service-health-endpoint" optional>Health endpoint</Label>
                   <Input
+                    id="edit-service-health-endpoint"
                     value={field.state.value}
                     onChange={(e) => field.handleChange(e.target.value)}
                     onBlur={field.handleBlur}
@@ -389,8 +401,9 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
             <form.Field name="techStack">
               {(field) => (
                 <Field>
-                  <Label optional>Tech stack</Label>
+                  <Label htmlFor="edit-service-tech-stack" optional>Tech stack</Label>
                   <TagsInput
+                    id="edit-service-tech-stack"
                     value={field.state.value}
                     onChange={field.handleChange}
                     placeholder="Add technology (press Enter)"
@@ -403,8 +416,9 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
             <form.Field name="tags">
               {(field) => (
                 <Field>
-                  <Label optional>Tags</Label>
+                  <Label htmlFor="edit-service-tags" optional>Tags</Label>
                   <TagsInput
+                    id="edit-service-tags"
                     value={field.state.value}
                     onChange={field.handleChange}
                     placeholder="Add tag (press Enter)"
@@ -418,8 +432,9 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
               <form.Field name="slaTarget">
                 {(field) => (
                   <Field>
-                    <Label optional>SLA Target (%)</Label>
+                    <Label htmlFor="edit-service-sla-target" optional>SLA Target (%)</Label>
                     <Input
+                      id="edit-service-sla-target"
                       type="number"
                       min={0}
                       max={100}
@@ -437,8 +452,9 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
             <form.Field name="documentationUrl">
               {(field) => (
                 <Field>
-                  <Label optional>Documentation URL</Label>
+                  <Label htmlFor="edit-service-documentation-url" optional>Documentation URL</Label>
                   <Input
+                    id="edit-service-documentation-url"
                     type="url"
                     value={field.state.value}
                     onChange={(e) => field.handleChange(e.target.value)}
@@ -453,8 +469,9 @@ export function EditServiceDrawer({ service, open, onOpenChange }: EditServiceDr
             <form.Field name="runbookUrl">
               {(field) => (
                 <Field>
-                  <Label optional>Runbook URL</Label>
+                  <Label htmlFor="edit-service-runbook-url" optional>Runbook URL</Label>
                   <Input
+                    id="edit-service-runbook-url"
                     type="url"
                     value={field.state.value}
                     onChange={(e) => field.handleChange(e.target.value)}

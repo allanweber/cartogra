@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
+import { Label } from '#/components/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
 import { ApiError, apiFetch, apiMutate } from '#/lib/api'
 
@@ -163,7 +164,7 @@ export function ScmConnectionDialog({ open, onOpenChange, provider, connection, 
               <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 px-4 py-2.5 text-sm">
                 <span className="flex items-center gap-2">
                   <span
-                    className={`size-2 shrink-0 rounded-full ${connection.lastSyncStatus === 'FAILED' ? 'bg-red-500' : 'bg-green-500'}`}
+                    className={`size-2 shrink-0 rounded-full ${connection.lastSyncStatus === 'FAILED' ? 'bg-critical' : 'bg-success'}`}
                   />
                   {connection.lastSyncStatus === 'FAILED' ? 'Sync failed' : 'Synced'}
                 </span>
@@ -185,11 +186,12 @@ export function ScmConnectionDialog({ open, onOpenChange, provider, connection, 
             {provider === 'github' ? (
               <>
                 <div className="space-y-1.5">
-                  <label className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                  <Label htmlFor="scm-organization">
                     Organization
                     <span className="text-destructive">*</span>
-                  </label>
+                  </Label>
                   <Input
+                    id="scm-organization"
                     placeholder="Enter organization"
                     value={ghOrg}
                     onChange={(e) => setGhOrg(e.target.value)}
@@ -197,11 +199,12 @@ export function ScmConnectionDialog({ open, onOpenChange, provider, connection, 
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                  <Label htmlFor="scm-access-token">
                     Access token
                     {!isEdit && <span className="text-destructive">*</span>}
-                  </label>
+                  </Label>
                   <Input
+                    id="scm-access-token"
                     type="password"
                     placeholder={isEdit ? '••••••• (leave blank to keep)' : 'Enter access token'}
                     value={ghToken}
@@ -214,11 +217,12 @@ export function ScmConnectionDialog({ open, onOpenChange, provider, connection, 
             ) : (
               <>
                 <div className="space-y-1.5">
-                  <label className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                  <Label htmlFor="scm-organization">
                     Organization
                     <span className="text-destructive">*</span>
-                  </label>
+                  </Label>
                   <Input
+                    id="scm-organization"
                     placeholder="Enter organization name"
                     value={azUrl}
                     onChange={(e) => setAzUrl(e.target.value)}
@@ -226,11 +230,12 @@ export function ScmConnectionDialog({ open, onOpenChange, provider, connection, 
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                  <Label htmlFor="scm-access-token">
                     Personal access token
                     {!isEdit && <span className="text-destructive">*</span>}
-                  </label>
+                  </Label>
                   <Input
+                    id="scm-access-token"
                     type="password"
                     placeholder={isEdit ? '••••••• (leave blank to keep)' : 'Enter personal access token'}
                     value={azPat}
@@ -243,8 +248,9 @@ export function ScmConnectionDialog({ open, onOpenChange, provider, connection, 
             )}
 
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">Sync interval</label>
+              <Label id="scm-sync-interval-label">Sync interval</Label>
               <ToggleGroup
+                aria-labelledby="scm-sync-interval-label"
                 type="single"
                 value={String(pollInterval)}
                 onValueChange={(v) => { if (v) setPollInterval(Number(v)) }}

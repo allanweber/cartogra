@@ -37,10 +37,10 @@ const typeConfig: Record<
   { color: string; bgColor: string; label: string }
 > = {
   deploy: { color: 'bg-success', bgColor: 'bg-success-subtle', label: 'Deploy' },
-  contract: { color: 'bg-[oklch(0.55_0.18_260)]', bgColor: 'bg-[oklch(0.96_0.04_260)] dark:bg-[oklch(0.25_0.05_260)]', label: 'Contract' },
+  contract: { color: 'bg-info', bgColor: 'bg-info-subtle', label: 'Contract' },
   risk: { color: 'bg-critical', bgColor: 'bg-critical-subtle', label: 'Risk' },
   ownership: { color: 'bg-warning', bgColor: 'bg-warning-subtle', label: 'Ownership' },
-  dependency: { color: 'bg-[oklch(0.60_0.18_240)]', bgColor: 'bg-[oklch(0.96_0.04_240)] dark:bg-[oklch(0.26_0.04_240)]', label: 'Dependency' },
+  dependency: { color: 'bg-info', bgColor: 'bg-info-subtle', label: 'Dependency' },
 }
 
 function TimelinePage() {

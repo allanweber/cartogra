@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
+import { Label } from '#/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#/components/ui/select'
 
 import type { PageResult, RegistryTeam } from '#/lib/registry-types'
@@ -144,11 +145,12 @@ export function InviteUserDialog({
             <form.Field name="email">
               {(field) => (
                 <div className="space-y-1.5">
-                  <label className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                  <Label htmlFor="invite-email">
                     Email
                     <span className="text-destructive">*</span>
-                  </label>
+                  </Label>
                   <Input
+                    id="invite-email"
                     type="email"
                     value={field.state.value}
                     onChange={(e) => field.handleChange(e.target.value)}
@@ -165,16 +167,16 @@ export function InviteUserDialog({
             <form.Field name="role">
               {(field) => (
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-foreground">
+                  <Label htmlFor="invite-role">
                     Role
-                  </label>
+                  </Label>
                   <Select
                     value={field.state.value}
                     onValueChange={(value) =>
                       field.handleChange(value as (typeof ROLES)[number])
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="invite-role">
                       <SelectValue placeholder="Select role" />
                     </SelectTrigger>
                     <SelectContent>
@@ -191,9 +193,9 @@ export function InviteUserDialog({
 
             {lockedTeam ? (
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">
+                <Label>
                   Team
-                </label>
+                </Label>
                 <p className="rounded-md border border-input bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
                   {lockedTeam.name}
                 </p>
@@ -202,16 +204,16 @@ export function InviteUserDialog({
               <form.Field name="teamId">
                 {(field) => (
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-foreground">
+                    <Label htmlFor="invite-team">
                       Team (optional)
-                    </label>
+                    </Label>
                     <Select
                       value={field.state.value === '' ? NO_TEAM_VALUE : field.state.value}
                       onValueChange={(value) =>
                         field.handleChange(value === NO_TEAM_VALUE ? '' : value)
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="invite-team">
                         <SelectValue placeholder="No team" />
                       </SelectTrigger>
                       <SelectContent>

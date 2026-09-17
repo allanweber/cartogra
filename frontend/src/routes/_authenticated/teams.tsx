@@ -61,8 +61,10 @@ function relativeTime(dateStr: string | null): string | null {
   return `${Math.floor(secs / 86400)}d ago`
 }
 
+// Hues chosen to stay >=30deg clear of every status/accent hue (critical 28, caution 65,
+// healthy 145, signal-blue 218, info 245) so a team avatar is never mistaken for a status color.
 function teamColor(name: string): string {
-  const hues = [145, 60, 240, 28, 320]
+  const hues = [100, 175, 285, 320, 350]
   const hue = hues[name.charCodeAt(0) % hues.length]
   return `oklch(0.50 0.18 ${hue})`
 }
@@ -494,8 +496,7 @@ function RiskExposureBadge({ exposure }: { exposure: RiskExposure }) {
         'capitalize',
         exposure === 'low' && 'text-muted-foreground',
         exposure === 'medium' && 'border-warning bg-warning-subtle text-warning',
-        exposure === 'high' && 'border-[oklch(0.68_0.14_40)] bg-[oklch(0.97_0.05_40)] text-[oklch(0.52_0.18_40)] dark:border-[oklch(0.55_0.14_40)] dark:text-[oklch(0.76_0.16_40)]',
-        exposure === 'critical' && 'border-critical bg-critical-subtle text-critical',
+        (exposure === 'high' || exposure === 'critical') && 'border-critical bg-critical-subtle text-critical',
       )}
     >
       {exposure} risk

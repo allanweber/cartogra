@@ -203,4 +203,13 @@ body {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+
+  /* Loading/progress feedback must keep signaling "in progress" — collapsing it to
+     one 0.01ms frame would silently remove the only cue that something is happening. */
+  .animate-spin,
+  .animate-pulse,
+  [data-slot="skeleton"] {
+    animation-duration: revert !important;
+    animation-iteration-count: revert !important;
+  }
 }
