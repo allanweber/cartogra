@@ -3,8 +3,8 @@ info:
   title: Cartogra Contract API
   version: "0.1.0"
   description: |
-    > **Phase 3 — Contract guardian — not yet implemented.**
-    > Forward-looking contract. See execution-checklist.md tasks 3.2–3.38.
+    > **Not yet implemented.**
+    > Forward-looking contract. See `docs/roadmap.md` Phase 5 — Change safety: contracts (5.1–5.8).
 
     API contract registry, breaking-change detection, consumer-producer matrix, and schema history.
 

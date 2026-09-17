@@ -44,7 +44,7 @@ subprojects {
     configure<com.diffplug.gradle.spotless.SpotlessExtension> {
         java {
             target("src/main/java/**/*.java", "src/test/java/**/*.java")
-            removeUnusedImports()
+            removeUnusedImports("cleanthat-javaparser-unnecessaryimport")
             trimTrailingWhitespace()
             endWithNewline()
         }

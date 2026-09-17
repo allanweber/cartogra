@@ -3,8 +3,10 @@ info:
   title: Cartogra Topology API
   version: "0.1.0"
   description: |
-    > **Phase 2 — Topology service — not yet implemented.**
-    > Forward-looking contract. See execution-checklist.md tasks 2.2–2.26.
+    > **Partially implemented** (graph node projection landed; most of the surface below has not).
+    > Forward-looking contract. See `docs/roadmap.md` Phases 1–3 — See the map / Answer impact
+    > questions / The map maintains itself. Per roadmap 1.6, this file is due to be cut down to
+    > exactly the endpoints that exist — it still documents the full aspirational surface.
 
     Dependency graph management, blast radius analysis, cycle detection, SPOF scoring, and drift detection.
 

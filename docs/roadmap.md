@@ -1,6 +1,7 @@
 # Cartogra — Product Roadmap
 
-> **Plan of record.** Supersedes `docs/execution-checklist.md`, which is kept for reference only.
+> **Plan of record.** Supersedes the old execution checklist, retired (deleted) once every live
+> reference to it below was repointed here — see git history for the prior content.
 > Written 2026-08-18 against commit `d6922fa`, after reading the code — not the old plan.
 
 ---
@@ -75,15 +76,17 @@ No user-facing value. It exists because the next phases are unverifiable without
   *Done:* no dangling `ADR-00xx` reference in the repo.
 - **0.4 — Docs match code.** `CONTEXT-MAP.md` topology status; `services/registry/CONTEXT.md` (claims V001–V011 and an `application/usecase` layer that no longer exists); `kafka-topics.md` cut to the 8 real topics with the rest moved to a clearly-marked "proposed" appendix; drop the "Notification worker" context that is not a module.
   *Done:* every table, topic, and package named in docs exists in code.
-- **0.5 — Retire the old checklist.** Banner at the top of `docs/execution-checklist.md` pointing here.
+- **0.5 — Retire the old checklist.** ~~Banner at the top of `docs/execution-checklist.md` pointing here.~~
+  Done one step further: the file is deleted outright and every live reference to it (OpenAPI specs,
+  `CONTEXT.md` files, `.claude/rules/backend.md`, BIP docs) repointed at this roadmap.
 - **0.6 — Make the gate tooling installable.** `npx impeccable install` and the `/improve-codebase-architecture` source pinned in `CONTRIBUTING.md`, with versions. A gate nobody else can run is not a gate — this story is what makes the standing checks below honest.
 
 **Gate**
 
-- [ ] A deliberate compile error in `services/topology` fails CI; a topology coverage report uploads like registry's.
-- [ ] Every `ADR-00xx` reference in the repo resolves to a file that exists.
-- [ ] Every table, topic, and package named in `CONTEXT-MAP.md`, the service `CONTEXT.md` files, and `kafka-topics.md` exists in code.
-- [ ] `docs/execution-checklist.md` carries the superseded banner.
+- [x] A deliberate compile error in `services/topology` fails CI; a topology coverage report uploads like registry's.
+- [x] Every `ADR-00xx` reference in the repo resolves to a file that exists.
+- [x] Every table, topic, and package named in `CONTEXT-MAP.md`, the service `CONTEXT.md` files, and `kafka-topics.md` exists in code.
+- [x] `docs/execution-checklist.md` is deleted; no reference to it remains anywhere in the repo.
 
 *Standing checks (§2 — Definition of done):*
 

@@ -92,16 +92,20 @@ Set `status: published` and add a `published_at` date when content goes live.
 
 ## Marking BIP Tasks Done
 
-In `docs/execution-checklist.md`, a BIP task is `[x]` complete when:
+`docs/roadmap.md` (§2, rule 6) treats content as **listed, never gating**: each phase names the
+posts worth writing under "Worth writing about," and none of them block that phase's gate. A BIP
+piece is done — worth crossing off your own tracking, informally — when:
 
 1. The `docs/bip/{task-id}-{slug}.md` file exists with all applicable channels drafted.
 2. Content is marked `status: draft` at minimum (published = bonus).
 
-A task blocked on "waiting to publish" should still be marked `[x]` once the draft is complete.
+A piece "waiting to publish" still counts as done once the draft is complete. Use the roadmap
+phase/story number as the `{task-id}` (e.g. `1.1`, `5.5`) when a BIP piece is tied to a specific
+story; use the "Worth writing about" bullet's own topic slug when it isn't.
 
 ---
 
 ## References
 
 - [workflow.md — BIP output channels](.../../.claude/rules/workflow.md)
-- [execution-checklist.md](../execution-checklist.md)
+- [roadmap.md](../roadmap.md)

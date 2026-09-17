@@ -78,7 +78,7 @@ No `*UseCase`/`*UseCaseImpl` layer — one `@Service` class per domain concept i
 
 | Service class | Key methods | Notes |
 |---|---|---|
-| `ServiceService` | `create`, `update`, `delete`, `get`, `list`, `detectOrphans`, `assignOwner`, `history`, `historyAt`, `listTechStacks`, `countByConnectionId`, `upsertDiscovered`, `resolveOwnership` | Every mutating method saves a history snapshot; `create`/`update`/`delete` publish the matching lifecycle event; `upsertDiscovered`/`resolveOwnership` are invoked from the Kafka consumers below, not from HTTP |
+| `ServiceService` | `create`, `update`, `delete`, `get`, `list`, `detectOrphans`, `assignOwner`, `history`, `historyAt`, `listTechStacks`, `countByConnectionId`, `upsertDiscovered`, `resolveOwnership` | Every mutating method saves a history snapshot and publishes the matching lifecycle event (`create`/`update`/`delete` directly; `upsertDiscovered` publishes `registered` on first insert, `updated` on a changed re-sync, nothing when the diff is a no-op; `resolveOwnership` publishes transitively via `assignOwner`) — this is what lets Topology's `GraphNodeEventConsumer` project discovered services into `graph_nodes`, not just manually-created ones. `upsertDiscovered`/`resolveOwnership` are invoked from the Kafka consumers below, not from HTTP |
 | `TeamService` | `create`, `update`, `delete`, `get`, `list`, `addMember`, `removeMember`, `listMembers`, `myTeamIds` | `create`/`update`/`delete` publish `team.created`/`updated`/`deleted` |
 | `ServiceHealthService` | health probing | Backs `HealthProbeScheduler` |
 | `PlanLimitService` | plan-limit checks | Backs `/internal/plan-limits`; advisory-lock guarded against TOCTOU |
