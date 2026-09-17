@@ -62,7 +62,7 @@ public class GraphNodeEventConsumer {
                     "cartogra.registry.service.updated",
                     "cartogra.registry.service.deleted"
             },
-            groupId = "${spring.kafka.consumer.group-id:topology-consumer}"
+            groupId = "${spring.kafka.consumer.group-id}"
     )
     public void consume(ConsumerRecord<String, String> record, Acknowledgment ack) {
         log.debug("Received {} key={} partition={} offset={}",
