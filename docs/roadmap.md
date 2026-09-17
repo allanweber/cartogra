@@ -90,8 +90,9 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 *Standing checks (§2 — Definition of done):*
 
-- [ ] Every story in this phase passed `/code-review` and `/security-review` before merge.
-- [ ] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
+- [x] Every story in this phase passed `/code-review` and `/security-review` before merge.
+- [x] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
+- [ ] `/impeccable critique` run over every screen this phase touched; findings fixed or recorded.
 - [ ] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
 - [ ] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
 
@@ -129,6 +130,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 - [ ] Every story in this phase passed `/code-review` and `/security-review` before merge.
 - [ ] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
+- [ ] `/impeccable critique` run over every screen this phase touched; findings fixed or recorded.
 - [ ] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
 - [ ] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
 
@@ -165,6 +167,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 - [ ] Every story in this phase passed `/code-review` and `/security-review` before merge.
 - [ ] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
+- [ ] `/impeccable critique` run over every screen this phase touched; findings fixed or recorded.
 - [ ] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
 - [ ] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
 
@@ -199,6 +202,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 - [ ] Every story in this phase passed `/code-review` and `/security-review` before merge.
 - [ ] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
+- [ ] `/impeccable critique` run over every screen this phase touched; findings fixed or recorded.
 - [ ] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
 - [ ] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
 
@@ -234,6 +238,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 - [ ] Every story in this phase passed `/code-review` and `/security-review` before merge.
 - [ ] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
+- [ ] `/impeccable critique` run over every screen this phase touched; findings fixed or recorded.
 - [ ] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
 - [ ] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
 
@@ -274,6 +279,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 - [ ] Every story in this phase passed `/code-review` and `/security-review` before merge.
 - [ ] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
+- [ ] `/impeccable critique` run over every screen this phase touched; findings fixed or recorded.
 - [ ] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
 - [ ] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
 
@@ -314,6 +320,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 - [ ] Every story in this phase passed `/code-review` and `/security-review` before merge.
 - [ ] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
+- [ ] `/impeccable critique` run over every screen this phase touched; findings fixed or recorded.
 - [ ] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
 - [ ] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
 
@@ -354,6 +361,7 @@ Triggered by real users, not by a calendar. Before this, Phase 4's single host i
 
 - [ ] Every story in this phase passed `/code-review` and `/security-review` before merge.
 - [ ] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
+- [ ] `/impeccable critique` run over every screen this phase touched; findings fixed or recorded.
 - [ ] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
 - [ ] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
 
@@ -388,6 +396,7 @@ Moved out of the old Phase 3 because none of it tests the product hypothesis, an
 
 - [ ] Every story in this phase passed `/code-review` and `/security-review` before merge.
 - [ ] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
+- [ ] `/impeccable critique` run over every screen this phase touched; findings fixed or recorded.
 - [ ] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
 - [ ] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
 
