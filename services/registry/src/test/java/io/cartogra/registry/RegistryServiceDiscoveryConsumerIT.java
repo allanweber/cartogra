@@ -47,6 +47,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -157,30 +158,44 @@ class RegistryServiceDiscoveryConsumerIT {
         var envelope = EventEnvelope.of("service.discovered", connectionId, tenantId, 1, payload);
         String json = objectMapper.writeValueAsString(envelope);
 
-        var producerFactory = new DefaultKafkaProducerFactory<String, String>(Map.of(
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers,
-                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
-                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class));
-        var template = new KafkaTemplate<>(producerFactory);
-        template.send(new ProducerRecord<>("cartogra.ingestion.service.discovered", externalId, json));
-        template.flush();
+        try (KafkaConsumer<String, String> registered = newRawConsumer("cartogra.registry.service.registered")) {
+            var producerFactory = new DefaultKafkaProducerFactory<String, String>(Map.of(
+                    ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers,
+                    ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
+                    ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class));
+            var template = new KafkaTemplate<>(producerFactory);
+            template.send(new ProducerRecord<>("cartogra.ingestion.service.discovered", externalId, json));
+            template.flush();
 
-        Awaitility.await()
-                .atMost(Duration.ofSeconds(15))
-                .pollInterval(Duration.ofMillis(300))
-                .untilAsserted(() -> {
-                    Optional<Service> found = serviceRepository.findByExternalId(tenantId, externalId);
-                    assertThat(found).isPresent();
+            AtomicReference<Service> savedService = new AtomicReference<>();
+            Awaitility.await()
+                    .atMost(Duration.ofSeconds(15))
+                    .pollInterval(Duration.ofMillis(300))
+                    .untilAsserted(() -> {
+                        Optional<Service> found = serviceRepository.findByExternalId(tenantId, externalId);
+                        assertThat(found).isPresent();
 
-                    Service svc = found.get();
-                    assertThat(svc.lastCommitSha()).isEqualTo("abc123");
-                    assertThat(svc.techStack()).contains("java");
-                    assertThat(svc.source()).isEqualTo("github");
-                    assertThat(svc.teamId()).isNull();
+                        Service svc = found.get();
+                        assertThat(svc.lastCommitSha()).isEqualTo("abc123");
+                        assertThat(svc.techStack()).contains("java");
+                        assertThat(svc.source()).isEqualTo("github");
+                        assertThat(svc.teamId()).isNull();
 
-                    var history = serviceHistoryRepository.findByServiceId(tenantId, svc.id(), 10, 0);
-                    assertThat(history).isNotEmpty();
-                });
+                        var history = serviceHistoryRepository.findByServiceId(tenantId, svc.id(), 10, 0);
+                        assertThat(history).isNotEmpty();
+
+                        savedService.set(svc);
+                    });
+
+            // Discovery must publish the same lifecycle event as the manual create path —
+            // it's what Topology's GraphNodeEventConsumer projects into graph_nodes.
+            ConsumerRecord<String, String> registeredRecord = pollForRecord(
+                    registered, savedService.get().id().toString(), Duration.ofSeconds(15));
+            assertThat(registeredRecord)
+                    .as("upsertDiscovered should publish cartogra.registry.service.registered so downstream " +
+                            "projections (e.g. Topology's graph_nodes) pick up discovered services")
+                    .isNotNull();
+        }
     }
 
     @Test

@@ -394,6 +394,7 @@ public class ServiceService {
             );
             Service saved = serviceRepository.save(updated);
             historyRepository.save(snapshot(saved, SystemActors.SYSTEM));
+            eventProducer.publishUpdated(saved);
         } else {
             // K8s never creates a row with externalId or connectionId.
             var created = new Service(
@@ -413,6 +414,7 @@ public class ServiceService {
             );
             Service saved = serviceRepository.save(created);
             historyRepository.save(snapshot(saved, SystemActors.SYSTEM));
+            eventProducer.publishRegistered(saved);
         }
     }
 
