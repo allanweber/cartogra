@@ -109,7 +109,7 @@ describe('DashboardPage', () => {
 
     // 1 healthy of 3 -> 33%
     expect(await screen.findByText('33%')).toBeInTheDocument()
-    expect(screen.getByText(/1 of 3 healthy/)).toBeInTheDocument()
+    expect(screen.getByText(/1 of 3 services healthy/)).toBeInTheDocument()
   })
 
   it('flags a service as stale when lastDeployedAt is older than 14 days', async () => {

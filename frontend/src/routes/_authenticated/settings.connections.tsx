@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
-import { Activity, Cloud, Hexagon, Server } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Activity, Cloud, Hexagon, RotateCw, Server } from 'lucide-react'
 import { useState } from 'react'
+import { toast } from 'sonner'
 
 import type { KubernetesCluster } from '#/components/KubernetesClusterDialog'
 import { KubernetesClusterDialog } from '#/components/KubernetesClusterDialog'
@@ -13,7 +14,7 @@ import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
 import { Skeleton } from '#/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '#/components/ui/tooltip'
-import { ApiError, apiFetch } from '#/lib/api'
+import { ApiError, apiFetch, apiMutate } from '#/lib/api'
 import type { PageResult, TenantInfo } from '#/lib/registry-types'
 import { useWizardStore } from '#/stores/useWizardStore'
 import { createFileRoute } from '@tanstack/react-router'
@@ -81,6 +82,7 @@ const PROVIDERS: ProviderItem[] = [
 
 function ConnectionsPage() {
   const openWizard = useWizardStore((s) => s.openWizard)
+  const queryClient = useQueryClient()
   const [dialogProvider, setDialogProvider] = useState<'github' | 'azuredevops' | null>(null)
   const [editConnection, setEditConnection] = useState<ScmConnection | undefined>(undefined)
   const [k8sDialogOpen, setK8sDialogOpen] = useState(false)
@@ -89,6 +91,17 @@ function ConnectionsPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['scm-connections'],
     queryFn: () => apiFetch<PageResult<ScmConnection>>('/v1/ingestion/scm-connections'),
+  })
+
+  const retrySyncMutation = useMutation({
+    mutationFn: (connectionId: string) => apiMutate<void>(`/v1/ingestion/scm-connections/${connectionId}/sync`, {}),
+    onSuccess: () => {
+      toast.success('Sync retried')
+      queryClient.invalidateQueries({ queryKey: ['scm-connections'] })
+    },
+    onError: (err: Error) => {
+      toast.error(err.message, { description: err instanceof ApiError ? `Trace: ${err.traceId}` : undefined })
+    },
   })
 
   const { data: countsData } = useQuery({
@@ -177,12 +190,25 @@ function ConnectionsPage() {
 
         {!isLoading && !error && failedConnections.length > 0 && (
           <Alert variant="destructive">
-            <AlertDescription>
-              {failedConnections.length === 1
-                ? `${PROVIDERS.find((p) => p.key === failedConnections[0].provider)?.label ?? failedConnections[0].provider} sync failed`
-                : `${failedConnections.length} connections failed to sync`}
-              {failedConnections[0].lastSyncError ? ` — ${failedConnections[0].lastSyncError}` : ''}
-              . Open "Manage" below to review.
+            <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+              <span>
+                {failedConnections.length === 1
+                  ? `${PROVIDERS.find((p) => p.key === failedConnections[0].provider)?.label ?? failedConnections[0].provider} sync failed`
+                  : `${failedConnections.length} connections failed to sync`}
+                {failedConnections[0].lastSyncError ? ` — ${failedConnections[0].lastSyncError}` : ''}
+              </span>
+              {failedConnections.length === 1 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => retrySyncMutation.mutate(failedConnections[0].id)}
+                  disabled={retrySyncMutation.isPending}
+                  className="gap-1.5"
+                >
+                  <RotateCw className="size-3.5" aria-hidden="true" />
+                  Retry sync
+                </Button>
+              )}
             </AlertDescription>
           </Alert>
         )}
@@ -192,64 +218,55 @@ function ConnectionsPage() {
             {PROVIDERS.map((p) => {
               if (p.key === 'kubernetes') {
                 const clusterCount = clusters.length
+                const canAddMore = !k8sLimitReached
                 return (
-                  <div key={p.key} className="flex items-center gap-4 px-5 py-4">
-                    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                      {p.icon}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">{p.label}</p>
-                      {clusterCount > 0 ? (
-                        <p className="text-xs text-muted-foreground truncate">
-                          {clusterCount} cluster{clusterCount !== 1 ? 's' : ''} registered
-                        </p>
-                      ) : (
-                        <p className="text-xs text-muted-foreground truncate">{p.description}</p>
+                  <div key={p.key} className="px-5 py-4">
+                    <div className="flex items-center gap-4">
+                      <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                        {p.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{p.label}</p>
+                        {clusterCount > 0 ? (
+                          <p className="text-xs text-muted-foreground truncate">
+                            {clusterCount} cluster{clusterCount !== 1 ? 's' : ''} registered
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground truncate">{p.description}</p>
+                        )}
+                      </div>
+                      {clusterCount === 0 && (
+                        k8sLimitReached ? (
+                          <DisabledConnectButton
+                            reason={maxK8sClusters === 0
+                              ? 'Not included in your plan'
+                              : 'Plan limit reached — upgrade to connect more clusters'}
+                          />
+                        ) : (
+                          <Button size="sm" onClick={() => openCreate(p.key)}>
+                            Connect
+                          </Button>
+                        )
                       )}
                     </div>
-                    {clusterCount > 0 ? (
-                      <div className="flex items-center gap-2.5 shrink-0">
-                        {clusters[0].status === 'ACTIVE' && (
-                          <span className="flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400">
-                            <span className="size-1.5 rounded-full bg-green-500" />
-                            Active
-                          </span>
-                        )}
-                        {clusters[0].status === 'CONNECTING' && (
-                          <span className="flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
-                            <span className="size-1.5 rounded-full bg-amber-500" />
-                            Connecting
-                          </span>
-                        )}
-                        {clusters[0].status === 'ERROR' && (
-                          <span className="flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400">
-                            <span className="size-1.5 rounded-full bg-red-500" />
-                            Error
-                          </span>
-                        )}
-                        <Button size="sm" variant="outline" onClick={() => openEditCluster(clusters[0])}>
-                          Manage
-                        </Button>
-                      </div>
-                    ) : k8sLimitReached ? (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span>
-                            <Button size="sm" disabled>
-                              Connect
+
+                    {clusterCount > 0 && (
+                      <div className="mt-3 space-y-2 pl-[52px]">
+                        {clusters.map((cluster) => (
+                          <div key={cluster.id} className="flex items-center gap-2.5 rounded-md bg-muted/40 px-3 py-2">
+                            <span className="flex-1 min-w-0 truncate text-sm">{cluster.name}</span>
+                            <ClusterStatusIndicator status={cluster.status} />
+                            <Button size="sm" variant="outline" onClick={() => openEditCluster(cluster)}>
+                              Manage
                             </Button>
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {maxK8sClusters === 0
-                            ? 'Not included in your plan'
-                            : 'Plan limit reached — upgrade to connect more clusters'}
-                        </TooltipContent>
-                      </Tooltip>
-                    ) : (
-                      <Button size="sm" onClick={() => openCreate(p.key)}>
-                        Connect
-                      </Button>
+                          </div>
+                        ))}
+                        {canAddMore && (
+                          <Button size="sm" variant="ghost" onClick={() => openCreate(p.key)} className="gap-1.5 text-muted-foreground">
+                            + Add another cluster
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </div>
                 )
@@ -265,7 +282,7 @@ function ConnectionsPage() {
                     <p className="text-sm font-medium">{p.label}</p>
                     {conn ? (
                       conn.lastSyncStatus === 'FAILED' && conn.lastSyncError ? (
-                        <p className="text-xs text-red-600 dark:text-red-400 truncate" title={conn.lastSyncError}>
+                        <p className="text-xs text-critical truncate" title={conn.lastSyncError}>
                           {conn.lastSyncError}
                         </p>
                       ) : (
@@ -287,13 +304,25 @@ function ConnectionsPage() {
                   ) : conn ? (
                     <div className="flex items-center gap-2.5 shrink-0">
                       {conn.lastSyncStatus === 'FAILED' ? (
-                        <span className="flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400">
-                          <span className="size-1.5 rounded-full bg-red-500" />
-                          Sync failed
-                        </span>
+                        <>
+                          <span className="flex items-center gap-1.5 text-xs font-medium text-critical">
+                            <span className="size-1.5 rounded-full bg-current" />
+                            Sync failed
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => retrySyncMutation.mutate(conn.id)}
+                            disabled={retrySyncMutation.isPending}
+                            className="gap-1.5"
+                          >
+                            <RotateCw className="size-3.5" aria-hidden="true" />
+                            Retry
+                          </Button>
+                        </>
                       ) : (
-                        <span className="flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400">
-                          <span className="size-1.5 rounded-full bg-green-500" />
+                        <span className="flex items-center gap-1.5 text-xs font-medium text-success">
+                          <span className="size-1.5 rounded-full bg-current" />
                           Connected
                         </span>
                       )}
@@ -302,20 +331,11 @@ function ConnectionsPage() {
                       </Button>
                     </div>
                   ) : scmLimitReached ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span>
-                          <Button size="sm" disabled>
-                            Connect
-                          </Button>
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {maxScmConnections === 0
-                          ? 'Not included in your plan'
-                          : 'Plan limit reached — upgrade to connect more providers'}
-                      </TooltipContent>
-                    </Tooltip>
+                    <DisabledConnectButton
+                      reason={maxScmConnections === 0
+                        ? 'Not included in your plan'
+                        : 'Plan limit reached — upgrade to connect more providers'}
+                    />
                   ) : (
                     <Button size="sm" onClick={() => openCreate(p.key)}>
                       Connect
@@ -345,5 +365,51 @@ function ConnectionsPage() {
         cluster={editCluster}
       />
     </SettingsTabsLayout>
+  )
+}
+
+function ClusterStatusIndicator({ status }: { status: KubernetesCluster['status'] }) {
+  if (status === 'ACTIVE') {
+    return (
+      <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-success">
+        <span className="size-1.5 rounded-full bg-current" />
+        Active
+      </span>
+    )
+  }
+  if (status === 'CONNECTING') {
+    return (
+      <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-warning">
+        <span className="size-1.5 rounded-full bg-current" />
+        Connecting
+      </span>
+    )
+  }
+  return (
+    <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-critical">
+      <span className="size-1.5 rounded-full bg-current" />
+      Error
+    </span>
+  )
+}
+
+// Kept keyboard-focusable and clickable (not `disabled`) so the plan-limit reason reaches
+// keyboard/screen-reader users too, not only mouse hover on a Tooltip over a disabled control.
+function DisabledConnectButton({ reason }: { reason: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          size="sm"
+          variant="outline"
+          aria-disabled="true"
+          className="cursor-not-allowed text-muted-foreground opacity-60 hover:bg-transparent"
+          onClick={() => toast.info(reason)}
+        >
+          Connect
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{reason}</TooltipContent>
+    </Tooltip>
   )
 }

@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, List, Plus, Search } from 'lucide-react'
-import { useState } from 'react'
+import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, List, Plus, RotateCw, Search, SlidersHorizontal } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { z } from 'zod'
 
 import { useDebounce } from '#/hooks/useDebounce'
 import { AppLayout } from '#/components/AppLayout'
@@ -18,8 +19,19 @@ import { cn } from '#/lib/utils'
 
 import type { PageResult, RegistryService, RegistryTeam, ScmSource, ServiceHealth } from '#/lib/registry-types'
 
+const catalogSearchSchema = z.object({
+  q: z.string().optional(),
+  team: z.string().optional(),
+  health: z.enum(['healthy', 'degraded', 'down']).optional(),
+  source: z.string().optional(),
+  tech: z.array(z.string()).optional(),
+  view: z.enum(['grid', 'list']).optional(),
+  page: z.number().int().min(0).optional(),
+})
+
 export const Route = createFileRoute('/_authenticated/catalog/')({
   component: CatalogPage,
+  validateSearch: catalogSearchSchema,
 })
 
 const LIMIT = 100
@@ -78,46 +90,79 @@ function riskBarClass(score: number): string {
   return 'bg-success'
 }
 
+const UNOWNED_SENTINEL = '__unowned__'
+
+function useRelativeSeconds(timestamp: number | undefined): number {
+  const [, forceTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => forceTick((n) => n + 1), 1000)
+    return () => clearInterval(id)
+  }, [])
+  if (!timestamp) return 0
+  return Math.max(0, Math.floor((Date.now() - timestamp) / 1000))
+}
+
 function CatalogPage() {
-  const [query, setQuery] = useState('')
-  const [teamFilter, setTeamFilter] = useState('')
-  const [healthFilter, setHealthFilter] = useState<ServiceHealth | 'all'>('all')
-  const [sourceFilter, setSourceFilter] = useState<ScmSource | 'all'>('all')
-  const [techFilter, setTechFilter] = useState<Set<string>>(new Set())
-  const [view, setView] = useState<'grid' | 'list'>('grid')
-  const [page, setPage] = useState(0)
+  const search = Route.useSearch()
+  const navigate = Route.useNavigate()
   const [registerOpen, setRegisterOpen] = useState(false)
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false)
 
-  const dQuery  = useDebounce(query, 500)
-  const dTeam   = useDebounce(teamFilter, 500)
-  const dHealth = useDebounce(healthFilter, 500)
-  const dSource = useDebounce(sourceFilter, 500)
-  const dTech   = useDebounce(techFilter, 500)
-  const dPage   = useDebounce(page, 500)
+  // Free-text search is debounced (throttles keystrokes); every other filter
+  // and pagination control applies immediately — it's a discrete click, not typing.
+  const [query, setQuery] = useState(search.q ?? '')
+  const dQuery = useDebounce(query, 500)
+  useEffect(() => {
+    if (dQuery !== (search.q ?? '')) {
+      navigate({ search: (prev) => ({ ...prev, q: dQuery || undefined, page: undefined }), replace: true })
+    }
+    // Deliberately reacting only to dQuery: also depending on search.q would re-fire this
+    // effect on browser back/forward before dQuery catches up (debounced), fighting the nav.
+  }, [dQuery])
+  // Keep the input in sync with the URL on browser back/forward navigation.
+  useEffect(() => {
+    if ((search.q ?? '') !== query) setQuery(search.q ?? '')
+    // Deliberately reacting only to search.q — this effect exists to pull URL changes into
+    // local state, not the other way around (that's the effect above).
+  }, [search.q])
 
-  const healthDbValue = HEALTH_OPTIONS.find((f) => f.value === dHealth)?.dbValue
+  const teamFilter = search.team ?? ''
+  const healthFilter = search.health ?? 'all'
+  const sourceFilter = (search.source ?? 'all') as ScmSource | 'all'
+  const techFilter = new Set(search.tech ?? [])
+  const view = search.view ?? 'grid'
+  const page = search.page ?? 0
 
-  const UNOWNED_SENTINEL = '__unowned__'
+  function updateSearch(patch: Partial<z.infer<typeof catalogSearchSchema>>, resetPageNum = true) {
+    navigate({
+      search: (prev) => ({ ...prev, ...patch, page: resetPageNum ? undefined : (patch.page ?? prev.page) }),
+      replace: true,
+    })
+  }
 
-  const { data: pageResult, isLoading, error } = useQuery({
-    queryKey: ['services', dTeam, dHealth, dSource, [...dTech].sort(), dQuery, dPage],
+  const healthDbValue = HEALTH_OPTIONS.find((f) => f.value === healthFilter)?.dbValue
+
+  const { data: pageResult, isLoading, error, dataUpdatedAt, refetch } = useQuery({
+    queryKey: ['services', teamFilter, healthFilter, sourceFilter, [...techFilter].sort(), dQuery, page],
     queryFn: () => {
       const params = new URLSearchParams()
-      if (dTeam === UNOWNED_SENTINEL) {
+      if (teamFilter === UNOWNED_SENTINEL) {
         params.set('unowned', 'true')
-      } else if (dTeam) {
-        params.set('teamId', dTeam)
+      } else if (teamFilter) {
+        params.set('teamId', teamFilter)
       }
       if (healthDbValue) params.set('health', healthDbValue)
-      if (dSource !== 'all') params.set('source', dSource)
-      dTech.forEach((t) => params.append('techStack', t))
+      if (sourceFilter !== 'all') params.set('source', sourceFilter)
+      techFilter.forEach((t) => params.append('techStack', t))
       if (dQuery.trim()) params.set('search', dQuery.trim())
       params.set('limit', String(LIMIT))
-      params.set('offset', String(dPage * LIMIT))
+      params.set('offset', String(page * LIMIT))
       return apiFetch<PageResult<RegistryService>>(`/v1/registry/services?${params}`)
     },
     refetchInterval: 5000,
   })
+
+  const updatedSecondsAgo = useRelativeSeconds(dataUpdatedAt)
 
   const { data: teamsPage } = useQuery({
     queryKey: ['teams'],
@@ -135,17 +180,13 @@ function CatalogPage() {
   const total = pageResult?.total ?? 0
   const totalPages = Math.ceil(total / LIMIT)
 
-  function resetPage() { setPage(0) }
-
   const hasActiveFilters = query !== '' || teamFilter !== '' || healthFilter !== 'all' || sourceFilter !== 'all' || techFilter.size > 0
+  const moreFiltersActive = sourceFilter !== 'all' || techFilter.size > 0
+  const moreFiltersCount = (sourceFilter !== 'all' ? 1 : 0) + techFilter.size
 
   function clearAllFilters() {
     setQuery('')
-    setTeamFilter('')
-    setHealthFilter('all')
-    setSourceFilter('all')
-    setTechFilter(new Set())
-    setPage(0)
+    navigate({ search: {}, replace: true })
   }
 
   const healthCounts = {
@@ -158,8 +199,6 @@ function CatalogPage() {
     ? 'Unowned'
     : (teams.find((t) => t.id === teamFilter)?.name ?? 'All teams')
   const selectedHealthLabel = HEALTH_OPTIONS.find((f) => f.value === healthFilter)?.label ?? 'All health'
-  const selectedSourceLabel = SOURCE_OPTIONS.find((f) => f.value === sourceFilter)?.label ?? 'All sources'
-  const selectedTechLabel = techFilter.size > 0 ? `All tech (${techFilter.size})` : 'All tech'
 
   const pageDescription = isLoading ? undefined : `${total} service${total !== 1 ? 's' : ''}`
 
@@ -182,7 +221,7 @@ function CatalogPage() {
             <Input
               placeholder="Search services..."
               value={query}
-              onChange={(e) => { setQuery(e.target.value); resetPage() }}
+              onChange={(e) => setQuery(e.target.value)}
               className="pl-8 text-sm"
               aria-label="Search services"
             />
@@ -203,17 +242,17 @@ function CatalogPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
-              <DropdownMenuItem onSelect={() => { setTeamFilter(''); resetPage() }} className="flex items-center gap-2">
+              <DropdownMenuItem onSelect={() => updateSearch({ team: undefined })} className="flex items-center gap-2">
                 <CheckMark checked={!teamFilter} />
                 All teams
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => { setTeamFilter(UNOWNED_SENTINEL); resetPage() }} className="flex items-center gap-2">
+              <DropdownMenuItem onSelect={() => updateSearch({ team: UNOWNED_SENTINEL })} className="flex items-center gap-2">
                 <CheckMark checked={teamFilter === UNOWNED_SENTINEL} />
                 <AlertTriangle className="size-3.5 text-muted-foreground" aria-hidden="true" />
                 Unowned
               </DropdownMenuItem>
               {teams.map((t) => (
-                <DropdownMenuItem key={t.id} onSelect={() => { setTeamFilter(t.id); resetPage() }} className="flex items-center gap-2">
+                <DropdownMenuItem key={t.id} onSelect={() => updateSearch({ team: t.id })} className="flex items-center gap-2">
                   <CheckMark checked={teamFilter === t.id} />
                   {t.name}
                 </DropdownMenuItem>
@@ -237,7 +276,11 @@ function CatalogPage() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
               {HEALTH_OPTIONS.map((opt) => (
-                <DropdownMenuItem key={opt.value} onSelect={() => { setHealthFilter(opt.value); resetPage() }} className="flex items-center gap-2">
+                <DropdownMenuItem
+                  key={opt.value}
+                  onSelect={() => updateSearch({ health: opt.value === 'all' ? undefined : opt.value })}
+                  className="flex items-center gap-2"
+                >
                   <CheckMark checked={healthFilter === opt.value} />
                   {opt.label}
                 </DropdownMenuItem>
@@ -245,61 +288,50 @@ function CatalogPage() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <DropdownMenu>
+          <DropdownMenu open={moreFiltersOpen} onOpenChange={setMoreFiltersOpen}>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
                 className={cn(
                   'h-auto gap-1.5 px-3 py-2 text-sm shadow-sm',
-                  sourceFilter !== 'all' ? 'border-primary bg-primary/5 text-foreground' : 'border-input bg-background text-foreground',
+                  moreFiltersActive ? 'border-primary bg-primary/5 text-foreground' : 'border-input bg-background text-foreground',
                 )}
-                aria-label="Filter by source"
+                aria-label="More filters"
               >
-                {selectedSourceLabel}
-                <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                <SlidersHorizontal className="size-3.5" aria-hidden="true" />
+                More filters
+                {moreFiltersCount > 0 && (
+                  <span className="flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                    {moreFiltersCount}
+                  </span>
+                )}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
+            <DropdownMenuContent align="start" className="max-h-80 w-64 overflow-y-auto">
+              <p className="px-2 pb-1 pt-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Source
+              </p>
               {SOURCE_OPTIONS.map((opt) => (
-                <DropdownMenuItem key={opt.value} onSelect={() => { setSourceFilter(opt.value); resetPage() }} className="flex items-center gap-2">
+                <DropdownMenuItem
+                  key={opt.value}
+                  onSelect={(e) => { e.preventDefault(); updateSearch({ source: opt.value === 'all' ? undefined : opt.value }) }}
+                  className="flex items-center gap-2"
+                >
                   <CheckMark checked={sourceFilter === opt.value} />
                   {opt.label}
                 </DropdownMenuItem>
               ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  'h-auto gap-1.5 px-3 py-2 text-sm shadow-sm',
-                  techFilter.size > 0 ? 'border-primary bg-primary/5 text-foreground' : 'border-input bg-background text-foreground',
-                )}
-                aria-label="Filter by tech stack"
-              >
-                {selectedTechLabel}
-                <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden="true" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
-              {techFilter.size > 0 && (
-                <DropdownMenuItem onSelect={() => { setTechFilter(new Set()); resetPage() }} className="text-muted-foreground">
-                  Clear filter
-                </DropdownMenuItem>
-              )}
+              <p className="mt-1 border-t border-border px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Tech stack
+              </p>
               {(techStacks ?? []).map((tech) => (
                 <DropdownMenuItem
                   key={tech}
                   onSelect={(e) => {
                     e.preventDefault()
-                    setTechFilter((prev) => {
-                      const next = new Set(prev)
-                      next.has(tech) ? next.delete(tech) : next.add(tech)
-                      return next
-                    })
-                    resetPage()
+                    const next = new Set(techFilter)
+                    next.has(tech) ? next.delete(tech) : next.add(tech)
+                    updateSearch({ tech: next.size > 0 ? [...next] : undefined })
                   }}
                   className="flex items-center gap-2"
                 >
@@ -313,7 +345,7 @@ function CatalogPage() {
           <div className="ml-auto flex overflow-hidden rounded-md border border-border">
             <Button
               variant="ghost"
-              onClick={() => setView('grid')}
+              onClick={() => updateSearch({ view: 'grid' }, false)}
               className={cn(
                 'h-auto rounded-none px-2.5 py-2 pointer-coarse:px-3.5 pointer-coarse:py-3',
                 view === 'grid' ? 'bg-primary text-primary-foreground hover:bg-primary' : 'bg-background text-muted-foreground hover:bg-muted',
@@ -325,7 +357,7 @@ function CatalogPage() {
             </Button>
             <Button
               variant="ghost"
-              onClick={() => setView('list')}
+              onClick={() => updateSearch({ view: 'list' }, false)}
               className={cn(
                 'h-auto rounded-none px-2.5 py-2 pointer-coarse:px-3.5 pointer-coarse:py-3',
                 view === 'list' ? 'bg-primary text-primary-foreground hover:bg-primary' : 'bg-background text-muted-foreground hover:bg-muted',
@@ -348,31 +380,38 @@ function CatalogPage() {
           )}
         </div>
 
-        {/* Health quick-filter chips */}
-        <div className="flex flex-wrap gap-2">
-          {(['healthy', 'degraded', 'down'] as ServiceHealth[]).map((value) => (
-            <Button
-              key={value}
-              variant="ghost"
-              onClick={() => { setHealthFilter(healthFilter === value ? 'all' : value); resetPage() }}
-              className={cn(
-                'h-auto gap-1.5 rounded-full border px-3 py-1 text-xs font-medium',
-                healthFilter === value
-                  ? 'border-primary bg-primary text-primary-foreground hover:bg-primary'
-                  : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground',
-              )}
-            >
-              <span
+        {/* Health quick-filter chips + freshness indicator */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-2">
+            {(['healthy', 'degraded', 'down'] as ServiceHealth[]).map((value) => (
+              <Button
+                key={value}
+                variant="ghost"
+                onClick={() => updateSearch({ health: healthFilter === value ? undefined : value })}
                 className={cn(
-                  'size-1.5 rounded-full',
-                  value === 'healthy' && 'bg-success',
-                  value === 'degraded' && 'bg-warning',
-                  value === 'down' && 'bg-critical',
+                  'h-auto gap-1.5 rounded-full border px-3 py-1 text-xs font-medium',
+                  healthFilter === value
+                    ? 'border-primary bg-primary text-primary-foreground hover:bg-primary'
+                    : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground',
                 )}
-              />
-              {value.charAt(0).toUpperCase() + value.slice(1)} ({healthCounts[value]})
-            </Button>
-          ))}
+              >
+                <span
+                  className={cn(
+                    'size-1.5 rounded-full',
+                    value === 'healthy' && 'bg-success',
+                    value === 'degraded' && 'bg-warning',
+                    value === 'down' && 'bg-critical',
+                  )}
+                />
+                {value.charAt(0).toUpperCase() + value.slice(1)} ({healthCounts[value]})
+              </Button>
+            ))}
+          </div>
+          {!isLoading && !error && dataUpdatedAt > 0 && (
+            <p className="shrink-0 text-xs text-muted-foreground">
+              Updated {updatedSecondsAgo < 5 ? 'just now' : `${updatedSecondsAgo}s ago`}
+            </p>
+          )}
         </div>
 
         {/* Content */}
@@ -384,9 +423,15 @@ function CatalogPage() {
           </div>
         ) : error ? (
           <Alert variant="destructive">
-            <AlertDescription>
-              {error.message}
-              {error instanceof ApiError && ` (trace: ${error.traceId})`}
+            <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+              <span>
+                {error.message}
+                {error instanceof ApiError && ` (trace: ${error.traceId})`}
+              </span>
+              <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1.5">
+                <RotateCw className="size-3.5" aria-hidden="true" />
+                Retry
+              </Button>
             </AlertDescription>
           </Alert>
         ) : services.length === 0 ? (
@@ -414,7 +459,7 @@ function CatalogPage() {
             <div className="flex gap-2">
               <Button
                 variant="outline"
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                onClick={() => updateSearch({ page: Math.max(0, page - 1) || undefined }, false)}
                 disabled={page === 0}
                 className="h-auto gap-1 px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed"
               >
@@ -423,7 +468,7 @@ function CatalogPage() {
               </Button>
               <Button
                 variant="outline"
-                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                onClick={() => updateSearch({ page: Math.min(totalPages - 1, page + 1) || undefined }, false)}
                 disabled={page >= totalPages - 1}
                 className="h-auto gap-1 px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed"
               >

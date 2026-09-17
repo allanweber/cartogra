@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { useSyncExternalStore } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Route } from '#/routes/_authenticated/catalog.$serviceId'
 import { apiFetch, ApiError } from '#/lib/api'
@@ -8,11 +9,29 @@ import type { PageResult, RegistryService, RegistryTeam } from '#/lib/registry-t
 
 let mockServiceId = 'svc-1'
 
+// Minimal reactive stand-in for TanStack Router's search-param state: real enough that
+// navigate({ search }) calls re-render the component with the updated `tab`.
+let mockSearch: Record<string, unknown> = {}
+const searchListeners = new Set<() => void>()
+function setMockSearch(next: Record<string, unknown>) {
+  mockSearch = next
+  searchListeners.forEach((l) => l())
+}
+function subscribeMockSearch(listener: () => void) {
+  searchListeners.add(listener)
+  return () => searchListeners.delete(listener)
+}
+const navigateMock = vi.fn((opts: { search: unknown }) => {
+  setMockSearch(typeof opts.search === 'function' ? opts.search(mockSearch) : ((opts.search ?? {}) as Record<string, unknown>))
+})
+
 vi.mock('@tanstack/react-router', async () => ({
   ...await vi.importActual('@tanstack/react-router'),
   createFileRoute: () => (opts: Record<string, unknown>) => ({
     ...opts,
     useParams: () => ({ serviceId: mockServiceId }),
+    useSearch: () => useSyncExternalStore(subscribeMockSearch, () => mockSearch),
+    useNavigate: () => navigateMock,
   }),
   Link: ({ children, to, className }: { children: React.ReactNode; to: string; className?: string }) => (
     <a href={to} className={className}>{children}</a>
@@ -118,6 +137,7 @@ describe('ServiceDetailPage', () => {
     vi.clearAllMocks()
     mockServiceId = 'svc-1'
     mockRoles = ['ADMIN']
+    setMockSearch({})
   })
 
   it('shows skeletons while loading', () => {
@@ -176,7 +196,7 @@ describe('ServiceDetailPage', () => {
     renderPage()
     await screen.findByRole('heading', { name: 'payments-api' })
     fireEvent.click(screen.getByRole('tab', { name: /contracts/i }))
-    expect(screen.getByText(/contract data not yet available/i)).toBeInTheDocument()
+    expect(screen.getByText(/contract detail isn't built yet/i)).toBeInTheDocument()
   })
 
   it('activity tab shows placeholder', async () => {
@@ -184,7 +204,7 @@ describe('ServiceDetailPage', () => {
     renderPage()
     await screen.findByRole('heading', { name: 'payments-api' })
     fireEvent.click(screen.getByRole('tab', { name: /activity/i }))
-    expect(screen.getByText(/activity feed not yet available/i)).toBeInTheDocument()
+    expect(screen.getByText(/activity detail isn't built yet/i)).toBeInTheDocument()
   })
 
   it('shows error alert on fetch failure', async () => {

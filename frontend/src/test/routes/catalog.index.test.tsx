@@ -1,14 +1,35 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { useSyncExternalStore } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Route } from '#/routes/_authenticated/catalog.index'
 import { apiFetch, ApiError } from '#/lib/api'
 
 import type { PageResult, RegistryService, RegistryTeam } from '#/lib/registry-types'
 
+// Minimal reactive stand-in for TanStack Router's search-param state: real enough that
+// navigate({ search }) calls re-render the component with the updated filters.
+let mockSearch: Record<string, unknown> = {}
+const searchListeners = new Set<() => void>()
+function setMockSearch(next: Record<string, unknown>) {
+  mockSearch = next
+  searchListeners.forEach((l) => l())
+}
+function subscribeMockSearch(listener: () => void) {
+  searchListeners.add(listener)
+  return () => searchListeners.delete(listener)
+}
+const navigateMock = vi.fn((opts: { search: unknown }) => {
+  setMockSearch(typeof opts.search === 'function' ? opts.search(mockSearch) : ((opts.search ?? {}) as Record<string, unknown>))
+})
+
 vi.mock('@tanstack/react-router', async () => ({
   ...await vi.importActual('@tanstack/react-router'),
-  createFileRoute: () => (opts: Record<string, unknown>) => opts,
+  createFileRoute: () => (opts: Record<string, unknown>) => ({
+    ...opts,
+    useSearch: () => useSyncExternalStore(subscribeMockSearch, () => mockSearch),
+    useNavigate: () => navigateMock,
+  }),
   Link: ({ children, to, className }: { children: React.ReactNode; to: string; className?: string }) => (
     <a href={to} className={className}>{children}</a>
   ),
@@ -118,7 +139,10 @@ function mockApiFetch(services: PageResult<RegistryService> = EMPTY_SERVICES) {
 }
 
 describe('CatalogPage', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setMockSearch({})
+  })
 
   it('shows skeletons while loading', () => {
     vi.mocked(apiFetch).mockReturnValue(new Promise(() => {}))
