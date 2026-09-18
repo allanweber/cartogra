@@ -20,5 +20,6 @@ val dockerService = System.getProperty("docker.service")
 include(
     "shared:common",
     "shared:test-support",
+    "shared:web",
     "services:$dockerService"
 )
