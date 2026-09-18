@@ -88,6 +88,9 @@ subprojects {
             dependency("io.netty:netty-codec-dns:4.2.17.Final") // CVE-2026-75595 (supersedes the 4.2.15.Final override for CVE-2026-42579 etc.)
             dependency("io.netty:netty-handler:4.2.17.Final") // CVE-2026-75595
             dependency("io.netty:netty-resolver-dns:4.2.17.Final") // CVE-2026-75595
+            dependency("io.netty:netty-codec-compression:4.2.17.Final") // CVE-2026-42583, CVE-2026-59901
+            dependency("io.netty:netty-codec-http:4.2.17.Final") // CVE-2026-42584, CVE-2026-42587, CVE-2026-55831, CVE-2026-55833, CVE-2026-56745
+            dependency("io.netty:netty-codec-http2:4.2.17.Final") // CVE-2026-42587, CVE-2026-56819
             dependency("org.bouncycastle:bcprov-jdk18on:1.81.1") // CVE-2025-14813
         }
     }
