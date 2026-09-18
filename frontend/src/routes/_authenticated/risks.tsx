@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { ChevronDown, ChevronUp, Wrench } from 'lucide-react'
-import { useState } from 'react'
+import { ChevronDown, ChevronUp, ShieldCheck, Wrench } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 import { AppLayout } from '#/components/AppLayout'
 import { Badge } from '#/components/ui/badge'
@@ -17,15 +17,46 @@ export const Route = createFileRoute('/_authenticated/risks')({
 
 type SeverityFilter = RiskSeverity | 'all'
 
+const SEVERITY_ORDER: Record<RiskSeverity, number> = { critical: 0, warning: 1, info: 2 }
+const DISMISSED_KEY = 'cartogra:risks:dismissed'
+
 function RisksPage() {
   const [filter, setFilter] = useState<SeverityFilter>('all')
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set())
+  const [showDismissed, setShowDismissed] = useState(false)
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DISMISSED_KEY)
+      if (raw) setDismissed(new Set(JSON.parse(raw) as string[]))
+    } catch {
+      // per-viewer convenience only — ignore read failures
+    }
+  }, [])
+
+  function toggleDismissed(id: string) {
+    setDismissed((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      try {
+        localStorage.setItem(DISMISSED_KEY, JSON.stringify([...next]))
+      } catch {
+        // per-viewer convenience only — ignore write failures
+      }
+      return next
+    })
+  }
 
   const criticalCount = MOCK_RISKS.filter((r) => r.severity === 'critical').length
   const warningCount = MOCK_RISKS.filter((r) => r.severity === 'warning').length
   const infoCount = MOCK_RISKS.filter((r) => r.severity === 'info').length
 
-  const filtered =
-    filter === 'all' ? MOCK_RISKS : MOCK_RISKS.filter((r) => r.severity === filter)
+  const filtered = MOCK_RISKS
+    .filter((r) => filter === 'all' || r.severity === filter)
+    .filter((r) => showDismissed || !dismissed.has(r.id))
+    .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity])
+
+  const dismissedCount = MOCK_RISKS.filter((r) => dismissed.has(r.id)).length
 
   return (
     <AppLayout title="Risks" description="Active dependency and operational risks">
@@ -55,12 +86,42 @@ function RisksPage() {
           />
         </div>
 
+        {dismissedCount > 0 && (
+          <div className="flex justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowDismissed((s) => !s)}
+              className="h-auto gap-1.5 px-2 py-1 text-xs text-muted-foreground"
+            >
+              {showDismissed ? 'Hide' : 'Show'} {dismissedCount} dismissed
+            </Button>
+          </div>
+        )}
+
         {/* Risk cards */}
-        <div className="space-y-2">
-          {filtered.map((risk) => (
-            <RiskCard key={risk.id} risk={risk} />
-          ))}
-        </div>
+        {filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16 text-center">
+            <ShieldCheck className="mb-3 size-8 text-muted-foreground/50" aria-hidden="true" />
+            <p className="text-sm font-medium">No active risks</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {dismissed.size > 0 && !showDismissed
+                ? 'All risks in this filter have been dismissed.'
+                : 'Nothing matches this filter right now.'}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filtered.map((risk) => (
+              <RiskCard
+                key={risk.id}
+                risk={risk}
+                dismissed={dismissed.has(risk.id)}
+                onToggleDismissed={() => toggleDismissed(risk.id)}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </AppLayout>
   )
@@ -106,11 +167,19 @@ function SummaryCard({
   )
 }
 
-function RiskCard({ risk }: { risk: (typeof MOCK_RISKS)[number] }) {
+function RiskCard({
+  risk,
+  dismissed,
+  onToggleDismissed,
+}: {
+  risk: (typeof MOCK_RISKS)[number]
+  dismissed: boolean
+  onToggleDismissed: () => void
+}) {
   const [expanded, setExpanded] = useState(false)
 
   return (
-    <Card className="overflow-hidden">
+    <Card className={cn('overflow-hidden', dismissed && 'opacity-60')}>
       <Button
         variant="ghost"
         className="h-auto w-full justify-start rounded-none p-0 text-left hover:bg-transparent"
@@ -131,6 +200,11 @@ function RiskCard({ risk }: { risk: (typeof MOCK_RISKS)[number] }) {
               >
                 {risk.severity}
               </Badge>
+              {dismissed && (
+                <Badge variant="outline" className="text-xs text-muted-foreground">
+                  Dismissed
+                </Badge>
+              )}
             </div>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {risk.services.map((s) => (
@@ -165,6 +239,15 @@ function RiskCard({ risk }: { risk: (typeof MOCK_RISKS)[number] }) {
               </p>
               <p className="mt-1 text-sm">{risk.fix}</p>
             </div>
+          </div>
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={(e) => { e.stopPropagation(); onToggleDismissed() }}
+            >
+              {dismissed ? 'Restore' : 'Dismiss'}
+            </Button>
           </div>
         </CardContent>
       )}

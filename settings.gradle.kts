@@ -24,6 +24,7 @@ rootProject.name = "cartogra"
 include(
     "shared:common",
     "shared:test-support",
+    "shared:web",
     "services:gateway",
     "services:registry",
     "services:ingestion",

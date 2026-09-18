@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Activity, AlertTriangle, Clock, Pencil, Shield, Zap } from 'lucide-react'
-import { useState } from 'react'
+import { Activity, AlertTriangle, Clock, Network, Pencil, Shield, Zap } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { z } from 'zod'
 
 import { AppLayout } from '#/components/AppLayout'
 import { EditServiceDrawer } from '#/components/EditServiceDrawer'
@@ -16,11 +17,14 @@ import { cn } from '#/lib/utils'
 
 import type { PageResult, RegistryService, RegistryTeam, ServiceHealth } from '#/lib/registry-types'
 
+type TabId = 'overview' | 'dependencies' | 'contracts' | 'activity'
+
 export const Route = createFileRoute('/_authenticated/catalog/$serviceId')({
   component: ServiceDetailPage,
+  validateSearch: z.object({
+    tab: z.enum(['overview', 'dependencies', 'contracts', 'activity']).optional(),
+  }),
 })
-
-type TabId = 'overview' | 'dependencies' | 'contracts' | 'activity'
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'overview', label: 'Overview' },
@@ -120,7 +124,16 @@ function buildInsights(service: RegistryService, riskScore: number): Insight[] {
 
 function ServiceDetailPage() {
   const { serviceId } = Route.useParams()
-  const [tab, setTab] = useState<TabId>('overview')
+  const search = Route.useSearch()
+  const navigate = Route.useNavigate()
+  const tab = search.tab ?? 'overview'
+  const setTab = (next: TabId) => navigate({ search: { tab: next === 'overview' ? undefined : next }, replace: true })
+  const tabRefs = useRef<Record<TabId, HTMLButtonElement | null>>({
+    overview: null,
+    dependencies: null,
+    contracts: null,
+    activity: null,
+  })
   const [editOpen, setEditOpen] = useState(false)
   const isAdmin = useAuthStore((s) => s.user?.roles.includes('ADMIN') ?? false)
 
@@ -276,13 +289,29 @@ function ServiceDetailPage() {
           {/* Left column */}
           <div className="min-w-0 space-y-4">
             {/* Tab bar */}
-            <div role="tablist" className="flex border-b border-border">
+            <div
+              role="tablist"
+              className="flex border-b border-border"
+              onKeyDown={(e) => {
+                if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+                e.preventDefault()
+                const idx = TABS.findIndex((t) => t.id === tab)
+                const nextIdx = e.key === 'ArrowRight'
+                  ? (idx + 1) % TABS.length
+                  : (idx - 1 + TABS.length) % TABS.length
+                const nextTab = TABS[nextIdx]
+                setTab(nextTab.id)
+                tabRefs.current[nextTab.id]?.focus()
+              }}
+            >
               {TABS.map((t) => (
                 <Button
                   key={t.id}
+                  ref={(el) => { tabRefs.current[t.id] = el }}
                   variant="ghost"
                   id={`tab-${t.id}`}
                   role="tab"
+                  tabIndex={tab === t.id ? 0 : -1}
                   aria-selected={tab === t.id}
                   aria-controls={`panel-${t.id}`}
                   onClick={() => setTab(t.id)}
@@ -459,51 +488,77 @@ function ServiceDetailPage() {
             {/* Dependencies */}
             {tab === 'dependencies' && (
               <div id="panel-dependencies" role="tabpanel" aria-labelledby="tab-dependencies">
-                <EmptyTab icon={<Shield className="size-8" />} message="Dependency graph not yet available." />
+                <EmptyTab
+                  icon={<Network className="size-8" />}
+                  message="Per-service dependency detail isn't built yet."
+                  linkTo="/graph"
+                  linkLabel="See the full dependency graph"
+                />
               </div>
             )}
 
             {/* Contracts */}
             {tab === 'contracts' && (
               <div id="panel-contracts" role="tabpanel" aria-labelledby="tab-contracts">
-                <EmptyTab icon={<Shield className="size-8" />} message="Contract data not yet available." />
+                <EmptyTab
+                  icon={<Shield className="size-8" />}
+                  message="Per-service contract detail isn't built yet."
+                  linkTo="/contracts"
+                  linkLabel="See all contracts"
+                />
               </div>
             )}
 
             {/* Activity */}
             {tab === 'activity' && (
               <div id="panel-activity" role="tabpanel" aria-labelledby="tab-activity">
-                <EmptyTab icon={<Activity className="size-8" />} message="Activity feed not yet available." />
+                <EmptyTab
+                  icon={<Activity className="size-8" />}
+                  message="Per-service activity detail isn't built yet."
+                  linkTo="/timeline"
+                  linkLabel="See the full activity timeline"
+                />
               </div>
             )}
           </div>
 
           {/* Right sidebar */}
           <div className="space-y-4">
-            <Card>
+            <Card className="border-dashed">
               <CardHeader className="pb-2 pt-5">
-                <CardTitle className="text-sm font-semibold">Active Risks (0)</CardTitle>
+                <CardTitle className="text-sm font-semibold text-muted-foreground">Active Risks</CardTitle>
               </CardHeader>
               <CardContent className="pb-5 pt-0">
-                <p className="text-sm text-muted-foreground">No active risks detected.</p>
+                <p className="text-sm text-muted-foreground">
+                  Risk detection isn't available for individual services yet. See{' '}
+                  <Link to="/risks" className="text-primary hover:underline">the Risks page</Link> for
+                  org-wide risk signals.
+                </p>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="border-dashed">
               <CardHeader className="pb-2 pt-5">
-                <CardTitle className="text-sm font-semibold">Contract Impact</CardTitle>
+                <CardTitle className="text-sm font-semibold text-muted-foreground">Contract Impact</CardTitle>
               </CardHeader>
               <CardContent className="pb-5 pt-0">
-                <p className="text-sm text-muted-foreground">No contract data available.</p>
+                <p className="text-sm text-muted-foreground">
+                  Contract impact analysis isn't available for individual services yet. See{' '}
+                  <Link to="/contracts" className="text-primary hover:underline">the Contracts page</Link>.
+                </p>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="border-dashed">
               <CardHeader className="pb-2 pt-5">
-                <CardTitle className="text-sm font-semibold">Health History (7d)</CardTitle>
+                <CardTitle className="text-sm font-semibold text-muted-foreground">Health History</CardTitle>
               </CardHeader>
               <CardContent className="pb-5 pt-0">
-                <HealthHistoryBar health={health} />
+                <p className="text-sm text-muted-foreground">
+                  Historical health trend isn't tracked yet — this card will show a 7-day trend once
+                  health snapshots are recorded over time. Current status:{' '}
+                  <span className={cn('font-medium capitalize', healthTextClass(health))}>{health}</span>.
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -581,30 +636,26 @@ function MetaField({
   )
 }
 
-function HealthHistoryBar({ health }: { health: ServiceHealth }) {
-  const colorClass =
-    health === 'down' ? 'bg-critical' : health === 'degraded' ? 'bg-warning' : 'bg-success'
-
-  return (
-    <div>
-      <div className="flex gap-1">
-        {Array.from({ length: 7 }).map((_, i) => (
-          <div key={i} className={cn('h-7 flex-1 rounded-sm', colorClass, 'opacity-80')} />
-        ))}
-      </div>
-      <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-        <span>7d ago</span>
-        <span>Today</span>
-      </div>
-    </div>
-  )
-}
-
-function EmptyTab({ icon, message }: { icon: React.ReactNode; message: string }) {
+function EmptyTab({
+  icon,
+  message,
+  linkTo,
+  linkLabel,
+}: {
+  icon: React.ReactNode
+  message: string
+  linkTo?: string
+  linkLabel?: string
+}) {
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-12 text-center">
       <div className="mb-3 text-muted-foreground/50">{icon}</div>
       <p className="text-sm text-muted-foreground">{message}</p>
+      {linkTo && linkLabel && (
+        <Button asChild variant="outline" size="sm" className="mt-4">
+          <Link to={linkTo}>{linkLabel}</Link>
+        </Button>
+      )}
     </div>
   )
 }

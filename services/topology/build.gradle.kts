@@ -23,6 +23,7 @@ tasks.jacocoTestReport {
 
 dependencies {
     implementation(project(":shared:common"))
+    implementation(project(":shared:web"))
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-data-jdbc")
@@ -40,4 +41,5 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers-postgresql")
     testImplementation("org.springframework.kafka:spring-kafka-test")
     testImplementation("org.springframework.security:spring-security-test")
+    testImplementation("org.wiremock:wiremock-standalone:3.9.1")
 }

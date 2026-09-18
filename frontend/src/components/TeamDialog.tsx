@@ -17,6 +17,7 @@ import { Button } from '#/components/ui/button'
 import { Checkbox } from '#/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
+import { Label } from '#/components/ui/label'
 import { InviteUserDialog } from '#/components/InviteUserDialog'
 import { cn } from '#/lib/utils'
 
@@ -357,11 +358,12 @@ export function TeamDialog({
               <form.Field name="name">
                 {(field) => (
                   <div className="space-y-1.5">
-                    <label className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                    <Label htmlFor="team-name">
                       Team name
                       <span className="text-destructive">*</span>
-                    </label>
+                    </Label>
                     <Input
+                      id="team-name"
                       value={field.state.value}
                       onChange={(e) => field.handleChange(e.target.value)}
                       onBlur={field.handleBlur}

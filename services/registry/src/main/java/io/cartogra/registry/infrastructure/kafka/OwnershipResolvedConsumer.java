@@ -49,7 +49,7 @@ public class OwnershipResolvedConsumer {
         this.objectMapper = objectMapper;
     }
 
-    @KafkaListener(topics = "cartogra.ingestion.ownership.resolved", groupId = "${spring.kafka.consumer.group-id:registry-ownership-consumer}")
+    @KafkaListener(topics = "cartogra.ingestion.ownership.resolved", groupId = "registry-ownership-consumer")
     public void consume(ConsumerRecord<String, String> record, Acknowledgment ack) {
         Context ctx = W3CTraceContextPropagator.getInstance().extract(
                 Context.current(), record.headers(), HEADERS_GETTER);

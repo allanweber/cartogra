@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Route } from '#/routes/_authenticated/teams'
 import { apiFetch, ApiError } from '#/lib/api'
+import { TooltipProvider } from '#/components/ui/tooltip'
 
 import type { PageResult, RegistryService, RegistryTeam } from '#/lib/registry-types'
 
@@ -104,7 +105,9 @@ function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <Page />
+      <TooltipProvider>
+        <Page />
+      </TooltipProvider>
     </QueryClientProvider>,
   )
 }

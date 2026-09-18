@@ -1,0 +1,77 @@
+{
+  "version": "0.2.0",
+  // Every "Debug *" config attaches to a JVM started by its Gradle "bootRun" task (see
+  // tasks.json), instead of letting VS Code launch the class itself. Reason: VS Code's own
+  // Java launch classpath for a Gradle module is unreliable — it can shadow
+  // src/main/resources/application.yml with the same-named src/test/resources/application.yml
+  // (dropping real config even with the dev profile active), and it can do the same to
+  // Flyway's classpath:db/migration scan (migrations silently never applied). Gradle's own
+  // bootRun classpath doesn't have this problem, so debugging through it sidesteps the
+  // whole class of bug rather than patching around it with vmArgs/spring.config overrides.
+  //
+  // Each service's bootRun always opens its own fixed JDWP port (root build.gradle.kts,
+  // debugPorts map) so all four can run — and be attached to — at the same time.
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Debug Gateway",
+      "request": "attach",
+      "hostName": "localhost",
+      "port": 5005,
+      "projectName": "gateway",
+      "preLaunchTask": "bootRun gateway (debug)"
+    },
+    {
+      "type": "java",
+      "name": "Debug Registry",
+      "request": "attach",
+      "hostName": "localhost",
+      "port": 5006,
+      "projectName": "registry",
+      "preLaunchTask": "bootRun registry (debug)"
+    },
+    {
+      "type": "java",
+      "name": "Debug Ingestion",
+      "request": "attach",
+      "hostName": "localhost",
+      "port": 5007,
+      "projectName": "ingestion",
+      "preLaunchTask": "bootRun ingestion (debug)"
+    },
+    {
+      "type": "java",
+      "name": "Debug Topology",
+      "request": "attach",
+      "hostName": "localhost",
+      "port": 5008,
+      "projectName": "topology",
+      "preLaunchTask": "bootRun topology (debug)"
+    },
+    {
+      "type": "node-terminal",
+      "name": "Debug Frontend (pnpm dev)",
+      "request": "launch",
+      "command": "pnpm dev",
+      "cwd": "${workspaceFolder}/frontend"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Debug All Backend Services",
+      "configurations": ["Debug Gateway", "Debug Registry", "Debug Ingestion", "Debug Topology"],
+      "stopAll": true
+    },
+    {
+      "name": "Debug All (Backend + Frontend)",
+      "configurations": [
+        "Debug Gateway",
+        "Debug Registry",
+        "Debug Ingestion",
+        "Debug Topology",
+        "Debug Frontend (pnpm dev)"
+      ],
+      "stopAll": true
+    }
+  ]
+}

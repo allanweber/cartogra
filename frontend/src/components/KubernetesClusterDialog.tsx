@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
+import { Label } from '#/components/ui/label'
 import { Switch } from '#/components/ui/switch'
 import { Textarea } from '#/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
@@ -33,9 +34,9 @@ interface Props {
 }
 
 const statusConfig = {
-  ACTIVE: { dot: 'bg-green-500', label: 'Active', text: 'text-green-600 dark:text-green-400' },
-  CONNECTING: { dot: 'bg-amber-500', label: 'Connecting…', text: 'text-amber-600 dark:text-amber-400' },
-  ERROR: { dot: 'bg-red-500', label: 'Error', text: 'text-red-600 dark:text-red-400' },
+  ACTIVE: { dot: 'bg-success', label: 'Active', text: 'text-success' },
+  CONNECTING: { dot: 'bg-warning', label: 'Connecting…', text: 'text-warning' },
+  ERROR: { dot: 'bg-critical', label: 'Error', text: 'text-critical' },
 }
 
 const textareaClass = 'font-mono resize-none'
@@ -186,11 +187,12 @@ export function KubernetesClusterDialog({ open, onOpenChange, cluster, onSuccess
             )}
 
             <div className="space-y-1.5">
-              <label className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+              <Label htmlFor="cluster-name">
                 Cluster name
                 <span className="text-destructive">*</span>
-              </label>
+              </Label>
               <Input
+                id="cluster-name"
                 placeholder="e.g. production-us-east"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -199,8 +201,9 @@ export function KubernetesClusterDialog({ open, onOpenChange, cluster, onSuccess
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">Auth method</label>
+              <Label id="cluster-auth-method-label">Auth method</Label>
               <ToggleGroup
+                aria-labelledby="cluster-auth-method-label"
                 type="single"
                 value={source}
                 onValueChange={(v) => { if (v && !isEdit) setSource(v as 'KUBECONFIG' | 'MANUAL') }}
@@ -219,11 +222,11 @@ export function KubernetesClusterDialog({ open, onOpenChange, cluster, onSuccess
             {source === 'KUBECONFIG' ? (
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                  <Label htmlFor="cluster-kubeconfig">
                     Kubeconfig
                     {!isEdit && <span className="text-destructive">*</span>}
-                  </label>
-                  <label className="cursor-pointer inline-flex items-center gap-1 rounded-md border border-input bg-transparent px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted">
+                  </Label>
+                  <Label className="cursor-pointer inline-flex items-center gap-1 rounded-md border border-input bg-transparent px-2.5 py-1 text-xs font-normal text-foreground transition-colors hover:bg-muted">
                     Upload file
                     <Input
                       type="file"
@@ -238,9 +241,10 @@ export function KubernetesClusterDialog({ open, onOpenChange, cluster, onSuccess
                         e.target.value = ''
                       }}
                     />
-                  </label>
+                  </Label>
                 </div>
                 <Textarea
+                  id="cluster-kubeconfig"
                   className={textareaClass}
                   rows={8}
                   placeholder={isEdit ? '••••••• (leave blank to keep)' : 'Paste your kubeconfig YAML here…'}
@@ -257,11 +261,12 @@ export function KubernetesClusterDialog({ open, onOpenChange, cluster, onSuccess
             ) : (
               <>
                 <div className="space-y-1.5">
-                  <label className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                  <Label htmlFor="cluster-api-server-url">
                     API server URL
                     <span className="text-destructive">*</span>
-                  </label>
+                  </Label>
                   <Input
+                    id="cluster-api-server-url"
                     placeholder="https://your-cluster:6443"
                     value={apiServerUrl}
                     onChange={(e) => setApiServerUrl(e.target.value)}
@@ -270,8 +275,9 @@ export function KubernetesClusterDialog({ open, onOpenChange, cluster, onSuccess
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-foreground">CA certificate (PEM)</label>
+                  <Label htmlFor="cluster-ca-cert">CA certificate (PEM)</Label>
                   <Textarea
+                    id="cluster-ca-cert"
                     className={textareaClass}
                     rows={5}
                     placeholder={isEdit ? '••••••• (leave blank to keep)' : '-----BEGIN CERTIFICATE-----\n…\n-----END CERTIFICATE-----'}
@@ -283,11 +289,12 @@ export function KubernetesClusterDialog({ open, onOpenChange, cluster, onSuccess
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                  <Label htmlFor="cluster-sa-token">
                     Service account token
                     {!isEdit && <span className="text-destructive">*</span>}
-                  </label>
+                  </Label>
                   <Input
+                    id="cluster-sa-token"
                     type="password"
                     placeholder={isEdit ? '••••••• (leave blank to keep)' : 'eyJhbGci…'}
                     value={saToken}
@@ -297,18 +304,17 @@ export function KubernetesClusterDialog({ open, onOpenChange, cluster, onSuccess
                   />
                 </div>
 
-                <div
-                  className="flex cursor-pointer items-center gap-3 pointer-coarse:py-2"
-                  onClick={() => setSkipTlsVerify((v) => !v)}
-                >
+                <div className="flex items-center gap-3 pointer-coarse:py-2">
                   <Switch
+                    id="cluster-skip-tls-verify"
                     checked={skipTlsVerify}
                     onCheckedChange={setSkipTlsVerify}
-                    onClick={(e) => e.stopPropagation()}
                   />
-                  <span className="text-sm font-medium text-foreground">Skip TLS verification</span>
+                  <Label htmlFor="cluster-skip-tls-verify" className="cursor-pointer font-medium">
+                    Skip TLS verification
+                  </Label>
                   {skipTlsVerify && (
-                    <span className="text-xs text-amber-600 dark:text-amber-400">Not recommended for production</span>
+                    <span className="text-xs text-warning">Not recommended for production</span>
                   )}
                 </div>
               </>

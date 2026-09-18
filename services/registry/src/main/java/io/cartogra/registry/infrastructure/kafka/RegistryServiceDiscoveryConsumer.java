@@ -53,7 +53,7 @@ public class RegistryServiceDiscoveryConsumer {
 
     @KafkaListener(
             topics = "cartogra.ingestion.service.discovered",
-            groupId = "${spring.kafka.consumer.group-id:registry-discovery-consumer}"
+            groupId = "registry-discovery-consumer"
     )
     public void consume(ConsumerRecord<String, String> record, Acknowledgment ack) {
         log.debug("Received service.discovered key={} partition={} offset={}",

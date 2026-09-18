@@ -218,6 +218,13 @@ public class ServiceService {
         return PageResult.of(items, total, limit, offset);
     }
 
+    /** Cross-tenant, active-only — backs the internal {@code /internal/services} endpoint. */
+    public PageResult<Service> listAllActive(int limit, int offset) {
+        List<Service> items = serviceRepository.findAllActive(limit, offset);
+        long total = serviceRepository.countActive();
+        return PageResult.of(items, total, limit, offset);
+    }
+
     public PageResult<Service> detectOrphans(UUID tenantId, int limit, int offset) {
         List<Service> orphans = serviceRepository.findOrphaned(tenantId, limit, offset);
         return PageResult.of(orphans, orphans.size(), limit, offset);
@@ -387,6 +394,7 @@ public class ServiceService {
             );
             Service saved = serviceRepository.save(updated);
             historyRepository.save(snapshot(saved, SystemActors.SYSTEM));
+            eventProducer.publishUpdated(saved);
         } else {
             // K8s never creates a row with externalId or connectionId.
             var created = new Service(
@@ -406,6 +414,7 @@ public class ServiceService {
             );
             Service saved = serviceRepository.save(created);
             historyRepository.save(snapshot(saved, SystemActors.SYSTEM));
+            eventProducer.publishRegistered(saved);
         }
     }
 

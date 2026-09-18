@@ -55,7 +55,9 @@ function redirectToLogin() {
 async function parseResponse<T>(response: Response): Promise<T> {
   const traceId = response.headers.get('X-Trace-Id') ?? 'unknown'
 
-  if (response.status === 204) {
+  // 204 has no body by spec; 202 (accepted, no representation yet) is used the same way
+  // by a couple of async-trigger endpoints (e.g. ScmConnectionController#triggerSync).
+  if (response.status === 204 || (response.status === 202 && response.headers.get('content-length') === '0')) {
     if (!response.ok) {
       throw new ApiError('UNKNOWN', 'Request failed.', traceId)
     }

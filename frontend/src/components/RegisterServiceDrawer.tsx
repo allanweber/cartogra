@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
+import { Label as BaseLabel } from '#/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#/components/ui/select'
 import { Textarea } from '#/components/ui/textarea'
 import { TagsInput } from '#/components/TagsInput'
@@ -28,13 +29,23 @@ interface CreateServicePayload {
   healthEndpoint: string | null
 }
 
-function Label({ children, required, optional }: { children: React.ReactNode; required?: boolean; optional?: boolean }) {
+function Label({
+  htmlFor,
+  children,
+  required,
+  optional,
+}: {
+  htmlFor: string
+  children: React.ReactNode
+  required?: boolean
+  optional?: boolean
+}) {
   return (
-    <label className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+    <BaseLabel htmlFor={htmlFor}>
       {children}
       {required && <span className="text-destructive">*</span>}
       {optional && <span className="text-sm font-normal text-muted-foreground">optional</span>}
-    </label>
+    </BaseLabel>
   )
 }
 
@@ -160,8 +171,9 @@ export function RegisterServiceDrawer({ open, onOpenChange }: RegisterServiceDra
             <form.Field name="name">
               {(field) => (
                 <Field>
-                  <Label required>Service name</Label>
+                  <Label htmlFor="service-name" required>Service name</Label>
                   <Input
+                    id="service-name"
                     value={field.state.value}
                     onChange={(e) => field.handleChange(e.target.value)}
                     onBlur={field.handleBlur}
@@ -176,8 +188,9 @@ export function RegisterServiceDrawer({ open, onOpenChange }: RegisterServiceDra
             <form.Field name="description">
               {(field) => (
                 <Field>
-                  <Label optional>Description</Label>
+                  <Label htmlFor="service-description" optional>Description</Label>
                   <Textarea
+                    id="service-description"
                     value={field.state.value}
                     onChange={(e) => field.handleChange(e.target.value)}
                     onBlur={field.handleBlur}
@@ -194,13 +207,13 @@ export function RegisterServiceDrawer({ open, onOpenChange }: RegisterServiceDra
               <form.Field name="teamId">
                 {(field) => (
                   <Field>
-                    <Label optional={isAdmin}>Owner team</Label>
+                    <Label htmlFor="service-team" optional={isAdmin}>Owner team</Label>
                     <Select
                       value={field.state.value}
                       onValueChange={field.handleChange}
                       disabled={!isAdmin}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="service-team">
                         <SelectValue placeholder="-- None --" />
                       </SelectTrigger>
                       <SelectContent>
@@ -216,8 +229,9 @@ export function RegisterServiceDrawer({ open, onOpenChange }: RegisterServiceDra
               <form.Field name="repositoryUrl">
                 {(field) => (
                   <Field>
-                    <Label optional>Repository URL</Label>
+                    <Label htmlFor="service-repository-url" optional>Repository URL</Label>
                     <Input
+                      id="service-repository-url"
                       value={field.state.value}
                       onChange={(e) => field.handleChange(e.target.value)}
                       onBlur={field.handleBlur}
@@ -233,8 +247,9 @@ export function RegisterServiceDrawer({ open, onOpenChange }: RegisterServiceDra
             <form.Field name="healthEndpoint">
               {(field) => (
                 <Field>
-                  <Label optional>Health endpoint</Label>
+                  <Label htmlFor="service-health-endpoint" optional>Health endpoint</Label>
                   <Input
+                    id="service-health-endpoint"
                     value={field.state.value}
                     onChange={(e) => field.handleChange(e.target.value)}
                     onBlur={field.handleBlur}
@@ -249,8 +264,9 @@ export function RegisterServiceDrawer({ open, onOpenChange }: RegisterServiceDra
             <form.Field name="techStack">
               {(field) => (
                 <Field>
-                  <Label optional>Tech stack</Label>
+                  <Label htmlFor="service-tech-stack" optional>Tech stack</Label>
                   <TagsInput
+                    id="service-tech-stack"
                     value={field.state.value}
                     onChange={field.handleChange}
                     placeholder="Add technology (press Enter)"

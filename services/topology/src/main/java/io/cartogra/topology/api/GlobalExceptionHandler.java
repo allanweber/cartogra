@@ -3,6 +3,7 @@ package io.cartogra.topology.api;
 import io.cartogra.common.api.ApiError;
 import io.cartogra.common.api.ApiErrorResponse;
 import io.cartogra.common.api.ErrorCodes;
+import io.cartogra.topology.domain.exception.BackfillFailedException;
 import io.cartogra.topology.domain.exception.DependencyNotFoundException;
 import io.cartogra.topology.domain.exception.DriftNotFoundException;
 import io.cartogra.topology.domain.exception.SelfDependencyException;
@@ -44,6 +45,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(SelfDependencyException.class)
     public ResponseEntity<ApiErrorResponse> handleSelfDependency(SelfDependencyException ex) {
         return respond(HttpStatus.BAD_REQUEST, ErrorCodes.BAD_REQUEST, ex.getMessage());
+    }
+
+    @ExceptionHandler(BackfillFailedException.class)
+    public ResponseEntity<ApiErrorResponse> handleBackfillFailed(BackfillFailedException ex) {
+        logger.warn("Backfill failed", ex);
+        String traceId = traceId();
+        var error = new ApiError(ErrorCodes.SERVICE_UNAVAILABLE, ex.getMessage(),
+                Map.of("nodesUpserted", ex.nodesUpserted(), "failedAtOffset", ex.failedAtOffset()));
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header("X-Trace-Id", traceId)
+                .body(new ApiErrorResponse(error, traceId));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Plus, Settings2, Users, X } from 'lucide-react'
+import { Plus, Search, Settings2, Users, X } from 'lucide-react'
 import { useState } from 'react'
 
 import { AppLayout } from '#/components/AppLayout'
@@ -9,7 +9,9 @@ import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Card, CardContent } from '#/components/ui/card'
+import { Input } from '#/components/ui/input'
 import { Skeleton } from '#/components/ui/skeleton'
+import { Tooltip, TooltipContent, TooltipTrigger } from '#/components/ui/tooltip'
 import { ApiError, apiFetch } from '#/lib/api'
 import { normalizeHealth } from '#/lib/registry-types'
 import { useAuthStore } from '#/stores/useAuthStore'
@@ -61,8 +63,10 @@ function relativeTime(dateStr: string | null): string | null {
   return `${Math.floor(secs / 86400)}d ago`
 }
 
+// Hues chosen to stay >=30deg clear of every status/accent hue (critical 28, caution 65,
+// healthy 145, signal-blue 218, info 245) so a team avatar is never mistaken for a status color.
 function teamColor(name: string): string {
-  const hues = [145, 60, 240, 28, 320]
+  const hues = [100, 175, 285, 320, 350]
   const hue = hues[name.charCodeAt(0) % hues.length]
   return `oklch(0.50 0.18 ${hue})`
 }
@@ -77,6 +81,8 @@ function TeamsPage() {
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [manageTeamId, setManageTeamId] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [criticalOnly, setCriticalOnly] = useState(false)
   const isAdmin = useAuthStore((s) => s.user?.roles.includes('ADMIN') ?? false)
   const isTeamOwner = useAuthStore((s) => s.user?.roles.includes('TEAM_OWNER') ?? false)
   const canCreateTeam = isAdmin || isTeamOwner
@@ -118,6 +124,11 @@ function TeamsPage() {
     return deriveRiskExposure(teamServiceMap.get(t.id) ?? []) === 'critical'
   }).length
 
+  const normalizedQuery = query.trim().toLowerCase()
+  const visibleTeams = teams
+    .filter((t) => !normalizedQuery || t.name.toLowerCase().includes(normalizedQuery))
+    .filter((t) => !criticalOnly || deriveRiskExposure(teamServiceMap.get(t.id) ?? []) === 'critical')
+
   const selectedTeam = selectedTeamId ? (teams.find((t) => t.id === selectedTeamId) ?? null) : null
   const manageTeam = manageTeamId ? (teams.find((t) => t.id === manageTeamId) ?? null) : null
 
@@ -138,8 +149,31 @@ function TeamsPage() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatCard label="Teams" value={totalTeams} />
           <StatCard label="Total Services" value={totalServices} />
-          <StatCard label="Unowned Services" value={unownedCount} variant={unownedCount > 0 ? 'warning' : undefined} />
-          <StatCard label="Critical Risk Teams" value={criticalRiskCount} variant={criticalRiskCount > 0 ? 'critical' : undefined} />
+          <StatCard
+            label="Unowned Services"
+            value={unownedCount}
+            variant={unownedCount > 0 ? 'warning' : undefined}
+            linkTo={unownedCount > 0 ? '/catalog' : undefined}
+            linkSearch={unownedCount > 0 ? { team: '__unowned__' } : undefined}
+          />
+          <StatCard
+            label="Critical Risk Teams"
+            value={criticalRiskCount}
+            variant={criticalRiskCount > 0 ? 'critical' : undefined}
+            active={criticalOnly}
+            onClick={criticalRiskCount > 0 ? () => setCriticalOnly((c) => !c) : undefined}
+          />
+        </div>
+
+        <div className="relative max-w-sm">
+          <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Input
+            placeholder="Search teams..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="pl-8 text-sm"
+            aria-label="Search teams"
+          />
         </div>
 
         {isLoading ? (
@@ -167,10 +201,16 @@ function TeamsPage() {
               </Button>
             )}
           </div>
+        ) : visibleTeams.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16 text-center">
+            <Search className="mb-3 size-8 text-muted-foreground/50" aria-hidden="true" />
+            <p className="text-sm font-medium">No teams match</p>
+            <p className="mt-1 text-xs text-muted-foreground">Try a different search or clear the risk filter</p>
+          </div>
         ) : (
           <div className={cn('grid gap-4', selectedTeam ? 'lg:grid-cols-[1fr_360px]' : 'grid-cols-1')}>
             <div className="space-y-2">
-              {teams.map((team) => {
+              {visibleTeams.map((team) => {
                 const svcs = teamServiceMap.get(team.id) ?? []
                 return (
                   <TeamRow
@@ -229,25 +269,59 @@ function StatCard({
   label,
   value,
   variant,
+  linkTo,
+  linkSearch,
+  active,
+  onClick,
 }: {
   label: string
   value: number
   variant?: 'warning' | 'critical'
+  linkTo?: string
+  linkSearch?: Record<string, string>
+  active?: boolean
+  onClick?: () => void
 }) {
+  const content = (
+    <>
+      <span
+        className={cn(
+          'text-2xl font-bold',
+          variant === 'critical' && 'text-critical',
+          variant === 'warning' && 'text-warning',
+        )}
+      >
+        {value}
+      </span>
+      <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
+    </>
+  )
+
+  const cardClass = cn('transition-colors', (linkTo || onClick) && 'cursor-pointer hover:bg-muted/50', active && 'border-primary bg-primary/5')
+
+  if (linkTo) {
+    return (
+      <Link to={linkTo} search={linkSearch} className="block">
+        <Card className={cardClass}>
+          <CardContent className="p-4">{content}</CardContent>
+        </Card>
+      </Link>
+    )
+  }
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} aria-pressed={active} className="block w-full text-left">
+        <Card className={cardClass}>
+          <CardContent className="p-4">{content}</CardContent>
+        </Card>
+      </button>
+    )
+  }
+
   return (
     <Card>
-      <CardContent className="p-4">
-        <span
-          className={cn(
-            'text-2xl font-bold',
-            variant === 'critical' && 'text-critical',
-            variant === 'warning' && 'text-warning',
-          )}
-        >
-          {value}
-        </span>
-        <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
-      </CardContent>
+      <CardContent className="p-4">{content}</CardContent>
     </Card>
   )
 }
@@ -329,16 +403,21 @@ function TeamRow({
         </div>
 
         {canManage && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onManage}
-            aria-label={`Manage ${team.name}`}
-            data-testid={`manage-btn-${team.id}`}
-            className="ml-1 shrink-0 rounded-md p-1.5 text-muted-foreground pointer-coarse:size-11"
-          >
-            <Settings2 className="size-4" aria-hidden="true" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={onManage}
+                aria-label={`Manage ${team.name}`}
+                data-testid={`manage-btn-${team.id}`}
+                className="ml-1 shrink-0 rounded-md p-1.5 text-muted-foreground pointer-coarse:size-11"
+              >
+                <Settings2 className="size-4" aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Edit or delete {team.name}</TooltipContent>
+          </Tooltip>
         )}
       </div>
     </div>
@@ -494,8 +573,7 @@ function RiskExposureBadge({ exposure }: { exposure: RiskExposure }) {
         'capitalize',
         exposure === 'low' && 'text-muted-foreground',
         exposure === 'medium' && 'border-warning bg-warning-subtle text-warning',
-        exposure === 'high' && 'border-[oklch(0.68_0.14_40)] bg-[oklch(0.97_0.05_40)] text-[oklch(0.52_0.18_40)] dark:border-[oklch(0.55_0.14_40)] dark:text-[oklch(0.76_0.16_40)]',
-        exposure === 'critical' && 'border-critical bg-critical-subtle text-critical',
+        (exposure === 'high' || exposure === 'critical') && 'border-critical bg-critical-subtle text-critical',
       )}
     >
       {exposure} risk

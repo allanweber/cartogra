@@ -620,7 +620,7 @@ class ServiceServiceTest {
 
         verify(serviceRepository).save(any());
         verify(historyRepository).save(any());
-        verifyNoInteractions(eventProducer);
+        verify(eventProducer).publishRegistered(saved);
     }
 
     @Test
@@ -638,6 +638,7 @@ class ServiceServiceTest {
 
         verify(serviceRepository).save(any());
         verify(historyRepository).save(any());
+        verify(eventProducer).publishUpdated(saved);
     }
 
     @Test

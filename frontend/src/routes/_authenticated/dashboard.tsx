@@ -16,7 +16,7 @@ import { normalizeHealth } from '#/lib/registry-types'
 import { cn } from '#/lib/utils'
 
 import type { TimelineEvent } from '#/lib/mock-data'
-import type { PageResult, RegistryService } from '#/lib/registry-types'
+import type { PageResult, RegistryService, RegistryTeam } from '#/lib/registry-types'
 
 export const Route = createFileRoute('/_authenticated/dashboard')({
   component: DashboardPage,
@@ -33,6 +33,12 @@ function DashboardPage() {
     queryKey: ['services', 'all'],
     queryFn: () => apiFetch<PageResult<RegistryService>>('/v1/registry/services?limit=200'),
   })
+
+  const { data: teamsPage } = useQuery({
+    queryKey: ['teams', 'count'],
+    queryFn: () => apiFetch<PageResult<RegistryTeam>>('/v1/registry/teams?limit=1'),
+  })
+  const totalTeams = teamsPage?.total ?? 0
 
   const services = servicesPage?.items ?? []
   const totalServices = servicesPage?.total ?? 0
@@ -73,11 +79,14 @@ function DashboardPage() {
                 <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
                   Health Score
                 </p>
-                <p className={cn('mt-1 text-4xl font-semibold tabular-nums leading-none', healthScoreClass)}>
+                <p
+                  className={cn('mt-1 text-4xl font-semibold tabular-nums leading-none', healthScoreClass)}
+                  title="Health Score = healthy services ÷ total services"
+                >
                   {healthScore}%
                 </p>
                 <p className="mt-1.5 text-xs text-muted-foreground">
-                  {healthyCount} of {services.length} healthy
+                  {healthyCount} of {services.length} services healthy
                 </p>
               </div>
 
@@ -134,7 +143,7 @@ function DashboardPage() {
               />
               <StatStrip
                 icon={<Users className="size-3.5" />}
-                value="5"
+                value={String(totalTeams)}
                 label="teams"
                 sub={`${orphanServices.length} unowned`}
               />
@@ -154,20 +163,29 @@ function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-2">
-              {MOCK_RISKS.slice(0, 4).map((risk) => (
-                <div
-                  key={risk.id}
-                  className="flex items-start gap-3 rounded-lg bg-muted/40 p-3"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium leading-tight">{risk.title}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {risk.services.join(', ')}
-                    </p>
+              {error ? (
+                <Alert variant="destructive">
+                  <AlertDescription>
+                    {error.message}
+                    {error instanceof ApiError && ` (trace: ${error.traceId})`}
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                MOCK_RISKS.slice(0, 4).map((risk) => (
+                  <div
+                    key={risk.id}
+                    className="flex items-start gap-3 rounded-lg bg-muted/40 p-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium leading-tight">{risk.title}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {risk.services.join(', ')}
+                      </p>
+                    </div>
+                    <SeverityBadge severity={risk.severity} />
                   </div>
-                  <SeverityBadge severity={risk.severity} />
-                </div>
-              ))}
+                ))
+              )}
             </CardContent>
           </Card>
 
@@ -180,6 +198,7 @@ function DashboardPage() {
                   All services <ArrowRight className="size-3" />
                 </Link>
               </div>
+              <p className="text-xs text-muted-foreground">No deploy in 14+ days</p>
             </CardHeader>
             <CardContent className="space-y-2">
               {isLoading ? (
@@ -216,9 +235,19 @@ function DashboardPage() {
                 View all <ArrowRight className="size-3" />
               </Link>
             </div>
+            <p className="text-xs text-muted-foreground">Most recent events across all services</p>
           </CardHeader>
           <CardContent>
-            <ActivityList events={MOCK_TIMELINE.slice(0, 5)} />
+            {error ? (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  {error.message}
+                  {error instanceof ApiError && ` (trace: ${error.traceId})`}
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <ActivityList events={MOCK_TIMELINE.slice(0, 5)} />
+            )}
           </CardContent>
         </Card>
       </div>

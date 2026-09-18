@@ -4,6 +4,7 @@ import io.cartogra.common.event.EventEnvelope;
 import io.cartogra.registry.domain.Service;
 import io.cartogra.registry.domain.ServiceHealthStatus;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -13,15 +14,24 @@ import org.springframework.kafka.core.KafkaTemplate;
 
 import java.time.Instant;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ServiceLifecycleEventProducerTest {
 
     @Mock
     KafkaTemplate<String, Object> kafkaTemplate;
+
+    @SuppressWarnings("unchecked")
+    @BeforeEach
+    void stubSend() {
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(CompletableFuture.completedFuture(null));
+    }
 
     @Test
     void publishRegisteredSendsToCorrectTopicWithEventType() {

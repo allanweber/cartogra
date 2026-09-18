@@ -1,8 +1,18 @@
 # ADR-0020 — `shared:web` Gradle module for cross-service web filters
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2026-05-20
 **Deciders**: Allan Weber
+
+> **Implementation note (2026-09-18)**: `shared:web` now exists, but its first two tenants were
+> `io.cartogra.web.client.TraceparentRequestInterceptor` (a `ClientHttpRequestInterceptor` for
+> internal service-to-service `RestClient`s — e.g. topology's and ingestion's Registry clients)
+> and `io.cartogra.web.filter.InternalAuthFilter` (deduplicated from three byte-identical
+> per-service copies in registry, topology, and ingestion) — not the `GatewayTokenFilter`
+> described below. Consumers wire both via an explicit `@Bean` in their own `@Configuration` —
+> the module's classes are not `@Component`-annotated, since component scanning doesn't cross a
+> service's own package tree. `GatewayTokenFilter` (task 5.Y) is still unimplemented; the module
+> layout it needs is unchanged from what's decided here.
 
 ---
 

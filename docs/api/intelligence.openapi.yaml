@@ -3,8 +3,8 @@ info:
   title: Cartogra Intelligence API
   version: "0.1.0"
   description: |
-    > **Phase 4 — Intelligence layer — not yet implemented.**
-    > Forward-looking contract. See execution-checklist.md tasks 4.2–4.35.
+    > **Not yet implemented.**
+    > Forward-looking contract. See `docs/roadmap.md` Phase 6 — Intelligence (6.1–6.7).
 
     AI-powered insights: natural language queries, architecture health scores, anti-pattern detection, and weekly digests.
 

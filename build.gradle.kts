@@ -9,6 +9,7 @@ import net.ltgt.gradle.errorprone.errorprone
 import org.gradle.api.plugins.quality.CheckstyleExtension
 import org.gradle.api.tasks.testing.logging.TestLogEvent
 import io.spring.gradle.dependencymanagement.dsl.DependencyManagementExtension
+import org.springframework.boot.gradle.tasks.run.BootRun
 
 plugins {
     id("org.springframework.boot") apply false
@@ -23,6 +24,15 @@ val springCloudVersion: String by project
 val testcontainersVersion: String by project
 val javaVersion: String by project
 
+// Fixed local debug ports so all four backend services can be debugged concurrently
+// (VS Code's "Debug All Backend Services" compound attaches to one port per service).
+val debugPorts = mapOf(
+    "gateway" to 5005,
+    "registry" to 5006,
+    "ingestion" to 5007,
+    "topology" to 5008,
+)
+
 subprojects {
     apply(plugin = "java")
     apply(plugin = "io.spring.dependency-management")
@@ -34,7 +44,7 @@ subprojects {
     configure<com.diffplug.gradle.spotless.SpotlessExtension> {
         java {
             target("src/main/java/**/*.java", "src/test/java/**/*.java")
-            removeUnusedImports()
+            removeUnusedImports("cleanthat-javaparser-unnecessaryimport")
             trimTrailingWhitespace()
             endWithNewline()
         }
@@ -64,9 +74,9 @@ subprojects {
             // CVE overrides not yet covered by spring-boot-dependencies:$springBootVersion — recheck on next BOM bump
             dependency("org.postgresql:postgresql:42.7.12") // CVE-2026-54291 (supersedes the 42.7.11 override for CVE-2026-42198)
             dependency("org.springframework.kafka:spring-kafka:4.0.6") // CVE-2026-41731
-            dependency("org.apache.tomcat.embed:tomcat-embed-core:11.0.22") // CVE-2026-41293
-            dependency("org.apache.tomcat.embed:tomcat-embed-el:11.0.22")
-            dependency("org.apache.tomcat.embed:tomcat-embed-websocket:11.0.22")
+            dependency("org.apache.tomcat.embed:tomcat-embed-core:11.0.25") // CVE-2026-65182, CVE-2026-65905, CVE-2026-68525 (supersedes the 11.0.22 override for CVE-2026-41293)
+            dependency("org.apache.tomcat.embed:tomcat-embed-el:11.0.25")
+            dependency("org.apache.tomcat.embed:tomcat-embed-websocket:11.0.25")
             dependency("com.fasterxml.jackson.core:jackson-databind:2.21.4") // CVE-2026-54512, CVE-2026-54513
             dependency("tools.jackson.core:jackson-databind:3.1.4") // CVE-2026-54512, CVE-2026-54513
             dependency("com.fasterxml.jackson.core:jackson-core:2.21.4") // GHSA-r7wm-3cxj-wff9
@@ -75,6 +85,13 @@ subprojects {
             dependency("org.springframework.data:spring-data-commons:4.0.6") // CVE-2026-41695, CVE-2026-41716
             dependency("org.springframework:spring-expression:7.0.8") // CVE-2026-41850
             dependency("org.springframework:spring-webmvc:7.0.8") // CVE-2026-41842, CVE-2026-41845
+            dependency("io.netty:netty-codec-dns:4.2.17.Final") // CVE-2026-75595 (supersedes the 4.2.15.Final override for CVE-2026-42579 etc.)
+            dependency("io.netty:netty-handler:4.2.17.Final") // CVE-2026-75595
+            dependency("io.netty:netty-resolver-dns:4.2.17.Final") // CVE-2026-75595
+            dependency("io.netty:netty-codec-compression:4.2.17.Final") // CVE-2026-42583, CVE-2026-59901
+            dependency("io.netty:netty-codec-http:4.2.17.Final") // CVE-2026-42584, CVE-2026-42587, CVE-2026-55831, CVE-2026-55833, CVE-2026-56745
+            dependency("io.netty:netty-codec-http2:4.2.17.Final") // CVE-2026-42587, CVE-2026-56819
+            dependency("org.bouncycastle:bcprov-jdk18on:1.81.1") // CVE-2025-14813
         }
     }
 
@@ -108,5 +125,16 @@ subprojects {
     tasks.withType<Test> {
         useJUnitPlatform()
         testLogging { events(TestLogEvent.PASSED, TestLogEvent.FAILED, TestLogEvent.SKIPPED) }
+    }
+
+    // Applies only where the Spring Boot plugin is actually applied (no-op otherwise).
+    // Local `bootRun` always targets dev — nothing here reaches the production jar/image.
+    tasks.withType<BootRun>().configureEach {
+        args("--spring.profiles.active=dev")
+        // suspend=n: bootRun always starts normally; a debugger can attach on this port
+        // at any time (or never) without needing a special "--debug-jvm" invocation.
+        debugPorts[project.name]?.let { port ->
+            jvmArgs("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:$port")
+        }
     }
 }

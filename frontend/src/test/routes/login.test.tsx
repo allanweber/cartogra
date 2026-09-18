@@ -69,7 +69,8 @@ describe('LoginPage', () => {
   it('shows validation error when fields are empty', async () => {
     renderPage()
     fireEvent.submit(screen.getByRole('button', { name: /^sign in$/i }).closest('form')!)
-    expect(await screen.findByText(/please fill in all fields/i)).toBeInTheDocument()
+    expect(await screen.findByText(/email is required/i)).toBeInTheDocument()
+    expect(screen.getByText(/password is required/i)).toBeInTheDocument()
   })
 
   it('shows API error message and traceId on failed login', async () => {
