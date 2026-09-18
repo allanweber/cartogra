@@ -2,6 +2,7 @@ package io.cartogra.topology.domain;
 
 import io.cartogra.common.event.EventEnvelope;
 import io.cartogra.topology.domain.event.ServiceLifecyclePayload;
+import io.cartogra.topology.domain.exception.BackfillFailedException;
 import io.cartogra.topology.infrastructure.registry.RegistryGraphNodeClient;
 import io.cartogra.topology.infrastructure.registry.RegistryServiceSnapshot;
 import io.cartogra.topology.repository.GraphNodeRepository;
@@ -18,8 +19,10 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -103,5 +106,24 @@ class GraphNodeServiceTest {
         assertThat(upserted).isEqualTo(201);
         verify(registryClient, times(2)).listActiveServices(anyInt(), anyInt());
         verify(graphNodeRepository, times(201)).upsert(any());
+    }
+
+    @Test
+    void backfillWrapsRegistryFailureWithProgressSoFar() {
+        UUID tenantId = UUID.randomUUID();
+        List<RegistryServiceSnapshot> fullPage = java.util.stream.IntStream.range(0, 200)
+                .mapToObj(i -> new RegistryServiceSnapshot(UUID.randomUUID(), tenantId, "svc-" + i, null, null, "HEALTHY"))
+                .toList();
+        when(registryClient.listActiveServices(anyInt(), eq(0))).thenReturn(fullPage);
+        when(registryClient.listActiveServices(anyInt(), eq(200)))
+                .thenThrow(new org.springframework.web.client.RestClientException("boom"));
+
+        assertThatThrownBy(() -> service.backfill())
+                .isInstanceOf(BackfillFailedException.class)
+                .satisfies(e -> {
+                    var ex = (BackfillFailedException) e;
+                    assertThat(ex.nodesUpserted()).isEqualTo(200);
+                    assertThat(ex.failedAtOffset()).isEqualTo(200);
+                });
     }
 }

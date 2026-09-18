@@ -43,6 +43,9 @@ topology:
     refresh-interval: ${TOPOLOGY_GRAPH_VIEW_REFRESH_INTERVAL:PT5S}
   registry:
     base-url: ${REGISTRY_URI:http://localhost:8081}/api/v1/registry
+  processed-events:
+    retention: ${TOPOLOGY_PROCESSED_EVENTS_RETENTION:P30D}
+    reaper-interval: ${TOPOLOGY_PROCESSED_EVENTS_REAPER_INTERVAL:PT1H}
 
 management:
   endpoints:

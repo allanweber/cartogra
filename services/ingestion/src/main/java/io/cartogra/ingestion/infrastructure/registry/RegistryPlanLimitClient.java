@@ -1,6 +1,7 @@
 package io.cartogra.ingestion.infrastructure.registry;
 
 import io.cartogra.ingestion.config.RegistryClientProperties;
+import io.cartogra.web.client.TraceparentRequestInterceptor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -23,8 +24,12 @@ public class RegistryPlanLimitClient {
 
     private final RestClient restClient;
 
-    public RegistryPlanLimitClient(RegistryClientProperties props) {
-        this.restClient = RestClient.builder().baseUrl(props.baseUrl()).build();
+    public RegistryPlanLimitClient(RegistryClientProperties props,
+            TraceparentRequestInterceptor traceparentRequestInterceptor) {
+        this.restClient = RestClient.builder()
+                .baseUrl(props.baseUrl())
+                .requestInterceptor(traceparentRequestInterceptor)
+                .build();
     }
 
     /**
@@ -37,7 +42,7 @@ public class RegistryPlanLimitClient {
                     .uri("/internal/plan-limits/{tenantId}", tenantId)
                     .retrieve()
                     .body(PlanLimitsEnvelope.class);
-            return Optional.ofNullable(envelope).map(PlanLimitsEnvelope::data);
+            return Optional.ofNullable(envelope).map(e -> e.data());
         } catch (RestClientException e) {
             log.warn("Failed to fetch plan limits for tenant {}: {}", tenantId, e.getMessage());
             return Optional.empty();

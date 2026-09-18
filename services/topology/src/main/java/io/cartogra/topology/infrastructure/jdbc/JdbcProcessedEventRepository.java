@@ -5,6 +5,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Repository
@@ -27,5 +28,12 @@ public class JdbcProcessedEventRepository implements ProcessedEventRepository {
                 .addValue("tenantId", tenantId)
                 .addValue("eventId", eventId);
         return jdbc.update(sql, params) == 1;
+    }
+
+    @Override
+    public int deleteOlderThan(Instant threshold) {
+        String sql = "DELETE FROM processed_events WHERE processed_at < :threshold";
+        var params = new MapSqlParameterSource().addValue("threshold", java.sql.Timestamp.from(threshold));
+        return jdbc.update(sql, params);
     }
 }

@@ -1,5 +1,6 @@
 package io.cartogra.topology.repository;
 
+import java.time.Instant;
 import java.util.UUID;
 
 public interface ProcessedEventRepository {
@@ -10,4 +11,10 @@ public interface ProcessedEventRepository {
      * skip processing when this returns {@code false}.
      */
     boolean markProcessed(UUID tenantId, UUID eventId);
+
+    /**
+     * Deletes every row with {@code processed_at} strictly before {@code threshold}. Returns the
+     * number of rows deleted, for the caller to log.
+     */
+    int deleteOlderThan(Instant threshold);
 }

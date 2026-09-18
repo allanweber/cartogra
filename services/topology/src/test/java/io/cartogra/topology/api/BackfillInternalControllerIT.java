@@ -110,4 +110,54 @@ class BackfillInternalControllerIT {
         assertThat(graphNodeRepository.findByServiceId(tenantB, serviceB).get().tier()).isNull();
         assertThat(graphNodeRepository.findByServiceId(tenantB, serviceB).get().healthStatus()).isEqualTo("UNKNOWN");
     }
+
+    /**
+     * Proves the retry added to {@code RegistryGraphNodeClient} actually recovers from a
+     * single transient failure — the first call to offset=0 returns a 503, the retried call
+     * returns the same success body as the happy-path test above, and backfill still
+     * completes with the expected count.
+     */
+    @Test
+    void backfillRetriesOnceAfterATransientFailureAndStillSucceeds() throws Exception {
+        UUID tenantC = UUID.randomUUID();
+        UUID serviceC = UUID.randomUUID();
+
+        WIRE_MOCK.stubFor(get(urlPathEqualTo("/internal/services"))
+                .withQueryParam("offset", equalTo("0"))
+                .inScenario("backfill-retry")
+                .whenScenarioStateIs(com.github.tomakehurst.wiremock.stubbing.Scenario.STARTED)
+                .willSetStateTo("retried")
+                .willReturn(aResponse().withStatus(503)));
+
+        WIRE_MOCK.stubFor(get(urlPathEqualTo("/internal/services"))
+                .withQueryParam("offset", equalTo("0"))
+                .inScenario("backfill-retry")
+                .whenScenarioStateIs("retried")
+                .willReturn(aResponse().withStatus(200).withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {"data":{"items":[
+                                  {"id":"%s","tenantId":"%s","name":"pre-existing-c","teamId":null,"tier":"STANDARD","healthStatus":"HEALTHY"}
+                                ],"total":1,"limit":200,"offset":0},"traceId":"a3f1c8d2000000000000000000000000"}
+                                """.formatted(serviceC, tenantC))));
+
+        WIRE_MOCK.stubFor(get(urlPathEqualTo("/internal/services"))
+                .withQueryParam("offset", equalTo("200"))
+                .willReturn(aResponse().withStatus(200).withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {"data":{"items":[],"total":1,"limit":200,"offset":200},"traceId":"a3f1c8d2000000000000000000000000"}
+                                """)));
+
+        HttpResponse<String> resp = HTTP.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create("http://localhost:" + port + "/api/v1/topology/internal/backfill"))
+                        .POST(HttpRequest.BodyPublishers.noBody())
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(resp.statusCode()).isEqualTo(200);
+        assertThat(resp.body()).contains("\"nodesUpserted\":1");
+
+        assertThat(graphNodeRepository.findByServiceId(tenantC, serviceC)).isPresent();
+        assertThat(graphNodeRepository.findByServiceId(tenantC, serviceC).get().name()).isEqualTo("pre-existing-c");
+    }
 }

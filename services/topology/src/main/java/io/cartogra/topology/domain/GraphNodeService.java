@@ -2,6 +2,7 @@ package io.cartogra.topology.domain;
 
 import io.cartogra.common.event.EventEnvelope;
 import io.cartogra.topology.domain.event.ServiceLifecyclePayload;
+import io.cartogra.topology.domain.exception.BackfillFailedException;
 import io.cartogra.topology.infrastructure.registry.RegistryGraphNodeClient;
 import io.cartogra.topology.infrastructure.registry.RegistryServiceSnapshot;
 import io.cartogra.topology.repository.GraphNodeRepository;
@@ -11,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClientException;
 
 import java.time.Instant;
 import java.util.List;
@@ -72,7 +74,11 @@ public class GraphNodeService {
         int offset = 0;
         List<RegistryServiceSnapshot> page;
         do {
-            page = registryClient.listActiveServices(BACKFILL_PAGE_SIZE, offset);
+            try {
+                page = registryClient.listActiveServices(BACKFILL_PAGE_SIZE, offset);
+            } catch (RestClientException e) {
+                throw new BackfillFailedException(upserted, offset, e);
+            }
             for (RegistryServiceSnapshot snapshot : page) {
                 graphNodeRepository.upsert(new GraphNodeUpsert(
                         snapshot.tenantId(), snapshot.id(), snapshot.name(),
