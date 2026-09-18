@@ -94,7 +94,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 - [x] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
 - [x] `/impeccable critique` run over every screen this phase touched; findings fixed or recorded.
 - [x] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
-- [ ] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
+- [x] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
 
 **Worth writing about**
 

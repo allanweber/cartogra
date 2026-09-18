@@ -1,5 +1,6 @@
 package io.cartogra.topology.infrastructure.registry;
 
+import io.cartogra.topology.repository.GraphNodeUpsert;
 import org.jspecify.annotations.Nullable;
 
 import java.util.UUID;
@@ -18,4 +19,7 @@ public record RegistryServiceSnapshot(
         @Nullable String tier,
         String healthStatus
 ) {
+    public GraphNodeUpsert toGraphNodeUpsert() {
+        return new GraphNodeUpsert(tenantId, id, name, teamId, tier, healthStatus);
+    }
 }

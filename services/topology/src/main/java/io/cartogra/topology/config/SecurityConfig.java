@@ -1,5 +1,6 @@
 package io.cartogra.topology.config;
 
+import io.cartogra.web.filter.InternalAuthFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -15,14 +16,13 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    private final InternalAuthFilter internalAuthFilter;
-
-    public SecurityConfig(InternalAuthFilter internalAuthFilter) {
-        this.internalAuthFilter = internalAuthFilter;
+    @Bean
+    public InternalAuthFilter internalAuthFilter() {
+        return new InternalAuthFilter();
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, InternalAuthFilter internalAuthFilter) throws Exception {
         return http
             .csrf(AbstractHttpConfigurer::disable)
             .httpBasic(AbstractHttpConfigurer::disable)

@@ -6,7 +6,6 @@ import io.cartogra.topology.domain.exception.BackfillFailedException;
 import io.cartogra.topology.infrastructure.registry.RegistryGraphNodeClient;
 import io.cartogra.topology.infrastructure.registry.RegistryServiceSnapshot;
 import io.cartogra.topology.repository.GraphNodeRepository;
-import io.cartogra.topology.repository.GraphNodeUpsert;
 import io.cartogra.topology.repository.ProcessedEventRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,9 +55,7 @@ public class GraphNodeService {
             Instant deletedAt = payload.deletedAt() != null ? payload.deletedAt() : envelope.timestamp();
             graphNodeRepository.softDelete(payload.tenantId(), payload.id(), deletedAt);
         } else {
-            graphNodeRepository.upsert(new GraphNodeUpsert(
-                    payload.tenantId(), payload.id(), payload.name(),
-                    payload.teamId(), payload.tier(), payload.healthStatus()));
+            graphNodeRepository.upsert(payload.toGraphNodeUpsert());
         }
     }
 
@@ -80,9 +77,7 @@ public class GraphNodeService {
                 throw new BackfillFailedException(upserted, offset, e);
             }
             for (RegistryServiceSnapshot snapshot : page) {
-                graphNodeRepository.upsert(new GraphNodeUpsert(
-                        snapshot.tenantId(), snapshot.id(), snapshot.name(),
-                        snapshot.teamId(), snapshot.tier(), snapshot.healthStatus()));
+                graphNodeRepository.upsert(snapshot.toGraphNodeUpsert());
                 upserted++;
             }
             offset += BACKFILL_PAGE_SIZE;

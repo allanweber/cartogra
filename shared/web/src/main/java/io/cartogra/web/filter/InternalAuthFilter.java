@@ -1,20 +1,24 @@
-package io.cartogra.registry.config;
+package io.cartogra.web.filter;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Component;
-import org.springframework.web.filter.OncePerRequestFilter;
-
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.filter.OncePerRequestFilter;
 
-@Component
+/**
+ * Seeds the {@code SecurityContext} from the {@code X-User-Roles} / {@code X-User-Id} headers the
+ * Gateway attaches to every proxied request. Not a {@code @Component}: cross-module component
+ * scanning isn't reliable across service boundaries (each service's {@code @SpringBootApplication}
+ * only scans its own package tree), so consumers declare it as a {@code @Bean} explicitly and wire
+ * it into their own {@code SecurityFilterChain} with {@code addFilterBefore}.
+ */
 public class InternalAuthFilter extends OncePerRequestFilter {
 
     @Override

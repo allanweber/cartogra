@@ -1,5 +1,6 @@
 package io.cartogra.topology.domain.event;
 
+import io.cartogra.topology.repository.GraphNodeUpsert;
 import org.jspecify.annotations.Nullable;
 
 import java.time.Instant;
@@ -22,4 +23,7 @@ public record ServiceLifecyclePayload(
         String healthStatus,
         @Nullable Instant deletedAt
 ) {
+    public GraphNodeUpsert toGraphNodeUpsert() {
+        return new GraphNodeUpsert(tenantId, id, name, teamId, tier, healthStatus);
+    }
 }
