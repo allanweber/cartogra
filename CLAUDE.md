@@ -11,3 +11,17 @@ ideation-output: C:\Users\allan\Documents\Allan\Notes\Ideation
 ## Skills
 
 Project skills live in `.claude/skills/`. Use `/plan-tasks <task lines>` to produce an implementation plan for checklist items.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues on `allanweber/cartogra`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Multi-context: root `CONTEXT-MAP.md` points to per-service `CONTEXT.md` files. See `docs/agents/domain.md`.
