@@ -91,7 +91,7 @@ subprojects {
             dependency("io.netty:netty-codec-compression:4.2.17.Final") // CVE-2026-42583, CVE-2026-59901
             dependency("io.netty:netty-codec-http:4.2.17.Final") // CVE-2026-42584, CVE-2026-42587, CVE-2026-55831, CVE-2026-55833, CVE-2026-56745
             dependency("io.netty:netty-codec-http2:4.2.17.Final") // CVE-2026-42587, CVE-2026-56819
-            dependency("org.bouncycastle:bcprov-jdk18on:1.81.1") // CVE-2025-14813
+            dependency("org.bouncycastle:bcprov-jdk18on:1.85") // CVE-2026-8763, CVE-2026-13506 (supersedes the 1.81.1 override for CVE-2025-14813)
         }
     }
 
