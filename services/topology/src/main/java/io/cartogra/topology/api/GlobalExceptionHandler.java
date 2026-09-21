@@ -6,7 +6,9 @@ import io.cartogra.common.api.ErrorCodes;
 import io.cartogra.topology.domain.exception.BackfillFailedException;
 import io.cartogra.topology.domain.exception.DependencyNotFoundException;
 import io.cartogra.topology.domain.exception.DriftNotFoundException;
+import io.cartogra.topology.domain.exception.DuplicateDependencyException;
 import io.cartogra.topology.domain.exception.SelfDependencyException;
+import io.cartogra.topology.domain.exception.UnknownServiceNodeException;
 import io.opentelemetry.api.trace.Span;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 
 import java.util.Map;
@@ -44,7 +47,24 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(SelfDependencyException.class)
     public ResponseEntity<ApiErrorResponse> handleSelfDependency(SelfDependencyException ex) {
-        return respond(HttpStatus.BAD_REQUEST, ErrorCodes.BAD_REQUEST, ex.getMessage());
+        return respond(HttpStatus.UNPROCESSABLE_CONTENT, ErrorCodes.SELF_DEPENDENCY, ex.getMessage());
+    }
+
+    @ExceptionHandler(UnknownServiceNodeException.class)
+    public ResponseEntity<ApiErrorResponse> handleUnknownServiceNode(UnknownServiceNodeException ex) {
+        return respond(HttpStatus.NOT_FOUND, ErrorCodes.NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(DuplicateDependencyException.class)
+    public ResponseEntity<ApiErrorResponse> handleDuplicateDependency(DuplicateDependencyException ex) {
+        return respond(HttpStatus.CONFLICT, ErrorCodes.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(RestClientException.class)
+    public ResponseEntity<ApiErrorResponse> handleRestClientException(RestClientException ex) {
+        logger.warn("Downstream service call failed", ex);
+        return respond(HttpStatus.SERVICE_UNAVAILABLE, ErrorCodes.SERVICE_UNAVAILABLE,
+                "A downstream service is unavailable");
     }
 
     @ExceptionHandler(BackfillFailedException.class)

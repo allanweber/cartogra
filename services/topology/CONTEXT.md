@@ -66,9 +66,10 @@ Cross-context references stored as IDs only — Topology never hydrates a `Servi
 | Method | Path | Description |
 |---|---|---|
 | POST | `/internal/backfill` | Admin: walk Registry once via `GraphNodeService.backfill()`, seeding `graph_nodes` for tenants that predate `GraphNodeEventConsumer` — [1.1] |
-| POST | `/api/v1/topology/dependencies` | Declare a dependency |
+| POST | `/api/v1/topology/dependencies` | Declare a dependency — validated against `graph_nodes` (404 unknown/soft-deleted node, 422 self-edge, 409 duplicate, 403 unauthorized); always `dependency_type=declared` — [1.2] |
+| PUT | `/api/v1/topology/dependencies/{id}` | Full replace of a declared dependency; same validation as POST, re-checked against both the old and new source/target pair — [1.2] |
 | GET | `/api/v1/topology/dependencies` | List dependencies for tenant |
-| DELETE | `/api/v1/topology/dependencies/{id}` | Remove a declared dependency |
+| DELETE | `/api/v1/topology/dependencies/{id}` | Remove a declared dependency (soft delete) — [1.2] |
 | GET | `/api/v1/topology/blast-radius/{serviceId}` | Downstream impact set |
 | GET | `/api/v1/topology/cycles` | Current cycle list |
 | GET | `/api/v1/topology/drifts` | Active drift records |
@@ -104,7 +105,7 @@ Cross-context references stored as IDs only — Topology never hydrates a `Servi
 
 | Neighbour | Relationship | Notes |
 |---|---|---|
-| Service Catalog (Registry) | Downstream (Conformist) | Consumes registry lifecycle events; references service IDs only. Also consumes `ownership-changed` for orphan risk flagging only (ADR-0027) — does not otherwise read team/ownership data |
+| Service Catalog (Registry) | Downstream (Conformist) | Consumes registry lifecycle events; references service IDs only. Also consumes `ownership-changed` for orphan risk flagging only (ADR-0027). Additionally calls Registry's internal `POST /internal/services/access` synchronously (direct service-to-service, bypasses the Gateway) to authorize declared-dependency mutations — "is this user a member of the team owning this service?" — fail closed on error — [1.2] |
 | Ingestion | Downstream (Conformist) | Consumes observed dependency edges |
 | Intelligence | Upstream (Customer/Supplier) | Produces graph + drift + cycle events |
 | Identity & Access (Gateway) | Conformist | Receives proxied requests with `X-Tenant-Id` |

@@ -19,4 +19,5 @@ public final class ErrorCodes {
     public static final String WEBHOOK_CONNECTION_NOT_FOUND  = "WEBHOOK_CONNECTION_NOT_FOUND";
     public static final String SERVICE_UNAVAILABLE           = "SERVICE_UNAVAILABLE";
     public static final String PLAN_LIMIT_EXCEEDED           = "PLAN_LIMIT_EXCEEDED";
+    public static final String SELF_DEPENDENCY                = "SELF_DEPENDENCY";
 }

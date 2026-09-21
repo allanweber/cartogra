@@ -53,6 +53,14 @@ class InternalPathDenyIT extends AbstractGatewayIT {
             .andExpect(status().is4xxClientError());
     }
 
+    // Registry's new /internal/services/access (Topology issue [1.2] declared-dependency
+    // authorization check) is another instance of the same shape.
+    @Test
+    void unauthenticatedRequestToRegistryServiceAccessIsRejected() throws Exception {
+        mockMvc.perform(post("/api/v1/registry/internal/services/access"))
+            .andExpect(status().is4xxClientError());
+    }
+
     @Test
     void authenticatedRequestToDownstreamInternalPathIsForbidden() throws Exception {
         UUID tenantId = insertTenant();
