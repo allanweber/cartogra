@@ -176,7 +176,6 @@ class ServiceAccessInternalControllerIT {
         addTeamMember(tenantA, teamA, userId);
         UUID serviceInTenantA = createService(tenantA, teamA);
 
-        // Asking under tenant B for a service that actually belongs to tenant A must not leak.
         JsonNode data = checkAccess(tenantB, userId, serviceInTenantA);
         assertThat(data.get(serviceInTenantA.toString()).booleanValue()).isFalse();
     }

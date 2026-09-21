@@ -34,14 +34,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 
 /**
- * Full-stack coverage of POST/PUT/DELETE {@code /dependencies} (Topology issue [1.2]): real
- * Postgres/Kafka, WireMock standing in for Registry's {@code /internal/services/access} (same
- * pattern as {@code BackfillInternalControllerIT} — this is NOT a cross-service e2e test, see
- * the 1.2 implementation plan for why that's out of scope for this task). Doesn't extend
- * {@code AbstractTopologyIT}: that base's {@code @SpringBootTest} doesn't set
- * {@code webEnvironment = RANDOM_PORT}, which {@code @LocalServerPort} here requires, and a
- * redeclared {@code @SpringBootTest} on a subclass doesn't merge with the parent's — so this
- * wires its own datasource properties instead, mirroring {@code BackfillInternalControllerIT}.
+ * Full-stack coverage of POST/PUT/DELETE {@code /dependencies}: real Postgres/Kafka, WireMock
+ * standing in for Registry's {@code /internal/services/access}. Doesn't extend
+ * {@code AbstractTopologyIT} since its {@code @SpringBootTest} doesn't set
+ * {@code webEnvironment = RANDOM_PORT}, which {@code @LocalServerPort} here requires.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "topology.graph-view.refresh-interval=PT1H")
@@ -172,8 +168,6 @@ class DependencyControllerIT {
         UUID target = seedNode(tenantId);
         stubAccessFor(true, source, target);
 
-        // "MEMBER", not "TEAM_OWNER" — role tier is irrelevant, only ADMIN or actual team
-        // membership (checked via Registry) matters.
         HttpResponse<String> resp = send("POST", "", tenantId, userId, "MEMBER", declareBody(source, target));
 
         assertThat(resp.statusCode()).isEqualTo(201);
@@ -197,8 +191,6 @@ class DependencyControllerIT {
         UUID tenantId = UUID.randomUUID();
         UUID source = seedNode(tenantId);
         UUID target = seedNode(tenantId);
-        // Registry would deny this pair for anyone — ADMIN must bypass the check entirely,
-        // never even call Registry, regardless of team membership.
         stubAccessFor(false, source, target);
 
         HttpResponse<String> resp = send("POST", "", tenantId, UUID.randomUUID(), "ADMIN", declareBody(source, target));
@@ -243,11 +235,7 @@ class DependencyControllerIT {
         assertThat(resp.statusCode()).isEqualTo(409);
     }
 
-    /**
-     * Regression: an unauthorized caller must get a uniform 403 for a duplicate edge, not the
-     * 409 an authorized caller would see — otherwise POST /dependencies is an oracle for
-     * enumerating which edges already exist in the tenant's graph.
-     */
+    /** Regression: unauthorized gets 403, never the 409 an authorized caller would see for the same pair. */
     @Test
     void postDependency_duplicateEdgeButUnauthorized_returns403Not409() throws Exception {
         UUID tenantId = UUID.randomUUID();
@@ -278,8 +266,6 @@ class DependencyControllerIT {
 
         assertThat(resp.statusCode()).isEqualTo(503);
 
-        // Retry the same edge as ADMIN (skips Registry entirely) — if the first attempt had
-        // persisted anything, this would now 409 instead of 201.
         HttpResponse<String> retry = send("POST", "", tenantId, UUID.randomUUID(), "ADMIN", declareBody(source, target));
         assertThat(retry.statusCode()).isEqualTo(201);
     }
@@ -325,7 +311,6 @@ class DependencyControllerIT {
         assertThat(created.statusCode()).isEqualTo(201);
         UUID id = UUID.fromString(objectMapper.readTree(created.body()).get("data").get("id").stringValue());
 
-        // Now Registry denies everything — including the pair this row already had.
         stubAccessFor(false, source, target, newTarget);
 
         HttpResponse<String> resp = send("PUT", "/" + id, tenantId, userId, "MEMBER", declareBody(source, newTarget));

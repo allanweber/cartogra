@@ -16,14 +16,9 @@ import java.util.UUID;
 
 /**
  * Direct service-to-service call to Registry's internal membership-check endpoint (bypasses
- * the Gateway — same trust model as {@link RegistryGraphNodeClient}). Backs
- * {@code DependencyService}'s per-service authorization check for declared-dependency mutations.
- *
- * <p>Unlike {@code RegistryPlanLimitClient}'s fail-open pattern, this does NOT catch and fall
- * back on failure: an authorization check that silently defaults to "allow" when Registry is
- * unreachable would be a security hole, not a graceful degradation. Callers must treat a
- * propagated {@link RestClientException} as "deny" ({@link Retry#executeSupplier} rethrows the
- * last exception once attempts are exhausted) — mapped to 503 by {@code GlobalExceptionHandler}.
+ * the Gateway, same trust model as {@link RegistryGraphNodeClient}). Unlike
+ * {@code RegistryPlanLimitClient}'s fail-open pattern, this fails closed: a propagated
+ * {@link RestClientException} must be treated as "deny", not "allow".
  */
 @Component
 public class RegistryMembershipClient {

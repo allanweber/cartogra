@@ -9,15 +9,9 @@ import org.springframework.web.client.RestClientException;
 import java.time.Duration;
 
 /**
- * Shared bounded-retry policy for direct service-to-service {@code RestClient} calls (Registry
- * lookups, etc.) — one place to change the policy instead of three near-identical copies.
- * 3 attempts, 1s fixed delay, logs a WARN on every retry (not just on final exhaustion) so
- * transient flakiness is visible in logs before it escalates to a caller-visible failure.
- *
- * <p>Only retries transient failures: 5xx responses and non-HTTP-status errors (connection
- * refused, timeouts). A 4xx {@link HttpStatusCodeException} is a client error that will never
- * succeed on retry, so it fails immediately instead of burning attempts and latency on a
- * call that can't work.
+ * Shared bounded-retry policy for direct service-to-service {@code RestClient} calls: 3
+ * attempts, 1s fixed delay, retries only transient failures (5xx, connection errors) — a 4xx
+ * {@link HttpStatusCodeException} fails immediately since retrying it can never succeed.
  */
 public final class ServiceCallRetry {
 

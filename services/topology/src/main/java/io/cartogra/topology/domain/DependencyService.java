@@ -22,19 +22,13 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * CRUD on declared dependencies — POST/PUT/DELETE {@code /dependencies}. Every mutation
- * validates against {@code graph_nodes}, enforces "either side" team-membership authorization
- * (via Registry's internal membership-check endpoint, fail closed), and marks the
- * {@code dependency_graph_edges} materialized view dirty for the next scheduled refresh.
+ * CRUD on declared dependencies. Authorization is ADMIN or team membership on either side of
+ * the edge (plain membership, not the {@code TEAM_OWNER} role tier) via Registry's internal
+ * membership-check endpoint, checked before any state-revealing validation to avoid leaking
+ * node-existence or duplicate-edge information to unauthorized callers.
  *
- * <p>Authorization is ADMIN or team membership — plain membership, not the {@code TEAM_OWNER}
- * role tier. {@code team_members} rows carry no rank of their own, so any member of the team
- * owning the source or target service may manage the edge; there is no coarse role-based gate
- * on top of that (see {@link #requireEitherSideAccess}).
- *
- * <p>This service only ever touches rows with {@code type = DECLARED}: {@link #update} and
- * {@link #delete} treat an id belonging to an {@code observed} edge as not found, since those
- * are owned exclusively by the observed-edge ingestion flow.
+ * <p>Only touches rows with {@code type = DECLARED}; {@link #update} and {@link #delete} treat
+ * an {@code observed} edge's id as not found.
  */
 @org.springframework.stereotype.Service
 public class DependencyService {
@@ -73,10 +67,6 @@ public class DependencyService {
     public Dependency update(UUID tenantId, @Nullable UUID userId, UUID id, DeclareDependencyRequest request) {
         Dependency existing = loadDeclared(tenantId, id);
 
-        // Authorization before any check that reveals server state (same reasoning as
-        // create()). Caller must be authorized for BOTH the pre-edit pair (to be allowed to
-        // touch this edge at all) and the post-edit pair (since that's what's being asserted)
-        // — one Registry call covering up to 4 distinct serviceIds, evaluated as two pairs.
         if (!isAdmin()) {
             Map<UUID, Boolean> access = fetchAccess(tenantId, userId,
                     existing.sourceServiceId(), existing.targetServiceId(),
@@ -144,7 +134,6 @@ public class DependencyService {
                 });
     }
 
-    /** ADMIN bypasses entirely — never calls Registry. Otherwise "either side" via Registry. */
     private void requireEitherSideAccess(UUID tenantId, @Nullable UUID userId, UUID sourceServiceId, UUID targetServiceId) {
         if (isAdmin()) {
             return;

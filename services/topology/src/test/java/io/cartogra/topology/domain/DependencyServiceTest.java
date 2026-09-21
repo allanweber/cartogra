@@ -54,9 +54,6 @@ class DependencyServiceTest {
     void setUp() {
         service = new DependencyService(dependencyRepository, graphNodeRepository,
                 registryMembershipClient, graphViewRefreshScheduler);
-        // Plain non-admin authority by default — exercises the Registry membership-check
-        // path. Deliberately NOT ROLE_TEAM_OWNER: role tier is irrelevant, only ADMIN or
-        // actual team membership matters. ADMIN-specific tests override this.
         SecurityContextHolder.getContext().setAuthentication(
                 new TestingAuthenticationToken("user", null, new SimpleGrantedAuthority("ROLE_MEMBER")));
     }
@@ -98,8 +95,6 @@ class DependencyServiceTest {
         return new Dependency(id, tenantId, source, target, type, DependencyProtocol.HTTP, null,
                 Instant.now(), Instant.now(), null);
     }
-
-    // ---- create ----
 
     @Test
     void create_success_savesWithDeclaredTypeAndMarksDirty() {
@@ -184,8 +179,6 @@ class DependencyServiceTest {
     void create_sameServicePairDifferentProtocol_succeeds() {
         stubLiveNodes();
         stubFullAccess();
-        // findByEdgeIdentity is queried with the HTTP protocol specifically — a GRPC edge
-        // between the same pair doesn't match, so it returns empty for this exact identity.
         when(dependencyRepository.findByEdgeIdentity(tenantId, sourceId, targetId, DependencyType.DECLARED, DependencyProtocol.HTTP))
                 .thenReturn(Optional.empty());
         when(dependencyRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -241,12 +234,7 @@ class DependencyServiceTest {
         verify(graphViewRefreshScheduler, never()).markDirty();
     }
 
-    /**
-     * Regression: authorization must run BEFORE node/duplicate checks, so an unauthorized
-     * caller can never distinguish "unknown node" / "duplicate edge" from "not authorized" —
-     * otherwise POST /dependencies becomes an oracle for enumerating the tenant's dependency
-     * graph without ever passing the team-membership check.
-     */
+    /** Regression: authorization runs before node/duplicate checks, so an unauthorized caller never reaches them. */
     @Test
     void create_unauthorizedCaller_throwsAccessDeniedEvenWithUnknownNodesAndExistingDuplicate() {
         when(registryMembershipClient.checkAccess(eq(tenantId), eq(userId), anyList()))
@@ -254,13 +242,9 @@ class DependencyServiceTest {
 
         assertThatThrownBy(() -> service.create(tenantId, userId, request(sourceId, targetId)))
                 .isInstanceOf(AccessDeniedException.class);
-        // Neither graphNodeRepository nor dependencyRepository.findByEdgeIdentity should ever
-        // be consulted — the unauthorized caller learns nothing about server state.
         verifyNoInteractions(graphNodeRepository);
         verify(dependencyRepository, never()).findByEdgeIdentity(any(), any(), any(), any(), any());
     }
-
-    // ---- update ----
 
     @Test
     void update_fullReplace_success() {
@@ -308,7 +292,6 @@ class DependencyServiceTest {
         UUID newTarget = UUID.randomUUID();
         Dependency existing = existingDependency(id, sourceId, targetId, DependencyType.DECLARED);
         when(dependencyRepository.findById(tenantId, id)).thenReturn(Optional.of(existing));
-        // New pair (newSource, newTarget) is authorized; old pair (sourceId, targetId) is not.
         when(registryMembershipClient.checkAccess(eq(tenantId), eq(userId), anyList()))
                 .thenReturn(Map.of(sourceId, false, targetId, false, newSource, true, newTarget, true));
 
@@ -324,7 +307,6 @@ class DependencyServiceTest {
         UUID newTarget = UUID.randomUUID();
         Dependency existing = existingDependency(id, sourceId, targetId, DependencyType.DECLARED);
         when(dependencyRepository.findById(tenantId, id)).thenReturn(Optional.of(existing));
-        // Old pair (sourceId, targetId) is authorized; new pair (newSource, newTarget) is not.
         when(registryMembershipClient.checkAccess(eq(tenantId), eq(userId), anyList()))
                 .thenReturn(Map.of(sourceId, true, targetId, true, newSource, false, newTarget, false));
 
@@ -357,7 +339,6 @@ class DependencyServiceTest {
         UUID id = UUID.randomUUID();
         Dependency existing = existingDependency(id, sourceId, targetId, DependencyType.DECLARED);
         stubLiveNodes();
-        // findByEdgeIdentity matches the row being updated itself — must be excluded, not treated as a dup.
         when(dependencyRepository.findById(tenantId, id)).thenReturn(Optional.of(existing));
         when(dependencyRepository.findByEdgeIdentity(tenantId, sourceId, targetId, DependencyType.DECLARED, DependencyProtocol.HTTP))
                 .thenReturn(Optional.of(existing));
@@ -379,8 +360,6 @@ class DependencyServiceTest {
         assertThatThrownBy(() -> service.update(tenantId, userId, id, request(sourceId, sourceId)))
                 .isInstanceOf(SelfDependencyException.class);
     }
-
-    // ---- delete ----
 
     @Test
     void delete_success_softDeletesAndMarksDirty() {
