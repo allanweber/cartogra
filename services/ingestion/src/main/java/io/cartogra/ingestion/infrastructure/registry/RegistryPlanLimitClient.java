@@ -1,16 +1,15 @@
 package io.cartogra.ingestion.infrastructure.registry;
 
 import io.cartogra.ingestion.config.RegistryClientProperties;
+import io.cartogra.web.client.ServiceCallRetry;
 import io.cartogra.web.client.TraceparentRequestInterceptor;
 import io.github.resilience4j.retry.Retry;
-import io.github.resilience4j.retry.RetryConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
-import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -34,11 +33,7 @@ public class RegistryPlanLimitClient {
                 .baseUrl(props.baseUrl())
                 .requestInterceptor(traceparentRequestInterceptor)
                 .build();
-        this.retry = Retry.of("registry-plan-limits-fetch", RetryConfig.custom()
-                .maxAttempts(3)
-                .waitDuration(Duration.ofSeconds(1))
-                .retryExceptions(RestClientException.class)
-                .build());
+        this.retry = ServiceCallRetry.threeAttempts("registry-plan-limits-fetch", log);
     }
 
     /**

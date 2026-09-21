@@ -1,14 +1,15 @@
 package io.cartogra.topology.infrastructure.registry;
 
 import io.cartogra.topology.config.RegistryClientProperties;
+import io.cartogra.web.client.ServiceCallRetry;
 import io.cartogra.web.client.TraceparentRequestInterceptor;
 import io.github.resilience4j.retry.Retry;
-import io.github.resilience4j.retry.RetryConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -27,6 +28,8 @@ import java.util.UUID;
 @Component
 public class RegistryMembershipClient {
 
+    private static final Logger log = LoggerFactory.getLogger(RegistryMembershipClient.class);
+
     private final RestClient restClient;
     private final Retry retry;
 
@@ -36,11 +39,7 @@ public class RegistryMembershipClient {
                 .baseUrl(props.baseUrl())
                 .requestInterceptor(traceparentRequestInterceptor)
                 .build();
-        this.retry = Retry.of("registry-membership-check", RetryConfig.custom()
-                .maxAttempts(3)
-                .waitDuration(Duration.ofSeconds(1))
-                .retryExceptions(RestClientException.class)
-                .build());
+        this.retry = ServiceCallRetry.threeAttempts("registry-membership-check", log);
     }
 
     /**

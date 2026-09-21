@@ -2,14 +2,14 @@ package io.cartogra.topology.infrastructure.registry;
 
 import io.cartogra.common.api.PageResult;
 import io.cartogra.topology.config.RegistryClientProperties;
+import io.cartogra.web.client.ServiceCallRetry;
 import io.cartogra.web.client.TraceparentRequestInterceptor;
 import io.github.resilience4j.retry.Retry;
-import io.github.resilience4j.retry.RetryConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
 
-import java.time.Duration;
 import java.util.List;
 
 /**
@@ -21,6 +21,8 @@ import java.util.List;
 @Component
 public class RegistryGraphNodeClient {
 
+    private static final Logger log = LoggerFactory.getLogger(RegistryGraphNodeClient.class);
+
     private final RestClient restClient;
     private final Retry retry;
 
@@ -30,11 +32,7 @@ public class RegistryGraphNodeClient {
                 .baseUrl(props.baseUrl())
                 .requestInterceptor(traceparentRequestInterceptor)
                 .build();
-        this.retry = Retry.of("registry-graph-node-fetch", RetryConfig.custom()
-                .maxAttempts(3)
-                .waitDuration(Duration.ofSeconds(1))
-                .retryExceptions(RestClientException.class)
-                .build());
+        this.retry = ServiceCallRetry.threeAttempts("registry-graph-node-fetch", log);
     }
 
     /**

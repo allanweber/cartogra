@@ -243,6 +243,28 @@ class DependencyControllerIT {
         assertThat(resp.statusCode()).isEqualTo(409);
     }
 
+    /**
+     * Regression: an unauthorized caller must get a uniform 403 for a duplicate edge, not the
+     * 409 an authorized caller would see — otherwise POST /dependencies is an oracle for
+     * enumerating which edges already exist in the tenant's graph.
+     */
+    @Test
+    void postDependency_duplicateEdgeButUnauthorized_returns403Not409() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        UUID adminId = UUID.randomUUID();
+        UUID source = seedNode(tenantId);
+        UUID target = seedNode(tenantId);
+        HttpResponse<String> first = send("POST", "", tenantId, adminId, "ADMIN", declareBody(source, target));
+        assertThat(first.statusCode()).isEqualTo(201);
+
+        UUID unauthorizedUserId = UUID.randomUUID();
+        stubAccessFor(false, source, target);
+
+        HttpResponse<String> resp = send("POST", "", tenantId, unauthorizedUserId, "MEMBER", declareBody(source, target));
+
+        assertThat(resp.statusCode()).isEqualTo(403);
+    }
+
     @Test
     void postDependency_registryWireMockFault_returns503AndPersistsNothing() throws Exception {
         UUID tenantId = UUID.randomUUID();

@@ -36,9 +36,6 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-kafka")
     implementation("io.fabric8:kubernetes-client")
-    // Bounded retry on outbound service-to-service calls to Registry — functional API,
-    // no Spring AOP/annotations needed (spring-boot-starter-aop is banned, see backend.md).
-    implementation("io.github.resilience4j:resilience4j-retry:2.3.0")
     runtimeOnly("org.postgresql:postgresql")
     testImplementation(project(":shared:test-support"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")

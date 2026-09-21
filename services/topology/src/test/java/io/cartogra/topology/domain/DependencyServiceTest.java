@@ -118,6 +118,7 @@ class DependencyServiceTest {
 
     @Test
     void create_unknownSourceNode_throwsUnknownServiceNodeException() {
+        stubFullAccess();
         when(graphNodeRepository.findByServiceId(tenantId, sourceId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(tenantId, userId, request(sourceId, targetId)))
@@ -128,6 +129,7 @@ class DependencyServiceTest {
 
     @Test
     void create_unknownTargetNode_throwsUnknownServiceNodeException() {
+        stubFullAccess();
         when(graphNodeRepository.findByServiceId(tenantId, sourceId)).thenReturn(Optional.of(liveNode(sourceId)));
         when(graphNodeRepository.findByServiceId(tenantId, targetId)).thenReturn(Optional.empty());
 
@@ -138,6 +140,7 @@ class DependencyServiceTest {
 
     @Test
     void create_softDeletedSourceNode_throwsUnknownServiceNodeException() {
+        stubFullAccess();
         when(graphNodeRepository.findByServiceId(tenantId, sourceId)).thenReturn(Optional.of(deletedNode(sourceId)));
 
         assertThatThrownBy(() -> service.create(tenantId, userId, request(sourceId, targetId)))
@@ -146,6 +149,7 @@ class DependencyServiceTest {
 
     @Test
     void create_softDeletedTargetNode_throwsUnknownServiceNodeException() {
+        stubFullAccess();
         when(graphNodeRepository.findByServiceId(tenantId, sourceId)).thenReturn(Optional.of(liveNode(sourceId)));
         when(graphNodeRepository.findByServiceId(tenantId, targetId)).thenReturn(Optional.of(deletedNode(targetId)));
 
@@ -155,6 +159,7 @@ class DependencyServiceTest {
 
     @Test
     void create_selfEdge_throwsSelfDependencyException() {
+        stubFullAccess();
         when(graphNodeRepository.findByServiceId(tenantId, sourceId)).thenReturn(Optional.of(liveNode(sourceId)));
 
         assertThatThrownBy(() -> service.create(tenantId, userId, request(sourceId, sourceId)))
@@ -164,6 +169,7 @@ class DependencyServiceTest {
 
     @Test
     void create_duplicateEdgeSameProtocol_throwsDuplicateDependencyException() {
+        stubFullAccess();
         stubLiveNodes();
         Dependency existing = existingDependency(UUID.randomUUID(), sourceId, targetId, DependencyType.DECLARED);
         when(dependencyRepository.findByEdgeIdentity(tenantId, sourceId, targetId, DependencyType.DECLARED, DependencyProtocol.HTTP))
@@ -226,8 +232,6 @@ class DependencyServiceTest {
 
     @Test
     void create_teamOwnerMemberOfNeither_throwsAccessDenied() {
-        stubLiveNodes();
-        stubNoDuplicate();
         when(registryMembershipClient.checkAccess(eq(tenantId), eq(userId), anyList()))
                 .thenReturn(Map.of(sourceId, false, targetId, false));
 
@@ -235,6 +239,25 @@ class DependencyServiceTest {
                 .isInstanceOf(AccessDeniedException.class);
         verify(dependencyRepository, never()).save(any());
         verify(graphViewRefreshScheduler, never()).markDirty();
+    }
+
+    /**
+     * Regression: authorization must run BEFORE node/duplicate checks, so an unauthorized
+     * caller can never distinguish "unknown node" / "duplicate edge" from "not authorized" —
+     * otherwise POST /dependencies becomes an oracle for enumerating the tenant's dependency
+     * graph without ever passing the team-membership check.
+     */
+    @Test
+    void create_unauthorizedCaller_throwsAccessDeniedEvenWithUnknownNodesAndExistingDuplicate() {
+        when(registryMembershipClient.checkAccess(eq(tenantId), eq(userId), anyList()))
+                .thenReturn(Map.of(sourceId, false, targetId, false));
+
+        assertThatThrownBy(() -> service.create(tenantId, userId, request(sourceId, targetId)))
+                .isInstanceOf(AccessDeniedException.class);
+        // Neither graphNodeRepository nor dependencyRepository.findByEdgeIdentity should ever
+        // be consulted — the unauthorized caller learns nothing about server state.
+        verifyNoInteractions(graphNodeRepository);
+        verify(dependencyRepository, never()).findByEdgeIdentity(any(), any(), any(), any(), any());
     }
 
     // ---- update ----
@@ -285,9 +308,6 @@ class DependencyServiceTest {
         UUID newTarget = UUID.randomUUID();
         Dependency existing = existingDependency(id, sourceId, targetId, DependencyType.DECLARED);
         when(dependencyRepository.findById(tenantId, id)).thenReturn(Optional.of(existing));
-        when(graphNodeRepository.findByServiceId(tenantId, newSource)).thenReturn(Optional.of(liveNode(newSource)));
-        when(graphNodeRepository.findByServiceId(tenantId, newTarget)).thenReturn(Optional.of(liveNode(newTarget)));
-        stubNoDuplicate();
         // New pair (newSource, newTarget) is authorized; old pair (sourceId, targetId) is not.
         when(registryMembershipClient.checkAccess(eq(tenantId), eq(userId), anyList()))
                 .thenReturn(Map.of(sourceId, false, targetId, false, newSource, true, newTarget, true));
@@ -304,9 +324,6 @@ class DependencyServiceTest {
         UUID newTarget = UUID.randomUUID();
         Dependency existing = existingDependency(id, sourceId, targetId, DependencyType.DECLARED);
         when(dependencyRepository.findById(tenantId, id)).thenReturn(Optional.of(existing));
-        when(graphNodeRepository.findByServiceId(tenantId, newSource)).thenReturn(Optional.of(liveNode(newSource)));
-        when(graphNodeRepository.findByServiceId(tenantId, newTarget)).thenReturn(Optional.of(liveNode(newTarget)));
-        stubNoDuplicate();
         // Old pair (sourceId, targetId) is authorized; new pair (newSource, newTarget) is not.
         when(registryMembershipClient.checkAccess(eq(tenantId), eq(userId), anyList()))
                 .thenReturn(Map.of(sourceId, true, targetId, true, newSource, false, newTarget, false));
@@ -324,6 +341,8 @@ class DependencyServiceTest {
         Dependency existing = existingDependency(id, sourceId, targetId, DependencyType.DECLARED);
         Dependency collidingRow = existingDependency(otherId, sourceId, newTarget, DependencyType.DECLARED);
         when(dependencyRepository.findById(tenantId, id)).thenReturn(Optional.of(existing));
+        when(registryMembershipClient.checkAccess(eq(tenantId), eq(userId), anyList()))
+                .thenReturn(Map.of(sourceId, true, targetId, true, newTarget, true));
         when(graphNodeRepository.findByServiceId(tenantId, sourceId)).thenReturn(Optional.of(liveNode(sourceId)));
         when(graphNodeRepository.findByServiceId(tenantId, newTarget)).thenReturn(Optional.of(liveNode(newTarget)));
         when(dependencyRepository.findByEdgeIdentity(tenantId, sourceId, newTarget, DependencyType.DECLARED, DependencyProtocol.HTTP))
@@ -353,6 +372,8 @@ class DependencyServiceTest {
         UUID id = UUID.randomUUID();
         Dependency existing = existingDependency(id, sourceId, targetId, DependencyType.DECLARED);
         when(dependencyRepository.findById(tenantId, id)).thenReturn(Optional.of(existing));
+        when(registryMembershipClient.checkAccess(eq(tenantId), eq(userId), anyList()))
+                .thenReturn(Map.of(sourceId, true, targetId, true));
         when(graphNodeRepository.findByServiceId(tenantId, sourceId)).thenReturn(Optional.of(liveNode(sourceId)));
 
         assertThatThrownBy(() -> service.update(tenantId, userId, id, request(sourceId, sourceId)))

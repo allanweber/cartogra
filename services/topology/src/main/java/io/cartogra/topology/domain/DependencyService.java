@@ -56,10 +56,10 @@ public class DependencyService {
 
     @Transactional
     public Dependency create(UUID tenantId, @Nullable UUID userId, DeclareDependencyRequest request) {
+        requireEitherSideAccess(tenantId, userId, request.sourceServiceId(), request.targetServiceId());
         validateNodes(tenantId, request.sourceServiceId(), request.targetServiceId());
         requireNotSelfEdge(request.sourceServiceId(), request.targetServiceId());
         requireNoDuplicate(tenantId, request.sourceServiceId(), request.targetServiceId(), request.protocol(), null);
-        requireEitherSideAccess(tenantId, userId, request.sourceServiceId(), request.targetServiceId());
 
         Instant now = Instant.now();
         Dependency saved = dependencyRepository.save(new Dependency(
@@ -73,13 +73,10 @@ public class DependencyService {
     public Dependency update(UUID tenantId, @Nullable UUID userId, UUID id, DeclareDependencyRequest request) {
         Dependency existing = loadDeclared(tenantId, id);
 
-        validateNodes(tenantId, request.sourceServiceId(), request.targetServiceId());
-        requireNotSelfEdge(request.sourceServiceId(), request.targetServiceId());
-        requireNoDuplicate(tenantId, request.sourceServiceId(), request.targetServiceId(), request.protocol(), id);
-
-        // Caller must be authorized for BOTH the pre-edit pair (to be allowed to touch this
-        // edge at all) and the post-edit pair (since that's what's being asserted) — one
-        // Registry call covering up to 4 distinct serviceIds, evaluated as two pairs.
+        // Authorization before any check that reveals server state (same reasoning as
+        // create()). Caller must be authorized for BOTH the pre-edit pair (to be allowed to
+        // touch this edge at all) and the post-edit pair (since that's what's being asserted)
+        // — one Registry call covering up to 4 distinct serviceIds, evaluated as two pairs.
         if (!isAdmin()) {
             Map<UUID, Boolean> access = fetchAccess(tenantId, userId,
                     existing.sourceServiceId(), existing.targetServiceId(),
@@ -87,6 +84,10 @@ public class DependencyService {
             requirePairAuthorized(access, existing.sourceServiceId(), existing.targetServiceId());
             requirePairAuthorized(access, request.sourceServiceId(), request.targetServiceId());
         }
+
+        validateNodes(tenantId, request.sourceServiceId(), request.targetServiceId());
+        requireNotSelfEdge(request.sourceServiceId(), request.targetServiceId());
+        requireNoDuplicate(tenantId, request.sourceServiceId(), request.targetServiceId(), request.protocol(), id);
 
         Dependency saved = dependencyRepository.save(new Dependency(
                 existing.id(), tenantId, request.sourceServiceId(), request.targetServiceId(),
