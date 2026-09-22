@@ -1,6 +1,6 @@
 # Topology Context
 
-**Service**: `services/topology` · Port `8082` · Phase 2 · **Planned**
+**Service**: `services/topology` · Port `8082` · Phase 1 · **Live**
 
 ---
 
@@ -61,7 +61,9 @@ Cross-context references stored as IDs only — Topology never hydrates a `Servi
 
 ---
 
-## Inbound Ports (API) — Planned
+## Inbound Ports (API)
+
+Implemented: backfill, dependency CRUD, graph read (`[1.1]`–`[1.3]`). Everything else below is still planned.
 
 | Method | Path | Description |
 |---|---|---|
@@ -70,6 +72,7 @@ Cross-context references stored as IDs only — Topology never hydrates a `Servi
 | PUT | `/api/v1/topology/dependencies/{id}` | Full replace of a declared dependency; same validation as POST, re-checked against both the old and new source/target pair — [1.2] |
 | GET | `/api/v1/topology/dependencies` | List dependencies for tenant |
 | DELETE | `/api/v1/topology/dependencies/{id}` | Remove a declared dependency (soft delete) — [1.2] |
+| GET | `/api/v1/topology/graph` | `{nodes[], edges[], truncated}` joining `graph_nodes` to the `dependency_graph_edges` MV; optional `teamId`/`type`/`limit`; 500-node hard cap; no per-team access control (read-only) — [1.3] |
 | GET | `/api/v1/topology/blast-radius/{serviceId}` | Downstream impact set |
 | GET | `/api/v1/topology/cycles` | Current cycle list |
 | GET | `/api/v1/topology/drifts` | Active drift records |

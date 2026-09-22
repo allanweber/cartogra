@@ -12,7 +12,7 @@
 | **Identity & Access** | `services/gateway` | Live (Phase 0/1) |
 | **Service Catalog** | `services/registry` | Live (Phase 0/1) |
 | **Ingestion** | `services/ingestion` | Live (Phase 0/1) |
-| **Topology** | `services/topology` | Skeleton (Phase 0 done: schema, CI, IT harness; no service/controller/consumer yet — that's Phase 1) |
+| **Topology** | `services/topology` | Live (Phase 1 in progress: backfill, dependency CRUD, and graph read shipped — [1.1]–[1.3]; blast-radius/cycles/drifts/spofs/risks still planned) |
 | **Contract** | `services/contract` | Empty directory (Phase 5) |
 | **Intelligence** | `services/intelligence` | Empty directory (Phase 6) |
 | **Frontend Shell** | `frontend/` | Partial (Phase 1) |
@@ -79,7 +79,7 @@
 | Upstream (U) | Downstream (D) | Relationship | Integration point |
 |---|---|---|---|
 | Identity & Access | Service Catalog | **Open Host Service / Conformist** | Declarative reverse proxy (Spring Cloud Gateway route, circuit-breaker guarded); Gateway forwards `X-Tenant-Id` derived from JWT |
-| Identity & Access | Topology | Open Host Service / Conformist | Declarative reverse proxy — route already exists in `gateway/application.yml` (`Path=/api/v1/topology/**`); no endpoints behind it yet, that's Phase 1 |
+| Identity & Access | Topology | Open Host Service / Conformist | Declarative reverse proxy (`gateway/application.yml`, `Path=/api/v1/topology/**`); backfill, dependency CRUD, and graph read are live behind it — [1.1]–[1.3] |
 | Identity & Access | Contract | Open Host Service / Conformist | Declarative reverse proxy (Phase 5 — route not yet created) |
 | Identity & Access | Intelligence | Open Host Service / Conformist | Declarative reverse proxy (Phase 6 — route not yet created) |
 | Service Catalog (U) | Topology (D) | **Customer / Supplier** | Planned, Phase 1: Kafka `cartogra.registry.service.{registered,updated,deleted}`, plus a planned `ownership-changed` event for orphan risk only (ADR-0027). No consumer exists in Topology yet — Registry only produces the three lifecycle topics today, and `ownership-changed` does not exist in code at all |
@@ -150,7 +150,7 @@ no consumer, and no code (`docs/roadmap.md` §12).
 - `services/gateway/CONTEXT.md` — Identity & Access context
 - `services/registry/CONTEXT.md` — Service Catalog context
 - `services/ingestion/CONTEXT.md` — Ingestion context
-- `services/topology/CONTEXT.md` — Topology context (planned)
+- `services/topology/CONTEXT.md` — Topology context (Phase 1 in progress)
 - `services/contract/CONTEXT.md` — Contract context (planned)
 - `services/intelligence/CONTEXT.md` — Intelligence context (planned)
 - `frontend/CONTEXT.md` — Frontend Shell context
