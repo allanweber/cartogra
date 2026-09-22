@@ -190,6 +190,9 @@ jobs:
       - name: Build gateway image
         run: docker build -f infra/docker/gateway/Dockerfile -t cartogra/gateway:ci .
 
+      - name: Build topology image
+        run: docker build -f infra/docker/topology/Dockerfile -t cartogra/topology:ci .
+
       - name: Build ingestion image
         run: docker build -f infra/docker/ingestion/Dockerfile -t cartogra/ingestion:ci .
 
@@ -205,5 +208,6 @@ jobs:
           echo "|---------|-------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| registry | \`cartogra/registry:ci\` | ✅ Built |" >> $GITHUB_STEP_SUMMARY
           echo "| gateway | \`cartogra/gateway:ci\` | ✅ Built |" >> $GITHUB_STEP_SUMMARY
+          echo "| topology | \`cartogra/topology:ci\` | ✅ Built |" >> $GITHUB_STEP_SUMMARY
           echo "| ingestion | \`cartogra/ingestion:ci\` | ✅ Built |" >> $GITHUB_STEP_SUMMARY
           echo "| frontend | \`cartogra/frontend:ci\` | ✅ Built |" >> $GITHUB_STEP_SUMMARY

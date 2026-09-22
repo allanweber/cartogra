@@ -332,6 +332,7 @@ jobs:
 
           check registry  'services/registry|infra/docker/registry'
           check gateway   'services/gateway|infra/docker/gateway'
+          check topology  'services/topology|infra/docker/topology'
           check ingestion 'services/ingestion|infra/docker/ingestion'
           check frontend  'frontend|infra/docker/frontend'
 
@@ -360,6 +361,21 @@ jobs:
         with:
           scan-type: 'image'
           image-ref: 'cartogra/gateway:ci'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+          format: 'table'
+
+      - name: Build topology image
+        if: steps.changes.outputs.topology == 'true'
+        run: docker build -f infra/docker/topology/Dockerfile -t cartogra/topology:ci .
+
+      - name: Scan topology image — fail on CRITICAL or HIGH (unfixed suppressed)
+        if: steps.changes.outputs.topology == 'true'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: 'image'
+          image-ref: 'cartogra/topology:ci'
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
           ignore-unfixed: true
@@ -414,6 +430,7 @@ jobs:
 
           row registry  cartogra/registry:ci  "${{ steps.changes.outputs.registry }}"
           row gateway   cartogra/gateway:ci   "${{ steps.changes.outputs.gateway }}"
+          row topology  cartogra/topology:ci  "${{ steps.changes.outputs.topology }}"
           row ingestion cartogra/ingestion:ci "${{ steps.changes.outputs.ingestion }}"
           row frontend  cartogra/frontend:ci  "${{ steps.changes.outputs.frontend }}"
 
