@@ -87,11 +87,13 @@ public class JdbcDependencyRepository implements DependencyRepository {
                     :type, :protocol, CAST(:metadata AS JSONB), :createdAt, :updatedAt, :deletedAt
                 )
                 ON CONFLICT (id) DO UPDATE SET
-                    dependency_type = EXCLUDED.dependency_type,
-                    protocol        = EXCLUDED.protocol,
-                    metadata        = EXCLUDED.metadata,
-                    updated_at      = EXCLUDED.updated_at,
-                    deleted_at      = EXCLUDED.deleted_at
+                    source_service_id = EXCLUDED.source_service_id,
+                    target_service_id = EXCLUDED.target_service_id,
+                    dependency_type   = EXCLUDED.dependency_type,
+                    protocol          = EXCLUDED.protocol,
+                    metadata          = EXCLUDED.metadata,
+                    updated_at        = EXCLUDED.updated_at,
+                    deleted_at        = EXCLUDED.deleted_at
                 RETURNING *
                 """;
         return jdbc.queryForObject(sql, toParams(dependency), DEPENDENCY_MAPPER);

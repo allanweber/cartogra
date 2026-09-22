@@ -54,6 +54,12 @@ class InternalPathDenyIT extends AbstractGatewayIT {
     }
 
     @Test
+    void unauthenticatedRequestToRegistryServiceAccessIsRejected() throws Exception {
+        mockMvc.perform(post("/api/v1/registry/internal/services/access"))
+            .andExpect(status().is4xxClientError());
+    }
+
+    @Test
     void authenticatedRequestToDownstreamInternalPathIsForbidden() throws Exception {
         UUID tenantId = insertTenant();
         String email = "internal-deny-" + UUID.randomUUID() + "@test.com";

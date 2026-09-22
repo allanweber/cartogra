@@ -34,6 +34,12 @@
 - Checked exceptions = recoverable (IO, network); unchecked = programming errors — NEVER swallow silently
 - Use try-with-resources for all `Closeable`
 
+**Comments:**
+
+- NEVER inline `//` comments — code and identifiers must read clearly on their own
+- Javadoc only when necessary: a class/method whose contract isn't obvious from its name and signature (a hidden constraint, a subtle invariant, a fail-open/fail-closed choice) — one or two sentences, not a walkthrough
+- NEVER Javadoc that restates what the code already says
+
 ## Spring Boot 4.0
 
 **Requirements:** Java 21+ (25 recommended) · Spring Framework 7.x · Jakarta EE 11 · Servlet 6.1 · Gradle 9.5.0+

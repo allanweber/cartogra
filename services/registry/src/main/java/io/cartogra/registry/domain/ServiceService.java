@@ -225,6 +225,19 @@ public class ServiceService {
         return PageResult.of(items, total, limit, offset);
     }
 
+    /**
+     * Backs the internal {@code /internal/services/access} endpoint — Topology's authorization
+     * check for declared-dependency mutations. Tenant-scoped (unlike {@link #listAllActive}):
+     * an unknown or cross-tenant {@code serviceId}, or an orphan service with no owning team,
+     * resolves to {@code false} rather than throwing.
+     */
+    public boolean isAccessibleBy(UUID tenantId, UUID userId, UUID serviceId) {
+        return serviceRepository.findById(tenantId, serviceId)
+                .map(Service::teamId)
+                .map(teamId -> teamRepository.isMember(tenantId, teamId, userId))
+                .orElse(false);
+    }
+
     public PageResult<Service> detectOrphans(UUID tenantId, int limit, int offset) {
         List<Service> orphans = serviceRepository.findOrphaned(tenantId, limit, offset);
         return PageResult.of(orphans, orphans.size(), limit, offset);
