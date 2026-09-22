@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 
 import java.util.Map;
@@ -127,6 +128,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MissingRequestHeaderException.class)
     public ResponseEntity<ApiErrorResponse> handleMissingHeader(MissingRequestHeaderException ex) {
         return respond(HttpStatus.BAD_REQUEST, ErrorCodes.BAD_REQUEST, "Missing required header: " + ex.getHeaderName());
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        return respond(HttpStatus.BAD_REQUEST, ErrorCodes.BAD_REQUEST,
+                "Invalid value for parameter '%s': %s".formatted(ex.getName(), ex.getValue()));
     }
 
     @ExceptionHandler(Exception.class)

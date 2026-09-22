@@ -3,6 +3,7 @@ package io.cartogra.topology.infrastructure.jdbc;
 import io.cartogra.topology.domain.GraphNode;
 import io.cartogra.topology.repository.GraphNodeRepository;
 import io.cartogra.topology.repository.GraphNodeUpsert;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -11,6 +12,8 @@ import org.springframework.stereotype.Repository;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -70,6 +73,40 @@ public class JdbcGraphNodeRepository implements GraphNodeRepository {
                 .addValue("tenantId", tenantId)
                 .addValue("serviceId", serviceId);
         return jdbc.query(sql, params, GRAPH_NODE_MAPPER).stream().findFirst();
+    }
+
+    @Override
+    public List<GraphNode> findForGraph(UUID tenantId, @Nullable UUID teamId, int limit) {
+        var sql = new StringBuilder("""
+                SELECT * FROM graph_nodes
+                WHERE tenant_id = :tenantId AND deleted_at IS NULL
+                """);
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("limit", limit);
+        if (teamId != null) {
+            sql.append(" AND team_id = :teamId");
+            params.addValue("teamId", teamId);
+        }
+        sql.append(" ORDER BY name ASC, service_id ASC LIMIT :limit");
+        return jdbc.query(sql.toString(), params, GRAPH_NODE_MAPPER);
+    }
+
+    @Override
+    public List<GraphNode> findByServiceIds(UUID tenantId, Collection<UUID> serviceIds, int limit) {
+        if (serviceIds.isEmpty()) {
+            return List.of();
+        }
+        String sql = """
+                SELECT * FROM graph_nodes
+                WHERE tenant_id = :tenantId AND deleted_at IS NULL AND service_id IN (:serviceIds)
+                ORDER BY name ASC, service_id ASC LIMIT :limit
+                """;
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("serviceIds", serviceIds)
+                .addValue("limit", limit);
+        return jdbc.query(sql, params, GRAPH_NODE_MAPPER);
     }
 
     private static final RowMapper<GraphNode> GRAPH_NODE_MAPPER = (rs, _) -> mapGraphNode(rs);

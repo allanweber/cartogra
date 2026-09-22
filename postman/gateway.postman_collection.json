@@ -57,12 +57,12 @@
 							}
 						},
 						"url": {
-							"raw": "{{gateway-url}}/ap/auth/register",
+							"raw": "{{gateway-url}}/api/auth/register",
 							"host": [
 								"{{gateway-url}}"
 							],
 							"path": [
-								"ap",
+								"api",
 								"auth",
 								"register"
 							]
@@ -113,12 +113,12 @@
 							}
 						},
 						"url": {
-							"raw": "{{gateway-url}}/ap/auth/verify",
+							"raw": "{{gateway-url}}/api/auth/verify",
 							"host": [
 								"{{gateway-url}}"
 							],
 							"path": [
-								"ap",
+								"api",
 								"auth",
 								"verify"
 							]
@@ -258,12 +258,12 @@
 							}
 						},
 						"url": {
-							"raw": "{{gateway-url}}/ap/auth/refresh",
+							"raw": "{{gateway-url}}/api/auth/refresh",
 							"host": [
 								"{{gateway-url}}"
 							],
 							"path": [
-								"ap",
+								"api",
 								"auth",
 								"refresh"
 							]
@@ -311,12 +311,12 @@
 							}
 						],
 						"url": {
-							"raw": "{{gateway-url}}/ap/auth/logout",
+							"raw": "{{gateway-url}}/api/auth/logout",
 							"host": [
 								"{{gateway-url}}"
 							],
 							"path": [
-								"ap",
+								"api",
 								"auth",
 								"logout"
 							]
@@ -372,12 +372,12 @@
 							}
 						],
 						"url": {
-							"raw": "{{gateway-url}}/ap/auth/userinfo",
+							"raw": "{{gateway-url}}/api/auth/userinfo",
 							"host": [
 								"{{gateway-url}}"
 							],
 							"path": [
-								"ap",
+								"api",
 								"auth",
 								"userinfo"
 							]
@@ -495,12 +495,12 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{gateway-url}}/ap/auth/oauth/google/start?tenantId={{tenantId}}",
+							"raw": "{{gateway-url}}/api/auth/oauth/google/start?tenantId={{tenantId}}",
 							"host": [
 								"{{gateway-url}}"
 							],
 							"path": [
-								"ap",
+								"api",
 								"auth",
 								"oauth",
 								"google",
@@ -537,12 +537,12 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{gateway-url}}/ap/auth/oauth/github/start?tenantId={{tenantId}}",
+							"raw": "{{gateway-url}}/api/auth/oauth/github/start?tenantId={{tenantId}}",
 							"host": [
 								"{{gateway-url}}"
 							],
 							"path": [
-								"ap",
+								"api",
 								"auth",
 								"oauth",
 								"github",
@@ -2554,6 +2554,322 @@
 										"webhooks",
 										"azuredevops",
 										"{{connectionId}}"
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Topology (via Gateway)",
+			"item": [
+				{
+					"name": "Dependencies",
+					"item": [
+						{
+							"name": "Declare Dependency",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"status is 201\", () => pm.expect(pm.response.code).to.equal(201));",
+											"pm.test(\"response envelope present\", () => { pm.expect(pm.response.json()).to.have.property(\"data\"); pm.expect(pm.response.json()).to.have.property(\"traceId\"); });",
+											"pm.test(\"traceId is 32 lowercase hex\", () => pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/));",
+											"pm.test(\"X-Trace-Id header matches body traceId\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId));",
+											"if (pm.response.code === 201) { pm.environment.set(\"dependencyId\", pm.response.json().data.id); }"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}",
+										"type": "text"
+									},
+									{
+										"key": "X-Tenant-Id",
+										"value": "{{tenantId}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{gateway-url}}/api/v1/topology/dependencies",
+									"host": [
+										"{{gateway-url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"topology",
+										"dependencies"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"sourceServiceId\": \"{{sourceServiceId}}\",\n  \"targetServiceId\": \"{{targetServiceId}}\",\n  \"protocol\": \"HTTP\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Update Dependency",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"status is 200\", () => pm.expect(pm.response.code).to.equal(200));",
+											"pm.test(\"response envelope present\", () => { pm.expect(pm.response.json()).to.have.property(\"data\"); pm.expect(pm.response.json()).to.have.property(\"traceId\"); });",
+											"pm.test(\"traceId is 32 lowercase hex\", () => pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/));",
+											"pm.test(\"X-Trace-Id header matches body traceId\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId));"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}",
+										"type": "text"
+									},
+									{
+										"key": "X-Tenant-Id",
+										"value": "{{tenantId}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{gateway-url}}/api/v1/topology/dependencies/{{dependencyId}}",
+									"host": [
+										"{{gateway-url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"topology",
+										"dependencies",
+										"{{dependencyId}}"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"sourceServiceId\": \"{{sourceServiceId}}\",\n  \"targetServiceId\": \"{{targetServiceId}}\",\n  \"protocol\": \"GRPC\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Delete Dependency",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"status is 204\", () => pm.expect(pm.response.code).to.equal(204));"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}",
+										"type": "text"
+									},
+									{
+										"key": "X-Tenant-Id",
+										"value": "{{tenantId}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{gateway-url}}/api/v1/topology/dependencies/{{dependencyId}}",
+									"host": [
+										"{{gateway-url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"topology",
+										"dependencies",
+										"{{dependencyId}}"
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Graph",
+					"item": [
+						{
+							"name": "Get Graph",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"status is 200\", () => pm.expect(pm.response.code).to.equal(200));",
+											"pm.test(\"response envelope present\", () => { pm.expect(pm.response.json()).to.have.property(\"data\"); pm.expect(pm.response.json()).to.have.property(\"traceId\"); });",
+											"pm.test(\"traceId is 32 lowercase hex\", () => pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/));",
+											"pm.test(\"X-Trace-Id header matches body traceId\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId));",
+											"pm.test(\"returns nodes, edges, truncated\", () => { const data = pm.response.json().data; pm.expect(data.nodes).to.be.an(\"array\"); pm.expect(data.edges).to.be.an(\"array\"); pm.expect(data.truncated).to.be.a(\"boolean\"); });"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}",
+										"type": "text"
+									},
+									{
+										"key": "X-Tenant-Id",
+										"value": "{{tenantId}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{gateway-url}}/api/v1/topology/graph",
+									"host": [
+										"{{gateway-url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"topology",
+										"graph"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Get Graph - Filtered by teamId",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"status is 200\", () => pm.expect(pm.response.code).to.equal(200));",
+											"pm.test(\"response envelope present\", () => { pm.expect(pm.response.json()).to.have.property(\"data\"); pm.expect(pm.response.json()).to.have.property(\"traceId\"); });",
+											"pm.test(\"traceId is 32 lowercase hex\", () => pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/));",
+											"pm.test(\"X-Trace-Id header matches body traceId\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId));"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}",
+										"type": "text"
+									},
+									{
+										"key": "X-Tenant-Id",
+										"value": "{{tenantId}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{gateway-url}}/api/v1/topology/graph?teamId={{teamId}}",
+									"host": [
+										"{{gateway-url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"topology",
+										"graph"
+									],
+									"query": [
+										{
+											"key": "teamId",
+											"value": "{{teamId}}"
+										}
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Get Graph - Filtered by type",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"status is 200\", () => pm.expect(pm.response.code).to.equal(200));",
+											"pm.test(\"response envelope present\", () => { pm.expect(pm.response.json()).to.have.property(\"data\"); pm.expect(pm.response.json()).to.have.property(\"traceId\"); });",
+											"pm.test(\"traceId is 32 lowercase hex\", () => pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/));",
+											"pm.test(\"X-Trace-Id header matches body traceId\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId));"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}",
+										"type": "text"
+									},
+									{
+										"key": "X-Tenant-Id",
+										"value": "{{tenantId}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{gateway-url}}/api/v1/topology/graph?type=DECLARED",
+									"host": [
+										"{{gateway-url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"topology",
+										"graph"
+									],
+									"query": [
+										{
+											"key": "type",
+											"value": "DECLARED"
+										}
 									]
 								}
 							},

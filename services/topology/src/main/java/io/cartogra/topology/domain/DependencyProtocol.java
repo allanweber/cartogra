@@ -9,4 +9,8 @@ public enum DependencyProtocol {
     public String toDbValue() {
         return name().toLowerCase(java.util.Locale.ROOT);
     }
+
+    public static DependencyProtocol fromDbValue(String value) {
+        return valueOf(value.toUpperCase(java.util.Locale.ROOT));
+    }
 }

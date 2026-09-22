@@ -1,0 +1,655 @@
+{
+	"info": {
+		"name": "Cartogra Topology",
+		"description": "Topology service API collection for Cartogra - backfill, declared dependencies, and the graph read API. Declaring a dependency requires sourceServiceId/targetServiceId to already exist as live graph_nodes rows - create them in Registry first, then run 'Trigger Backfill' to seed graph_nodes synchronously (avoids waiting on the async Kafka projection), and set the sourceServiceId/targetServiceId environment variables from the Registry service ids before running the Dependencies requests.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "topology-url",
+			"value": "http://localhost:8082",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Backfill",
+			"item": [
+				{
+					"name": "Trigger Backfill",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{topology-url}}/api/v1/topology/internal/backfill",
+							"host": [
+								"{{topology-url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"topology",
+								"internal",
+								"backfill"
+							]
+						},
+						"description": "Admin, service-to-service endpoint - not proxied through the Gateway (blocked by InternalPathDenyFilter). Walks Registry once to seed graph_nodes for tenants that predate the GraphNodeEventConsumer; safe to re-run."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"status is 200\", function () {",
+									"    pm.expect(pm.response.code).to.equal(200);",
+									"});",
+									"",
+									"pm.test(\"response envelope present\", function () {",
+									"    pm.expect(pm.response.json()).to.have.property(\"data\");",
+									"    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+									"});",
+									"",
+									"pm.test(\"traceId is 32 lowercase hex\", function () {",
+									"    pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/);",
+									"});",
+									"",
+									"pm.test(\"X-Trace-Id header matches body traceId\", function () {",
+									"    pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId);",
+									"});",
+									"",
+									"pm.test(\"nodesUpserted is a number\", function () {",
+									"    pm.expect(pm.response.json().data.nodesUpserted).to.be.a(\"number\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Dependencies",
+			"item": [
+				{
+					"name": "Declare Dependency",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "X-Tenant-Id",
+								"value": "{{tenantId}}",
+								"type": "text"
+							},
+							{
+								"key": "X-User-Id",
+								"value": "{{userId}}",
+								"type": "text"
+							},
+							{
+								"key": "X-User-Roles",
+								"value": "ADMIN",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{topology-url}}/api/v1/topology/dependencies",
+							"host": [
+								"{{topology-url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"topology",
+								"dependencies"
+							]
+						},
+						"description": "sourceServiceId/targetServiceId must reference existing, live graph_nodes rows for this tenant (404 UnknownServiceNodeException otherwise). Always creates a DECLARED-type edge.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"sourceServiceId\": \"{{sourceServiceId}}\",\n  \"targetServiceId\": \"{{targetServiceId}}\",\n  \"protocol\": \"HTTP\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"status is 201\", function () {",
+									"    pm.expect(pm.response.code).to.equal(201);",
+									"});",
+									"",
+									"pm.test(\"response envelope present\", function () {",
+									"    pm.expect(pm.response.json()).to.have.property(\"data\");",
+									"    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+									"});",
+									"",
+									"pm.test(\"traceId is 32 lowercase hex\", function () {",
+									"    pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/);",
+									"});",
+									"",
+									"pm.test(\"X-Trace-Id header matches body traceId\", function () {",
+									"    pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId);",
+									"});",
+									"",
+									"pm.test(\"dependency has expected fields\", function () {",
+									"    const data = pm.response.json().data;",
+									"    pm.expect(data.sourceServiceId).to.equal(pm.environment.get(\"sourceServiceId\"));",
+									"    pm.expect(data.targetServiceId).to.equal(pm.environment.get(\"targetServiceId\"));",
+									"    pm.expect(data.type).to.equal(\"DECLARED\");",
+									"});",
+									"",
+									"if (pm.response.code === 201) {",
+									"    pm.environment.set(\"dependencyId\", pm.response.json().data.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Update Dependency",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "X-Tenant-Id",
+								"value": "{{tenantId}}",
+								"type": "text"
+							},
+							{
+								"key": "X-User-Id",
+								"value": "{{userId}}",
+								"type": "text"
+							},
+							{
+								"key": "X-User-Roles",
+								"value": "ADMIN",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{topology-url}}/api/v1/topology/dependencies/{{dependencyId}}",
+							"host": [
+								"{{topology-url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"topology",
+								"dependencies",
+								"{{dependencyId}}"
+							]
+						},
+						"description": "Full replace of a declared dependency; re-validated against both the old and new source/target pair.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"sourceServiceId\": \"{{sourceServiceId}}\",\n  \"targetServiceId\": \"{{targetServiceId}}\",\n  \"protocol\": \"GRPC\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"status is 200\", function () {",
+									"    pm.expect(pm.response.code).to.equal(200);",
+									"});",
+									"",
+									"pm.test(\"response envelope present\", function () {",
+									"    pm.expect(pm.response.json()).to.have.property(\"data\");",
+									"    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+									"});",
+									"",
+									"pm.test(\"traceId is 32 lowercase hex\", function () {",
+									"    pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/);",
+									"});",
+									"",
+									"pm.test(\"X-Trace-Id header matches body traceId\", function () {",
+									"    pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId);",
+									"});",
+									"",
+									"pm.test(\"protocol updated\", function () {",
+									"    pm.expect(pm.response.json().data.protocol).to.equal(\"GRPC\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Delete Dependency",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "X-Tenant-Id",
+								"value": "{{tenantId}}",
+								"type": "text"
+							},
+							{
+								"key": "X-User-Id",
+								"value": "{{userId}}",
+								"type": "text"
+							},
+							{
+								"key": "X-User-Roles",
+								"value": "ADMIN",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{topology-url}}/api/v1/topology/dependencies/{{dependencyId}}",
+							"host": [
+								"{{topology-url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"topology",
+								"dependencies",
+								"{{dependencyId}}"
+							]
+						},
+						"description": "Soft-deletes a declared dependency."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"status is 204\", function () {",
+									"    pm.expect(pm.response.code).to.equal(204);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Graph",
+			"item": [
+				{
+					"name": "Get Graph",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "X-Tenant-Id",
+								"value": "{{tenantId}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{topology-url}}/api/v1/topology/graph",
+							"host": [
+								"{{topology-url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"topology",
+								"graph"
+							]
+						},
+						"description": "{nodes[], edges[], truncated} from dependency_graph_edges joined to graph_nodes, capped at 500 nodes."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"status is 200\", function () {",
+									"    pm.expect(pm.response.code).to.equal(200);",
+									"});",
+									"",
+									"pm.test(\"response envelope present\", function () {",
+									"    pm.expect(pm.response.json()).to.have.property(\"data\");",
+									"    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+									"});",
+									"",
+									"pm.test(\"traceId is 32 lowercase hex\", function () {",
+									"    pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/);",
+									"});",
+									"",
+									"pm.test(\"X-Trace-Id header matches body traceId\", function () {",
+									"    pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId);",
+									"});",
+									"",
+									"pm.test(\"returns nodes, edges, truncated\", function () {",
+									"    const data = pm.response.json().data;",
+									"    pm.expect(data.nodes).to.be.an(\"array\");",
+									"    pm.expect(data.edges).to.be.an(\"array\");",
+									"    pm.expect(data.truncated).to.be.a(\"boolean\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Get Graph - Filtered by teamId",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "X-Tenant-Id",
+								"value": "{{tenantId}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{topology-url}}/api/v1/topology/graph?teamId={{teamId}}",
+							"host": [
+								"{{topology-url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"topology",
+								"graph"
+							],
+							"query": [
+								{
+									"key": "teamId",
+									"value": "{{teamId}}"
+								}
+							]
+						},
+						"description": "Nodes with team_id = teamId, plus any cross-team neighbor node needed to keep every returned edge non-dangling."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"status is 200\", function () {",
+									"    pm.expect(pm.response.code).to.equal(200);",
+									"});",
+									"",
+									"pm.test(\"response envelope present\", function () {",
+									"    pm.expect(pm.response.json()).to.have.property(\"data\");",
+									"    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+									"});",
+									"",
+									"pm.test(\"traceId is 32 lowercase hex\", function () {",
+									"    pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/);",
+									"});",
+									"",
+									"pm.test(\"X-Trace-Id header matches body traceId\", function () {",
+									"    pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Get Graph - Filtered by type",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "X-Tenant-Id",
+								"value": "{{tenantId}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{topology-url}}/api/v1/topology/graph?type=DECLARED",
+							"host": [
+								"{{topology-url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"topology",
+								"graph"
+							],
+							"query": [
+								{
+									"key": "type",
+									"value": "DECLARED"
+								}
+							]
+						},
+						"description": "type filters edges by dependency_type (DECLARED/OBSERVED) only - the node set is unaffected."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"status is 200\", function () {",
+									"    pm.expect(pm.response.code).to.equal(200);",
+									"});",
+									"",
+									"pm.test(\"response envelope present\", function () {",
+									"    pm.expect(pm.response.json()).to.have.property(\"data\");",
+									"    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+									"});",
+									"",
+									"pm.test(\"traceId is 32 lowercase hex\", function () {",
+									"    pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/);",
+									"});",
+									"",
+									"pm.test(\"X-Trace-Id header matches body traceId\", function () {",
+									"    pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Get Graph - With limit",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "X-Tenant-Id",
+								"value": "{{tenantId}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{topology-url}}/api/v1/topology/graph?limit=2",
+							"host": [
+								"{{topology-url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"topology",
+								"graph"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "2"
+								}
+							]
+						},
+						"description": "limit is clamped to [1, 500]. truncated is true whenever more nodes match than were returned."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"status is 200\", function () {",
+									"    pm.expect(pm.response.code).to.equal(200);",
+									"});",
+									"",
+									"pm.test(\"response envelope present\", function () {",
+									"    pm.expect(pm.response.json()).to.have.property(\"data\");",
+									"    pm.expect(pm.response.json()).to.have.property(\"traceId\");",
+									"});",
+									"",
+									"pm.test(\"traceId is 32 lowercase hex\", function () {",
+									"    pm.expect(pm.response.json().traceId).to.match(/^[0-9a-f]{32}$/);",
+									"});",
+									"",
+									"pm.test(\"X-Trace-Id header matches body traceId\", function () {",
+									"    pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.equal(pm.response.json().traceId);",
+									"});",
+									"",
+									"pm.test(\"returns at most the requested limit\", function () {",
+									"    pm.expect(pm.response.json().data.nodes.length).to.be.at.most(2);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Get Graph - Invalid type (400)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "X-Tenant-Id",
+								"value": "{{tenantId}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{topology-url}}/api/v1/topology/graph?type=NOT_A_TYPE",
+							"host": [
+								"{{topology-url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"topology",
+								"graph"
+							],
+							"query": [
+								{
+									"key": "type",
+									"value": "NOT_A_TYPE"
+								}
+							]
+						},
+						"description": "An unparseable type value is rejected with 400 BAD_REQUEST, not a 500."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"status is 400\", function () {",
+									"    pm.expect(pm.response.code).to.equal(400);",
+									"});",
+									"",
+									"pm.test(\"error code is BAD_REQUEST\", function () {",
+									"    pm.expect(pm.response.json().error.code).to.equal(\"BAD_REQUEST\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Health",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{topology-url}}/actuator/health",
+							"host": [
+								"{{topology-url}}"
+							],
+							"path": [
+								"actuator",
+								"health"
+							]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"status is 200\", function () {",
+									"    pm.expect(pm.response.code).to.equal(200);",
+									"});",
+									"",
+									"pm.test(\"health status is UP\", function () {",
+									"    pm.expect(pm.response.json().status).to.equal(\"UP\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			]
+		}
+	]
+}
