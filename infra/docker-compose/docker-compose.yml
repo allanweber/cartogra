@@ -103,7 +103,7 @@ services:
       kafka:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health/liveness"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health/live"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -132,7 +132,7 @@ services:
       kafka:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health/liveness"]
+      test: ["CMD", "curl", "-f", "http://localhost:8081/api/v1/registry/actuator/health/live"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -161,7 +161,7 @@ services:
       kafka:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health/liveness"]
+      test: ["CMD", "curl", "-f", "http://localhost:8082/api/v1/topology/actuator/health/live"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -190,7 +190,7 @@ services:
       kafka:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8085/actuator/health/liveness"]
+      test: ["CMD", "curl", "-f", "http://localhost:8085/api/v1/ingestion/actuator/health/live"]
       interval: 15s
       timeout: 5s
       retries: 10

@@ -293,6 +293,67 @@ jobs:
             echo "⏭️ Skipped — no changes in \`frontend/\`" >> $GITHUB_STEP_SUMMARY
           fi
 
+  e2e:
+    name: E2E — Playwright
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Start backend stack (postgres, valkey, kafka, gateway, registry, topology)
+        working-directory: infra/docker-compose
+        run: docker compose -f docker-compose.yml up -d --build postgres valkey kafka gateway registry topology
+
+      - name: Wait for backend services to be healthy
+        working-directory: infra/docker-compose
+        run: docker compose -f docker-compose.yml up -d --wait postgres valkey kafka gateway registry topology
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Playwright e2e suite
+        working-directory: frontend
+        env:
+          CI: 'true'
+          E2E_BASE_URL: http://localhost:3006
+          E2E_API_BASE_URL: http://localhost:8080
+          E2E_DB_URL: postgresql://cartogra:cartogra@localhost:5436/cartogra
+        run: pnpm run test:e2e
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 14
+
+      - name: Dump backend logs on failure
+        if: failure()
+        working-directory: infra/docker-compose
+        run: docker compose -f docker-compose.yml logs gateway registry topology
+
+      - name: Tear down backend stack
+        if: always()
+        working-directory: infra/docker-compose
+        run: docker compose -f docker-compose.yml down -v
+
   container-build:
     name: Container — Build checks
     needs: [backend, frontend]

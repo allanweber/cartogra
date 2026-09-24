@@ -72,8 +72,14 @@ class GraphControllerIT {
     }
 
     private void seedEdge(UUID tenantId, UUID source, UUID target, DependencyType type, DependencyProtocol protocol) {
+        seedEdge(tenantId, source, target, type, protocol, null);
+    }
+
+    private void seedEdge(UUID tenantId, UUID source, UUID target, DependencyType type, DependencyProtocol protocol,
+            String metadata) {
         Instant now = Instant.now();
-        dependencyRepository.save(new Dependency(UUID.randomUUID(), tenantId, source, target, type, protocol, null, now, now, null));
+        dependencyRepository.save(
+                new Dependency(UUID.randomUUID(), tenantId, source, target, type, protocol, metadata, now, now, null));
     }
 
     private HttpResponse<String> getGraph(UUID tenantId, String query) throws Exception {
@@ -112,6 +118,21 @@ class GraphControllerIT {
         assertThat(edge.get("target").stringValue()).isEqualTo(b.toString());
         assertThat(edge.get("dependencyType").stringValue()).isEqualTo("DECLARED");
         assertTraceIdHeaderMatchesBody(resp);
+    }
+
+    @Test
+    void edgeIncludesProtocolAndMetadata() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        UUID a = seedNode(tenantId, "svc-a", null);
+        UUID b = seedNode(tenantId, "svc-b", null);
+        seedEdge(tenantId, a, b, DependencyType.DECLARED, DependencyProtocol.GRPC, "internal RPC only");
+        graphViewRepository.refresh();
+
+        HttpResponse<String> resp = getGraph(tenantId, "");
+
+        JsonNode edge = objectMapper.readTree(resp.body()).get("data").get("edges").get(0);
+        assertThat(edge.get("protocol").stringValue()).isEqualTo("GRPC");
+        assertThat(edge.get("metadata").stringValue()).isEqualTo("internal RPC only");
     }
 
     @Test

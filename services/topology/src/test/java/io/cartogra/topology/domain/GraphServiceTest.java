@@ -42,7 +42,7 @@ class GraphServiceTest {
     }
 
     private GraphEdge edge(UUID source, UUID target, DependencyType type) {
-        return new GraphEdge(tenantId, source, target, type, DependencyProtocol.HTTP);
+        return new GraphEdge(tenantId, source, target, type, DependencyProtocol.HTTP, null);
     }
 
     @Test

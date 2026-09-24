@@ -18,8 +18,11 @@ import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * CRUD on declared dependencies. Authorization is ADMIN or team membership on either side of
@@ -94,6 +97,47 @@ public class DependencyService {
 
         dependencyRepository.softDelete(tenantId, id);
         graphViewRefreshScheduler.markDirty();
+    }
+
+    public ServiceDependencies findForService(UUID tenantId, UUID serviceId) {
+        requireLiveNode(tenantId, serviceId);
+
+        List<Dependency> edges = dependencyRepository.findByService(tenantId, serviceId).stream()
+                .filter(dependency -> dependency.type() == DependencyType.DECLARED)
+                .toList();
+        List<Dependency> downstreamEdges = edges.stream()
+                .filter(dependency -> dependency.sourceServiceId().equals(serviceId))
+                .toList();
+        List<Dependency> upstreamEdges = edges.stream()
+                .filter(dependency -> dependency.targetServiceId().equals(serviceId))
+                .toList();
+
+        Set<UUID> counterpartIds = new LinkedHashSet<>();
+        downstreamEdges.forEach(dependency -> counterpartIds.add(dependency.targetServiceId()));
+        upstreamEdges.forEach(dependency -> counterpartIds.add(dependency.sourceServiceId()));
+        Map<UUID, GraphNode> nodesById = graphNodeRepository
+                .findByServiceIds(tenantId, counterpartIds, counterpartIds.size())
+                .stream()
+                .collect(Collectors.toMap(GraphNode::serviceId, Function.identity()));
+
+        List<DependencyEdge> upstream = upstreamEdges.stream()
+                .map(dependency -> toEdge(dependency, nodesById.get(dependency.sourceServiceId())))
+                .filter(Objects::nonNull)
+                .toList();
+        List<DependencyEdge> downstream = downstreamEdges.stream()
+                .map(dependency -> toEdge(dependency, nodesById.get(dependency.targetServiceId())))
+                .filter(Objects::nonNull)
+                .toList();
+
+        return new ServiceDependencies(upstream, downstream);
+    }
+
+    private static @Nullable DependencyEdge toEdge(Dependency dependency, @Nullable GraphNode counterpart) {
+        if (counterpart == null) {
+            return null;
+        }
+        return new DependencyEdge(dependency.id(), counterpart, dependency.protocol(), dependency.metadata(),
+                dependency.createdAt(), dependency.updatedAt());
     }
 
     private Dependency loadDeclared(UUID tenantId, UUID id) {

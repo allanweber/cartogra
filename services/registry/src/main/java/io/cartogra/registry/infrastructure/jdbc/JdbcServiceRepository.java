@@ -338,9 +338,13 @@ public class JdbcServiceRepository implements ServiceRepository {
             params.addValue("source", filter.source());
         }
         if (filter.search() != null && !filter.search().isBlank()) {
-            sql.append(" AND to_tsvector('english', coalesce(name,'') || ' ' || coalesce(description,'')) @@ plainto_tsquery('english', :search)");
-            params.addValue("search", filter.search());
+            sql.append(" AND (name ILIKE :search OR description ILIKE :search)");
+            params.addValue("search", "%" + escapeLikePattern(filter.search().trim()) + "%");
         }
+    }
+
+    private static String escapeLikePattern(String value) {
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 
     private MapSqlParameterSource toParams(Service s) {

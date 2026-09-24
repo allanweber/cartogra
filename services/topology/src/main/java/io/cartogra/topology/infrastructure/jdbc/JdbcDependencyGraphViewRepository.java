@@ -61,6 +61,7 @@ public class JdbcDependencyGraphViewRepository implements DependencyGraphViewRep
                 UUID.fromString(rs.getString("source_service_id")),
                 UUID.fromString(rs.getString("target_service_id")),
                 DependencyType.fromDbValue(rs.getString("dependency_type")),
-                DependencyProtocol.fromDbValue(rs.getString("protocol")));
+                DependencyProtocol.fromDbValue(rs.getString("protocol")),
+                rs.getString("metadata"));
     }
 }

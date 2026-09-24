@@ -8,10 +8,6 @@ Be extremely concise. Sacrifice grammar for the sake of concision.
 
 ideation-output: C:\Users\allan\Documents\Allan\Notes\Ideation
 
-## Skills
-
-Project skills live in `.claude/skills/`. Use `/plan-tasks <task lines>` to produce an implementation plan for checklist items.
-
 ## Agent skills
 
 ### Issue tracker
