@@ -1,12 +1,14 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, List, Plus, RotateCw, Search, SlidersHorizontal } from 'lucide-react'
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, LayoutGrid, List, Plus, RotateCw, Search, SlidersHorizontal } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { z } from 'zod'
 
 import { useDebounce } from '#/hooks/useDebounce'
 import { AppLayout } from '#/components/AppLayout'
 import { RegisterServiceDrawer } from '#/components/RegisterServiceDrawer'
+import { RiskScoreBar, RiskScoreInline } from '#/components/RiskScoreBadge'
+import { TierBadge } from '#/components/TierBadge'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
@@ -63,31 +65,6 @@ function relativeTime(dateStr: string | null): string | null {
 function isStale(dateStr: string | null): boolean {
   if (!dateStr) return false
   return Date.now() - new Date(dateStr).getTime() > 14 * 86400 * 1000
-}
-
-function computeRiskScore(service: RegistryService): number {
-  const health = normalizeHealth(service.healthStatus)
-  let score = health === 'down' ? 60 : health === 'degraded' ? 35 : 5
-  if (service.lastDeployedAt) {
-    const days = (Date.now() - new Date(service.lastDeployedAt).getTime()) / 86400000
-    score += Math.min(30, Math.floor(days * 1.5))
-  } else {
-    score += 18
-  }
-  if (!service.teamId) score += 8
-  return Math.min(99, Math.max(1, score))
-}
-
-function riskColorClass(score: number): string {
-  if (score >= 70) return 'text-critical'
-  if (score >= 35) return 'text-warning'
-  return 'text-success'
-}
-
-function riskBarClass(score: number): string {
-  if (score >= 70) return 'bg-critical'
-  if (score >= 35) return 'bg-warning'
-  return 'bg-success'
 }
 
 const UNOWNED_SENTINEL = '__unowned__'
@@ -189,8 +166,8 @@ function CatalogPage() {
   const totalPages = Math.ceil(total / LIMIT)
 
   const hasActiveFilters = query !== '' || teamFilter !== '' || healthFilter !== 'all' || sourceFilter !== 'all' || techFilter.size > 0
-  const moreFiltersActive = sourceFilter !== 'all' || techFilter.size > 0
-  const moreFiltersCount = (sourceFilter !== 'all' ? 1 : 0) + techFilter.size
+  const moreFiltersActive = teamFilter !== '' || sourceFilter !== 'all' || techFilter.size > 0
+  const moreFiltersCount = (teamFilter !== '' ? 1 : 0) + (sourceFilter !== 'all' ? 1 : 0) + techFilter.size
 
   function clearAllFilters() {
     setQuery('')
@@ -202,11 +179,6 @@ function CatalogPage() {
     degraded: services.filter((s) => normalizeHealth(s.healthStatus) === 'degraded').length,
     down: services.filter((s) => normalizeHealth(s.healthStatus) === 'down').length,
   }
-
-  const selectedTeamName = teamFilter === UNOWNED_SENTINEL
-    ? 'Unowned'
-    : (teams.find((t) => t.id === teamFilter)?.name ?? 'All teams')
-  const selectedHealthLabel = HEALTH_OPTIONS.find((f) => f.value === healthFilter)?.label ?? 'All health'
 
   const pageDescription = isLoading ? undefined : `${total} service${total !== 1 ? 's' : ''}`
 
@@ -235,67 +207,6 @@ function CatalogPage() {
             />
           </div>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  'h-auto gap-1.5 px-3 py-2 text-sm shadow-sm pointer-coarse:h-11',
-                  teamFilter ? 'border-primary bg-primary/5 text-foreground' : 'border-input bg-background text-foreground',
-                )}
-                aria-label="Filter by team"
-              >
-                {selectedTeamName}
-                <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden="true" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
-              <DropdownMenuItem onSelect={() => updateSearch({ team: undefined })} className="flex items-center gap-2">
-                <CheckMark checked={!teamFilter} />
-                All teams
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => updateSearch({ team: UNOWNED_SENTINEL })} className="flex items-center gap-2">
-                <CheckMark checked={teamFilter === UNOWNED_SENTINEL} />
-                <AlertTriangle className="size-3.5 text-muted-foreground" aria-hidden="true" />
-                Unowned
-              </DropdownMenuItem>
-              {teams.map((t) => (
-                <DropdownMenuItem key={t.id} onSelect={() => updateSearch({ team: t.id })} className="flex items-center gap-2">
-                  <CheckMark checked={teamFilter === t.id} />
-                  {t.name}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  'h-auto gap-1.5 px-3 py-2 text-sm shadow-sm pointer-coarse:h-11',
-                  healthFilter !== 'all' ? 'border-primary bg-primary/5 text-foreground' : 'border-input bg-background text-foreground',
-                )}
-                aria-label="Filter by health"
-              >
-                {selectedHealthLabel}
-                <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden="true" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              {HEALTH_OPTIONS.map((opt) => (
-                <DropdownMenuItem
-                  key={opt.value}
-                  onSelect={() => updateSearch({ health: opt.value === 'all' ? undefined : opt.value })}
-                  className="flex items-center gap-2"
-                >
-                  <CheckMark checked={healthFilter === opt.value} />
-                  {opt.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
           <DropdownMenu open={moreFiltersOpen} onOpenChange={setMoreFiltersOpen}>
             <DropdownMenuTrigger asChild>
               <Button
@@ -315,8 +226,40 @@ function CatalogPage() {
                 )}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="max-h-80 w-64 overflow-y-auto">
+            <DropdownMenuContent align="start" className="max-h-96 w-64 overflow-y-auto">
               <p className="px-2 pb-1 pt-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Team
+              </p>
+              {/* Capped independently of the panel's own scroll region so a large team
+                  list can't push the Source/Tech stack sections out of easy reach. */}
+              <div className="max-h-40 overflow-y-auto">
+                <DropdownMenuItem
+                  onSelect={(e) => { e.preventDefault(); updateSearch({ team: undefined }) }}
+                  className="flex items-center gap-2"
+                >
+                  <CheckMark checked={!teamFilter} />
+                  All teams
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(e) => { e.preventDefault(); updateSearch({ team: UNOWNED_SENTINEL }) }}
+                  className="flex items-center gap-2"
+                >
+                  <CheckMark checked={teamFilter === UNOWNED_SENTINEL} />
+                  <AlertTriangle className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                  Unowned
+                </DropdownMenuItem>
+                {teams.map((t) => (
+                  <DropdownMenuItem
+                    key={t.id}
+                    onSelect={(e) => { e.preventDefault(); updateSearch({ team: t.id }) }}
+                    className="flex items-center gap-2"
+                  >
+                    <CheckMark checked={teamFilter === t.id} />
+                    {t.name}
+                  </DropdownMenuItem>
+                ))}
+              </div>
+              <p className="mt-1 border-t border-border px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Source
               </p>
               {SOURCE_OPTIONS.map((opt) => (
@@ -497,7 +440,6 @@ function ServiceCard({ service, teamName }: { service: RegistryService; teamName
   const stale = isStale(service.lastDeployedAt)
   const isOrphan = service.teamId === null
   const hasBreakingChange = tags.includes('breaking-change')
-  const risk = computeRiskScore(service)
 
   return (
     <Link to="/catalog/$serviceId" params={{ serviceId: service.id }}>
@@ -507,9 +449,7 @@ function ServiceCard({ service, teamName }: { service: RegistryService; teamName
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="font-semibold leading-tight group-hover:text-primary">{service.name}</span>
-              {service.tier === 'CRITICAL' && (
-                <span className="text-xs font-semibold uppercase tracking-wide text-critical">CRITICAL</span>
-              )}
+              <TierBadge tier={service.tier} />
             </div>
             <p className="mt-0.5 text-xs text-muted-foreground">
               Team:{' '}
@@ -549,9 +489,7 @@ function ServiceCard({ service, teamName }: { service: RegistryService; teamName
               </span>
             )}
           </div>
-          <span className={cn('text-sm font-semibold tabular-nums', riskColorClass(risk))}>
-            {risk}
-          </span>
+          <RiskScoreInline service={service} />
         </div>
 
         {/* Warning tags */}
@@ -599,16 +537,13 @@ function ServiceListRow({ service, teamName }: { service: RegistryService; teamN
   const tech = service.techStack ?? []
   const deploy = relativeTime(service.lastDeployedAt)
   const isOrphan = service.teamId === null
-  const risk = computeRiskScore(service)
 
   return (
     <Link to="/catalog/$serviceId" params={{ serviceId: service.id }} className="block">
       <div className={cn('group grid gap-x-4 px-5 py-3 transition-colors hover:bg-muted/30', LIST_COLS)}>
         <div className="min-w-0">
           <p className="truncate font-medium group-hover:text-primary">{service.name}</p>
-          {service.tier === 'CRITICAL' && (
-            <span className="text-xs font-semibold uppercase tracking-wide text-critical">CRITICAL</span>
-          )}
+          <TierBadge tier={service.tier} />
         </div>
         <div className="flex items-center">
           <HealthCell health={health} />
@@ -641,15 +576,7 @@ function ServiceListRow({ service, teamName }: { service: RegistryService; teamN
           <span className="text-sm text-muted-foreground">{deploy ?? '—'}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className={cn('min-w-[2ch] text-sm font-semibold tabular-nums', riskColorClass(risk))}>
-            {risk}
-          </span>
-          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-            <div
-              className={cn('h-full rounded-full transition-all', riskBarClass(risk))}
-              style={{ width: `${risk}%` }}
-            />
-          </div>
+          <RiskScoreBar service={service} />
         </div>
       </div>
     </Link>

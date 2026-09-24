@@ -169,6 +169,16 @@ describe('CatalogPage', () => {
     expect(screen.getByText('grpc')).toBeInTheDocument()
   })
 
+  it('risk score exposes a breakdown popover instead of a bare number', async () => {
+    mockApiFetch({ items: [MOCK_SERVICE], total: 1, limit: 100, offset: 0 })
+    renderPage()
+    const trigger = await screen.findByRole('button', { name: /risk score 31, low risk/i })
+    fireEvent.click(trigger)
+    expect(await screen.findByText('No owning team')).toBeInTheDocument()
+    // "Never deployed" also appears in the card footer, so the popover adds a second match.
+    expect(screen.getAllByText('Never deployed').length).toBeGreaterThanOrEqual(2)
+  })
+
   it('shows empty state when no services match', async () => {
     mockApiFetch(EMPTY_SERVICES)
     renderPage()
@@ -206,7 +216,6 @@ describe('CatalogPage', () => {
     mockApiFetch()
     renderPage()
     await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
-    expect(screen.getByRole('button', { name: 'Filter by health' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Healthy/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Degraded/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Down/i })).toBeInTheDocument()
@@ -232,7 +241,7 @@ describe('CatalogPage', () => {
     mockApiFetch()
     renderPage()
     await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: /filter by team/i }))
+    fireEvent.click(screen.getByRole('button', { name: /more filters/i }))
     expect(await screen.findByText('Unowned')).toBeInTheDocument()
   })
 
@@ -240,7 +249,7 @@ describe('CatalogPage', () => {
     mockApiFetch()
     renderPage()
     await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: /filter by team/i }))
+    fireEvent.click(screen.getByRole('button', { name: /more filters/i }))
     const unownedItem = await screen.findByText('Unowned')
     fireEvent.click(unownedItem)
     await waitFor(() => {

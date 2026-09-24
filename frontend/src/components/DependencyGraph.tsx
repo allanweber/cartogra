@@ -5,17 +5,20 @@ import {
   forceLink,
   forceManyBody,
   forceSimulation,
+  type Simulation,
   type SimulationLinkDatum,
   type SimulationNodeDatum,
 } from 'd3-force'
 import { scaleOrdinal } from 'd3-scale'
 import { select } from 'd3-selection'
-import { zoom, zoomIdentity, type D3ZoomEvent } from 'd3-zoom'
+import { zoom, zoomIdentity, type D3ZoomEvent, type ZoomBehavior } from 'd3-zoom'
 import { useEffect, useMemo, useRef } from 'react'
 
+import { useReducedMotion } from '#/hooks/useReducedMotion'
 import { normalizeHealth } from '#/lib/registry-types'
 
 import type { Graph, GraphEdge, GraphNode } from '#/lib/topology-types'
+import type { ServiceHealth } from '#/lib/registry-types'
 
 interface SimNode extends SimulationNodeDatum, GraphNode {}
 interface SimLink extends SimulationLinkDatum<SimNode> {
@@ -27,6 +30,16 @@ const healthColor = scaleOrdinal<string, string>()
   .domain(['healthy', 'degraded', 'down'])
   .range(['var(--color-success)', 'var(--color-warning)', 'var(--color-critical)'])
 
+// Health is never signaled by fill color alone: degraded nodes get a dashed outline
+// and down nodes get an exclamation glyph, so the state also reads for color-blind users.
+function healthDasharray(health: ServiceHealth): string | null {
+  return health === 'degraded' ? '3,2' : null
+}
+
+// Settle instantly instead of animating — D3's tick loop is JS-driven, so the global
+// `prefers-reduced-motion` CSS rule in styles.css can't reach it; this can.
+const REDUCED_MOTION_SETTLE_TICKS = 300
+
 function endpointId(endpoint: SimLink['source']): string {
   return typeof endpoint === 'object' ? endpoint.serviceId : String(endpoint)
 }
@@ -35,14 +48,21 @@ export function DependencyGraph({
   graph,
   selectedServiceId,
   onSelectNode,
+  focusServiceId,
 }: {
   graph: Graph
   selectedServiceId: string | null
   onSelectNode: (serviceId: string | null) => void
+  /** A service to pan/zoom to center on once the layout is available (e.g. arriving via a deep link). */
+  focusServiceId?: string | null
 }) {
   const svgRef = useRef<SVGSVGElement>(null)
   const onSelectNodeRef = useRef(onSelectNode)
   onSelectNodeRef.current = onSelectNode
+  const zoomBehaviorRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null)
+  const reducedMotion = useReducedMotion()
+  const reducedMotionRef = useRef(reducedMotion)
+  reducedMotionRef.current = reducedMotion
 
   const structureKey = useMemo(() => {
     const nodeIds = graph.nodes.map((node) => node.serviceId).sort().join(',')
@@ -53,12 +73,39 @@ export function DependencyGraph({
     return `${nodeIds}|${edgeIds}`
   }, [graph.nodes, graph.edges])
 
+  // Snaps the viewport to a node instantly rather than animating the pan/zoom — d3-transition
+  // isn't a dependency here, and an instant cut also sidesteps the reduced-motion question
+  // entirely rather than needing to gate an eased transition.
+  function centerOnService(serviceId: string) {
+    const svgEl = svgRef.current
+    const zoomBehavior = zoomBehaviorRef.current
+    if (!svgEl || !zoomBehavior) return
+    const svg = select(svgEl)
+    const width = svgEl.clientWidth || 800
+    const height = svgEl.clientHeight || 600
+
+    let target: SimNode | undefined
+    svg.selectAll<SVGGElement, SimNode>('.graph-node').each(function (node) {
+      if (node.serviceId === serviceId) target = node
+    })
+    if (!target || target.x == null || target.y == null) return
+
+    const scale = 1.4
+    const transform = zoomIdentity
+      .translate(width / 2, height / 2)
+      .scale(scale)
+      .translate(-target.x, -target.y)
+
+    svg.call(zoomBehavior.transform, transform)
+  }
+
   useEffect(() => {
     const svgEl = svgRef.current
     if (!svgEl) return
 
     const width = svgEl.clientWidth || 800
     const height = svgEl.clientHeight || 600
+    const reduceMotion = reducedMotionRef.current
 
     const nodes: SimNode[] = graph.nodes.map((node) => ({ ...node }))
     const nodesById = new Map(nodes.map((node) => [node.serviceId, node]))
@@ -116,10 +163,25 @@ export function DependencyGraph({
       .attr('r', 14)
       .attr('fill', (node) => healthColor(normalizeHealth(node.healthStatus)))
       .attr('stroke', 'var(--background)')
-      .attr('stroke-width', 2)
+      .attr('stroke-width', (node) => (normalizeHealth(node.healthStatus) === 'down' ? 3 : 2))
+      .attr('stroke-dasharray', (node) => healthDasharray(normalizeHealth(node.healthStatus)))
+
+    // Non-color marker for the down state, in addition to the dashed outline for degraded above.
+    nodeSelection
+      .append('text')
+      .attr('class', 'graph-node-health-glyph')
+      .text((node) => (normalizeHealth(node.healthStatus) === 'down' ? '!' : ''))
+      .attr('x', 0)
+      .attr('y', 4)
+      .attr('text-anchor', 'middle')
+      .attr('font-size', 11)
+      .attr('font-weight', 700)
+      .attr('fill', 'var(--background)')
+      .attr('pointer-events', 'none')
 
     nodeSelection
       .append('text')
+      .attr('class', 'graph-node-label')
       .text((node) => node.name)
       .attr('x', 18)
       .attr('y', 4)
@@ -146,35 +208,50 @@ export function DependencyGraph({
         root.attr('transform', event.transform.toString())
       })
     svg.call(zoomBehavior).call(zoomBehavior.transform, zoomIdentity)
+    zoomBehaviorRef.current = zoomBehavior
 
-    const simulation = forceSimulation<SimNode>(nodes)
+    function renderTick() {
+      linkSelection
+        .selectAll<SVGLineElement, SimLink>('line')
+        .attr('x1', (link) => (link.source as SimNode).x ?? 0)
+        .attr('y1', (link) => (link.source as SimNode).y ?? 0)
+        .attr('x2', (link) => (link.target as SimNode).x ?? 0)
+        .attr('y2', (link) => (link.target as SimNode).y ?? 0)
+      nodeSelection.attr('transform', (node) => `translate(${node.x ?? 0},${node.y ?? 0})`)
+    }
+
+    const simulation: Simulation<SimNode, SimLink> = forceSimulation<SimNode>(nodes)
       .force('link', forceLink<SimNode, SimLink>(links).id((node) => node.serviceId).distance(90).strength(0.4))
       .force('charge', forceManyBody().strength(-220))
       .force('center', forceCenter(width / 2, height / 2))
       .force('collide', forceCollide(28))
-      .on('tick', () => {
-        linkSelection
-          .selectAll<SVGLineElement, SimLink>('line')
-          .attr('x1', (link) => (link.source as SimNode).x ?? 0)
-          .attr('y1', (link) => (link.source as SimNode).y ?? 0)
-          .attr('x2', (link) => (link.target as SimNode).x ?? 0)
-          .attr('y2', (link) => (link.target as SimNode).y ?? 0)
-        nodeSelection.attr('transform', (node) => `translate(${node.x ?? 0},${node.y ?? 0})`)
+
+    if (reduceMotion) {
+      simulation.stop()
+      for (let i = 0; i < REDUCED_MOTION_SETTLE_TICKS; i++) simulation.tick()
+      renderTick()
+      if (focusServiceId) centerOnService(focusServiceId)
+    } else {
+      simulation.on('tick', renderTick)
+      simulation.on('end', () => {
+        if (focusServiceId) centerOnService(focusServiceId)
       })
+    }
 
     const dragBehavior = drag<SVGGElement, SimNode>()
       .clickDistance(4)
       .on('start', (event: D3DragEvent<SVGGElement, SimNode, SimNode>, node) => {
-        if (!event.active) simulation.alphaTarget(0.3).restart()
+        if (!reducedMotionRef.current && !event.active) simulation.alphaTarget(0.3).restart()
         node.fx = node.x
         node.fy = node.y
       })
       .on('drag', (event, node) => {
         node.fx = event.x
         node.fy = event.y
+        if (reducedMotionRef.current) renderTick()
       })
       .on('end', (event) => {
-        if (!event.active) simulation.alphaTarget(0)
+        if (!reducedMotionRef.current && !event.active) simulation.alphaTarget(0)
       })
     nodeSelection.call(dragBehavior)
 
@@ -182,11 +259,20 @@ export function DependencyGraph({
       simulation.stop()
       svg.selectAll('*').remove()
       svg.on('.zoom', null)
+      zoomBehaviorRef.current = null
     }
     // Rebuilds the simulation/zoom/layout only when the set of nodes or edges actually
     // changes — a refetch that just updates node data (e.g. health status) must not reset
     // the user's pan/zoom/drag layout; see the sibling effect below for data-only refresh.
   }, [structureKey])
+
+  // Re-centers on a newly requested focus target without rebuilding the simulation —
+  // covers navigating here from a different service's Dependencies tab while the graph
+  // (same node/edge set) is already mounted.
+  useEffect(() => {
+    if (!focusServiceId) return
+    centerOnService(focusServiceId)
+  }, [focusServiceId])
 
   useEffect(() => {
     const svgEl = svgRef.current
@@ -209,7 +295,12 @@ export function DependencyGraph({
     nodeSelection
       .select<SVGCircleElement>('circle.graph-node-visible')
       .attr('fill', (node) => healthColor(normalizeHealth(node.healthStatus)))
-    nodeSelection.select<SVGTextElement>('text').text((node) => node.name)
+      .attr('stroke-width', (node) => (normalizeHealth(node.healthStatus) === 'down' ? 3 : 2))
+      .attr('stroke-dasharray', (node) => healthDasharray(normalizeHealth(node.healthStatus)))
+    nodeSelection
+      .select<SVGTextElement>('text.graph-node-health-glyph')
+      .text((node) => (normalizeHealth(node.healthStatus) === 'down' ? '!' : ''))
+    nodeSelection.select<SVGTextElement>('text.graph-node-label').text((node) => node.name)
 
     const latestEdgeByKey = new Map(graph.edges.map((edge) => [`${edge.source}>${edge.target}`, edge]))
     svg.selectAll<SVGGElement, SimLink>('.graph-link').each(function (link) {

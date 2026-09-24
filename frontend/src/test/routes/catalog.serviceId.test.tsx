@@ -223,6 +223,25 @@ describe('ServiceDetailPage', () => {
     expect(await screen.findByText('No declared dependencies yet.')).toBeInTheDocument()
   })
 
+  it('dependencies tab has a link into the graph focused on this service', async () => {
+    mockSuccess()
+    renderPage()
+    await screen.findByRole('heading', { name: 'payments-api' })
+    fireEvent.click(screen.getByRole('tab', { name: /dependencies/i }))
+    const link = await screen.findByRole('link', { name: /view in graph/i })
+    expect(link).toHaveAttribute('href', '/graph')
+  })
+
+  it('risk score ring exposes a breakdown popover instead of a bare number', async () => {
+    mockSuccess()
+    renderPage()
+    await screen.findByRole('heading', { name: 'payments-api' })
+    const trigger = screen.getByRole('button', { name: /risk score 31, low risk/i })
+    fireEvent.click(trigger)
+    expect(await screen.findByText('No owning team')).toBeInTheDocument()
+    expect(screen.getByText('Never deployed')).toBeInTheDocument()
+  })
+
   it('dependencies tab renders upstream and downstream entries', async () => {
     mockSuccess(MOCK_SERVICE, [], {
       downstream: [
@@ -407,7 +426,7 @@ describe('ServiceDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /add dependency/i }))
     const searchInput = await screen.findByPlaceholderText('Search services…')
     fireEvent.change(searchInput, { target: { value: 'auth' } })
-    fireEvent.click(await screen.findByRole('button', { name: 'auth-service' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'auth-service' }))
 
     const dialog = screen.getByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: /add dependency/i }))
@@ -444,7 +463,7 @@ describe('ServiceDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /add dependency/i }))
     const searchInput = await screen.findByPlaceholderText('Search services…')
     fireEvent.change(searchInput, { target: { value: 'auth' } })
-    fireEvent.click(await screen.findByRole('button', { name: 'auth-service' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'auth-service' }))
 
     const dialog = screen.getByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: /add dependency/i }))

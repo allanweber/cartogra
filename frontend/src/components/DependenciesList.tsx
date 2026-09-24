@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { Network, Pencil, Plus, Trash2 } from 'lucide-react'
+import { GitBranch, Network, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import { ConfirmDialog } from '#/components/ConfirmDialog'
@@ -135,8 +135,14 @@ export function DependenciesList({ serviceId, canManage }: { serviceId: string; 
 
   return (
     <div className="space-y-5">
-      {canManage && (
-        <div className="flex justify-end">
+      <div className="flex items-center justify-end gap-2">
+        <Button asChild variant="outline" size="sm" className="gap-1.5">
+          <Link to="/graph" search={{ service: serviceId }}>
+            <GitBranch className="size-3.5" />
+            View in graph
+          </Link>
+        </Button>
+        {canManage && (
           <Button
             size="sm"
             onClick={() => {
@@ -148,8 +154,8 @@ export function DependenciesList({ serviceId, canManage }: { serviceId: string; 
             <Plus className="size-3.5" />
             Add dependency
           </Button>
-        </div>
-      )}
+        )}
+      </div>
 
       {isLoading && (
         <div className="space-y-3">

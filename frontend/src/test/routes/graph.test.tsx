@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
+import { useSyncExternalStore } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, apiFetch } from '#/lib/api'
@@ -8,9 +9,26 @@ import { Route } from '#/routes/_authenticated/graph'
 import type { PageResult, RegistryTeam } from '#/lib/registry-types'
 import type { Graph } from '#/lib/topology-types'
 
+// Minimal reactive stand-in for TanStack Router's search-param state: real enough that
+// navigate({ search }) calls re-render the component with the updated filters/selection.
+let mockSearch: Record<string, unknown> = {}
+const searchListeners = new Set<() => void>()
+function subscribeMockSearch(listener: () => void) {
+  searchListeners.add(listener)
+  return () => searchListeners.delete(listener)
+}
+const navigateMock = vi.fn((opts: { search: unknown }) => {
+  mockSearch = typeof opts.search === 'function' ? opts.search(mockSearch) : ((opts.search ?? {}) as Record<string, unknown>)
+  searchListeners.forEach((l) => l())
+})
+
 vi.mock('@tanstack/react-router', async () => ({
   ...(await vi.importActual('@tanstack/react-router')),
-  createFileRoute: () => (opts: Record<string, unknown>) => opts,
+  createFileRoute: () => (opts: Record<string, unknown>) => ({
+    ...opts,
+    useSearch: () => useSyncExternalStore(subscribeMockSearch, () => mockSearch),
+    useNavigate: () => navigateMock,
+  }),
   Link: ({ children, to, className }: { children: React.ReactNode; to: string; className?: string }) => (
     <a href={to} className={className}>
       {children}
@@ -68,7 +86,10 @@ function renderPage() {
 }
 
 describe('GraphPage', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSearch = {}
+  })
 
   it('shows skeletons while loading', () => {
     vi.mocked(apiFetch).mockReturnValue(new Promise(() => {}))
@@ -86,15 +107,25 @@ describe('GraphPage', () => {
   it('renders the graph canvas once data loads, requesting declared by default', async () => {
     mockGraphCalls(() => makeGraph())
     renderPage()
-    expect(await screen.findByRole('img', { name: /service dependency graph/i })).toBeInTheDocument()
+    expect(await screen.findByRole('group', { name: /service dependency graph/i })).toBeInTheDocument()
     expect(screen.getByText('Select a node to see its details.')).toBeInTheDocument()
     expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('type=DECLARED'))
+  })
+
+  it('arriving with a ?service= deep link preselects that node in the side panel', async () => {
+    mockGraphCalls(() => makeGraph())
+    mockSearch = { service: 's2' }
+    renderPage()
+    await screen.findByRole('group', { name: /service dependency graph/i })
+
+    expect(await screen.findAllByText('auth-service')).not.toHaveLength(0)
+    expect(screen.getByText('degraded')).toBeInTheDocument()
   })
 
   it('selecting a node shows its details and neighbor links in the side panel', async () => {
     mockGraphCalls(() => makeGraph())
     renderPage()
-    const svg = await screen.findByRole('img', { name: /service dependency graph/i })
+    const svg = await screen.findByRole('group', { name: /service dependency graph/i })
 
     const nodeCircle = svg.querySelector('.graph-node circle')
     expect(nodeCircle).toBeTruthy()
@@ -111,7 +142,7 @@ describe('GraphPage', () => {
   it('exposes edge protocol and metadata as a native hover tooltip on the canvas', async () => {
     mockGraphCalls(() => makeGraph())
     renderPage()
-    const svg = await screen.findByRole('img', { name: /service dependency graph/i })
+    const svg = await screen.findByRole('group', { name: /service dependency graph/i })
 
     const title = svg.querySelector('.graph-link title')
     expect(title?.textContent).toBe('HTTP — internal-only')
@@ -122,7 +153,7 @@ describe('GraphPage', () => {
       query.includes('OBSERVED') ? makeGraph({ nodes: [], edges: [] }) : makeGraph(),
     )
     renderPage()
-    await screen.findByRole('img', { name: /service dependency graph/i })
+    await screen.findByRole('group', { name: /service dependency graph/i })
 
     fireEvent.click(screen.getByRole('radio', { name: 'Observed' }))
 
@@ -144,20 +175,20 @@ describe('GraphPage', () => {
       return Promise.resolve(makeGraph())
     })
     renderPage()
-    await screen.findByRole('img', { name: /service dependency graph/i })
+    await screen.findByRole('group', { name: /service dependency graph/i })
     vi.mocked(apiFetch).mockClear()
 
     fireEvent.click(screen.getByRole('combobox'))
     fireEvent.click(await screen.findByRole('option', { name: 'Platform' }))
 
-    expect(await screen.findByRole('img', { name: /service dependency graph/i })).toBeInTheDocument()
+    expect(await screen.findByRole('group', { name: /service dependency graph/i })).toBeInTheDocument()
     expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('teamId=team-1'))
   })
 
   it('shows a dismissible banner when the graph is truncated', async () => {
     mockGraphCalls(() => makeGraph({ truncated: true }))
     renderPage()
-    await screen.findByRole('img', { name: /service dependency graph/i })
+    await screen.findByRole('group', { name: /service dependency graph/i })
 
     expect(screen.getByText(/has been truncated/i)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /dismiss/i }))
