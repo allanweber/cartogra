@@ -10,7 +10,7 @@ import {
   type SimulationNodeDatum,
 } from 'd3-force'
 import { scaleOrdinal } from 'd3-scale'
-import { select } from 'd3-selection'
+import { select, type BaseType, type Selection } from 'd3-selection'
 import { zoom, zoomIdentity, type D3ZoomEvent, type ZoomBehavior } from 'd3-zoom'
 import { useEffect, useMemo, useRef } from 'react'
 
@@ -20,7 +20,7 @@ import { normalizeHealth } from '#/lib/registry-types'
 import type { Graph, GraphEdge, GraphNode } from '#/lib/topology-types'
 import type { ServiceHealth } from '#/lib/registry-types'
 
-interface SimNode extends SimulationNodeDatum, GraphNode {}
+export interface SimNode extends SimulationNodeDatum, GraphNode {}
 interface SimLink extends SimulationLinkDatum<SimNode> {
   protocol: GraphEdge['protocol']
   metadata: GraphEdge['metadata']
@@ -42,6 +42,43 @@ const REDUCED_MOTION_SETTLE_TICKS = 300
 
 function endpointId(endpoint: SimLink['source']): string {
   return typeof endpoint === 'object' ? endpoint.serviceId : String(endpoint)
+}
+
+export interface NodeAppearance {
+  ariaLabel: string
+  fill: string
+  strokeWidth: number
+  strokeDasharray: string | null
+  glyph: string
+  label: string
+}
+
+// The one place a node's health+tier become what a caller (visual or assistive-tech)
+// perceives. Both the initial-build and data-refresh effects call this — never derive
+// aria-label/fill/glyph independently, or the two fall out of sync on refresh.
+export function nodeAppearance(node: SimNode): NodeAppearance {
+  const health = normalizeHealth(node.healthStatus)
+  return {
+    ariaLabel: `${node.name}, ${health}${node.tier ? `, ${node.tier.toLowerCase()} tier` : ''}`,
+    fill: healthColor(health),
+    strokeWidth: health === 'down' ? 3 : 2,
+    strokeDasharray: healthDasharray(health),
+    glyph: health === 'down' ? '!' : '',
+    label: node.name,
+  }
+}
+
+function applyNodeAppearance<TParent extends BaseType>(
+  nodeSelection: Selection<SVGGElement, SimNode, TParent, unknown>,
+) {
+  nodeSelection.attr('aria-label', (node) => nodeAppearance(node).ariaLabel)
+  nodeSelection
+    .select<SVGCircleElement>('circle.graph-node-visible')
+    .attr('fill', (node) => nodeAppearance(node).fill)
+    .attr('stroke-width', (node) => nodeAppearance(node).strokeWidth)
+    .attr('stroke-dasharray', (node) => nodeAppearance(node).strokeDasharray)
+  nodeSelection.select<SVGTextElement>('text.graph-node-health-glyph').text((node) => nodeAppearance(node).glyph)
+  nodeSelection.select<SVGTextElement>('text.graph-node-label').text((node) => nodeAppearance(node).label)
 }
 
 export function DependencyGraph({
@@ -146,31 +183,18 @@ export function DependencyGraph({
       .attr('class', 'graph-node')
       .attr('tabindex', 0)
       .attr('role', 'button')
-      .attr(
-        'aria-label',
-        (node) =>
-          `${node.name}, ${normalizeHealth(node.healthStatus)}${node.tier ? `, ${node.tier.toLowerCase()} tier` : ''}`,
-      )
       .style('cursor', 'pointer')
 
     // Oversized transparent hit circle keeps the visible glyph at r=14 while giving
     // pointer and touch input a 44px target, matching the link hit-line pattern below.
     nodeSelection.append('circle').attr('class', 'graph-node-hit').attr('r', 22).attr('fill', 'transparent')
 
-    nodeSelection
-      .append('circle')
-      .attr('class', 'graph-node-visible')
-      .attr('r', 14)
-      .attr('fill', (node) => healthColor(normalizeHealth(node.healthStatus)))
-      .attr('stroke', 'var(--background)')
-      .attr('stroke-width', (node) => (normalizeHealth(node.healthStatus) === 'down' ? 3 : 2))
-      .attr('stroke-dasharray', (node) => healthDasharray(normalizeHealth(node.healthStatus)))
+    nodeSelection.append('circle').attr('class', 'graph-node-visible').attr('r', 14).attr('stroke', 'var(--background)')
 
-    // Non-color marker for the down state, in addition to the dashed outline for degraded above.
+    // Non-color marker for the down state, in addition to the dashed outline for degraded below.
     nodeSelection
       .append('text')
       .attr('class', 'graph-node-health-glyph')
-      .text((node) => (normalizeHealth(node.healthStatus) === 'down' ? '!' : ''))
       .attr('x', 0)
       .attr('y', 4)
       .attr('text-anchor', 'middle')
@@ -182,12 +206,13 @@ export function DependencyGraph({
     nodeSelection
       .append('text')
       .attr('class', 'graph-node-label')
-      .text((node) => node.name)
       .attr('x', 18)
       .attr('y', 4)
       .attr('font-size', 11)
       .attr('fill', 'var(--foreground)')
       .attr('pointer-events', 'none')
+
+    applyNodeAppearance(nodeSelection)
 
     function selectFromEvent(event: Event, node: SimNode) {
       event.stopPropagation()
@@ -286,21 +311,7 @@ export function DependencyGraph({
       if (!latest) return
       Object.assign(node, latest)
     })
-    nodeSelection
-      .attr(
-        'aria-label',
-        (node) =>
-          `${node.name}, ${normalizeHealth(node.healthStatus)}${node.tier ? `, ${node.tier.toLowerCase()} tier` : ''}`,
-      )
-    nodeSelection
-      .select<SVGCircleElement>('circle.graph-node-visible')
-      .attr('fill', (node) => healthColor(normalizeHealth(node.healthStatus)))
-      .attr('stroke-width', (node) => (normalizeHealth(node.healthStatus) === 'down' ? 3 : 2))
-      .attr('stroke-dasharray', (node) => healthDasharray(normalizeHealth(node.healthStatus)))
-    nodeSelection
-      .select<SVGTextElement>('text.graph-node-health-glyph')
-      .text((node) => (normalizeHealth(node.healthStatus) === 'down' ? '!' : ''))
-    nodeSelection.select<SVGTextElement>('text.graph-node-label').text((node) => node.name)
+    applyNodeAppearance(nodeSelection)
 
     const latestEdgeByKey = new Map(graph.edges.map((edge) => [`${edge.source}>${edge.target}`, edge]))
     svg.selectAll<SVGGElement, SimLink>('.graph-link').each(function (link) {

@@ -78,11 +78,12 @@ function mockGraphCalls(byQuery: (query: string) => Graph) {
 function renderPage() {
   const Page = (Route as any).component
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
+  const result = render(
     <QueryClientProvider client={client}>
       <Page />
     </QueryClientProvider>,
   )
+  return { ...result, client }
 }
 
 describe('GraphPage', () => {
@@ -137,6 +138,49 @@ describe('GraphPage', () => {
     expect(screen.getByText('HTTP')).toBeInTheDocument()
     expect(screen.getByText('internal-only')).toBeInTheDocument()
     expect(screen.getByText('View in catalog →')).toBeInTheDocument()
+  })
+
+  it('selecting a node via keyboard (Enter) shows the same details as a click', async () => {
+    mockGraphCalls(() => makeGraph())
+    renderPage()
+    const svg = await screen.findByRole('group', { name: /service dependency graph/i })
+
+    const nodeCircle = svg.querySelector('.graph-node circle')
+    const nodeGroup = nodeCircle!.parentElement as unknown as SVGGElement
+    nodeGroup.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+
+    expect(await screen.findAllByText('api-gateway')).not.toHaveLength(0)
+    expect(screen.getByRole('link', { name: 'auth-service' })).toBeInTheDocument()
+  })
+
+  it('describes each node to assistive tech via aria-label, and keeps it current after a data refresh', async () => {
+    mockGraphCalls(() => makeGraph())
+    const { client } = renderPage()
+    const svg = await screen.findByRole('group', { name: /service dependency graph/i })
+
+    const nodeGroups = svg.querySelectorAll('.graph-node')
+    const apiGatewayNode = Array.from(nodeGroups).find((el) => el.getAttribute('aria-label')?.startsWith('api-gateway'))
+    expect(apiGatewayNode?.getAttribute('aria-label')).toBe('api-gateway, healthy, critical tier')
+    const visibleCircle = apiGatewayNode!.querySelector('circle.graph-node-visible')
+    const initialFill = visibleCircle?.getAttribute('fill')
+
+    // Same queryKey, same node/edge set, health flips healthy -> down: invalidating
+    // (rather than changing type/team, which swaps queryKey and remounts the whole
+    // graph) keeps DependencyGraph mounted so only its data-refresh effect re-runs —
+    // this is the real regression test for the duplicated-logic bug (candidate 2).
+    mockGraphCalls(() => makeGraph({ nodes: [
+      { serviceId: 's1', name: 'api-gateway', teamId: null, tier: 'CRITICAL', healthStatus: 'UNHEALTHY' },
+      { serviceId: 's2', name: 'auth-service', teamId: null, tier: 'STANDARD', healthStatus: 'DEGRADED' },
+    ] }))
+    await client.invalidateQueries()
+
+    await vi.waitFor(() => {
+      const refreshed = Array.from(svg.querySelectorAll('.graph-node')).find((el) =>
+        el.getAttribute('aria-label')?.startsWith('api-gateway'),
+      )
+      expect(refreshed?.getAttribute('aria-label')).toBe('api-gateway, down, critical tier')
+      expect(refreshed?.querySelector('circle.graph-node-visible')?.getAttribute('fill')).not.toBe(initialFill)
+    })
   })
 
   it('exposes edge protocol and metadata as a native hover tooltip on the canvas', async () => {

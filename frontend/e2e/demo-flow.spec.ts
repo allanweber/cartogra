@@ -28,20 +28,27 @@ test('register services, declare a dependency, and see it on the graph', async (
 
   const dependencyDialog = page.getByRole('dialog')
   await dependencyDialog.getByPlaceholder('Search services…').fill(downstreamService)
-  await dependencyDialog.getByRole('button', { name: downstreamService }).click()
+  await dependencyDialog.getByRole('option', { name: downstreamService }).click()
   await dependencyDialog.getByRole('button', { name: 'Add dependency' }).click()
   await expect(dependencyDialog).not.toBeVisible()
   await expect(page.getByRole('link', { name: downstreamService })).toBeVisible()
 
-  await page.getByRole('link', { name: 'Graph' }).click()
-  await expect(page.getByRole('img', { name: 'Service dependency graph' })).toBeVisible()
+  await page.getByRole('link', { name: 'Graph', exact: true }).click()
+  await expect(page.getByRole('group', { name: 'Service dependency graph' })).toBeVisible()
 
   await page.getByRole('radio', { name: 'Observed' }).click()
   await expect(page.getByText(/observed dependencies aren.t collected yet/i)).toBeVisible()
 
   await page.getByRole('radio', { name: 'Declared' }).click()
-  await expect(page.getByRole('img', { name: 'Service dependency graph' })).toBeVisible()
+  await expect(page.getByRole('group', { name: 'Service dependency graph' })).toBeVisible()
 
   await page.locator('.graph-node circle').first().click()
+  await expect(page.getByText('Neighbors')).toBeVisible()
+
+  // Keyboard path: the other node, selected via focus + Enter rather than a click,
+  // must reach the same details panel — proves the a11y affordance actually works,
+  // not just that an aria-label attribute is present.
+  await page.locator('.graph-node').nth(1).focus()
+  await page.keyboard.press('Enter')
   await expect(page.getByText('Neighbors')).toBeVisible()
 })
