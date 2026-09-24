@@ -9,7 +9,9 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? [['html', { open: 'never' }], ['github']] : 'list',
+  reporter: process.env.CI
+    ? [['html', { open: 'never' }], ['github']]
+    : [['html', { open: 'never' }], ['list']],
   globalSetup: './e2e/global-setup.ts',
   use: {
     baseURL,
