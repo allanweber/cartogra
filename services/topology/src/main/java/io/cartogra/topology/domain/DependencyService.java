@@ -18,8 +18,11 @@ import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * CRUD on declared dependencies. Authorization is ADMIN or team membership on either side of
@@ -51,9 +54,10 @@ public class DependencyService {
     @Transactional
     public Dependency create(UUID tenantId, @Nullable UUID userId, DeclareDependencyRequest request) {
         requireEitherSideAccess(tenantId, userId, request.sourceServiceId(), request.targetServiceId());
-        validateNodes(tenantId, request.sourceServiceId(), request.targetServiceId());
+        NodePair nodes = validateNodes(tenantId, request.sourceServiceId(), request.targetServiceId());
         requireNotSelfEdge(request.sourceServiceId(), request.targetServiceId());
-        requireNoDuplicate(tenantId, request.sourceServiceId(), request.targetServiceId(), request.protocol(), null);
+        requireNoDuplicate(tenantId, request.sourceServiceId(), request.targetServiceId(), request.protocol(), null,
+                nodes);
 
         Instant now = Instant.now();
         Dependency saved = dependencyRepository.save(new Dependency(
@@ -75,9 +79,10 @@ public class DependencyService {
             requirePairAuthorized(access, request.sourceServiceId(), request.targetServiceId());
         }
 
-        validateNodes(tenantId, request.sourceServiceId(), request.targetServiceId());
+        NodePair nodes = validateNodes(tenantId, request.sourceServiceId(), request.targetServiceId());
         requireNotSelfEdge(request.sourceServiceId(), request.targetServiceId());
-        requireNoDuplicate(tenantId, request.sourceServiceId(), request.targetServiceId(), request.protocol(), id);
+        requireNoDuplicate(tenantId, request.sourceServiceId(), request.targetServiceId(), request.protocol(), id,
+                nodes);
 
         Dependency saved = dependencyRepository.save(new Dependency(
                 existing.id(), tenantId, request.sourceServiceId(), request.targetServiceId(),
@@ -96,6 +101,47 @@ public class DependencyService {
         graphViewRefreshScheduler.markDirty();
     }
 
+    public ServiceDependencies findForService(UUID tenantId, UUID serviceId) {
+        requireLiveNode(tenantId, serviceId);
+
+        List<Dependency> edges = dependencyRepository.findByService(tenantId, serviceId).stream()
+                .filter(dependency -> dependency.type() == DependencyType.DECLARED)
+                .toList();
+        List<Dependency> downstreamEdges = edges.stream()
+                .filter(dependency -> dependency.sourceServiceId().equals(serviceId))
+                .toList();
+        List<Dependency> upstreamEdges = edges.stream()
+                .filter(dependency -> dependency.targetServiceId().equals(serviceId))
+                .toList();
+
+        Set<UUID> counterpartIds = new LinkedHashSet<>();
+        downstreamEdges.forEach(dependency -> counterpartIds.add(dependency.targetServiceId()));
+        upstreamEdges.forEach(dependency -> counterpartIds.add(dependency.sourceServiceId()));
+        Map<UUID, GraphNode> nodesById = graphNodeRepository
+                .findByServiceIds(tenantId, counterpartIds, counterpartIds.size())
+                .stream()
+                .collect(Collectors.toMap(GraphNode::serviceId, Function.identity()));
+
+        List<DependencyEdge> upstream = upstreamEdges.stream()
+                .map(dependency -> toEdge(dependency, nodesById.get(dependency.sourceServiceId())))
+                .filter(Objects::nonNull)
+                .toList();
+        List<DependencyEdge> downstream = downstreamEdges.stream()
+                .map(dependency -> toEdge(dependency, nodesById.get(dependency.targetServiceId())))
+                .filter(Objects::nonNull)
+                .toList();
+
+        return new ServiceDependencies(upstream, downstream);
+    }
+
+    private static @Nullable DependencyEdge toEdge(Dependency dependency, @Nullable GraphNode counterpart) {
+        if (counterpart == null) {
+            return null;
+        }
+        return new DependencyEdge(dependency.id(), counterpart, dependency.protocol(), dependency.metadata(),
+                dependency.createdAt(), dependency.updatedAt());
+    }
+
     private Dependency loadDeclared(UUID tenantId, UUID id) {
         Dependency existing = dependencyRepository.findById(tenantId, id)
                 .orElseThrow(() -> new DependencyNotFoundException(id));
@@ -105,17 +151,21 @@ public class DependencyService {
         return existing;
     }
 
-    private void validateNodes(UUID tenantId, UUID sourceServiceId, UUID targetServiceId) {
-        requireLiveNode(tenantId, sourceServiceId);
-        requireLiveNode(tenantId, targetServiceId);
+    private record NodePair(GraphNode source, GraphNode target) {}
+
+    private NodePair validateNodes(UUID tenantId, UUID sourceServiceId, UUID targetServiceId) {
+        GraphNode source = requireLiveNode(tenantId, sourceServiceId);
+        GraphNode target = requireLiveNode(tenantId, targetServiceId);
+        return new NodePair(source, target);
     }
 
-    private void requireLiveNode(UUID tenantId, UUID serviceId) {
+    private GraphNode requireLiveNode(UUID tenantId, UUID serviceId) {
         GraphNode node = graphNodeRepository.findByServiceId(tenantId, serviceId)
                 .orElseThrow(() -> new UnknownServiceNodeException(serviceId));
         if (node.isDeleted()) {
             throw new UnknownServiceNodeException(serviceId);
         }
+        return node;
     }
 
     private void requireNotSelfEdge(UUID sourceServiceId, UUID targetServiceId) {
@@ -125,12 +175,12 @@ public class DependencyService {
     }
 
     private void requireNoDuplicate(UUID tenantId, UUID sourceServiceId, UUID targetServiceId,
-            DependencyProtocol protocol, @Nullable UUID excludingDependencyId) {
+            DependencyProtocol protocol, @Nullable UUID excludingDependencyId, NodePair nodes) {
         dependencyRepository.findByEdgeIdentity(tenantId, sourceServiceId, targetServiceId,
                         DependencyType.DECLARED, protocol)
                 .filter(match -> !match.id().equals(excludingDependencyId))
                 .ifPresent(match -> {
-                    throw new DuplicateDependencyException(sourceServiceId, targetServiceId);
+                    throw new DuplicateDependencyException(nodes.source().name(), nodes.target().name());
                 });
     }
 

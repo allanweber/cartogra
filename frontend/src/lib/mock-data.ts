@@ -65,20 +65,6 @@ export interface TimelineEvent {
   team: string | null
 }
 
-export interface GraphNode {
-  id: string
-  name: string
-  health: ServiceHealth
-  team: string | null
-  tier: ServiceTier
-}
-
-export interface GraphEdge {
-  from: string
-  to: string
-  protocol: 'REST' | 'gRPC' | 'Kafka'
-}
-
 export type OperationsEventType = 'github' | 'k8s' | 'otel' | 'azure'
 export type OperationsEventStatus = 'success' | 'error' | 'warning' | 'info'
 
@@ -145,38 +131,6 @@ export const MOCK_TIMELINE: TimelineEvent[] = [
   { id: 'tl-8', type: 'contract', service: 'Auth Service', msg: 'auth-api updated to v1.4 — new scopes added', time: '7d ago', actor: 'alice@corp.com', team: 'Security' },
   { id: 'tl-9', type: 'deploy', service: 'Billing Service', msg: 'Deployed v1.1.5 — invoice timezone fix', time: '6h ago', actor: 'ci-bot', team: 'Payments' },
   { id: 'tl-10', type: 'dependency', service: 'Analytics Engine', msg: 'Removed dependency on legacy Event Bus', time: '8d ago', actor: 'bob@corp.com', team: 'Data' },
-]
-
-export const MOCK_GRAPH_NODES: GraphNode[] = [
-  { id: 'g-1', name: 'API Gateway', health: 'healthy', team: 'Platform', tier: 'critical' },
-  { id: 'g-2', name: 'Auth Service', health: 'healthy', team: 'Security', tier: 'critical' },
-  { id: 'g-3', name: 'Payment Service', health: 'degraded', team: 'Payments', tier: 'critical' },
-  { id: 'g-4', name: 'User Service', health: 'healthy', team: 'Core', tier: 'standard' },
-  { id: 'g-5', name: 'Notification Service', health: 'healthy', team: 'Platform', tier: 'standard' },
-  { id: 'g-6', name: 'Analytics Engine', health: 'degraded', team: 'Data', tier: 'standard' },
-  { id: 'g-7', name: 'Search Service', health: 'down', team: null, tier: 'standard' },
-  { id: 'g-8', name: 'Billing Service', health: 'healthy', team: 'Payments', tier: 'critical' },
-  { id: 'g-9', name: 'Config Service', health: 'healthy', team: 'Platform', tier: 'standard' },
-  { id: 'g-10', name: 'ML Pipeline', health: 'healthy', team: 'Data', tier: 'standard' },
-]
-
-export const MOCK_GRAPH_EDGES: GraphEdge[] = [
-  { from: 'g-1', to: 'g-2', protocol: 'REST' },
-  { from: 'g-1', to: 'g-3', protocol: 'REST' },
-  { from: 'g-1', to: 'g-4', protocol: 'REST' },
-  { from: 'g-1', to: 'g-5', protocol: 'REST' },
-  { from: 'g-1', to: 'g-6', protocol: 'REST' },
-  { from: 'g-1', to: 'g-7', protocol: 'REST' },
-  { from: 'g-3', to: 'g-8', protocol: 'gRPC' },
-  { from: 'g-4', to: 'g-2', protocol: 'REST' },
-  { from: 'g-4', to: 'g-6', protocol: 'Kafka' },
-  { from: 'g-5', to: 'g-6', protocol: 'Kafka' },
-  { from: 'g-6', to: 'g-7', protocol: 'REST' },
-  { from: 'g-2', to: 'g-4', protocol: 'REST' },
-  { from: 'g-9', to: 'g-4', protocol: 'gRPC' },
-  { from: 'g-9', to: 'g-3', protocol: 'gRPC' },
-  { from: 'g-10', to: 'g-6', protocol: 'Kafka' },
-  { from: 'g-8', to: 'g-9', protocol: 'REST' },
 ]
 
 export const MOCK_EVENTS: OperationsEvent[] = [

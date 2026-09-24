@@ -199,6 +199,22 @@ class DependencyControllerIT {
     }
 
     @Test
+    void postDependency_freeTextMetadata_returns201AndPersistsVerbatim() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        UUID source = seedNode(tenantId);
+        UUID target = seedNode(tenantId);
+        String body = """
+                {"sourceServiceId":"%s","targetServiceId":"%s","protocol":"HTTP","metadata":"some plain text notes"}
+                """.formatted(source, target);
+
+        HttpResponse<String> resp = send("POST", "", tenantId, UUID.randomUUID(), "ADMIN", body);
+
+        assertThat(resp.statusCode()).isEqualTo(201);
+        JsonNode data = objectMapper.readTree(resp.body()).get("data");
+        assertThat(data.get("metadata").stringValue()).isEqualTo("some plain text notes");
+    }
+
+    @Test
     void postDependency_unknownSourceServiceId_returns404() throws Exception {
         UUID tenantId = UUID.randomUUID();
         UUID target = seedNode(tenantId);

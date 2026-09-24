@@ -1,10 +1,8 @@
 package io.cartogra.topology.domain.exception;
 
-import java.util.UUID;
-
 public class DuplicateDependencyException extends RuntimeException {
-    public DuplicateDependencyException(UUID sourceServiceId, UUID targetServiceId) {
-        super("A declared dependency already exists from " + sourceServiceId + " to " + targetServiceId
+    public DuplicateDependencyException(String sourceServiceName, String targetServiceName) {
+        super("A declared dependency already exists from " + sourceServiceName + " to " + targetServiceName
                 + " with this protocol");
     }
 }

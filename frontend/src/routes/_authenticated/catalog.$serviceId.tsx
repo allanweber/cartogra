@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Activity, AlertTriangle, Clock, Network, Pencil, Shield, Zap } from 'lucide-react'
+import { Activity, AlertTriangle, Clock, Pencil, Shield, Zap } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { z } from 'zod'
 
 import { AppLayout } from '#/components/AppLayout'
+import { DependenciesList } from '#/components/DependenciesList'
 import { EditServiceDrawer } from '#/components/EditServiceDrawer'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
@@ -140,7 +141,6 @@ function ServiceDetailPage() {
   const { data: service, isLoading, error } = useQuery({
     queryKey: ['service', serviceId],
     queryFn: () => apiFetch<RegistryService>(`/v1/registry/services/${serviceId}`),
-    refetchInterval: 5000,
   })
 
   const { data: teamsPage } = useQuery({
@@ -488,12 +488,7 @@ function ServiceDetailPage() {
             {/* Dependencies */}
             {tab === 'dependencies' && (
               <div id="panel-dependencies" role="tabpanel" aria-labelledby="tab-dependencies">
-                <EmptyTab
-                  icon={<Network className="size-8" />}
-                  message="Per-service dependency detail isn't built yet."
-                  linkTo="/graph"
-                  linkLabel="See the full dependency graph"
-                />
+                <DependenciesList serviceId={serviceId} canManage={canEdit} />
               </div>
             )}
 

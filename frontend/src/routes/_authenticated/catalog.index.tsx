@@ -159,7 +159,6 @@ function CatalogPage() {
       params.set('offset', String(page * LIMIT))
       return apiFetch<PageResult<RegistryService>>(`/v1/registry/services?${params}`)
     },
-    refetchInterval: 5000,
   })
 
   const updatedSecondsAgo = useRelativeSeconds(dataUpdatedAt)

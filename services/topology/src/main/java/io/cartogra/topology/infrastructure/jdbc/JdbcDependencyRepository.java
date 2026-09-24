@@ -84,7 +84,7 @@ public class JdbcDependencyRepository implements DependencyRepository {
                     dependency_type, protocol, metadata, created_at, updated_at, deleted_at
                 ) VALUES (
                     :id, :tenantId, :sourceServiceId, :targetServiceId,
-                    :type, :protocol, CAST(:metadata AS JSONB), :createdAt, :updatedAt, :deletedAt
+                    :type, :protocol, :metadata, :createdAt, :updatedAt, :deletedAt
                 )
                 ON CONFLICT (id) DO UPDATE SET
                     source_service_id = EXCLUDED.source_service_id,

@@ -107,6 +107,17 @@ resilience4j:
         base-config: default
       topology:
         base-config: default
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 5s
+    instances:
+      registry:
+        base-config: default
+      ingestion:
+        base-config: default
+      topology:
+        base-config: default
 
 app:
   frontend:
