@@ -54,9 +54,10 @@ public class DependencyService {
     @Transactional
     public Dependency create(UUID tenantId, @Nullable UUID userId, DeclareDependencyRequest request) {
         requireEitherSideAccess(tenantId, userId, request.sourceServiceId(), request.targetServiceId());
-        validateNodes(tenantId, request.sourceServiceId(), request.targetServiceId());
+        NodePair nodes = validateNodes(tenantId, request.sourceServiceId(), request.targetServiceId());
         requireNotSelfEdge(request.sourceServiceId(), request.targetServiceId());
-        requireNoDuplicate(tenantId, request.sourceServiceId(), request.targetServiceId(), request.protocol(), null);
+        requireNoDuplicate(tenantId, request.sourceServiceId(), request.targetServiceId(), request.protocol(), null,
+                nodes);
 
         Instant now = Instant.now();
         Dependency saved = dependencyRepository.save(new Dependency(
@@ -78,9 +79,10 @@ public class DependencyService {
             requirePairAuthorized(access, request.sourceServiceId(), request.targetServiceId());
         }
 
-        validateNodes(tenantId, request.sourceServiceId(), request.targetServiceId());
+        NodePair nodes = validateNodes(tenantId, request.sourceServiceId(), request.targetServiceId());
         requireNotSelfEdge(request.sourceServiceId(), request.targetServiceId());
-        requireNoDuplicate(tenantId, request.sourceServiceId(), request.targetServiceId(), request.protocol(), id);
+        requireNoDuplicate(tenantId, request.sourceServiceId(), request.targetServiceId(), request.protocol(), id,
+                nodes);
 
         Dependency saved = dependencyRepository.save(new Dependency(
                 existing.id(), tenantId, request.sourceServiceId(), request.targetServiceId(),
@@ -149,17 +151,21 @@ public class DependencyService {
         return existing;
     }
 
-    private void validateNodes(UUID tenantId, UUID sourceServiceId, UUID targetServiceId) {
-        requireLiveNode(tenantId, sourceServiceId);
-        requireLiveNode(tenantId, targetServiceId);
+    private record NodePair(GraphNode source, GraphNode target) {}
+
+    private NodePair validateNodes(UUID tenantId, UUID sourceServiceId, UUID targetServiceId) {
+        GraphNode source = requireLiveNode(tenantId, sourceServiceId);
+        GraphNode target = requireLiveNode(tenantId, targetServiceId);
+        return new NodePair(source, target);
     }
 
-    private void requireLiveNode(UUID tenantId, UUID serviceId) {
+    private GraphNode requireLiveNode(UUID tenantId, UUID serviceId) {
         GraphNode node = graphNodeRepository.findByServiceId(tenantId, serviceId)
                 .orElseThrow(() -> new UnknownServiceNodeException(serviceId));
         if (node.isDeleted()) {
             throw new UnknownServiceNodeException(serviceId);
         }
+        return node;
     }
 
     private void requireNotSelfEdge(UUID sourceServiceId, UUID targetServiceId) {
@@ -169,12 +175,12 @@ public class DependencyService {
     }
 
     private void requireNoDuplicate(UUID tenantId, UUID sourceServiceId, UUID targetServiceId,
-            DependencyProtocol protocol, @Nullable UUID excludingDependencyId) {
+            DependencyProtocol protocol, @Nullable UUID excludingDependencyId, NodePair nodes) {
         dependencyRepository.findByEdgeIdentity(tenantId, sourceServiceId, targetServiceId,
                         DependencyType.DECLARED, protocol)
                 .filter(match -> !match.id().equals(excludingDependencyId))
                 .ifPresent(match -> {
-                    throw new DuplicateDependencyException(sourceServiceId, targetServiceId);
+                    throw new DuplicateDependencyException(nodes.source().name(), nodes.target().name());
                 });
     }
 

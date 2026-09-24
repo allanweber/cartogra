@@ -144,6 +144,7 @@ export function DependencyGraph({
       })
 
     const dragBehavior = drag<SVGGElement, SimNode>()
+      .clickDistance(4)
       .on('start', (event: D3DragEvent<SVGGElement, SimNode, SimNode>, node) => {
         if (!event.active) simulation.alphaTarget(0.3).restart()
         node.fx = node.x

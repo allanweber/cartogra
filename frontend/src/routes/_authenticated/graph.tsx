@@ -23,6 +23,25 @@ export const Route = createFileRoute('/_authenticated/graph')({
 
 const ALL_TEAMS = 'ALL'
 
+/**
+ * A→B and B→A between the same pair are distinct declared-dependency rows (the DB's
+ * uniqueness constraint is directional), so a reciprocal edge would otherwise list the same
+ * neighbor twice with an identical protocol badge. Collapse to one row per (neighbor, protocol).
+ */
+function dedupeNeighbors(
+  entries: { node: GraphNode; edge: GraphEdge }[],
+): { node: GraphNode; edge: GraphEdge }[] {
+  const seen = new Set<string>()
+  const result: { node: GraphNode; edge: GraphEdge }[] = []
+  for (const entry of entries) {
+    const key = `${entry.node.serviceId}|${entry.edge.protocol}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(entry)
+  }
+  return result
+}
+
 function GraphPage() {
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null)
   const [type, setType] = useState<DependencyType>('DECLARED')
@@ -57,13 +76,15 @@ function GraphPage() {
   const selectedNode = selectedServiceId ? (nodesById.get(selectedServiceId) ?? null) : null
   const neighbors: { node: GraphNode; edge: GraphEdge }[] =
     selectedNode && graph
-      ? graph.edges
-          .filter((edge) => edge.source === selectedNode.serviceId || edge.target === selectedNode.serviceId)
-          .map((edge) => ({
-            node: nodesById.get(edge.source === selectedNode.serviceId ? edge.target : edge.source),
-            edge,
-          }))
-          .filter((entry): entry is { node: GraphNode; edge: GraphEdge } => !!entry.node)
+      ? dedupeNeighbors(
+          graph.edges
+            .filter((edge) => edge.source === selectedNode.serviceId || edge.target === selectedNode.serviceId)
+            .map((edge) => ({
+              node: nodesById.get(edge.source === selectedNode.serviceId ? edge.target : edge.source),
+              edge,
+            }))
+            .filter((entry): entry is { node: GraphNode; edge: GraphEdge } => !!entry.node),
+        )
       : []
 
   return (
@@ -183,7 +204,7 @@ function GraphPage() {
                     ) : (
                       <ul className="space-y-2">
                         {neighbors.map(({ node, edge }) => (
-                          <li key={node.serviceId}>
+                          <li key={`${node.serviceId}-${edge.protocol}`}>
                             <div className="flex items-center gap-2">
                               <Link
                                 to="/catalog/$serviceId"
