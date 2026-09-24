@@ -85,13 +85,10 @@ export function DependencyGraph({
   graph,
   selectedServiceId,
   onSelectNode,
-  focusServiceId,
 }: {
   graph: Graph
   selectedServiceId: string | null
   onSelectNode: (serviceId: string | null) => void
-  /** A service to pan/zoom to center on once the layout is available (e.g. arriving via a deep link). */
-  focusServiceId?: string | null
 }) {
   const svgRef = useRef<SVGSVGElement>(null)
   const onSelectNodeRef = useRef(onSelectNode)
@@ -100,6 +97,17 @@ export function DependencyGraph({
   const reducedMotion = useReducedMotion()
   const reducedMotionRef = useRef(reducedMotion)
   reducedMotionRef.current = reducedMotion
+
+  // What this component itself last told its caller was selected, via onSelectNode — an
+  // incoming selectedServiceId that doesn't match came from outside (a deep link, a link
+  // from another screen), which is the only case that should pan/zoom the canvas; a value
+  // that matches means the user just clicked a node here, and re-centering on every click
+  // would be disorienting motion for no reason during ordinary exploration.
+  const lastEmittedSelectionRef = useRef<string | null>(null)
+  // Pans to an initial selection once, on this component's true first mount — never again
+  // on a later structural rebuild (a filter/team/type change) alone, even if the selection
+  // that triggered it was never "claimed" by a click (see lastEmittedSelectionRef above).
+  const hasCenteredOnMountRef = useRef(false)
 
   const structureKey = useMemo(() => {
     const nodeIds = graph.nodes.map((node) => node.serviceId).sort().join(',')
@@ -216,6 +224,7 @@ export function DependencyGraph({
 
     function selectFromEvent(event: Event, node: SimNode) {
       event.stopPropagation()
+      lastEmittedSelectionRef.current = node.serviceId
       onSelectNodeRef.current(node.serviceId)
     }
     nodeSelection.on('click', selectFromEvent)
@@ -225,7 +234,10 @@ export function DependencyGraph({
         selectFromEvent(event, node)
       }
     })
-    svg.on('click', () => onSelectNodeRef.current(null))
+    svg.on('click', () => {
+      lastEmittedSelectionRef.current = null
+      onSelectNodeRef.current(null)
+    })
 
     const zoomBehavior = zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.2, 4])
@@ -255,11 +267,13 @@ export function DependencyGraph({
       simulation.stop()
       for (let i = 0; i < REDUCED_MOTION_SETTLE_TICKS; i++) simulation.tick()
       renderTick()
-      if (focusServiceId) centerOnService(focusServiceId)
+      if (!hasCenteredOnMountRef.current && selectedServiceId) centerOnService(selectedServiceId)
+      hasCenteredOnMountRef.current = true
     } else {
       simulation.on('tick', renderTick)
       simulation.on('end', () => {
-        if (focusServiceId) centerOnService(focusServiceId)
+        if (!hasCenteredOnMountRef.current && selectedServiceId) centerOnService(selectedServiceId)
+        hasCenteredOnMountRef.current = true
       })
     }
 
@@ -291,13 +305,16 @@ export function DependencyGraph({
     // the user's pan/zoom/drag layout; see the sibling effect below for data-only refresh.
   }, [structureKey])
 
-  // Re-centers on a newly requested focus target without rebuilding the simulation —
+  // Re-centers on a newly requested external selection without rebuilding the simulation —
   // covers navigating here from a different service's Dependencies tab while the graph
-  // (same node/edge set) is already mounted.
+  // (same node/edge set) is already mounted. Skipped when selectedServiceId just echoes
+  // back what this component itself last emitted (an ordinary click) — see
+  // lastEmittedSelectionRef above.
   useEffect(() => {
-    if (!focusServiceId) return
-    centerOnService(focusServiceId)
-  }, [focusServiceId])
+    if (!selectedServiceId) return
+    if (selectedServiceId === lastEmittedSelectionRef.current) return
+    centerOnService(selectedServiceId)
+  }, [selectedServiceId])
 
   useEffect(() => {
     const svgEl = svgRef.current

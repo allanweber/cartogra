@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { Network, X } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { z } from 'zod'
 
 import { AppLayout } from '#/components/AppLayout'
@@ -59,16 +59,7 @@ function GraphPage() {
   const type = search.type ?? 'DECLARED'
   const teamId = search.team ?? null
 
-  // Distinguishes "arrived here via a deep link" (or a link from another screen) from an
-  // in-graph node click, even though both end up setting the same `service` search param —
-  // only the former should pan/zoom the canvas; re-centering on every click would be
-  // disorienting motion for no reason during ordinary exploration.
-  const lastClickSelectedRef = useRef<string | null>(null)
-  const focusServiceId =
-    search.service && search.service !== lastClickSelectedRef.current ? search.service : null
-
   function setSelectedServiceId(id: string | null) {
-    lastClickSelectedRef.current = id
     navigate({ search: (prev) => ({ ...prev, service: id ?? undefined }), replace: true })
   }
   function setType(next: DependencyType) {
@@ -207,12 +198,7 @@ function GraphPage() {
       {!isLoading && graph && graph.nodes.length > 0 && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
           <div className="h-[calc(100vh-260px)] min-h-[480px] rounded-xl border border-border bg-card">
-            <DependencyGraph
-              graph={graph}
-              selectedServiceId={selectedServiceId}
-              onSelectNode={setSelectedServiceId}
-              focusServiceId={focusServiceId}
-            />
+            <DependencyGraph graph={graph} selectedServiceId={selectedServiceId} onSelectNode={setSelectedServiceId} />
           </div>
 
           <div className="space-y-4">
