@@ -3,9 +3,13 @@ package io.cartogra.topology.infrastructure.kafka;
 import io.cartogra.common.event.EventEnvelope;
 import io.cartogra.test.KafkaTestSupport;
 import io.cartogra.test.PostgresTestSupport;
+import io.cartogra.topology.domain.Dependency;
+import io.cartogra.topology.domain.DependencyProtocol;
+import io.cartogra.topology.domain.DependencyType;
 import io.cartogra.topology.domain.GraphNode;
 import io.cartogra.topology.domain.GraphNodeService;
 import io.cartogra.topology.domain.event.ServiceLifecyclePayload;
+import io.cartogra.topology.repository.DependencyRepository;
 import io.cartogra.topology.repository.GraphNodeRepository;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,6 +68,9 @@ class GraphNodeEventConsumerIT {
 
     @Autowired
     GraphNodeRepository graphNodeRepository;
+
+    @Autowired
+    DependencyRepository dependencyRepository;
 
     @Autowired
     KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
@@ -169,6 +176,39 @@ class GraphNodeEventConsumerIT {
                     assertThat(found.get().isDeleted()).isTrue();
                     assertThat(found.get().deletedAt()).isEqualTo(deletedAt);
                 });
+    }
+
+    @Test
+    void deletedEventSoftDeletesEdgesTouchingTheService() {
+        UUID tenantId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+        UUID counterpartId = UUID.randomUUID();
+        var registered = new ServiceLifecyclePayload(serviceId, tenantId, "payments", null, "STANDARD", "HEALTHY", null);
+        send("cartogra.registry.service.registered", EventEnvelope.of("service.registered", serviceId, tenantId, 1, registered));
+        var counterpartRegistered = new ServiceLifecyclePayload(counterpartId, tenantId, "billing", null, "STANDARD", "HEALTHY", null);
+        send("cartogra.registry.service.registered",
+                EventEnvelope.of("service.registered", counterpartId, tenantId, 1, counterpartRegistered));
+
+        Awaitility.await().atMost(Duration.ofSeconds(15)).pollInterval(Duration.ofMillis(300))
+                .until(() -> graphNodeRepository.findByServiceId(tenantId, serviceId).isPresent()
+                        && graphNodeRepository.findByServiceId(tenantId, counterpartId).isPresent());
+
+        Instant now = Instant.now();
+        Dependency edge = dependencyRepository.save(new Dependency(UUID.randomUUID(), tenantId, serviceId,
+                counterpartId, DependencyType.DECLARED, DependencyProtocol.HTTP, null, now, now, null));
+
+        Instant deletedAt = Instant.parse("2026-08-01T00:00:00Z");
+        var deleted = new ServiceLifecyclePayload(serviceId, tenantId, "payments", null, "STANDARD", "HEALTHY", deletedAt);
+        send("cartogra.registry.service.deleted", EventEnvelope.of("service.deleted", serviceId, tenantId, 1, deleted));
+
+        // findById/findByService only ever surface non-deleted rows — their emptiness
+        // after the deleted event is exactly the caller-visible proof the edge is gone.
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(15))
+                .pollInterval(Duration.ofMillis(300))
+                .untilAsserted(() -> assertThat(dependencyRepository.findById(tenantId, edge.id())).isEmpty());
+
+        assertThat(dependencyRepository.findByService(tenantId, serviceId)).isEmpty();
     }
 
     @Test

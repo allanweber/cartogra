@@ -5,6 +5,8 @@ import io.cartogra.topology.domain.event.ServiceLifecyclePayload;
 import io.cartogra.topology.domain.exception.BackfillFailedException;
 import io.cartogra.topology.infrastructure.registry.RegistryGraphNodeClient;
 import io.cartogra.topology.infrastructure.registry.RegistryServiceSnapshot;
+import io.cartogra.topology.infrastructure.scheduled.DependencyGraphViewRefreshScheduler;
+import io.cartogra.topology.repository.DependencyRepository;
 import io.cartogra.topology.repository.GraphNodeRepository;
 import io.cartogra.topology.repository.GraphNodeUpsert;
 import io.cartogra.topology.repository.ProcessedEventRepository;
@@ -34,12 +36,15 @@ class GraphNodeServiceTest {
     @Mock GraphNodeRepository graphNodeRepository;
     @Mock ProcessedEventRepository processedEventRepository;
     @Mock RegistryGraphNodeClient registryClient;
+    @Mock DependencyRepository dependencyRepository;
+    @Mock DependencyGraphViewRefreshScheduler graphViewRefreshScheduler;
 
     private GraphNodeService service;
 
     @BeforeEach
     void setUp() {
-        service = new GraphNodeService(graphNodeRepository, processedEventRepository, registryClient);
+        service = new GraphNodeService(graphNodeRepository, processedEventRepository, registryClient,
+                dependencyRepository, graphViewRefreshScheduler);
     }
 
     private static EventEnvelope<ServiceLifecyclePayload> envelope(String eventType, ServiceLifecyclePayload payload) {
@@ -58,6 +63,8 @@ class GraphNodeServiceTest {
 
         verify(graphNodeRepository).upsert(new GraphNodeUpsert(tenantId, serviceId, "payments", null, "STANDARD", "HEALTHY"));
         verify(graphNodeRepository, never()).softDelete(any(), any(), any());
+        verify(dependencyRepository, never()).softDeleteAllForService(any(), any());
+        verify(graphViewRefreshScheduler, never()).markDirty();
     }
 
     @Test
@@ -73,6 +80,8 @@ class GraphNodeServiceTest {
 
         verify(graphNodeRepository).softDelete(tenantId, serviceId, deletedAt);
         verify(graphNodeRepository, never()).upsert(any());
+        verify(dependencyRepository).softDeleteAllForService(tenantId, serviceId);
+        verify(graphViewRefreshScheduler).markDirty();
     }
 
     @Test
@@ -87,6 +96,8 @@ class GraphNodeServiceTest {
 
         verify(graphNodeRepository, never()).upsert(any());
         verify(graphNodeRepository, never()).softDelete(any(), any(), any());
+        verify(dependencyRepository, never()).softDeleteAllForService(any(), any());
+        verify(graphViewRefreshScheduler, never()).markDirty();
     }
 
     @Test
