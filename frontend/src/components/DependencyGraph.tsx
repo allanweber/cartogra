@@ -97,10 +97,22 @@ export function DependencyGraph({
       .data(nodes, (node) => node.serviceId)
       .join('g')
       .attr('class', 'graph-node')
+      .attr('tabindex', 0)
+      .attr('role', 'button')
+      .attr(
+        'aria-label',
+        (node) =>
+          `${node.name}, ${normalizeHealth(node.healthStatus)}${node.tier ? `, ${node.tier.toLowerCase()} tier` : ''}`,
+      )
       .style('cursor', 'pointer')
+
+    // Oversized transparent hit circle keeps the visible glyph at r=14 while giving
+    // pointer and touch input a 44px target, matching the link hit-line pattern below.
+    nodeSelection.append('circle').attr('class', 'graph-node-hit').attr('r', 22).attr('fill', 'transparent')
 
     nodeSelection
       .append('circle')
+      .attr('class', 'graph-node-visible')
       .attr('r', 14)
       .attr('fill', (node) => healthColor(normalizeHealth(node.healthStatus)))
       .attr('stroke', 'var(--background)')
@@ -115,9 +127,16 @@ export function DependencyGraph({
       .attr('fill', 'var(--foreground)')
       .attr('pointer-events', 'none')
 
-    nodeSelection.on('click', (event, node) => {
+    function selectFromEvent(event: Event, node: SimNode) {
       event.stopPropagation()
       onSelectNodeRef.current(node.serviceId)
+    }
+    nodeSelection.on('click', selectFromEvent)
+    nodeSelection.on('keydown', (event: KeyboardEvent, node) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        selectFromEvent(event, node)
+      }
     })
     svg.on('click', () => onSelectNodeRef.current(null))
 
@@ -181,7 +200,15 @@ export function DependencyGraph({
       if (!latest) return
       Object.assign(node, latest)
     })
-    nodeSelection.select<SVGCircleElement>('circle').attr('fill', (node) => healthColor(normalizeHealth(node.healthStatus)))
+    nodeSelection
+      .attr(
+        'aria-label',
+        (node) =>
+          `${node.name}, ${normalizeHealth(node.healthStatus)}${node.tier ? `, ${node.tier.toLowerCase()} tier` : ''}`,
+      )
+    nodeSelection
+      .select<SVGCircleElement>('circle.graph-node-visible')
+      .attr('fill', (node) => healthColor(normalizeHealth(node.healthStatus)))
     nodeSelection.select<SVGTextElement>('text').text((node) => node.name)
 
     const latestEdgeByKey = new Map(graph.edges.map((edge) => [`${edge.source}>${edge.target}`, edge]))
@@ -224,5 +251,12 @@ export function DependencyGraph({
       )
   }, [selectedServiceId, graph])
 
-  return <svg ref={svgRef} className="h-full w-full" role="img" aria-label="Service dependency graph" />
+  return (
+    <svg
+      ref={svgRef}
+      className="h-full w-full"
+      role="group"
+      aria-label="Service dependency graph. Tab to move between services, Enter or Space to select one."
+    />
+  )
 }

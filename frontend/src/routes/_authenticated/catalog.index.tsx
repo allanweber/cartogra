@@ -102,6 +102,17 @@ function useRelativeSeconds(timestamp: number | undefined): number {
   return Math.max(0, Math.floor((Date.now() - timestamp) / 1000))
 }
 
+// Isolated so the 1s interval ticking this label re-renders only itself, not the
+// full CatalogPage tree (up to 100 service cards/rows) that owns the query state.
+function UpdatedAgo({ dataUpdatedAt }: { dataUpdatedAt: number }) {
+  const updatedSecondsAgo = useRelativeSeconds(dataUpdatedAt)
+  return (
+    <p className="shrink-0 text-xs text-muted-foreground">
+      Updated {updatedSecondsAgo < 5 ? 'just now' : `${updatedSecondsAgo}s ago`}
+    </p>
+  )
+}
+
 function CatalogPage() {
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
@@ -160,8 +171,6 @@ function CatalogPage() {
       return apiFetch<PageResult<RegistryService>>(`/v1/registry/services?${params}`)
     },
   })
-
-  const updatedSecondsAgo = useRelativeSeconds(dataUpdatedAt)
 
   const { data: teamsPage } = useQuery({
     queryKey: ['teams'],
@@ -231,7 +240,7 @@ function CatalogPage() {
               <Button
                 variant="outline"
                 className={cn(
-                  'h-auto gap-1.5 px-3 py-2 text-sm shadow-sm',
+                  'h-auto gap-1.5 px-3 py-2 text-sm shadow-sm pointer-coarse:h-11',
                   teamFilter ? 'border-primary bg-primary/5 text-foreground' : 'border-input bg-background text-foreground',
                 )}
                 aria-label="Filter by team"
@@ -264,7 +273,7 @@ function CatalogPage() {
               <Button
                 variant="outline"
                 className={cn(
-                  'h-auto gap-1.5 px-3 py-2 text-sm shadow-sm',
+                  'h-auto gap-1.5 px-3 py-2 text-sm shadow-sm pointer-coarse:h-11',
                   healthFilter !== 'all' ? 'border-primary bg-primary/5 text-foreground' : 'border-input bg-background text-foreground',
                 )}
                 aria-label="Filter by health"
@@ -292,7 +301,7 @@ function CatalogPage() {
               <Button
                 variant="outline"
                 className={cn(
-                  'h-auto gap-1.5 px-3 py-2 text-sm shadow-sm',
+                  'h-auto gap-1.5 px-3 py-2 text-sm shadow-sm pointer-coarse:h-11',
                   moreFiltersActive ? 'border-primary bg-primary/5 text-foreground' : 'border-input bg-background text-foreground',
                 )}
                 aria-label="More filters"
@@ -406,11 +415,7 @@ function CatalogPage() {
               </Button>
             ))}
           </div>
-          {!isLoading && !error && dataUpdatedAt > 0 && (
-            <p className="shrink-0 text-xs text-muted-foreground">
-              Updated {updatedSecondsAgo < 5 ? 'just now' : `${updatedSecondsAgo}s ago`}
-            </p>
-          )}
+          {!isLoading && !error && dataUpdatedAt > 0 && <UpdatedAgo dataUpdatedAt={dataUpdatedAt} />}
         </div>
 
         {/* Content */}
@@ -562,7 +567,11 @@ function ServiceCard({ service, teamName }: { service: RegistryService; teamName
   )
 }
 
-const LIST_COLS = 'grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,0.9fr)_minmax(0,0.65fr)]'
+// Below `md` only Service/Health/Risk fit legibly; Source/Owner/Tech/Last-deploy join at `md`
+// and up, matching the card grid's own threshold for its densest layout (`lg` for 4 columns).
+// Keep this in sync with the `hidden md:*` cells in ServiceListRow below — column count must
+// match at every breakpoint.
+const LIST_COLS = 'grid-cols-[minmax(0,1fr)_auto_minmax(0,4.5rem)] md:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,0.9fr)_minmax(0,0.65fr)]'
 
 function ServiceListTable({ services, teamMap }: { services: RegistryService[]; teamMap: Map<string, string> }) {
   return (
@@ -570,10 +579,10 @@ function ServiceListTable({ services, teamMap }: { services: RegistryService[]; 
       <div className={cn('grid gap-x-4 border-b border-border bg-muted/50 px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground', LIST_COLS)}>
         <span>Service</span>
         <span>Health</span>
-        <span>Source</span>
-        <span>Owner</span>
-        <span>Tech</span>
-        <span>Last deploy</span>
+        <span className="hidden md:block">Source</span>
+        <span className="hidden md:block">Owner</span>
+        <span className="hidden md:block">Tech</span>
+        <span className="hidden md:block">Last deploy</span>
         <span>Risk</span>
       </div>
       <div className="divide-y divide-border">
@@ -604,12 +613,12 @@ function ServiceListRow({ service, teamName }: { service: RegistryService; teamN
         <div className="flex items-center">
           <HealthCell health={health} />
         </div>
-        <div className="flex items-center">
+        <div className="hidden items-center md:flex">
           <span className="text-sm text-muted-foreground">
             {service.source ? (SCM_LABEL[service.source] ?? service.source) : '—'}
           </span>
         </div>
-        <div className="flex items-center">
+        <div className="hidden items-center md:flex">
           {isOrphan ? (
             <span className="inline-flex items-center gap-0.5 text-sm text-warning">
               No owner
@@ -618,7 +627,7 @@ function ServiceListRow({ service, teamName }: { service: RegistryService; teamN
             <span className="truncate text-sm">{teamName}</span>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-1">
+        <div className="hidden flex-wrap items-center gap-1 md:flex">
           {tech.slice(0, 2).map((t) => (
             <span key={t} className="rounded-md border border-border bg-background px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
               {t}
@@ -628,7 +637,7 @@ function ServiceListRow({ service, teamName }: { service: RegistryService; teamN
             <span className="text-xs text-muted-foreground">+{tech.length - 2}</span>
           )}
         </div>
-        <div className="flex items-center">
+        <div className="hidden items-center md:flex">
           <span className="text-sm text-muted-foreground">{deploy ?? '—'}</span>
         </div>
         <div className="flex items-center gap-1.5">
