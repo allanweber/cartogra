@@ -121,16 +121,16 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 **Gate**
 
-- [ ] Replaying a `service.registered` envelope is a no-op; `service.deleted` soft-deletes the node — both proven by ITs.
-- [ ] `/graph` renders a 20-service, 30-edge tenant without freezing, on hardware named in the doc.
-- [ ] `MOCK_GRAPH_NODES` and `MOCK_GRAPH_EDGES` are deleted from the repo.
-- [ ] `docs/api/topology.openapi.yaml` matches the implemented routes exactly — no path documented that does not exist.
+- [x] Replaying a `service.registered` envelope is a no-op; `service.deleted` soft-deletes the node — both proven by ITs.
+- [x] `/graph` renders a 20-service, 30-edge tenant without freezing, on hardware named in the doc.
+- [x] `MOCK_GRAPH_NODES` and `MOCK_GRAPH_EDGES` are deleted from the repo.
+- [x] `docs/api/topology.openapi.yaml` matches the implemented routes exactly — no path documented that does not exist.
 
 *Standing checks (§2 — Definition of done):*
 
-- [ ] Every story in this phase passed `/code-review` and `/security-review` before merge.
-- [ ] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
-- [ ] `/impeccable critique` run over every screen this phase touched; findings fixed or recorded.
+- [x] Every story in this phase passed `/code-review` and `/security-review` before merge.
+- [x] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
+- [x] `/impeccable critique` run over every screen this phase touched; findings fixed or recorded.
 - [ ] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
 - [ ] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
 

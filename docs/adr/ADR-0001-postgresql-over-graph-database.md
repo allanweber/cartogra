@@ -80,6 +80,32 @@ SELECT DISTINCT service_id FROM blast_radius;
 
 The same pattern applies to cycle detection (add a `visited` array and check `NOT (target_id = ANY(visited))`) and ancestor queries (swap `source_id`/`target_id`).
 
+## Dependency Graph Materialized View (addendum — 2026-09-25)
+
+`dependency_graph_edges` (introduced in `V003__create_dependency_graph_view.sql`) is a
+materialized view over `dependencies` — a flattened, pre-filtered (`deleted_at IS NULL`)
+snapshot that graph traversal queries (blast radius, cycle detection, SPOF scoring) read
+from instead of the base table, so those queries never re-filter soft deletes or contend
+with the base table's write path.
+
+**Refresh strategy:** writes never refresh the view inline. Every mutation to `dependencies`
+calls `DependencyGraphViewRefreshScheduler#markDirty()`, setting an in-process flag; a
+fixed-delay scheduled tick (default `PT5S`) checks the flag, takes a global Postgres advisory
+lock so only one horizontally-scaled instance refreshes at a time, and runs
+`REFRESH MATERIALIZED VIEW CONCURRENTLY`. This debounces bursts of writes into a single
+refresh and keeps the view queryable throughout.
+
+**Schema-parity risk:** the view is a hand-maintained `SELECT` projection, not a generated
+mirror — it currently projects `tenant_id, source_service_id, target_service_id,
+dependency_type, protocol, metadata` and omits `id, created_at, updated_at, deleted_at`.
+Postgres itself prevents dropping or renaming a `dependencies` column the view depends on,
+but nothing prevents a *new* `dependencies` column from being added and silently never
+projected into the view. `DependencyGraphViewSchemaParityIT` (in
+`services/topology/src/test/java/io/cartogra/topology/infrastructure/jdbc/`) closes this
+gap: it fails the build if a `dependencies` column is neither in the view nor in that test's
+documented exclusion list, forcing an explicit decision on every new column instead of
+letting the two drift apart silently.
+
 ## References
 
 - [PostgreSQL Recursive Queries](https://www.postgresql.org/docs/current/queries-with.html)

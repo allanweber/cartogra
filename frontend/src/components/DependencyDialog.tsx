@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Search, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
+
+import { cn } from '#/lib/utils'
 
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
@@ -24,6 +26,21 @@ interface DependencyDialogProps {
   edit?: { entry: DependencyDirectionEntry; direction: 'upstream' | 'downstream' }
 }
 
+/**
+ * Resolves an edit's source/target from the UI's upstream/downstream concept: a
+ * 'downstream' edit means serviceId is the source (edit.entry is downstream of it); an
+ * 'upstream' edit means edit.entry is the source (serviceId is downstream of it). Get
+ * this backwards and every edit silently reverses the edge direction.
+ */
+export function resolveEditEndpoints(
+  serviceId: string,
+  edit: NonNullable<DependencyDialogProps['edit']>,
+): { sourceServiceId: string; targetServiceId: string } {
+  return edit.direction === 'downstream'
+    ? { sourceServiceId: serviceId, targetServiceId: edit.entry.serviceId }
+    : { sourceServiceId: edit.entry.serviceId, targetServiceId: serviceId }
+}
+
 export function DependencyDialog({ serviceId, open, onOpenChange, edit }: DependencyDialogProps) {
   const queryClient = useQueryClient()
   const isEdit = !!edit
@@ -32,6 +49,8 @@ export function DependencyDialog({ serviceId, open, onOpenChange, edit }: Depend
   const [searchQuery, setSearchQuery] = useState('')
   const [protocol, setProtocol] = useState<DependencyProtocol>(edit?.entry.protocol ?? 'HTTP')
   const [metadata, setMetadata] = useState(edit?.entry.metadata ?? '')
+  const [activeIndex, setActiveIndex] = useState(-1)
+  const listboxId = useId()
 
   const debouncedQuery = useDebounce(searchQuery, 250)
 
@@ -47,8 +66,7 @@ export function DependencyDialog({ serviceId, open, onOpenChange, edit }: Depend
   const mutation = useMutation({
     mutationFn: () => {
       if (edit) {
-        const sourceServiceId = edit.direction === 'downstream' ? serviceId : edit.entry.serviceId
-        const targetServiceId = edit.direction === 'downstream' ? edit.entry.serviceId : serviceId
+        const { sourceServiceId, targetServiceId } = resolveEditEndpoints(serviceId, edit)
         return apiFetch<DependencyResponse>(`/v1/topology/dependencies/${edit.entry.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -81,6 +99,10 @@ export function DependencyDialog({ serviceId, open, onOpenChange, edit }: Depend
     setMetadata(edit?.entry.metadata ?? '')
   }, [open])
 
+  useEffect(() => {
+    setActiveIndex(-1)
+  }, [debouncedQuery])
+
   function handleClose() {
     if (mutation.isPending) return
     onOpenChange(false)
@@ -88,6 +110,30 @@ export function DependencyDialog({ serviceId, open, onOpenChange, edit }: Depend
 
   const canSubmit = isEdit || !!selectedTarget
   const candidates = (searchResults?.items ?? []).filter((service) => service.id !== serviceId)
+  const listboxOpen = debouncedQuery.trim().length > 0
+  const optionId = (index: number) => `${listboxId}-option-${index}`
+
+  function selectCandidate(service: RegistryService) {
+    setSelectedTarget(service)
+    setSearchQuery('')
+    setActiveIndex(-1)
+  }
+
+  function handleSearchKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (!listboxOpen || candidates.length === 0) return
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      setActiveIndex((i) => (i + 1) % candidates.length)
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      setActiveIndex((i) => (i <= 0 ? candidates.length - 1 : i - 1))
+    } else if (event.key === 'Enter' && activeIndex >= 0) {
+      event.preventDefault()
+      selectCandidate(candidates[activeIndex])
+    } else if (event.key === 'Escape') {
+      setActiveIndex(-1)
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -152,28 +198,43 @@ export function DependencyDialog({ serviceId, open, onOpenChange, edit }: Depend
                   <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     autoFocus
+                    role="combobox"
+                    aria-autocomplete="list"
+                    aria-expanded={listboxOpen}
+                    aria-controls={listboxId}
+                    aria-activedescendant={activeIndex >= 0 ? optionId(activeIndex) : undefined}
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
+                    onKeyDown={handleSearchKeyDown}
                     placeholder="Search services…"
                     className="pl-9"
                   />
-                  {debouncedQuery.trim().length > 0 && (
-                    <div className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-popover shadow-md">
+                  {listboxOpen && (
+                    <div
+                      id={listboxId}
+                      role="listbox"
+                      aria-label="Matching services"
+                      className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-popover shadow-md"
+                    >
                       {isSearching ? (
                         <p className="px-3 py-2 text-sm text-muted-foreground">Searching…</p>
                       ) : candidates.length === 0 ? (
                         <p className="px-3 py-2 text-sm text-muted-foreground">No services found.</p>
                       ) : (
-                        candidates.map((service) => (
+                        candidates.map((service, index) => (
                           <Button
                             key={service.id}
+                            id={optionId(index)}
+                            role="option"
+                            aria-selected={index === activeIndex}
                             type="button"
                             variant="ghost"
-                            onClick={() => {
-                              setSelectedTarget(service)
-                              setSearchQuery('')
-                            }}
-                            className="h-auto w-full justify-start rounded-none px-3 py-2 text-left text-sm font-normal"
+                            onMouseEnter={() => setActiveIndex(index)}
+                            onClick={() => selectCandidate(service)}
+                            className={cn(
+                              'h-auto w-full justify-start rounded-none px-3 py-2 text-left text-sm font-normal',
+                              index === activeIndex && 'bg-muted text-foreground',
+                            )}
                           >
                             {service.name}
                           </Button>

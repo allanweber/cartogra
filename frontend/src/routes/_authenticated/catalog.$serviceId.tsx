@@ -7,12 +7,15 @@ import { z } from 'zod'
 import { AppLayout } from '#/components/AppLayout'
 import { DependenciesList } from '#/components/DependenciesList'
 import { EditServiceDrawer } from '#/components/EditServiceDrawer'
+import { RiskScoreBadge } from '#/components/RiskScoreBadge'
+import { TierBadge } from '#/components/TierBadge'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
 import { Skeleton } from '#/components/ui/skeleton'
 import { ApiError, apiFetch } from '#/lib/api'
 import { normalizeHealth, SCM_LABEL } from '#/lib/registry-types'
+import { computeRiskScore } from '#/lib/risk-score'
 import { useAuthStore } from '#/stores/useAuthStore'
 import { cn } from '#/lib/utils'
 
@@ -43,25 +46,6 @@ function relativeTime(dateStr: string): string {
   return `${Math.floor(hrs / 24)}d ago`
 }
 
-function computeRiskScore(service: RegistryService): number {
-  const health = normalizeHealth(service.healthStatus)
-  let score = health === 'down' ? 60 : health === 'degraded' ? 35 : 5
-  if (service.lastDeployedAt) {
-    const days = (Date.now() - new Date(service.lastDeployedAt).getTime()) / 86400000
-    score += Math.min(30, Math.floor(days * 1.5))
-  } else {
-    score += 18
-  }
-  if (!service.teamId) score += 8
-  return Math.min(99, Math.max(1, score))
-}
-
-function riskRingClass(score: number): string {
-  if (score >= 70) return 'border-critical text-critical'
-  if (score >= 35) return 'border-warning text-warning'
-  return 'border-success text-success'
-}
-
 function healthDotClass(health: ServiceHealth): string {
   if (health === 'down') return 'bg-critical'
   if (health === 'degraded') return 'bg-warning'
@@ -72,11 +56,6 @@ function healthTextClass(health: ServiceHealth): string {
   if (health === 'down') return 'text-critical'
   if (health === 'degraded') return 'text-warning'
   return 'text-success'
-}
-
-function tierBadgeClass(tier: string): string {
-  if (tier === 'CRITICAL') return 'border-critical text-critical bg-critical-subtle'
-  return 'border-border text-muted-foreground bg-transparent'
 }
 
 interface Insight {
@@ -223,16 +202,7 @@ function ServiceDetailPage() {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-bold">{service.name}</h1>
-                {service.tier && (
-                  <span
-                    className={cn(
-                      'rounded border px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide',
-                      tierBadgeClass(service.tier),
-                    )}
-                  >
-                    {service.tier}
-                  </span>
-                )}
+                <TierBadge tier={service.tier} />
                 <span className={cn('inline-flex items-center gap-1.5', healthTextClass(health))}>
                   <span className={cn('size-2 rounded-full', healthDotClass(health))} aria-hidden="true" />
                   <span className="capitalize">{health}</span>
@@ -260,14 +230,7 @@ function ServiceDetailPage() {
             </div>
             <div className="flex shrink-0 flex-col items-center gap-1">
               <span className="text-xs text-muted-foreground">Risk Score</span>
-              <div
-                className={cn(
-                  'flex h-14 w-14 items-center justify-center rounded-full border-2 text-xl font-bold tabular-nums',
-                  riskRingClass(riskScore),
-                )}
-              >
-                {riskScore}
-              </div>
+              <RiskScoreBadge service={service} variant="ring" />
             </div>
           </CardContent>
         </Card>
@@ -433,7 +396,7 @@ function ServiceDetailPage() {
                               href={service.repositoryUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="block truncate text-xs text-primary hover:underline"
+                              className="block truncate font-mono text-xs text-primary hover:underline"
                             >
                               {service.repositoryUrl}
                             </a>
@@ -458,7 +421,7 @@ function ServiceDetailPage() {
                         {service.documentationUrl && (
                           <div className="space-y-0.5">
                             <p className="text-xs uppercase tracking-wide text-muted-foreground">Documentation</p>
-                            <a href={service.documentationUrl} target="_blank" rel="noopener noreferrer" className="block truncate text-xs text-primary hover:underline">
+                            <a href={service.documentationUrl} target="_blank" rel="noopener noreferrer" className="block truncate font-mono text-xs text-primary hover:underline">
                               {service.documentationUrl}
                             </a>
                           </div>
@@ -466,7 +429,7 @@ function ServiceDetailPage() {
                         {service.runbookUrl && (
                           <div className="space-y-0.5">
                             <p className="text-xs uppercase tracking-wide text-muted-foreground">Runbook</p>
-                            <a href={service.runbookUrl} target="_blank" rel="noopener noreferrer" className="block truncate text-xs text-primary hover:underline">
+                            <a href={service.runbookUrl} target="_blank" rel="noopener noreferrer" className="block truncate font-mono text-xs text-primary hover:underline">
                               {service.runbookUrl}
                             </a>
                           </div>

@@ -5,6 +5,8 @@ import io.cartogra.topology.domain.event.ServiceLifecyclePayload;
 import io.cartogra.topology.domain.exception.BackfillFailedException;
 import io.cartogra.topology.infrastructure.registry.RegistryGraphNodeClient;
 import io.cartogra.topology.infrastructure.registry.RegistryServiceSnapshot;
+import io.cartogra.topology.infrastructure.scheduled.DependencyGraphViewRefreshScheduler;
+import io.cartogra.topology.repository.DependencyRepository;
 import io.cartogra.topology.repository.GraphNodeRepository;
 import io.cartogra.topology.repository.ProcessedEventRepository;
 import org.slf4j.Logger;
@@ -27,13 +29,19 @@ public class GraphNodeService {
     private final GraphNodeRepository graphNodeRepository;
     private final ProcessedEventRepository processedEventRepository;
     private final RegistryGraphNodeClient registryClient;
+    private final DependencyRepository dependencyRepository;
+    private final DependencyGraphViewRefreshScheduler graphViewRefreshScheduler;
 
     public GraphNodeService(GraphNodeRepository graphNodeRepository,
                              ProcessedEventRepository processedEventRepository,
-                             RegistryGraphNodeClient registryClient) {
+                             RegistryGraphNodeClient registryClient,
+                             DependencyRepository dependencyRepository,
+                             DependencyGraphViewRefreshScheduler graphViewRefreshScheduler) {
         this.graphNodeRepository = graphNodeRepository;
         this.processedEventRepository = processedEventRepository;
         this.registryClient = registryClient;
+        this.dependencyRepository = dependencyRepository;
+        this.graphViewRefreshScheduler = graphViewRefreshScheduler;
     }
 
     /**
@@ -52,11 +60,23 @@ public class GraphNodeService {
 
         ServiceLifecyclePayload payload = envelope.payload();
         if (EVENT_TYPE_DELETED.equals(envelope.eventType())) {
-            Instant deletedAt = payload.deletedAt() != null ? payload.deletedAt() : envelope.timestamp();
-            graphNodeRepository.softDelete(payload.tenantId(), payload.id(), deletedAt);
+            handleDeleted(payload, envelope.timestamp());
         } else {
             graphNodeRepository.upsert(payload.toGraphNodeUpsert());
         }
+    }
+
+    /**
+     * Removing a service from the graph is one operation, not three: the node, every
+     * edge touching it (declared or observed), and the read-side view all have to go
+     * dark together, or blast-radius/cycle/SPOF queries keep tripping over a service
+     * that no longer exists.
+     */
+    private void handleDeleted(ServiceLifecyclePayload payload, Instant envelopeTimestamp) {
+        Instant deletedAt = payload.deletedAt() != null ? payload.deletedAt() : envelopeTimestamp;
+        graphNodeRepository.softDelete(payload.tenantId(), payload.id(), deletedAt);
+        dependencyRepository.softDeleteAllForService(payload.tenantId(), payload.id());
+        graphViewRefreshScheduler.markDirty();
     }
 
     /**

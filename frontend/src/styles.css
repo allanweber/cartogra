@@ -190,6 +190,16 @@ body {
 .severity-warning  { color: var(--warning); }
 .severity-info     { color: var(--info); }
 
+/* Dependency graph nodes are D3-driven <g role="button"> elements, not native <button>s,
+   so the shared focus-visible/ring language is reproduced here rather than inherited. */
+.graph-node:focus-visible {
+  outline: none;
+}
+.graph-node:focus-visible .graph-node-visible {
+  stroke: var(--ring);
+  stroke-width: 3;
+}
+
 /* Contract status — resolves to the semantic status tokens above */
 .status-breaking { color: var(--critical); }
 .status-compatible { color: var(--success); }

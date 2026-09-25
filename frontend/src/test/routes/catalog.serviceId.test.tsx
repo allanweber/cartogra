@@ -223,6 +223,25 @@ describe('ServiceDetailPage', () => {
     expect(await screen.findByText('No declared dependencies yet.')).toBeInTheDocument()
   })
 
+  it('dependencies tab has a link into the graph focused on this service', async () => {
+    mockSuccess()
+    renderPage()
+    await screen.findByRole('heading', { name: 'payments-api' })
+    fireEvent.click(screen.getByRole('tab', { name: /dependencies/i }))
+    const link = await screen.findByRole('link', { name: /view in graph/i })
+    expect(link).toHaveAttribute('href', '/graph')
+  })
+
+  it('risk score ring exposes a breakdown popover instead of a bare number', async () => {
+    mockSuccess()
+    renderPage()
+    await screen.findByRole('heading', { name: 'payments-api' })
+    const trigger = screen.getByRole('button', { name: /risk score 31, low risk/i })
+    fireEvent.click(trigger)
+    expect(await screen.findByText('No owning team')).toBeInTheDocument()
+    expect(screen.getByText('Never deployed')).toBeInTheDocument()
+  })
+
   it('dependencies tab renders upstream and downstream entries', async () => {
     mockSuccess(MOCK_SERVICE, [], {
       downstream: [
@@ -407,7 +426,7 @@ describe('ServiceDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /add dependency/i }))
     const searchInput = await screen.findByPlaceholderText('Search services…')
     fireEvent.change(searchInput, { target: { value: 'auth' } })
-    fireEvent.click(await screen.findByRole('button', { name: 'auth-service' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'auth-service' }))
 
     const dialog = screen.getByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: /add dependency/i }))
@@ -444,7 +463,7 @@ describe('ServiceDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /add dependency/i }))
     const searchInput = await screen.findByPlaceholderText('Search services…')
     fireEvent.change(searchInput, { target: { value: 'auth' } })
-    fireEvent.click(await screen.findByRole('button', { name: 'auth-service' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'auth-service' }))
 
     const dialog = screen.getByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: /add dependency/i }))
@@ -511,6 +530,70 @@ describe('ServiceDetailPage', () => {
       expect(putBody).toEqual({
         sourceServiceId: 'svc-1',
         targetServiceId: 'svc-2',
+        protocol: 'HTTP',
+        metadata: null,
+      }),
+    )
+  })
+
+  it('edit UPSTREAM dependency flow: source/target stay correctly oriented, not reversed', async () => {
+    let putBody: unknown = null
+    vi.mocked(apiFetch).mockImplementation((path: string, init?: RequestInit) => {
+      if (path.includes('/v1/registry/teams/mine')) return Promise.resolve([])
+      if (path.includes('/v1/registry/teams')) return Promise.resolve(EMPTY_TEAMS)
+      if (path === '/v1/topology/dependencies/dep-2' && init?.method === 'PUT') {
+        putBody = init.body ? JSON.parse(init.body as string) : null
+        return Promise.resolve({
+          id: 'dep-2',
+          sourceServiceId: 'svc-2',
+          targetServiceId: 'svc-1',
+          type: 'DECLARED',
+          protocol: 'HTTP',
+          metadata: null,
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+        })
+      }
+      if (path.includes('/dependencies')) {
+        const populated: ServiceDependencies = {
+          downstream: [],
+          upstream: [
+            {
+              id: 'dep-2',
+              serviceId: 'svc-2',
+              name: 'auth-service',
+              teamId: null,
+              tier: null,
+              healthStatus: 'HEALTHY',
+              protocol: 'HTTP',
+              metadata: null,
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+            },
+          ],
+        }
+        return Promise.resolve(populated)
+      }
+      return Promise.resolve(MOCK_SERVICE)
+    })
+
+    renderPage()
+    await screen.findByRole('heading', { name: 'payments-api' })
+    fireEvent.click(screen.getByRole('tab', { name: /dependencies/i }))
+    await screen.findByRole('link', { name: 'auth-service' })
+
+    fireEvent.click(screen.getByRole('button', { name: /edit dependency on auth-service/i }))
+
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: /save changes/i }))
+
+    // svc-1 (this page's service, mockServiceId) is downstream of auth-service here —
+    // an upstream edit must keep auth-service (svc-2) as source, svc-1 as target. Get
+    // resolveEditEndpoints' ternary backwards and this comes out reversed instead.
+    await waitFor(() =>
+      expect(putBody).toEqual({
+        sourceServiceId: 'svc-2',
+        targetServiceId: 'svc-1',
         protocol: 'HTTP',
         metadata: null,
       }),

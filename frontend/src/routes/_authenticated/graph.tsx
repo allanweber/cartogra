@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { Network, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { z } from 'zod'
 
 import { AppLayout } from '#/components/AppLayout'
 import { DependencyGraph } from '#/components/DependencyGraph'
@@ -17,8 +18,15 @@ import { normalizeHealth } from '#/lib/registry-types'
 import type { PageResult, RegistryTeam } from '#/lib/registry-types'
 import type { DependencyType, Graph, GraphEdge, GraphNode } from '#/lib/topology-types'
 
+const graphSearchSchema = z.object({
+  service: z.string().optional(),
+  type: z.enum(['DECLARED', 'OBSERVED']).optional(),
+  team: z.string().optional(),
+})
+
 export const Route = createFileRoute('/_authenticated/graph')({
   component: GraphPage,
+  validateSearch: graphSearchSchema,
 })
 
 const ALL_TEAMS = 'ALL'
@@ -43,10 +51,23 @@ function dedupeNeighbors(
 }
 
 function GraphPage() {
-  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null)
-  const [type, setType] = useState<DependencyType>('DECLARED')
-  const [teamId, setTeamId] = useState<string | null>(null)
+  const search = Route.useSearch()
+  const navigate = Route.useNavigate()
   const [bannerDismissed, setBannerDismissed] = useState(false)
+
+  const selectedServiceId = search.service ?? null
+  const type = search.type ?? 'DECLARED'
+  const teamId = search.team ?? null
+
+  function setSelectedServiceId(id: string | null) {
+    navigate({ search: (prev) => ({ ...prev, service: id ?? undefined }), replace: true })
+  }
+  function setType(next: DependencyType) {
+    navigate({ search: (prev) => ({ ...prev, type: next === 'DECLARED' ? undefined : next }), replace: true })
+  }
+  function setTeamId(next: string | null) {
+    navigate({ search: (prev) => ({ ...prev, team: next ?? undefined }), replace: true })
+  }
 
   const { data: teamsPage } = useQuery({
     queryKey: ['teams'],
