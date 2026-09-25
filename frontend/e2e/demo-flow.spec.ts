@@ -20,6 +20,15 @@ test('register services, declare a dependency, and see it on the graph', async (
     await expect(page.getByRole('link', { name })).toBeVisible()
   }
 
+  // Risk score badge: a freshly registered, unowned, never-deployed service should
+  // surface both factors in its breakdown popover, not just a bare number.
+  const upstreamCard = page.getByRole('link', { name: upstreamService })
+  await upstreamCard.getByRole('button', { name: /risk score/i }).click()
+  const riskPopover = page.getByRole('dialog')
+  await expect(riskPopover.getByText('No owning team')).toBeVisible()
+  await expect(riskPopover.getByText('Never deployed')).toBeVisible()
+  await page.keyboard.press('Escape')
+
   await page.getByRole('link', { name: upstreamService }).click()
   await expect(page.locator('#main-content').getByRole('heading', { name: upstreamService })).toBeVisible()
 

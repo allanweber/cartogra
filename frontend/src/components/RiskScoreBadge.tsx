@@ -7,6 +7,8 @@ import { cn } from '#/lib/utils'
 import type { RiskBand, RiskBreakdown } from '#/lib/risk-score'
 import type { RegistryService } from '#/lib/registry-types'
 
+type RiskScoreVariant = 'inline' | 'bar' | 'ring'
+
 function riskTextClass(band: RiskBand): string {
   if (band === 'high') return 'text-critical'
   if (band === 'moderate') return 'text-warning'
@@ -61,46 +63,34 @@ function RiskBreakdownContent({ breakdown }: { breakdown: RiskBreakdown }) {
   )
 }
 
-// stopPropagation keeps a click on the trigger from also firing the surrounding card/row
-// Link's navigation — these badges are used inside fully-clickable catalog cards/rows.
-function stopPropagation(event: React.SyntheticEvent) {
-  event.stopPropagation()
-}
-
-/** Grid-card footer: bare numeral + severity icon. */
-export function RiskScoreInline({ service, className }: { service: RegistryService; className?: string }) {
-  const breakdown = computeRiskBreakdown(service)
-  return (
-    <Popover>
-      <PopoverTrigger
-        onClick={stopPropagation}
-        className={cn(
-          '-m-1 inline-flex items-center gap-1 rounded-md p-1 text-sm font-semibold tabular-nums transition-colors hover:bg-muted/60 hover:underline focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
-          riskTextClass(breakdown.band),
-          className,
-        )}
-        aria-label={`Risk score ${breakdown.score}, ${riskBandLabel(breakdown.band)}. View breakdown.`}
-      >
-        <RiskIcon band={breakdown.band} className="size-3.5" />
-        {breakdown.score}
-      </PopoverTrigger>
-      <PopoverContent align="end">
-        <RiskBreakdownContent breakdown={breakdown} />
-      </PopoverContent>
-    </Popover>
+function triggerClassName(variant: RiskScoreVariant, band: RiskBand): string {
+  if (variant === 'inline') {
+    return cn(
+      '-m-1 inline-flex items-center gap-1 rounded-md p-1 text-sm font-semibold tabular-nums transition-colors hover:bg-muted/60 hover:underline focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+      riskTextClass(band),
+    )
+  }
+  if (variant === 'bar') {
+    return '-m-1 flex flex-1 items-center gap-1.5 rounded-md p-1 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50'
+  }
+  return cn(
+    'flex h-14 w-14 items-center justify-center rounded-full border-2 text-xl font-bold tabular-nums transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+    riskRingClass(band),
   )
 }
 
-/** List-row cell: numeral + icon + progress bar. */
-export function RiskScoreBar({ service }: { service: RegistryService }) {
-  const breakdown = computeRiskBreakdown(service)
-  return (
-    <Popover>
-      <PopoverTrigger
-        onClick={stopPropagation}
-        className="-m-1 flex flex-1 items-center gap-1.5 rounded-md p-1 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-        aria-label={`Risk score ${breakdown.score}, ${riskBandLabel(breakdown.band)}. View breakdown.`}
-      >
+function RiskScoreTrigger({ variant, breakdown }: { variant: RiskScoreVariant; breakdown: RiskBreakdown }) {
+  if (variant === 'inline') {
+    return (
+      <>
+        <RiskIcon band={breakdown.band} className="size-3.5" />
+        {breakdown.score}
+      </>
+    )
+  }
+  if (variant === 'bar') {
+    return (
+      <>
         <RiskIcon band={breakdown.band} className={cn('size-3.5 shrink-0', riskTextClass(breakdown.band))} />
         <span className={cn('min-w-[2ch] text-sm font-semibold tabular-nums', riskTextClass(breakdown.band))}>
           {breakdown.score}
@@ -111,27 +101,27 @@ export function RiskScoreBar({ service }: { service: RegistryService }) {
             style={{ width: `${breakdown.score}%` }}
           />
         </span>
-      </PopoverTrigger>
-      <PopoverContent align="end">
-        <RiskBreakdownContent breakdown={breakdown} />
-      </PopoverContent>
-    </Popover>
-  )
+      </>
+    )
+  }
+  return <>{breakdown.score}</>
 }
 
-/** Detail-header ring. */
-export function RiskScoreRing({ service }: { service: RegistryService }) {
+/**
+ * Risk score badge in one of three visual shapes: `inline` (grid-card footer — bare
+ * numeral + severity icon), `bar` (list-row cell — numeral + icon + progress bar), or
+ * `ring` (detail-header — a plain ring, no icon). All three share one Popover-wired
+ * trigger; only the trigger's inner markup and styling change per variant.
+ */
+export function RiskScoreBadge({ service, variant }: { service: RegistryService; variant: RiskScoreVariant }) {
   const breakdown = computeRiskBreakdown(service)
   return (
     <Popover>
       <PopoverTrigger
-        className={cn(
-          'flex h-14 w-14 items-center justify-center rounded-full border-2 text-xl font-bold tabular-nums transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
-          riskRingClass(breakdown.band),
-        )}
+        className={triggerClassName(variant, breakdown.band)}
         aria-label={`Risk score ${breakdown.score}, ${riskBandLabel(breakdown.band)}. View breakdown.`}
       >
-        {breakdown.score}
+        <RiskScoreTrigger variant={variant} breakdown={breakdown} />
       </PopoverTrigger>
       <PopoverContent align="end">
         <RiskBreakdownContent breakdown={breakdown} />

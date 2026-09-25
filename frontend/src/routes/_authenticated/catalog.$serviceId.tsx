@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { AppLayout } from '#/components/AppLayout'
 import { DependenciesList } from '#/components/DependenciesList'
 import { EditServiceDrawer } from '#/components/EditServiceDrawer'
-import { RiskScoreRing } from '#/components/RiskScoreBadge'
+import { RiskScoreBadge } from '#/components/RiskScoreBadge'
 import { TierBadge } from '#/components/TierBadge'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
@@ -230,7 +230,7 @@ function ServiceDetailPage() {
             </div>
             <div className="flex shrink-0 flex-col items-center gap-1">
               <span className="text-xs text-muted-foreground">Risk Score</span>
-              <RiskScoreRing service={service} />
+              <RiskScoreBadge service={service} variant="ring" />
             </div>
           </CardContent>
         </Card>

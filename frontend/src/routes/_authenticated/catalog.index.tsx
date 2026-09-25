@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { useDebounce } from '#/hooks/useDebounce'
 import { AppLayout } from '#/components/AppLayout'
 import { RegisterServiceDrawer } from '#/components/RegisterServiceDrawer'
-import { RiskScoreBar, RiskScoreInline } from '#/components/RiskScoreBadge'
+import { RiskScoreBadge } from '#/components/RiskScoreBadge'
 import { TierBadge } from '#/components/TierBadge'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
@@ -17,7 +17,7 @@ import { Input } from '#/components/ui/input'
 import { Skeleton } from '#/components/ui/skeleton'
 import { ApiError, apiFetch } from '#/lib/api'
 import { normalizeHealth, SCM_LABEL } from '#/lib/registry-types'
-import { cn } from '#/lib/utils'
+import { cn, preventNavigationFromPopoverTrigger } from '#/lib/utils'
 
 import type { PageResult, RegistryService, RegistryTeam, ScmSource, ServiceHealth } from '#/lib/registry-types'
 
@@ -442,7 +442,7 @@ function ServiceCard({ service, teamName }: { service: RegistryService; teamName
   const hasBreakingChange = tags.includes('breaking-change')
 
   return (
-    <Link to="/catalog/$serviceId" params={{ serviceId: service.id }}>
+    <Link to="/catalog/$serviceId" params={{ serviceId: service.id }} onClick={preventNavigationFromPopoverTrigger}>
       <Card className="group h-full cursor-pointer gap-3 rounded-xl p-4 py-4 transition-all hover:shadow-md">
         {/* Header */}
         <div className="flex items-start justify-between gap-2">
@@ -489,7 +489,7 @@ function ServiceCard({ service, teamName }: { service: RegistryService; teamName
               </span>
             )}
           </div>
-          <RiskScoreInline service={service} />
+          <RiskScoreBadge service={service} variant="inline" />
         </div>
 
         {/* Warning tags */}
@@ -539,7 +539,12 @@ function ServiceListRow({ service, teamName }: { service: RegistryService; teamN
   const isOrphan = service.teamId === null
 
   return (
-    <Link to="/catalog/$serviceId" params={{ serviceId: service.id }} className="block">
+    <Link
+      to="/catalog/$serviceId"
+      params={{ serviceId: service.id }}
+      className="block"
+      onClick={preventNavigationFromPopoverTrigger}
+    >
       <div className={cn('group grid gap-x-4 px-5 py-3 transition-colors hover:bg-muted/30', LIST_COLS)}>
         <div className="min-w-0">
           <p className="truncate font-medium group-hover:text-primary">{service.name}</p>
@@ -576,7 +581,7 @@ function ServiceListRow({ service, teamName }: { service: RegistryService; teamN
           <span className="text-sm text-muted-foreground">{deploy ?? '—'}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <RiskScoreBar service={service} />
+          <RiskScoreBadge service={service} variant="bar" />
         </div>
       </div>
     </Link>
