@@ -37,8 +37,12 @@ function healthDasharray(health: ServiceHealth): string | null {
 }
 
 // Settle instantly instead of animating — D3's tick loop is JS-driven, so the global
-// `prefers-reduced-motion` CSS rule in styles.css can't reach it; this can.
-const REDUCED_MOTION_SETTLE_TICKS = 300
+// `prefers-reduced-motion` CSS rule in styles.css can't reach it; this can. Ticks run
+// until the simulation naturally converges (alpha < alphaMin, d3-force's own stopping
+// condition — matches what the animated path would do on its own), bounded by a wall-clock
+// budget so a very large graph degrades to a slightly less-settled layout instead of
+// blocking the main thread indefinitely.
+const REDUCED_MOTION_SETTLE_BUDGET_MS = 150
 
 function endpointId(endpoint: SimLink['source']): string {
   return typeof endpoint === 'object' ? endpoint.serviceId : String(endpoint)
@@ -265,7 +269,10 @@ export function DependencyGraph({
 
     if (reduceMotion) {
       simulation.stop()
-      for (let i = 0; i < REDUCED_MOTION_SETTLE_TICKS; i++) simulation.tick()
+      const deadline = performance.now() + REDUCED_MOTION_SETTLE_BUDGET_MS
+      while (simulation.alpha() > simulation.alphaMin() && performance.now() < deadline) {
+        simulation.tick()
+      }
       renderTick()
       if (!hasCenteredOnMountRef.current && selectedServiceId) centerOnService(selectedServiceId)
       hasCenteredOnMountRef.current = true
