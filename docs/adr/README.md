@@ -23,6 +23,13 @@ This directory captures significant architectural decisions made during the deve
 | [ADR-0018](ADR-0018-spec-discovery-transport.md) | Spec discovery transport (Kafka topic from ingestion) | Proposed | 2026-05-20 |
 | [ADR-0019](ADR-0019-guest-enforcement-mechanism.md) | Guest enforcement via special JWT role (no anonymous path) | Proposed | 2026-05-20 |
 | [ADR-0020](ADR-0020-shared-web-module.md) | New `shared:web` Gradle module for cross-service web filters | Proposed | 2026-05-20 |
+| [ADR-0021](ADR-0021-service-discovery-upsert-keying.md) | Service Discovery Upsert Keying Strategy | Accepted | 2026-06-04 |
+| [0022](0022-team-owner-role-tenant-wide-enforcement.md) | TEAM_OWNER role enforced tenant-wide until team membership exists | Superseded by ADR-0025 | 2026-07-01 |
+| [0023](0023-kafka-manual-ack-preserves-failure-semantics.md) | Kafka consumers move to manual ack, but still ack on failure | Accepted | 2026-07-08 |
+| [0024](0024-gateway-circuit-breaking-via-route-filter-not-restclient.md) | Gateway circuit breaking is a Resilience4j route filter, not a per-service RestClient wrapper | Accepted | 2026-07-08 |
+| [0025](0025-team-membership-replaces-team-owner-role.md) | Team membership (live DB check) replaces the TEAM_OWNER role | Accepted | 2026-07-13 |
+| [0026](0026-accept-alpha-opentelemetry-logback-appender.md) | Accept `opentelemetry-logback-appender-1.0` as a permanently-alpha dependency | Accepted | 2026-07-17 |
+| [0027](0027-topology-consumes-ownership-events-for-orphan-risk.md) | Topology consumes a Registry ownership event to compute orphan risk | Proposed | 2026-08-05 |
 
 ## Process
 
@@ -31,6 +38,9 @@ This directory captures significant architectural decisions made during the deve
 3. Open a PR with **`docs:`** prefix; tag relevant deciders as reviewers.
 4. On merge to `main` the status becomes **Accepted**.
 5. To supersede: change the old ADR status to *Superseded by ADR-NNNN* and create the new record.
+
+> Files from ADR-0022 onward dropped the `ADR-` filename prefix (e.g. `0028-my-decision.md`,
+> not `ADR-0028-my-decision.md`) — match the newer, unprefixed convention for any new ADR.
 
 ## Statuses
 
