@@ -19,6 +19,9 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
 
 import java.time.Instant;
 import java.util.Map;
@@ -30,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -42,6 +46,8 @@ class DependencyServiceTest {
     @Mock GraphNodeRepository graphNodeRepository;
     @Mock RegistryMembershipClient registryMembershipClient;
     @Mock DependencyGraphViewRefreshScheduler graphViewRefreshScheduler;
+    @Mock PlatformTransactionManager transactionManager;
+    @Mock TransactionStatus transactionStatus;
 
     private DependencyService service;
 
@@ -53,7 +59,9 @@ class DependencyServiceTest {
     @BeforeEach
     void setUp() {
         service = new DependencyService(dependencyRepository, graphNodeRepository,
-                registryMembershipClient, graphViewRefreshScheduler);
+                registryMembershipClient, graphViewRefreshScheduler, transactionManager);
+        lenient().when(transactionManager.getTransaction(any(TransactionDefinition.class)))
+                .thenReturn(transactionStatus);
         SecurityContextHolder.getContext().setAuthentication(
                 new TestingAuthenticationToken("user", null, new SimpleGrantedAuthority("ROLE_MEMBER")));
     }
@@ -244,6 +252,19 @@ class DependencyServiceTest {
                 .isInstanceOf(AccessDeniedException.class);
         verifyNoInteractions(graphNodeRepository);
         verify(dependencyRepository, never()).findByEdgeIdentity(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void accessDeniedThrowsBeforeAnyRepositoryInteraction() {
+        when(registryMembershipClient.checkAccess(eq(tenantId), eq(userId), anyList()))
+                .thenReturn(Map.of(sourceId, false, targetId, false));
+
+        assertThatThrownBy(() -> service.create(tenantId, userId, request(sourceId, targetId)))
+                .isInstanceOf(AccessDeniedException.class);
+        verifyNoInteractions(dependencyRepository);
+        verifyNoInteractions(graphNodeRepository);
+        verifyNoInteractions(graphViewRefreshScheduler);
+        verifyNoInteractions(transactionManager);
     }
 
     @Test

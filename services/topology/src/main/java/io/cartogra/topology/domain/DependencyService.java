@@ -12,7 +12,8 @@ import io.cartogra.topology.repository.GraphNodeRepository;
 import org.jspecify.annotations.Nullable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.util.LinkedHashSet;
@@ -40,34 +41,37 @@ public class DependencyService {
     private final GraphNodeRepository graphNodeRepository;
     private final RegistryMembershipClient registryMembershipClient;
     private final DependencyGraphViewRefreshScheduler graphViewRefreshScheduler;
+    private final TransactionTemplate transactionTemplate;
 
     public DependencyService(DependencyRepository dependencyRepository,
             GraphNodeRepository graphNodeRepository,
             RegistryMembershipClient registryMembershipClient,
-            DependencyGraphViewRefreshScheduler graphViewRefreshScheduler) {
+            DependencyGraphViewRefreshScheduler graphViewRefreshScheduler,
+            PlatformTransactionManager transactionManager) {
         this.dependencyRepository = dependencyRepository;
         this.graphNodeRepository = graphNodeRepository;
         this.registryMembershipClient = registryMembershipClient;
         this.graphViewRefreshScheduler = graphViewRefreshScheduler;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
-    @Transactional
     public Dependency create(UUID tenantId, @Nullable UUID userId, DeclareDependencyRequest request) {
         requireEitherSideAccess(tenantId, userId, request.sourceServiceId(), request.targetServiceId());
-        NodePair nodes = validateNodes(tenantId, request.sourceServiceId(), request.targetServiceId());
-        requireNotSelfEdge(request.sourceServiceId(), request.targetServiceId());
-        requireNoDuplicate(tenantId, request.sourceServiceId(), request.targetServiceId(), request.protocol(), null,
-                nodes);
+        return transactionTemplate.execute(status -> {
+            NodePair nodes = validateNodes(tenantId, request.sourceServiceId(), request.targetServiceId());
+            requireNotSelfEdge(request.sourceServiceId(), request.targetServiceId());
+            requireNoDuplicate(tenantId, request.sourceServiceId(), request.targetServiceId(), request.protocol(), null,
+                    nodes);
 
-        Instant now = Instant.now();
-        Dependency saved = dependencyRepository.save(new Dependency(
-                UUID.randomUUID(), tenantId, request.sourceServiceId(), request.targetServiceId(),
-                DependencyType.DECLARED, request.protocol(), request.metadata(), now, now, null));
-        graphViewRefreshScheduler.markDirty();
-        return saved;
+            Instant now = Instant.now();
+            Dependency saved = dependencyRepository.save(new Dependency(
+                    UUID.randomUUID(), tenantId, request.sourceServiceId(), request.targetServiceId(),
+                    DependencyType.DECLARED, request.protocol(), request.metadata(), now, now, null));
+            graphViewRefreshScheduler.markDirty();
+            return saved;
+        });
     }
 
-    @Transactional
     public Dependency update(UUID tenantId, @Nullable UUID userId, UUID id, DeclareDependencyRequest request) {
         Dependency existing = loadDeclared(tenantId, id);
 
@@ -79,26 +83,29 @@ public class DependencyService {
             requirePairAuthorized(access, request.sourceServiceId(), request.targetServiceId());
         }
 
-        NodePair nodes = validateNodes(tenantId, request.sourceServiceId(), request.targetServiceId());
-        requireNotSelfEdge(request.sourceServiceId(), request.targetServiceId());
-        requireNoDuplicate(tenantId, request.sourceServiceId(), request.targetServiceId(), request.protocol(), id,
-                nodes);
+        return transactionTemplate.execute(status -> {
+            NodePair nodes = validateNodes(tenantId, request.sourceServiceId(), request.targetServiceId());
+            requireNotSelfEdge(request.sourceServiceId(), request.targetServiceId());
+            requireNoDuplicate(tenantId, request.sourceServiceId(), request.targetServiceId(), request.protocol(), id,
+                    nodes);
 
-        Dependency saved = dependencyRepository.save(new Dependency(
-                existing.id(), tenantId, request.sourceServiceId(), request.targetServiceId(),
-                DependencyType.DECLARED, request.protocol(), request.metadata(),
-                existing.createdAt(), Instant.now(), null));
-        graphViewRefreshScheduler.markDirty();
-        return saved;
+            Dependency saved = dependencyRepository.save(new Dependency(
+                    existing.id(), tenantId, request.sourceServiceId(), request.targetServiceId(),
+                    DependencyType.DECLARED, request.protocol(), request.metadata(),
+                    existing.createdAt(), Instant.now(), null));
+            graphViewRefreshScheduler.markDirty();
+            return saved;
+        });
     }
 
-    @Transactional
     public void delete(UUID tenantId, @Nullable UUID userId, UUID id) {
         Dependency existing = loadDeclared(tenantId, id);
         requireEitherSideAccess(tenantId, userId, existing.sourceServiceId(), existing.targetServiceId());
 
-        dependencyRepository.softDelete(tenantId, id);
-        graphViewRefreshScheduler.markDirty();
+        transactionTemplate.executeWithoutResult(status -> {
+            dependencyRepository.softDelete(tenantId, id);
+            graphViewRefreshScheduler.markDirty();
+        });
     }
 
     public ServiceDependencies findForService(UUID tenantId, UUID serviceId) {

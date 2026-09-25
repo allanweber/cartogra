@@ -14,6 +14,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
@@ -49,7 +51,7 @@ class RegistryGraphNodeClientTest {
                                 """)));
 
         var client = new RegistryGraphNodeClient(
-                new RegistryClientProperties("http://localhost:" + WIRE_MOCK.port()),
+                new RegistryClientProperties("http://localhost:" + WIRE_MOCK.port(), Duration.ofSeconds(3)),
                 new TraceparentRequestInterceptor());
 
         SpanContext spanContext = SpanContext.create(
