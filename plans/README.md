@@ -11,18 +11,57 @@ the operator prefers.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 001  | Make topology's registry backfill resilient to transient failures | P2 | S | — | TODO |
-| 002  | Propagate W3C traceparent on internal Registry RestClient calls | P2 | S | — | TODO |
-| 003  | Add a retention reaper for topology's `processed_events` ledger | P3 | S | — | TODO |
+| 001  | Make topology's registry backfill resilient to transient failures | P2 | S | — | DONE — `ServiceCallRetry.threeAttempts` wired into `RegistryGraphNodeClient` |
+| 002  | Propagate W3C traceparent on internal Registry RestClient calls | P2 | S | — | DONE — `TraceparentRequestInterceptor` wired into `RegistryGraphNodeClient` |
+| 003  | Add a retention reaper for topology's `processed_events` ledger | P3 | S | — | DONE — `ProcessedEventReaperScheduler` + IT exist |
+
+Reconciled 2026-09-24 (new `/improve` run, full-repo scope, commit `d249c0f`) — all three verified DONE by reading the current code, not re-planned.
+
+## 2026-09-24 run — full-repo audit, commit `d249c0f`
+
+Standard-effort audit across all nine categories, fanned out to 4 parallel subagents
+(topology+gateway correctness/security; test-coverage+architecture+dependencies across
+topology/registry/ingestion/shared; frontend correctness/perf/tests/DX; docs+direction).
+17 findings vetted personally (code re-read, not just subagent-reported) and presented;
+operator selected 8 for planning. Full findings list and the ones not selected are recorded
+in this run's audit notes (ask the operator or re-run `/improve` to regenerate if needed —
+not persisted as a separate file per the skill's template).
+
+| Plan | Title | Priority | Effort | Risk | Depends on | Status |
+|------|-------|----------|--------|------|------------|--------|
+| 004 | Make `EventEnvelope.eventId` deterministic instead of wall-clock-derived | P1 | S | MED | — | DONE — reviewed and approved 2026-09-25; changes staged uncommitted on `phase-1-gate-improve` |
+| 005 | Move Registry membership check out of DependencyService's DB transaction, bound its timeout | P1 | M | MED | — | TODO |
+| 006 | Make the dashboard's health metrics honest about the 200-service page cap | P1 | S | LOW | — | TODO |
+| 007 | Bound the dependency graph's reduced-motion settle loop by wall-clock time | P1 | S | LOW | — | TODO |
+| 008 | Move the duplicated `AdvisoryLockRepository`/`JdbcAdvisoryLockRepository` into `shared:web` | P2 | S | LOW | — | TODO |
+| 009 | Add ADR-0021 through ADR-0027 to the ADR index | P3 | S | LOW | — | TODO |
+| 010 | Surface errors from secondary `useQuery` calls instead of silently defaulting | P2 | M | LOW | (run after 006 — see below) | TODO |
+| 011 | Add direct unit tests for `DependencyGraph`'s keyboard nav, cleanup, reduced motion | P2 | M | LOW | 007 (soft — see plan) | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
 
-## Dependency notes
+### Recommended execution order
 
-- None of the three plans depend on each other. Plan 002 touches
-  `RegistryGraphNodeClient.java`, the same file Plan 001 modifies (to add a retry loop) —
-  if both are executed, run 001 first so 002's `.headers(...)` addition lands inside the
-  retry loop rather than the other way around; 002's own drift check will catch it either way.
+004, 005, 006, 007 (all independent, all P1 — any order/parallel is fine) → 008, 009 (independent, P2/P3, any order) → 010 (after 006, same file) → 011 (after 007, same file/behavior it tests).
+
+### Dependency notes
+
+- **006 before 010**: both touch `dashboard.tsx` — 006 edits the `servicesPage`/health-metrics section, 010 edits the separate `teamsPage` query's error handling. Low overlap risk, but land 006 first to minimize merge friction (010's plan file notes this too).
+- **007 before 011**: 011 adds a test for the reduced-motion settle path's time budget, which only exists after 007 replaces the fixed `REDUCED_MOTION_SETTLE_TICKS` constant with `REDUCED_MOTION_SETTLE_BUDGET_MS`. 011 can run first with that one test case skipped (its plan documents this explicitly), but running 007 first avoids the skip.
+- 004, 005, 006, 007, 008, 009 have no file overlap with each other and can run fully in parallel if the operator prefers.
+
+### Findings selected but not yet planned in full (lower-priority, available on request)
+
+Not written up as plans this run — the operator selected 8 of 17 vetted findings. Available if wanted later:
+topology's dedupe-key/write tenant-id mismatch (envelope vs. payload `tenantId` in `GraphNodeService`), the advisory-lock `ThreadLocal` single-slot footgun (dormant — only matters if a 2nd lock key is added), unbounded `metadata` TEXT field on `DeclareDependencyRequest` (no `@Size`), missing `GlobalExceptionHandlerTest` in topology, registry's advisory-lock repo never tested against a live Postgres (only mocked), untested dialogs with real mutation logic (`DependencyDialog`, `DependenciesList`, etc.), `DependencyGraph` not responding to container resize, registry's `ServiceRequest`/`TeamRequest` violating the repo's own one-request-record-per-entity convention, `shared/common` having zero tests (`UuidV5`, `NoHtmlValidator`), OAuth email-verification trust gap, login timing side-channel (email enumeration), auth-route rate limiting keyed on `remoteAddr` (defeated behind a proxy), password-reset/email-verify OTP entropy + lockout, `AbortSignal` never forwarded to `apiFetch` (wasted in-flight requests on query cancellation), several more doc-drift items (Phase-number mismatches between `PRODUCT.md`/`roadmap.md`, roadmap's own stale "next ADR is 0028" claim, roadmap's stale August-velocity contingency), PRODUCT.md's Compatibility Matrix screen missing a roadmap story, and three internal service-to-service calls (topology/ingestion → registry) that bypass the Gateway ahead of Phase 7.4's NetworkPolicy lockdown plan.
+
+Two direction-level findings surfaced but are design decisions, not plans: (1) ADR-0027 (Registry→Topology `ownership-changed` topic) and `docs/roadmap.md` story 3.3 (consume Ingestion's `ownership.resolved`) prescribe two different mechanisms for the same not-yet-built orphan-risk feature — `docs/architecture/kafka-topics.md` already flags this as unresolved; needs an operator decision, not a plan. (2) roadmap.md's velocity-contingency framing (still describing August as a near-stall) is three weeks stale against `git log` — September commit volume already exceeds June/July, so any "cut Phase 3 scope" contingency reasoning should be re-checked against current pace before acting on it.
+
+## 2026-09-17 run — branch-scoped audit (superseded plans, all DONE)
+
+Original scope: `issues/106-graph-nodes-projected-from-registry`, story 1.1 "Graph nodes
+projected from the registry" via `git diff --name-only $(git merge-base origin/main HEAD)..HEAD`.
+Planned at commit `46e7bb5`.
 
 ## Findings considered and rejected (for now)
 
@@ -37,3 +76,11 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJE
   predates this branch and isn't scoped to a single service's diff. Revisit before relying on
   RLS as a real second line of tenant-isolation defense in production; today, isolation is
   enforced entirely by the explicit `WHERE tenant_id = :tenantId` filters in repository code.
+- **This run (2026-09-24), EventEnvelope wall-clock `eventId`** — investigated deeply before
+  planning (see plan 004): the exact mechanism (`eventType + entityId + timestamp` hashed into
+  `eventId`) is already known and explicitly accepted for ingestion's `sync.command` idempotency
+  in `docs/adr/ADR-0014-sync-command-idempotency.md`, which built a separate concurrent-execution
+  guard specifically because this scheme can't support content-based dedup. Plan 004 fixes the
+  shared `EventEnvelope` primitive (so the `processed_events` ledger's own stated guarantee holds
+  for producers that rely on it) without touching or reopening ADR-0014's accepted, separate
+  design for sync commands.
