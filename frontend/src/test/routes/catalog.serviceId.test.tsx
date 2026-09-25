@@ -536,6 +536,70 @@ describe('ServiceDetailPage', () => {
     )
   })
 
+  it('edit UPSTREAM dependency flow: source/target stay correctly oriented, not reversed', async () => {
+    let putBody: unknown = null
+    vi.mocked(apiFetch).mockImplementation((path: string, init?: RequestInit) => {
+      if (path.includes('/v1/registry/teams/mine')) return Promise.resolve([])
+      if (path.includes('/v1/registry/teams')) return Promise.resolve(EMPTY_TEAMS)
+      if (path === '/v1/topology/dependencies/dep-2' && init?.method === 'PUT') {
+        putBody = init.body ? JSON.parse(init.body as string) : null
+        return Promise.resolve({
+          id: 'dep-2',
+          sourceServiceId: 'svc-2',
+          targetServiceId: 'svc-1',
+          type: 'DECLARED',
+          protocol: 'HTTP',
+          metadata: null,
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+        })
+      }
+      if (path.includes('/dependencies')) {
+        const populated: ServiceDependencies = {
+          downstream: [],
+          upstream: [
+            {
+              id: 'dep-2',
+              serviceId: 'svc-2',
+              name: 'auth-service',
+              teamId: null,
+              tier: null,
+              healthStatus: 'HEALTHY',
+              protocol: 'HTTP',
+              metadata: null,
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+            },
+          ],
+        }
+        return Promise.resolve(populated)
+      }
+      return Promise.resolve(MOCK_SERVICE)
+    })
+
+    renderPage()
+    await screen.findByRole('heading', { name: 'payments-api' })
+    fireEvent.click(screen.getByRole('tab', { name: /dependencies/i }))
+    await screen.findByRole('link', { name: 'auth-service' })
+
+    fireEvent.click(screen.getByRole('button', { name: /edit dependency on auth-service/i }))
+
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: /save changes/i }))
+
+    // svc-1 (this page's service, mockServiceId) is downstream of auth-service here —
+    // an upstream edit must keep auth-service (svc-2) as source, svc-1 as target. Get
+    // resolveEditEndpoints' ternary backwards and this comes out reversed instead.
+    await waitFor(() =>
+      expect(putBody).toEqual({
+        sourceServiceId: 'svc-2',
+        targetServiceId: 'svc-1',
+        protocol: 'HTTP',
+        metadata: null,
+      }),
+    )
+  })
+
   it('remove dependency flow: confirm dialog then delete, list refreshes', async () => {
     let deleteCalled = false
     let fetchCount = 0

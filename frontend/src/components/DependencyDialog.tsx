@@ -26,6 +26,21 @@ interface DependencyDialogProps {
   edit?: { entry: DependencyDirectionEntry; direction: 'upstream' | 'downstream' }
 }
 
+/**
+ * Resolves an edit's source/target from the UI's upstream/downstream concept: a
+ * 'downstream' edit means serviceId is the source (edit.entry is downstream of it); an
+ * 'upstream' edit means edit.entry is the source (serviceId is downstream of it). Get
+ * this backwards and every edit silently reverses the edge direction.
+ */
+export function resolveEditEndpoints(
+  serviceId: string,
+  edit: NonNullable<DependencyDialogProps['edit']>,
+): { sourceServiceId: string; targetServiceId: string } {
+  return edit.direction === 'downstream'
+    ? { sourceServiceId: serviceId, targetServiceId: edit.entry.serviceId }
+    : { sourceServiceId: edit.entry.serviceId, targetServiceId: serviceId }
+}
+
 export function DependencyDialog({ serviceId, open, onOpenChange, edit }: DependencyDialogProps) {
   const queryClient = useQueryClient()
   const isEdit = !!edit
@@ -51,8 +66,7 @@ export function DependencyDialog({ serviceId, open, onOpenChange, edit }: Depend
   const mutation = useMutation({
     mutationFn: () => {
       if (edit) {
-        const sourceServiceId = edit.direction === 'downstream' ? serviceId : edit.entry.serviceId
-        const targetServiceId = edit.direction === 'downstream' ? edit.entry.serviceId : serviceId
+        const { sourceServiceId, targetServiceId } = resolveEditEndpoints(serviceId, edit)
         return apiFetch<DependencyResponse>(`/v1/topology/dependencies/${edit.entry.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },

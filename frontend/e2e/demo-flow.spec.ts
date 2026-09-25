@@ -31,6 +31,7 @@ test('register services, declare a dependency, and see it on the graph', async (
 
   await page.getByRole('link', { name: upstreamService }).click()
   await expect(page.locator('#main-content').getByRole('heading', { name: upstreamService })).toBeVisible()
+  const upstreamServiceId = new URL(page.url()).pathname.split('/').pop()!
 
   await page.getByRole('tab', { name: 'Dependencies' }).click()
   await page.getByRole('button', { name: 'Add dependency' }).click()
@@ -41,6 +42,26 @@ test('register services, declare a dependency, and see it on the graph', async (
   await dependencyDialog.getByRole('button', { name: 'Add dependency' }).click()
   await expect(dependencyDialog).not.toBeVisible()
   await expect(page.getByRole('link', { name: downstreamService })).toBeVisible()
+
+  // Editing an upstream dependency (from the downstream service's own page) must
+  // preserve the original edge direction, not silently reverse it — the one branch of
+  // the direction-resolving ternary no vitest coverage exercised before this candidate.
+  await page.getByRole('link', { name: downstreamService }).click()
+  await expect(page.locator('#main-content').getByRole('heading', { name: downstreamService })).toBeVisible()
+  const downstreamServiceId = new URL(page.url()).pathname.split('/').pop()!
+
+  await page.getByRole('tab', { name: 'Dependencies' }).click()
+  await page.getByRole('button', { name: `Edit dependency on ${upstreamService}` }).click()
+  const editDialog = page.getByRole('dialog')
+  await expect(editDialog.getByRole('heading', { name: upstreamService })).toBeVisible()
+
+  const putRequest = page.waitForRequest(
+    (req) => req.method() === 'PUT' && req.url().includes('/api/v1/topology/dependencies/'),
+  )
+  await editDialog.getByRole('button', { name: 'Save changes' }).click()
+  const putBody = (await putRequest).postDataJSON()
+  expect(putBody.sourceServiceId).toBe(upstreamServiceId)
+  expect(putBody.targetServiceId).toBe(downstreamServiceId)
 
   await page.getByRole('link', { name: 'Graph', exact: true }).click()
   await expect(page.getByRole('group', { name: 'Service dependency graph' })).toBeVisible()
