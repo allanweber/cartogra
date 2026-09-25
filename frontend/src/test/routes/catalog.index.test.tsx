@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSyncExternalStore } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Route } from '#/routes/_authenticated/catalog.index'
+import { TooltipProvider } from '#/components/ui/tooltip'
 import { apiFetch, ApiError } from '#/lib/api'
 
 import type { PageResult, RegistryService, RegistryTeam } from '#/lib/registry-types'
@@ -125,7 +126,9 @@ function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <Page />
+      <TooltipProvider>
+        <Page />
+      </TooltipProvider>
     </QueryClientProvider>,
   )
 }
@@ -256,5 +259,33 @@ describe('CatalogPage', () => {
       const calls = vi.mocked(apiFetch).mock.calls.map(([path]) => path)
       expect(calls.some((p) => p.includes('unowned=true'))).toBe(true)
     })
+  })
+
+  it('shows an inline error on the Team section when the teams query fails but services succeeds', async () => {
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path.includes('/v1/registry/teams')) {
+        return Promise.reject(new ApiError('SERVER_ERROR', 'teams unavailable', 'trace-cat-teams-1'))
+      }
+      if (path.includes('/v1/registry/services/tech-stacks')) return Promise.resolve([])
+      return Promise.resolve(EMPTY_SERVICES)
+    })
+    renderPage()
+    await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /more filters/i }))
+    expect(await screen.findByLabelText(/teams unavailable.*trace-cat-teams-1/i)).toBeInTheDocument()
+  })
+
+  it('shows an inline error on the Tech stack section when the tech-stacks query fails but services succeeds', async () => {
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path.includes('/v1/registry/teams')) return Promise.resolve(EMPTY_TEAMS)
+      if (path.includes('/v1/registry/services/tech-stacks')) {
+        return Promise.reject(new ApiError('SERVER_ERROR', 'tech stacks unavailable', 'trace-cat-tech-1'))
+      }
+      return Promise.resolve(EMPTY_SERVICES)
+    })
+    renderPage()
+    await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /more filters/i }))
+    expect(await screen.findByLabelText(/tech stacks unavailable.*trace-cat-tech-1/i)).toBeInTheDocument()
   })
 })

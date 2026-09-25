@@ -10,6 +10,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.client.RestClientException;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -44,7 +45,7 @@ class RegistryMembershipClientTest {
 
     private RegistryMembershipClient client() {
         return new RegistryMembershipClient(
-                new RegistryClientProperties("http://localhost:" + WIRE_MOCK.port()),
+                new RegistryClientProperties("http://localhost:" + WIRE_MOCK.port(), Duration.ofSeconds(3)),
                 new TraceparentRequestInterceptor());
     }
 

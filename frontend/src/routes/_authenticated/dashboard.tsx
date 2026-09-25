@@ -1,10 +1,13 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Activity, AlertTriangle, ArrowRight, Clock, Server, Users } from 'lucide-react'
+import { useState } from 'react'
+import { Activity, AlertTriangle, ArrowRight, Clock, Server, Users, X } from 'lucide-react'
 
 import { AppLayout } from '#/components/AppLayout'
+import { InlineQueryError } from '#/components/InlineQueryError'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Badge } from '#/components/ui/badge'
+import { Button } from '#/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
 import { Skeleton } from '#/components/ui/skeleton'
 import { ApiError, apiFetch } from '#/lib/api'
@@ -29,12 +32,14 @@ function isStale(dateStr: string | null): boolean {
 }
 
 function DashboardPage() {
+  const [bannerDismissed, setBannerDismissed] = useState(false)
+
   const { data: servicesPage, isLoading, error } = useQuery({
     queryKey: ['services', 'all'],
     queryFn: () => apiFetch<PageResult<RegistryService>>('/v1/registry/services?limit=200'),
   })
 
-  const { data: teamsPage } = useQuery({
+  const { data: teamsPage, error: teamsError } = useQuery({
     queryKey: ['teams', 'count'],
     queryFn: () => apiFetch<PageResult<RegistryTeam>>('/v1/registry/teams?limit=1'),
   })
@@ -42,6 +47,7 @@ function DashboardPage() {
 
   const services = servicesPage?.items ?? []
   const totalServices = servicesPage?.total ?? 0
+  const truncated = (servicesPage?.total ?? 0) > (servicesPage?.items.length ?? 0)
   const criticalTier = services.filter((s) => s.tier === 'CRITICAL').length
   const staleServices = services.filter((s) => isStale(s.lastDeployedAt))
   const orphanServices = services.filter((s) => s.teamId === null)
@@ -61,6 +67,21 @@ function DashboardPage() {
   return (
     <AppLayout title="Dashboard" description="Architecture health overview">
       <div className="space-y-4">
+        {truncated && !bannerDismissed && !isLoading && !error && (
+          <Alert className="mb-4">
+            <AlertDescription className="flex items-center justify-between gap-4">
+              <span>
+                Showing the first {servicesPage?.items.length} of {totalServices} services — health
+                metrics below reflect only the services shown.
+              </span>
+              <Button variant="ghost" size="icon-sm" onClick={() => setBannerDismissed(true)}>
+                <X className="size-3.5" />
+                <span className="sr-only">Dismiss</span>
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Health overview panel — health score primary, secondary metrics compact strip */}
         {isLoading ? (
           <Skeleton className="h-44 w-full rounded-xl" />
@@ -146,6 +167,7 @@ function DashboardPage() {
                 value={String(totalTeams)}
                 label="teams"
                 sub={`${orphanServices.length} unowned`}
+                error={teamsError}
               />
             </div>
           </Card>
@@ -272,12 +294,14 @@ function StatStrip({
   label,
   sub,
   valueClass,
+  error,
 }: {
   icon: React.ReactNode
   value: string
   label: string
   sub: string
   valueClass?: string
+  error?: unknown
 }) {
   return (
     <div className="flex items-center gap-3 px-5 py-3">
@@ -286,6 +310,7 @@ function StatStrip({
         <div className="flex items-baseline gap-1">
           <span className={cn('text-base font-semibold tabular-nums', valueClass)}>{value}</span>
           <span className="text-xs text-muted-foreground">{label}</span>
+          {error ? <InlineQueryError error={error} /> : null}
         </div>
         <p className="truncate text-xs text-muted-foreground">{sub}</p>
       </div>

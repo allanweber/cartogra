@@ -6,6 +6,7 @@ import { z } from 'zod'
 
 import { useDebounce } from '#/hooks/useDebounce'
 import { AppLayout } from '#/components/AppLayout'
+import { InlineQueryError } from '#/components/InlineQueryError'
 import { RegisterServiceDrawer } from '#/components/RegisterServiceDrawer'
 import { RiskScoreBadge } from '#/components/RiskScoreBadge'
 import { TierBadge } from '#/components/TierBadge'
@@ -149,12 +150,12 @@ function CatalogPage() {
     },
   })
 
-  const { data: teamsPage } = useQuery({
+  const { data: teamsPage, error: teamsError } = useQuery({
     queryKey: ['teams'],
     queryFn: () => apiFetch<PageResult<RegistryTeam>>('/v1/registry/teams?limit=200'),
   })
 
-  const { data: techStacks } = useQuery({
+  const { data: techStacks, error: techStacksError } = useQuery({
     queryKey: ['tech-stacks'],
     queryFn: () => apiFetch<string[]>('/v1/registry/services/tech-stacks'),
   })
@@ -227,8 +228,9 @@ function CatalogPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="max-h-96 w-64 overflow-y-auto">
-              <p className="px-2 pb-1 pt-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="flex items-center gap-1.5 px-2 pb-1 pt-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Team
+                {teamsError && <InlineQueryError error={teamsError} />}
               </p>
               {/* Capped independently of the panel's own scroll region so a large team
                   list can't push the Source/Tech stack sections out of easy reach. */}
@@ -272,8 +274,9 @@ function CatalogPage() {
                   {opt.label}
                 </DropdownMenuItem>
               ))}
-              <p className="mt-1 border-t border-border px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="mt-1 flex items-center gap-1.5 border-t border-border px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Tech stack
+                {techStacksError && <InlineQueryError error={techStacksError} />}
               </p>
               {(techStacks ?? []).map((tech) => (
                 <DropdownMenuItem

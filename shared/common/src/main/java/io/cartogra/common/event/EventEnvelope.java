@@ -10,7 +10,8 @@ public record EventEnvelope<P>(
     public static <P> EventEnvelope<P> of(String eventType, UUID entityId, UUID tenantId, int version, P payload) {
         Instant now = Instant.now();
         return new EventEnvelope<>(
-                UuidV5.fromNames(eventType, entityId.toString(), now.toString()),
+                UuidV5.fromNames(eventType, entityId.toString(), tenantId.toString(),
+                        String.valueOf(version), String.valueOf(payload)),
                 eventType, entityId, tenantId, now, version, UUID.randomUUID(), payload);
     }
 }

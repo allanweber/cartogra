@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Route } from '#/routes/_authenticated/settings.connections'
+import { TooltipProvider } from '#/components/ui/tooltip'
 import { apiFetch } from '#/lib/api'
 import type { PageResult, TenantInfo } from '#/lib/registry-types'
 import type { ScmConnection } from '#/components/ScmConnectionDialog'
@@ -98,7 +99,9 @@ function renderPage() {
   const Page = (Route as any).component
   return render(
     <QueryClientProvider client={client}>
-      <Page />
+      <TooltipProvider>
+        <Page />
+      </TooltipProvider>
     </QueryClientProvider>,
   )
 }
@@ -230,5 +233,47 @@ describe('ConnectionsPage', () => {
     renderPage()
     expect(await screen.findByText(/Failed to load connections/i)).toBeInTheDocument()
     expect(await screen.findByText(/abc123traceid/)).toBeInTheDocument()
+  })
+
+  it('shows an inline error next to the section heading when the counts-by-connection query fails', async () => {
+    const { ApiError } = await import('#/lib/api')
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path.includes('/auth/tenant')) return Promise.resolve(MOCK_TENANT)
+      if (path.includes('k8s')) return Promise.resolve(EMPTY_CLUSTERS)
+      if (path.includes('counts-by-connection')) {
+        return Promise.reject(new ApiError('SERVER_ERROR', 'counts unavailable', 'trace-counts-1'))
+      }
+      return Promise.resolve(EMPTY_CONNECTIONS)
+    })
+    renderPage()
+    expect(await screen.findByLabelText(/counts unavailable.*trace-counts-1/i)).toBeInTheDocument()
+  })
+
+  it('shows an inline error next to the Kubernetes row when the clusters query fails', async () => {
+    const { ApiError } = await import('#/lib/api')
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path.includes('/auth/tenant')) return Promise.resolve(MOCK_TENANT)
+      if (path.includes('k8s')) {
+        return Promise.reject(new ApiError('SERVER_ERROR', 'clusters unavailable', 'trace-clusters-1'))
+      }
+      if (path.includes('counts-by-connection')) return Promise.resolve({ counts: {} })
+      return Promise.resolve(EMPTY_CONNECTIONS)
+    })
+    renderPage()
+    expect(await screen.findByLabelText(/clusters unavailable.*trace-clusters-1/i)).toBeInTheDocument()
+  })
+
+  it('shows an inline error next to the section heading when the tenant query fails', async () => {
+    const { ApiError } = await import('#/lib/api')
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path.includes('/auth/tenant')) {
+        return Promise.reject(new ApiError('SERVER_ERROR', 'tenant unavailable', 'trace-tenant-1'))
+      }
+      if (path.includes('k8s')) return Promise.resolve(EMPTY_CLUSTERS)
+      if (path.includes('counts-by-connection')) return Promise.resolve({ counts: {} })
+      return Promise.resolve(EMPTY_CONNECTIONS)
+    })
+    renderPage()
+    expect(await screen.findByLabelText(/tenant unavailable.*trace-tenant-1/i)).toBeInTheDocument()
   })
 })

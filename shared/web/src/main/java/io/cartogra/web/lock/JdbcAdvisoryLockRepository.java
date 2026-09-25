@@ -1,9 +1,7 @@
-package io.cartogra.topology.infrastructure.jdbc;
+package io.cartogra.web.lock;
 
-import io.cartogra.topology.repository.AdvisoryLockRepository;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.datasource.DataSourceUtils;
-import org.springframework.stereotype.Repository;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
@@ -11,7 +9,12 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
-@Repository
+/**
+ * Not a {@code @Component}: cross-module component scanning isn't reliable across service
+ * boundaries (each service's {@code @SpringBootApplication} only scans its own package). Each
+ * consuming service registers this explicitly via a {@code @Bean} factory method — see
+ * {@code LockConfig} in that service's {@code config} package.
+ */
 public class JdbcAdvisoryLockRepository implements AdvisoryLockRepository {
 
     // pg_try_advisory_lock/pg_advisory_unlock are session-scoped: acquire and release must run on the

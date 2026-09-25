@@ -1,9 +1,9 @@
 package io.cartogra.registry.domain;
 
 import io.cartogra.registry.infrastructure.http.ServiceHealthChecker;
-import io.cartogra.registry.repository.AdvisoryLockRepository;
 import io.cartogra.registry.repository.ServiceHistoryRepository;
 import io.cartogra.registry.repository.ServiceRepository;
+import io.cartogra.web.lock.AdvisoryLockRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

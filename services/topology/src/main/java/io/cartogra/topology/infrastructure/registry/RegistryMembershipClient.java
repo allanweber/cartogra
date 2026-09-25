@@ -6,10 +6,12 @@ import io.cartogra.web.client.TraceparentRequestInterceptor;
 import io.github.resilience4j.retry.Retry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import java.net.http.HttpClient;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -30,8 +32,14 @@ public class RegistryMembershipClient {
 
     public RegistryMembershipClient(RegistryClientProperties props,
             TraceparentRequestInterceptor traceparentRequestInterceptor) {
+        var httpClient = HttpClient.newBuilder()
+                .connectTimeout(props.timeout())
+                .build();
+        var factory = new JdkClientHttpRequestFactory(httpClient);
+        factory.setReadTimeout(props.timeout());
         this.restClient = RestClient.builder()
                 .baseUrl(props.baseUrl())
+                .requestFactory(factory)
                 .requestInterceptor(traceparentRequestInterceptor)
                 .build();
         this.retry = ServiceCallRetry.threeAttempts("registry-membership-check", log);

@@ -2,11 +2,11 @@ package io.cartogra.registry.domain;
 
 import io.cartogra.common.api.PageResult;
 import io.cartogra.registry.infrastructure.kafka.TeamLifecycleEventProducer;
-import io.cartogra.registry.repository.AdvisoryLockRepository;
 import io.cartogra.registry.repository.TeamRepository;
 import io.cartogra.registry.domain.exception.DuplicateTeamNameException;
 import io.cartogra.registry.domain.exception.PlanLimitExceededException;
 import io.cartogra.registry.domain.exception.TeamNotFoundException;
+import io.cartogra.web.lock.AdvisoryLockRepository;
 import org.jspecify.annotations.Nullable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;

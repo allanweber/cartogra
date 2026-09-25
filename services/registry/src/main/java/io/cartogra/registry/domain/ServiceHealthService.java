@@ -2,9 +2,9 @@ package io.cartogra.registry.domain;
 
 import io.cartogra.common.identity.SystemActors;
 import io.cartogra.registry.infrastructure.http.ServiceHealthChecker;
-import io.cartogra.registry.repository.AdvisoryLockRepository;
 import io.cartogra.registry.repository.ServiceHistoryRepository;
 import io.cartogra.registry.repository.ServiceRepository;
+import io.cartogra.web.lock.AdvisoryLockRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.core.JacksonException;
