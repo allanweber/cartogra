@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Activity, AlertTriangle, ArrowRight, Clock, Server, Users, X } from 'lucide-react'
 
 import { AppLayout } from '#/components/AppLayout'
+import { InlineQueryError } from '#/components/InlineQueryError'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
@@ -38,7 +39,7 @@ function DashboardPage() {
     queryFn: () => apiFetch<PageResult<RegistryService>>('/v1/registry/services?limit=200'),
   })
 
-  const { data: teamsPage } = useQuery({
+  const { data: teamsPage, error: teamsError } = useQuery({
     queryKey: ['teams', 'count'],
     queryFn: () => apiFetch<PageResult<RegistryTeam>>('/v1/registry/teams?limit=1'),
   })
@@ -166,6 +167,7 @@ function DashboardPage() {
                 value={String(totalTeams)}
                 label="teams"
                 sub={`${orphanServices.length} unowned`}
+                error={teamsError}
               />
             </div>
           </Card>
@@ -292,12 +294,14 @@ function StatStrip({
   label,
   sub,
   valueClass,
+  error,
 }: {
   icon: React.ReactNode
   value: string
   label: string
   sub: string
   valueClass?: string
+  error?: unknown
 }) {
   return (
     <div className="flex items-center gap-3 px-5 py-3">
@@ -306,6 +310,7 @@ function StatStrip({
         <div className="flex items-baseline gap-1">
           <span className={cn('text-base font-semibold tabular-nums', valueClass)}>{value}</span>
           <span className="text-xs text-muted-foreground">{label}</span>
+          {error ? <InlineQueryError error={error} /> : null}
         </div>
         <p className="truncate text-xs text-muted-foreground">{sub}</p>
       </div>

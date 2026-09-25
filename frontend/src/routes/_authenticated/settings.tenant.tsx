@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 
+import { InlineQueryError } from '#/components/InlineQueryError'
 import { SettingsTabsLayout } from '#/components/SettingsTabsLayout'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Badge } from '#/components/ui/badge'
@@ -117,6 +118,7 @@ function TenantPage() {
                     servicesUsage.data?.total,
                     data.plan.maxServices,
                   )}
+                  {servicesUsage.error && <InlineQueryError error={servicesUsage.error} />}
                 </dd>
               </div>
               <div className="rounded-lg bg-muted/50 px-4 py-3">
@@ -140,6 +142,7 @@ function TenantPage() {
                     scmConnectionsUsage.data?.total,
                     data.plan.maxScmConnections,
                   )}
+                  {scmConnectionsUsage.error && <InlineQueryError error={scmConnectionsUsage.error} />}
                 </dd>
               </div>
               <div className="rounded-lg bg-muted/50 px-4 py-3">
@@ -149,6 +152,7 @@ function TenantPage() {
                     k8sClustersUsage.data?.total,
                     data.plan.maxK8sClusters,
                   )}
+                  {k8sClustersUsage.error && <InlineQueryError error={k8sClustersUsage.error} />}
                 </dd>
               </div>
               <div className="rounded-lg bg-muted/50 px-4 py-3">

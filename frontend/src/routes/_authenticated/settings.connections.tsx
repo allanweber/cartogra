@@ -3,6 +3,7 @@ import { Activity, Cloud, Hexagon, RotateCw, Server } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
+import { InlineQueryError } from '#/components/InlineQueryError'
 import type { KubernetesCluster } from '#/components/KubernetesClusterDialog'
 import { KubernetesClusterDialog } from '#/components/KubernetesClusterDialog'
 import type { ScmConnection } from '#/components/ScmConnectionDialog'
@@ -104,19 +105,19 @@ function ConnectionsPage() {
     },
   })
 
-  const { data: countsData } = useQuery({
+  const { data: countsData, error: countsError } = useQuery({
     queryKey: ['services-counts-by-connection'],
     queryFn: () => apiFetch<{ counts: Record<string, number> }>('/v1/registry/services/counts-by-connection'),
   })
 
-  const { data: clustersData } = useQuery({
+  const { data: clustersData, error: clustersError } = useQuery({
     queryKey: ['k8s-clusters'],
     queryFn: () => apiFetch<PageResult<KubernetesCluster>>('/v1/ingestion/k8s/clusters'),
     refetchInterval: (query) =>
       query.state.data?.items.some((c) => c.status === 'CONNECTING') ? 2000 : false,
   })
 
-  const { data: tenantData } = useQuery({
+  const { data: tenantData, error: tenantError } = useQuery({
     queryKey: ['tenant-info'],
     queryFn: () => apiFetch<TenantInfo>('/auth/tenant'),
   })
@@ -157,7 +158,11 @@ function ConnectionsPage() {
       <div className="space-y-2">
         <div className="mb-1 flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-sm font-semibold">SCM & Platform Connections</h2>
+            <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+              SCM & Platform Connections
+              {countsError && <InlineQueryError error={countsError} />}
+              {tenantError && <InlineQueryError error={tenantError} />}
+            </h2>
             <p className="text-xs text-muted-foreground">
               Connect your source control and infrastructure providers to start syncing services.
             </p>
@@ -226,7 +231,10 @@ function ConnectionsPage() {
                         {p.icon}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">{p.label}</p>
+                        <p className="flex items-center gap-1.5 text-sm font-medium">
+                          {p.label}
+                          {clustersError && <InlineQueryError error={clustersError} />}
+                        </p>
                         {clusterCount > 0 ? (
                           <p className="text-xs text-muted-foreground truncate">
                             {clusterCount} cluster{clusterCount !== 1 ? 's' : ''} registered

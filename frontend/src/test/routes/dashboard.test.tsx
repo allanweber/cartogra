@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Route } from '#/routes/_authenticated/dashboard'
+import { TooltipProvider } from '#/components/ui/tooltip'
 import { apiFetch, ApiError } from '#/lib/api'
 
 import type { PageResult, RegistryService } from '#/lib/registry-types'
@@ -70,7 +71,9 @@ function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <Page />
+      <TooltipProvider>
+        <Page />
+      </TooltipProvider>
     </QueryClientProvider>,
   )
 }
@@ -167,5 +170,18 @@ describe('DashboardPage', () => {
 
     await screen.findByText(/2 of 2 services healthy/)
     expect(screen.queryByText(/showing the first/i)).not.toBeInTheDocument()
+  })
+
+  it('shows an inline error on the teams stat when the teams query fails but services succeeds', async () => {
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path.includes('/registry/teams')) {
+        return Promise.reject(new ApiError('SERVER_ERROR', 'teams unavailable', 'trace-teams-1'))
+      }
+      const page: PageResult<RegistryService> = { items: [], total: 0, limit: 200, offset: 0 }
+      return Promise.resolve(page)
+    })
+    renderPage()
+
+    expect(await screen.findByLabelText(/teams unavailable.*trace-teams-1/i)).toBeInTheDocument()
   })
 })
