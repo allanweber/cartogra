@@ -1,4 +1,4 @@
-package io.cartogra.topology.repository;
+package io.cartogra.web.lock;
 
 public interface AdvisoryLockRepository {
     boolean tryAcquireLock(long key);

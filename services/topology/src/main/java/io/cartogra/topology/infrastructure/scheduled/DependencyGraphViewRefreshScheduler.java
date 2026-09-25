@@ -1,7 +1,7 @@
 package io.cartogra.topology.infrastructure.scheduled;
 
-import io.cartogra.topology.repository.AdvisoryLockRepository;
 import io.cartogra.topology.repository.DependencyGraphViewRepository;
+import io.cartogra.web.lock.AdvisoryLockRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;

@@ -5,6 +5,7 @@ plugins {
 dependencies {
     api(project(":shared:common"))
     api("org.springframework:spring-web")
+    api("org.springframework:spring-jdbc")
     api("org.springframework.security:spring-security-core")
     api("io.opentelemetry:opentelemetry-api")
     api("io.github.resilience4j:resilience4j-retry:2.3.0")
