@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Route } from '#/routes/_authenticated/dashboard'
@@ -137,5 +137,35 @@ describe('DashboardPage', () => {
     renderPage()
 
     expect(await screen.findByText('No stale services.')).toBeInTheDocument()
+  })
+
+  it('shows a truncation banner when total exceeds the fetched page', async () => {
+    const page: PageResult<RegistryService> = {
+      items: [makeService({ id: 's1' }), makeService({ id: 's2' })],
+      total: 250,
+      limit: 200,
+      offset: 0,
+    }
+    vi.mocked(apiFetch).mockResolvedValue(page)
+    renderPage()
+
+    expect(await screen.findByText(/showing the first/i)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /dismiss/i }))
+    expect(screen.queryByText(/showing the first/i)).not.toBeInTheDocument()
+  })
+
+  it('does not show a truncation banner when total equals the fetched page', async () => {
+    const page: PageResult<RegistryService> = {
+      items: [makeService({ id: 's1' }), makeService({ id: 's2' })],
+      total: 2,
+      limit: 200,
+      offset: 0,
+    }
+    vi.mocked(apiFetch).mockResolvedValue(page)
+    renderPage()
+
+    await screen.findByText(/2 of 2 services healthy/)
+    expect(screen.queryByText(/showing the first/i)).not.toBeInTheDocument()
   })
 })
