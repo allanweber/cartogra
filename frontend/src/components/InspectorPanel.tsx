@@ -146,7 +146,7 @@ function BlastRadiusTab({
   }
 
   return (
-    <ScrollArea className="max-h-[calc(100vh-420px)] min-h-[240px]">
+    <ScrollArea className="h-full">
       <div className="space-y-5 pr-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
@@ -199,13 +199,17 @@ export function InspectorPanel({
   const teamName = teamMap.get(node.teamId ?? '') ?? null
 
   return (
-    <Card>
-      <CardHeader className="pb-2 pt-5">
+    <Card className="h-full">
+      <CardHeader className="shrink-0 pb-2 pt-5">
         <CardTitle className="text-sm font-semibold">{node.name}</CardTitle>
       </CardHeader>
-      <CardContent className="pb-3 pt-0">
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'details' | 'blast-radius')}>
-          <TabsList>
+      <CardContent className="flex min-h-0 flex-1 flex-col pb-3 pt-0">
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => setActiveTab(value as 'details' | 'blast-radius')}
+          className="h-full min-h-0"
+        >
+          <TabsList className="shrink-0">
             <TabsTrigger value="details">Details</TabsTrigger>
             <TabsTrigger value="blast-radius">Blast Radius</TabsTrigger>
           </TabsList>
@@ -225,7 +229,7 @@ export function InspectorPanel({
               <p>{teamName ?? 'Unassigned'}</p>
             </div>
           </TabsContent>
-          <TabsContent value="blast-radius" className="pt-3">
+          <TabsContent value="blast-radius" className="min-h-0 pt-3">
             <BlastRadiusTab
               blastRadius={blastRadius}
               isLoading={isBlastRadiusLoading}
@@ -235,7 +239,7 @@ export function InspectorPanel({
           </TabsContent>
         </Tabs>
       </CardContent>
-      <CardFooter className="pt-0">
+      <CardFooter className="shrink-0">
         <Link to="/catalog/$serviceId" params={{ serviceId: node.serviceId }} className="text-sm text-primary hover:underline">
           View in catalog →
         </Link>

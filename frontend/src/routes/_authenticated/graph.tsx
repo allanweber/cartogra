@@ -107,7 +107,7 @@ function GraphPage() {
       title="Graph"
       description="A dependency map for blast radius, single points of failure, and drift visibility."
     >
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+      <div className="mb-4 flex shrink-0 flex-wrap items-center gap-3">
         <ToggleGroup
           type="single"
           value={type}
@@ -140,7 +140,7 @@ function GraphPage() {
       </div>
 
       {type === 'OBSERVED' && (
-        <Alert className="mb-4">
+        <Alert className="mb-4 shrink-0">
           <AlertDescription>
             Observed dependencies aren&apos;t collected yet — this view will populate once span data lands in
             Phase 3.
@@ -149,7 +149,7 @@ function GraphPage() {
       )}
 
       {graph?.truncated && !bannerDismissed && (
-        <Alert className="mb-4">
+        <Alert className="mb-4 shrink-0">
           <AlertDescription className="flex items-center justify-between gap-4">
             <span>This graph has been truncated — not every service is shown.</span>
             <Button variant="ghost" size="icon-sm" onClick={() => setBannerDismissed(true)}>
@@ -190,8 +190,8 @@ function GraphPage() {
       )}
 
       {!isLoading && graph && graph.nodes.length > 0 && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
-          <div className="h-[calc(100vh-260px)] min-h-[480px] rounded-xl border border-border bg-card">
+        <div className="grid min-h-[480px] flex-1 grid-cols-1 grid-rows-1 gap-4 lg:grid-cols-[1fr_320px]">
+          <div className="h-full min-h-0 rounded-xl border border-border bg-card">
             <DependencyGraph
               graph={graph}
               selectedServiceId={selectedServiceId}
@@ -200,7 +200,7 @@ function GraphPage() {
             />
           </div>
 
-          <div className="space-y-4">
+          <div className="h-full min-h-0">
             {selectedNode ? (
               <InspectorPanel
                 key={selectedNode.serviceId}
@@ -211,8 +211,8 @@ function GraphPage() {
                 blastRadiusError={blastRadiusError}
               />
             ) : (
-              <Card className="border-dashed">
-                <CardContent className="py-8 text-center text-sm text-muted-foreground">
+              <Card className="h-full border-dashed">
+                <CardContent className="flex h-full items-center justify-center py-8 text-center text-sm text-muted-foreground">
                   Select a node to see its details.
                 </CardContent>
               </Card>
