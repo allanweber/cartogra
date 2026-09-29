@@ -8,6 +8,10 @@
 
 ## 1. Where we actually are
 
+<details>
+
+<summary>Open</summary>
+
 Measured, not claimed:
 
 | Area | State | Evidence |
@@ -27,8 +31,13 @@ Phases 0+1 (gateway + registry + ingestion + auth/catalog UI) cost roughly 10 we
 **Product position:** the catalog half of the product works. The differentiator — dependency intelligence — has schema and nothing else. Everything in this roadmap is ordered to close that gap first, because a catalog without a graph is a spreadsheet with OAuth.
 
 ---
+</details>
 
 ## 2. Rules this roadmap follows
+
+<details>
+
+<summary>Open</summary>
 
 The old checklist broke each of these; that is why it stopped being usable.
 
@@ -63,8 +72,14 @@ The old checklist broke each of these; that is why it stopped being usable.
 | `/improve-codebase-architecture` | External (mattpocock), pinned version in `CONTRIBUTING.md` — run before use |
 
 ---
+</details>
+
 
 ## 3. Phase 0 — Make the repo honest (≈1 week)
+
+<details>
+
+<summary>Open</summary>
 
 No user-facing value. It exists because the next phases are unverifiable without it.
 
@@ -102,8 +117,13 @@ No user-facing value. It exists because the next phases are unverifiable without
 - Deleting ADRs breaks more than docs: 40 dangling references and public posts pointing at files that no longer exist. (short post)
 
 ---
+</details>
 
 ## 4. Phase 1 — See the map (≈4 weeks)
+
+<details>
+
+<summary>Open</summary>
 
 **Goal:** a user can express and see how their services connect. This is the first time Cartogra does something a catalog cannot.
 
@@ -141,8 +161,12 @@ No user-facing value. It exists because the next phases are unverifiable without
 - A force-directed graph in plain D3, and why we did not reach for Cytoscape. (short post + clip)
 
 ---
+</details>
 
 ## 5. Phase 2 — Answer impact questions (≈4 weeks)
+<details>
+
+<summary>Open</summary>
 
 **Goal:** the graph stops being a picture and starts making decisions. This is the "seconds, not hours" promise in `PRODUCT.md`.
 
@@ -179,8 +203,13 @@ No user-facing value. It exists because the next phases are unverifiable without
 - 60-second clip: click a service, see what breaks. (video)
 
 ---
+</details>
 
 ## 6. Phase 3 — The map maintains itself (≈5 weeks)
+
+<details>
+
+<summary>Open</summary>
 
 **Goal:** remove manual upkeep — the reason internal service catalogs die.
 
@@ -214,7 +243,13 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 ---
 
+</details>
+
 ## 7. Phase 4 — A product a stranger can try (≈4 weeks)
+
+<details>
+
+<summary>Open</summary>
 
 **Goal:** the first public artifact. Moved forward from the old plan's Phase 5 — nothing is validated until someone outside can click it.
 
@@ -251,7 +286,13 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 ---
 
+</details>
+
 ## 8. Phase 5 — Change safety: contracts (≈7 weeks)
+
+<details>
+
+<summary>Open</summary>
 
 **Goal:** the second product pillar — catch breaking API changes before merge. Start with the smallest loop that a CI pipeline can block on.
 
@@ -293,7 +334,13 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 ---
 
+</details>
+
 ## 9. Phase 6 — Intelligence (≈5 weeks)
+
+<details>
+
+<summary>Open</summary>
 
 **Goal:** explanation on top of evidence. Deliberately after Phases 1–5, because an LLM narrating an empty graph is a demo, not a product.
 
@@ -334,7 +381,13 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 ---
 
+</details>
+
 ## 10. Phase 7 — Production hardening (≈5 weeks)
+
+<details>
+
+<summary>Open</summary>
 
 Triggered by real users, not by a calendar. Before this, Phase 4's single host is enough.
 
@@ -374,7 +427,13 @@ Triggered by real users, not by a calendar. Before this, Phase 4's single host i
 
 ---
 
+<details>
+
 ## 11. Phase 8 — Commercial (only when someone wants to pay)
+
+<details>
+
+<summary>Open</summary>
 
 Partially built already: `billing_plans` (V010/V013), `tenants.plan_id` (V011), `PlanLimitService`, and the plan-limit advisory lock exist.
 
@@ -426,7 +485,13 @@ Moved out of the old Phase 3 because none of it tests the product hypothesis, an
 
 ---
 
+<details>
+
 ## 13. Sequencing at a glance
+
+<details>
+
+<summary>Open</summary>
 
 ```
 P0 repo truth  →  P1 see the map  →  P2 answer impact  →  P3 self-maintaining
@@ -443,3 +508,5 @@ P0 repo truth  →  P1 see the map  →  P2 answer impact  →  P3 self-maintain
 Cumulative: **P0–P4 ≈ 18 weeks** to a public, self-maintaining dependency map with an audit trail — the smallest thing that is recognisably Cartogra rather than a catalog. P5 adds the contract pillar, P6 the intelligence pillar.
 
 Estimates assume one developer at the June–July pace (~30 commits/month). At August's pace they are meaningless — if the gap persists, cut Phase 3 to 3.1+3.2 and Phase 5 to 5.1–5.3 rather than stretching every phase.
+
+<details>
