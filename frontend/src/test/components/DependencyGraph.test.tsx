@@ -1,7 +1,15 @@
 import { render } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { DependencyGraph, nodeAppearance, type SimNode } from '#/components/DependencyGraph'
+import {
+  DependencyGraph,
+  highlightRingAppearance,
+  linkOpacity,
+  nodeAppearance,
+  nodeOpacity,
+  type BlastRadiusHighlightMap,
+  type SimNode,
+} from '#/components/DependencyGraph'
 
 import type { Graph } from '#/lib/topology-types'
 
@@ -48,6 +56,87 @@ describe('nodeAppearance', () => {
     expect(appearance.strokeWidth).toBe(3)
     expect(appearance.strokeDasharray).toBeNull()
     expect(appearance.glyph).toBe('!')
+  })
+})
+
+describe('highlightRingAppearance', () => {
+  const map: BlastRadiusHighlightMap = new Map([
+    ['s2', 'upstream'],
+    ['s3', 'downstream'],
+  ])
+
+  it('gives the selected node the ring color regardless of the highlight map', () => {
+    expect(highlightRingAppearance('s1', 's1', map)).toEqual({ stroke: 'var(--ring)', strokeWidth: 3 })
+  })
+
+  it('gives an upstream node the upstream color', () => {
+    expect(highlightRingAppearance('s2', 's1', map)).toEqual({
+      stroke: 'var(--color-blast-upstream)',
+      strokeWidth: 2.5,
+    })
+  })
+
+  it('gives a downstream node the downstream color', () => {
+    expect(highlightRingAppearance('s3', 's1', map)).toEqual({
+      stroke: 'var(--color-blast-downstream)',
+      strokeWidth: 2.5,
+    })
+  })
+
+  it('returns null for a node in neither the map nor selected', () => {
+    expect(highlightRingAppearance('s4', 's1', map)).toBeNull()
+  })
+
+  it('returns null when the map is null (loading or no selection)', () => {
+    expect(highlightRingAppearance('s2', 's1', null)).toBeNull()
+  })
+})
+
+describe('nodeOpacity', () => {
+  const map: BlastRadiusHighlightMap = new Map([['s2', 'upstream']])
+
+  it('is full opacity when nothing is selected', () => {
+    expect(nodeOpacity('s5', null, map)).toBe(1)
+  })
+
+  it('is full opacity while the highlight map is still loading (null)', () => {
+    expect(nodeOpacity('s5', 's1', null)).toBe(1)
+  })
+
+  it('is full opacity for the selected node', () => {
+    expect(nodeOpacity('s1', 's1', map)).toBe(1)
+  })
+
+  it('is full opacity for a node in the highlight map', () => {
+    expect(nodeOpacity('s2', 's1', map)).toBe(1)
+  })
+
+  it('dims a node outside the selection and the highlight map', () => {
+    expect(nodeOpacity('s9', 's1', map)).toBe(0.15)
+  })
+})
+
+describe('linkOpacity', () => {
+  const map: BlastRadiusHighlightMap = new Map([['s2', 'upstream']])
+
+  it('is full opacity when nothing is selected', () => {
+    expect(linkOpacity('s9', 's8', null, map)).toBe(1)
+  })
+
+  it('is full opacity while the highlight map is still loading (null)', () => {
+    expect(linkOpacity('s9', 's8', 's1', null)).toBe(1)
+  })
+
+  it('is full opacity when either endpoint is the selected node', () => {
+    expect(linkOpacity('s1', 's9', 's1', map)).toBe(1)
+  })
+
+  it('is full opacity when either endpoint is in the highlight map', () => {
+    expect(linkOpacity('s2', 's9', 's1', map)).toBe(1)
+  })
+
+  it('dims a link with neither endpoint involved', () => {
+    expect(linkOpacity('s8', 's9', 's1', map)).toBe(0.1)
   })
 })
 

@@ -60,3 +60,29 @@ export interface DeclareDependencyRequest {
   protocol: DependencyProtocol
   metadata: string | null
 }
+
+export type BlastRadiusDirection = 'UPSTREAM' | 'DOWNSTREAM'
+
+export interface BlastRadiusEntry {
+  serviceId: string
+  name: string
+  teamId: string | null
+  tier: ServiceTierValue | null
+  healthStatus: ServiceHealthStatus
+  distance: number
+}
+
+export interface BlastRadiusDirectionResult {
+  entries: BlastRadiusEntry[]
+  depthTruncated: boolean
+  nodesBeyondDepth: number
+  nodeCapTruncated: boolean
+  nodesBeyondCap: number
+}
+
+export interface BlastRadius {
+  serviceId: string
+  upstream: BlastRadiusDirectionResult
+  downstream: BlastRadiusDirectionResult
+  maxDepth: number
+}

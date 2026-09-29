@@ -6,17 +6,18 @@ import { z } from 'zod'
 
 import { AppLayout } from '#/components/AppLayout'
 import { DependencyGraph } from '#/components/DependencyGraph'
+import { InspectorPanel } from '#/components/InspectorPanel'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
+import { Card, CardContent } from '#/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#/components/ui/select'
 import { Skeleton } from '#/components/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
 import { ApiError, apiFetch } from '#/lib/api'
-import { normalizeHealth } from '#/lib/registry-types'
 
+import type { BlastRadiusHighlightMap } from '#/components/DependencyGraph'
 import type { PageResult, RegistryTeam } from '#/lib/registry-types'
-import type { DependencyType, Graph, GraphEdge, GraphNode } from '#/lib/topology-types'
+import type { BlastRadius, DependencyType, Graph, GraphNode } from '#/lib/topology-types'
 
 const graphSearchSchema = z.object({
   service: z.string().optional(),
@@ -30,25 +31,6 @@ export const Route = createFileRoute('/_authenticated/graph')({
 })
 
 const ALL_TEAMS = 'ALL'
-
-/**
- * A→B and B→A between the same pair are distinct declared-dependency rows (the DB's
- * uniqueness constraint is directional), so a reciprocal edge would otherwise list the same
- * neighbor twice with an identical protocol badge. Collapse to one row per (neighbor, protocol).
- */
-function dedupeNeighbors(
-  entries: { node: GraphNode; edge: GraphEdge }[],
-): { node: GraphNode; edge: GraphEdge }[] {
-  const seen = new Set<string>()
-  const result: { node: GraphNode; edge: GraphEdge }[] = []
-  for (const entry of entries) {
-    const key = `${entry.node.serviceId}|${entry.edge.protocol}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    result.push(entry)
-  }
-  return result
-}
 
 function GraphPage() {
   const search = Route.useSearch()
@@ -74,6 +56,8 @@ function GraphPage() {
     queryFn: () => apiFetch<PageResult<RegistryTeam>>('/v1/registry/teams?limit=200'),
   })
 
+  const teamMap = useMemo(() => new Map((teamsPage?.items ?? []).map((t) => [t.id, t.name])), [teamsPage])
+
   const { data: graph, isLoading, error } = useQuery({
     queryKey: ['graph', type, teamId],
     queryFn: () => {
@@ -95,18 +79,28 @@ function GraphPage() {
   }, [graph])
 
   const selectedNode = selectedServiceId ? (nodesById.get(selectedServiceId) ?? null) : null
-  const neighbors: { node: GraphNode; edge: GraphEdge }[] =
-    selectedNode && graph
-      ? dedupeNeighbors(
-          graph.edges
-            .filter((edge) => edge.source === selectedNode.serviceId || edge.target === selectedNode.serviceId)
-            .map((edge) => ({
-              node: nodesById.get(edge.source === selectedNode.serviceId ? edge.target : edge.source),
-              edge,
-            }))
-            .filter((entry): entry is { node: GraphNode; edge: GraphEdge } => !!entry.node),
-        )
-      : []
+
+  const {
+    data: blastRadius,
+    isLoading: isBlastRadiusLoading,
+    error: blastRadiusError,
+  } = useQuery({
+    queryKey: ['blast-radius', selectedServiceId],
+    queryFn: () => apiFetch<BlastRadius>(`/v1/topology/blast-radius/${selectedServiceId}`),
+    enabled: !!selectedServiceId,
+    staleTime: 0,
+  })
+
+  const blastRadiusHighlight = useMemo<BlastRadiusHighlightMap | null>(() => {
+    if (!blastRadius) return null
+    const map: BlastRadiusHighlightMap = new Map()
+    blastRadius.upstream.entries.forEach((e) => map.set(e.serviceId, 'upstream'))
+    // Downstream wins on the canvas if a node is both (grilled and confirmed) — the panel's
+    // two sections independently show both, so the cycle fact isn't hidden, only the
+    // single-ring canvas summary picks one.
+    blastRadius.downstream.entries.forEach((e) => map.set(e.serviceId, 'downstream'))
+    return map
+  }, [blastRadius])
 
   return (
     <AppLayout
@@ -198,61 +192,24 @@ function GraphPage() {
       {!isLoading && graph && graph.nodes.length > 0 && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
           <div className="h-[calc(100vh-260px)] min-h-[480px] rounded-xl border border-border bg-card">
-            <DependencyGraph graph={graph} selectedServiceId={selectedServiceId} onSelectNode={setSelectedServiceId} />
+            <DependencyGraph
+              graph={graph}
+              selectedServiceId={selectedServiceId}
+              onSelectNode={setSelectedServiceId}
+              blastRadiusHighlight={blastRadiusHighlight}
+            />
           </div>
 
           <div className="space-y-4">
             {selectedNode ? (
-              <Card>
-                <CardHeader className="pb-2 pt-5">
-                  <CardTitle className="text-sm font-semibold">{selectedNode.name}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4 pb-5 pt-0 text-sm">
-                  <div className="space-y-1">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Health</p>
-                    <p className="capitalize">{normalizeHealth(selectedNode.healthStatus)}</p>
-                  </div>
-                  {selectedNode.tier && (
-                    <div className="space-y-1">
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Tier</p>
-                      <p className="capitalize">{selectedNode.tier.toLowerCase()}</p>
-                    </div>
-                  )}
-                  <div className="space-y-1">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Neighbors</p>
-                    {neighbors.length === 0 ? (
-                      <p className="text-muted-foreground">No connected services.</p>
-                    ) : (
-                      <ul className="space-y-2">
-                        {neighbors.map(({ node, edge }) => (
-                          <li key={`${node.serviceId}-${edge.protocol}`}>
-                            <div className="flex items-center gap-2">
-                              <Link
-                                to="/catalog/$serviceId"
-                                params={{ serviceId: node.serviceId }}
-                                className="text-primary hover:underline"
-                              >
-                                {node.name}
-                              </Link>
-                              <span className="rounded-md border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                                {edge.protocol}
-                              </span>
-                            </div>
-                            {edge.metadata && <p className="text-xs text-muted-foreground">{edge.metadata}</p>}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                  <Link
-                    to="/catalog/$serviceId"
-                    params={{ serviceId: selectedNode.serviceId }}
-                    className="block text-primary hover:underline"
-                  >
-                    View in catalog →
-                  </Link>
-                </CardContent>
-              </Card>
+              <InspectorPanel
+                key={selectedNode.serviceId}
+                node={selectedNode}
+                teamMap={teamMap}
+                blastRadius={blastRadius}
+                isBlastRadiusLoading={isBlastRadiusLoading}
+                blastRadiusError={blastRadiusError}
+              />
             ) : (
               <Card className="border-dashed">
                 <CardContent className="py-8 text-center text-sm text-muted-foreground">

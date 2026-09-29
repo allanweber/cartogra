@@ -85,14 +85,57 @@ function applyNodeAppearance<TParent extends BaseType>(
   nodeSelection.select<SVGTextElement>('text.graph-node-label').text((node) => nodeAppearance(node).label)
 }
 
+export type BlastRadiusHighlightMap = Map<string, 'upstream' | 'downstream'>
+
+// The one place a node's blast-radius ring color is decided — layered outside the health
+// circle (see the `graph-node-highlight-ring` element below) so health and blast-radius
+// encodings never compete for the same attribute the way a single fill color would.
+export function highlightRingAppearance(
+  serviceId: string,
+  selectedServiceId: string | null,
+  highlightMap: BlastRadiusHighlightMap | null,
+): { stroke: string; strokeWidth: number } | null {
+  if (serviceId === selectedServiceId) return { stroke: 'var(--ring)', strokeWidth: 3 }
+  const kind = highlightMap?.get(serviceId)
+  if (kind === 'upstream') return { stroke: 'var(--color-blast-upstream)', strokeWidth: 2.5 }
+  if (kind === 'downstream') return { stroke: 'var(--color-blast-downstream)', strokeWidth: 2.5 }
+  return null
+}
+
+// No dimming until blast-radius data is available (highlightMap is null while the query is
+// loading or nothing is selected) — avoids flashing a stale/incomplete highlight. The
+// selected-node ring still shows instantly on click regardless, since it only depends on
+// selectedServiceId, not the map — see highlightRingAppearance above.
+export function nodeOpacity(
+  serviceId: string,
+  selectedServiceId: string | null,
+  highlightMap: BlastRadiusHighlightMap | null,
+): number {
+  if (!selectedServiceId || !highlightMap) return 1
+  return serviceId === selectedServiceId || highlightMap.has(serviceId) ? 1 : 0.15
+}
+
+export function linkOpacity(
+  sourceId: string,
+  targetId: string,
+  selectedServiceId: string | null,
+  highlightMap: BlastRadiusHighlightMap | null,
+): number {
+  if (!selectedServiceId || !highlightMap) return 1
+  const involved = (id: string) => id === selectedServiceId || highlightMap.has(id)
+  return involved(sourceId) || involved(targetId) ? 1 : 0.1
+}
+
 export function DependencyGraph({
   graph,
   selectedServiceId,
   onSelectNode,
+  blastRadiusHighlight,
 }: {
   graph: Graph
   selectedServiceId: string | null
   onSelectNode: (serviceId: string | null) => void
+  blastRadiusHighlight?: BlastRadiusHighlightMap | null
 }) {
   const svgRef = useRef<SVGSVGElement>(null)
   const onSelectNodeRef = useRef(onSelectNode)
@@ -202,6 +245,17 @@ export function DependencyGraph({
     nodeSelection.append('circle').attr('class', 'graph-node-hit').attr('r', 22).attr('fill', 'transparent')
 
     nodeSelection.append('circle').attr('class', 'graph-node-visible').attr('r', 14).attr('stroke', 'var(--background)')
+
+    // Painted after graph-node-visible so it rings outside the health circle rather than
+    // competing with it — see highlightRingAppearance for the selected/upstream/downstream
+    // color decision applied to this element in the opacity/highlight effect below.
+    nodeSelection
+      .append('circle')
+      .attr('class', 'graph-node-highlight-ring')
+      .attr('r', 19)
+      .attr('fill', 'none')
+      .attr('stroke-width', 0)
+      .attr('pointer-events', 'none')
 
     // Non-color marker for the down state, in addition to the dashed outline for degraded below.
     nodeSelection
@@ -354,28 +408,23 @@ export function DependencyGraph({
     const svgEl = svgRef.current
     if (!svgEl) return
     const svg = select(svgEl)
-
-    if (!selectedServiceId) {
-      svg.selectAll('.graph-node').style('opacity', 1)
-      svg.selectAll('.graph-links line').style('opacity', 1)
-      return
-    }
-
-    const neighborIds = new Set<string>([selectedServiceId])
-    graph.edges.forEach((edge) => {
-      if (edge.source === selectedServiceId) neighborIds.add(edge.target)
-      if (edge.target === selectedServiceId) neighborIds.add(edge.source)
-    })
+    const highlightMap = blastRadiusHighlight ?? null
 
     svg
       .selectAll<SVGGElement, SimNode>('.graph-node')
-      .style('opacity', (node) => (neighborIds.has(node.serviceId) ? 1 : 0.15))
+      .style('opacity', (node) => nodeOpacity(node.serviceId, selectedServiceId, highlightMap))
+    svg
+      .selectAll<SVGGElement, SimNode>('.graph-node')
+      .select<SVGCircleElement>('circle.graph-node-highlight-ring')
+      .attr('stroke', (node) => highlightRingAppearance(node.serviceId, selectedServiceId, highlightMap)?.stroke ?? 'none')
+      .attr(
+        'stroke-width',
+        (node) => highlightRingAppearance(node.serviceId, selectedServiceId, highlightMap)?.strokeWidth ?? 0,
+      )
     svg
       .selectAll<SVGLineElement, SimLink>('.graph-links line')
-      .style('opacity', (link) =>
-        endpointId(link.source) === selectedServiceId || endpointId(link.target) === selectedServiceId ? 1 : 0.1,
-      )
-  }, [selectedServiceId, graph])
+      .style('opacity', (link) => linkOpacity(endpointId(link.source), endpointId(link.target), selectedServiceId, highlightMap))
+  }, [selectedServiceId, blastRadiusHighlight, graph])
 
   return (
     <svg

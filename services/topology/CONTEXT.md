@@ -17,7 +17,7 @@ Topology maintains the live dependency graph of all Services within a tenant. It
 | **Dependency** | A directional edge from a **source** Service to a **target** Service; has a type (declared/observed) and a protocol |
 | **Declared dependency** | A dependency explicitly registered by a developer (via the API or spec file) |
 | **Observed dependency** | A dependency inferred from OTel trace spans collected by the Ingestion worker (ADR-0016) |
-| **Blast radius** | The set of Services that would be affected if a given Service degraded or went down; computed via downstream graph traversal |
+| **Blast radius** | The set of Services reachable from a given Service within a bounded hop count, in both directions: `upstream` (what it depends on, forward traversal) and `downstream` (what would be affected if it degraded or went down, backward traversal) — computed via a recursive CTE over `dependency_graph_edges`. Note: this `upstream`/`downstream` pairing is the opposite of the one used by the 1-hop `/dependencies/{serviceId}` endpoint |
 | **Cycle** | A set of Services in a circular dependency chain; indicates an architectural anti-pattern |
 | **Drift** | A mismatch between declared and observed dependencies (`undeclared` = observed but not declared; `missing` = declared but not observed) |
 | **SPOF** | Single Point of Failure — a Service with no redundancy that sits on the critical path of many other Services |
@@ -63,7 +63,7 @@ Cross-context references stored as IDs only — Topology never hydrates a `Servi
 
 ## Inbound Ports (API)
 
-Implemented: backfill, dependency CRUD, graph read (`[1.1]`–`[1.3]`). Everything else below is still planned.
+Implemented: backfill, dependency CRUD, graph read (`[1.1]`–`[1.3]`), blast radius (`[2.1]`). Everything else below is still planned.
 
 | Method | Path | Description |
 |---|---|---|
@@ -73,7 +73,7 @@ Implemented: backfill, dependency CRUD, graph read (`[1.1]`–`[1.3]`). Everythi
 | GET | `/api/v1/topology/dependencies` | List dependencies for tenant |
 | DELETE | `/api/v1/topology/dependencies/{id}` | Remove a declared dependency (soft delete) — [1.2] |
 | GET | `/api/v1/topology/graph` | `{nodes[], edges[], truncated}` joining `graph_nodes` to the `dependency_graph_edges` MV; optional `teamId`/`type`/`limit`; 500-node hard cap; no per-team access control (read-only) — [1.3] |
-| GET | `/api/v1/topology/blast-radius/{serviceId}` | Downstream impact set |
+| GET | `/api/v1/topology/blast-radius/{serviceId}` | `{serviceId, upstream: {entries[], depthTruncated, nodesBeyondDepth, nodeCapTruncated, nodesBeyondCap}, downstream: {...}, maxDepth}`; recursive CTE over `dependency_graph_edges`, cycle-safe via a visited-path array; optional `direction` (`UPSTREAM`/`DOWNSTREAM`) and `depth` (default 3, clamped to max 6); 200-node cap per direction; 404 unknown/soft-deleted node, 400 `depth < 1` — [2.1]. **Direction naming is the opposite of the `/dependencies/{serviceId}` upstream/downstream above**: here `upstream` = what this service depends on, `downstream` = who is impacted if it fails — see `BlastRadiusService`'s Javadoc |
 | GET | `/api/v1/topology/cycles` | Current cycle list |
 | GET | `/api/v1/topology/drifts` | Active drift records |
 | POST | `/api/v1/topology/drifts/{id}/resolve` | Mark a drift record resolved |
