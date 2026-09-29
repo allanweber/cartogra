@@ -73,12 +73,12 @@ test('register services, declare a dependency, and see it on the graph', async (
   await expect(page.getByRole('group', { name: 'Service dependency graph' })).toBeVisible()
 
   await page.locator('.graph-node circle').first().click()
-  await expect(page.getByText('Neighbors')).toBeVisible()
+  await expect(page.getByRole('tab', { name: 'Blast Radius' })).toBeVisible()
 
   // Keyboard path: the other node, selected via focus + Enter rather than a click,
   // must reach the same details panel — proves the a11y affordance actually works,
   // not just that an aria-label attribute is present.
   await page.locator('.graph-node').nth(1).focus()
   await page.keyboard.press('Enter')
-  await expect(page.getByText('Neighbors')).toBeVisible()
+  await expect(page.getByRole('tab', { name: 'Blast Radius' })).toBeVisible()
 })
