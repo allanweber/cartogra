@@ -7,7 +7,7 @@ import { ApiError, apiFetch } from '#/lib/api'
 import { Route } from '#/routes/_authenticated/graph'
 
 import type { PageResult, RegistryTeam } from '#/lib/registry-types'
-import type { Graph } from '#/lib/topology-types'
+import type { BlastRadius, Graph } from '#/lib/topology-types'
 
 // Minimal reactive stand-in for TanStack Router's search-param state: real enough that
 // navigate({ search }) calls re-render the component with the updated filters/selection.
@@ -67,9 +67,17 @@ function makeGraph(overrides: Partial<Graph> = {}): Graph {
   }
 }
 
-function mockGraphCalls(byQuery: (query: string) => Graph) {
+const EMPTY_BLAST_RADIUS: BlastRadius = {
+  serviceId: 's1',
+  upstream: { entries: [], depthTruncated: false, nodesBeyondDepth: 0, nodeCapTruncated: false, nodesBeyondCap: 0 },
+  downstream: { entries: [], depthTruncated: false, nodesBeyondDepth: 0, nodeCapTruncated: false, nodesBeyondCap: 0 },
+  maxDepth: 3,
+}
+
+function mockGraphCalls(byQuery: (query: string) => Graph, blastRadius: BlastRadius = EMPTY_BLAST_RADIUS) {
   vi.mocked(apiFetch).mockImplementation((path: string) => {
     if (path.includes('/v1/registry/teams')) return Promise.resolve(EMPTY_TEAMS)
+    if (path.includes('/v1/topology/blast-radius/')) return Promise.resolve(blastRadius)
     const query = path.split('?')[1] ?? ''
     return Promise.resolve(byQuery(query))
   })
@@ -120,11 +128,24 @@ describe('GraphPage', () => {
     await screen.findByRole('group', { name: /service dependency graph/i })
 
     expect(await screen.findAllByText('auth-service')).not.toHaveLength(0)
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Details' }))
     expect(screen.getByText('degraded')).toBeInTheDocument()
   })
 
-  it('selecting a node shows its details and neighbor links in the side panel', async () => {
-    mockGraphCalls(() => makeGraph())
+  it('selecting a node shows the Inspector panel, defaulting to its blast radius', async () => {
+    const blastRadius: BlastRadius = {
+      serviceId: 's1',
+      upstream: { entries: [], depthTruncated: false, nodesBeyondDepth: 0, nodeCapTruncated: false, nodesBeyondCap: 0 },
+      downstream: {
+        entries: [{ serviceId: 's2', name: 'auth-service', teamId: null, tier: null, healthStatus: 'HEALTHY', distance: 1 }],
+        depthTruncated: false,
+        nodesBeyondDepth: 0,
+        nodeCapTruncated: false,
+        nodesBeyondCap: 0,
+      },
+      maxDepth: 3,
+    }
+    mockGraphCalls(() => makeGraph(), blastRadius)
     renderPage()
     const svg = await screen.findByRole('group', { name: /service dependency graph/i })
 
@@ -134,13 +155,13 @@ describe('GraphPage', () => {
     nodeGroup.dispatchEvent(new MouseEvent('click', { bubbles: true }))
 
     expect(await screen.findAllByText('api-gateway')).not.toHaveLength(0)
-    expect(screen.getByRole('link', { name: 'auth-service' })).toBeInTheDocument()
-    expect(screen.getByText('HTTP')).toBeInTheDocument()
-    expect(screen.getByText('internal-only')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Blast Radius' })).toHaveAttribute('data-state', 'active')
+    expect(await screen.findAllByText('auth-service')).not.toHaveLength(0)
+    expect(screen.getByText('1 hop away')).toBeInTheDocument()
     expect(screen.getByText('View in catalog →')).toBeInTheDocument()
   })
 
-  it('selecting a node via keyboard (Enter) shows the same details as a click', async () => {
+  it('selecting a node via keyboard (Enter) shows the same panel as a click', async () => {
     mockGraphCalls(() => makeGraph())
     renderPage()
     const svg = await screen.findByRole('group', { name: /service dependency graph/i })
@@ -150,7 +171,7 @@ describe('GraphPage', () => {
     nodeGroup.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
 
     expect(await screen.findAllByText('api-gateway')).not.toHaveLength(0)
-    expect(screen.getByRole('link', { name: 'auth-service' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Blast Radius' })).toBeInTheDocument()
   })
 
   it('describes each node to assistive tech via aria-label, and keeps it current after a data refresh', async () => {

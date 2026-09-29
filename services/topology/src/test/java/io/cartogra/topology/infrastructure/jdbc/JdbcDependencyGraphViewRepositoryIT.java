@@ -1,10 +1,12 @@
 package io.cartogra.topology.infrastructure.jdbc;
 
 import io.cartogra.topology.AbstractTopologyIT;
+import io.cartogra.topology.domain.BlastRadiusDirection;
 import io.cartogra.topology.domain.Dependency;
 import io.cartogra.topology.domain.DependencyProtocol;
 import io.cartogra.topology.domain.DependencyType;
 import io.cartogra.topology.domain.GraphEdge;
+import io.cartogra.topology.repository.BlastRadiusRow;
 import io.cartogra.topology.repository.DependencyGraphViewRepository;
 import io.cartogra.topology.repository.DependencyRepository;
 import org.junit.jupiter.api.Test;
@@ -100,5 +102,126 @@ class JdbcDependencyGraphViewRepositoryIT extends AbstractTopologyIT {
         List<GraphEdge> found = graphViewRepository.findByServiceIds(tenantId, Set.of(a), null);
 
         assertThat(found).isEmpty();
+    }
+
+    @Test
+    void twelveNodeFanOutReturnsExactlyThoseTwelve() {
+        UUID tenantId = UUID.randomUUID();
+        UUID a = UUID.randomUUID();
+        List<UUID> firstHop = List.of(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
+        firstHop.forEach(b -> saveDependency(tenantId, a, b, DependencyType.DECLARED, DependencyProtocol.HTTP));
+
+        java.util.Map<UUID, UUID> secondHopParent = new java.util.LinkedHashMap<>();
+        for (UUID b : firstHop) {
+            for (int i = 0; i < 2; i++) {
+                UUID c = UUID.randomUUID();
+                secondHopParent.put(c, b);
+                saveDependency(tenantId, b, c, DependencyType.DECLARED, DependencyProtocol.HTTP);
+            }
+        }
+        graphViewRepository.refresh();
+
+        List<BlastRadiusRow> rows = graphViewRepository.findBlastRadius(tenantId, a, BlastRadiusDirection.UPSTREAM, 3);
+
+        assertThat(rows).hasSize(12);
+        assertThat(rows).filteredOn(row -> firstHop.contains(row.serviceId()))
+                .hasSize(4)
+                .allSatisfy(row -> assertThat(row.depth()).isEqualTo(1));
+        assertThat(rows).filteredOn(row -> secondHopParent.containsKey(row.serviceId()))
+                .hasSize(8)
+                .allSatisfy(row -> assertThat(row.depth()).isEqualTo(2));
+    }
+
+    @Test
+    void threeNodeCycleTerminatesAndDoesNotReturnSelf() {
+        UUID tenantId = UUID.randomUUID();
+        UUID a = UUID.randomUUID();
+        UUID b = UUID.randomUUID();
+        UUID c = UUID.randomUUID();
+        saveDependency(tenantId, a, b, DependencyType.DECLARED, DependencyProtocol.HTTP);
+        saveDependency(tenantId, b, c, DependencyType.DECLARED, DependencyProtocol.HTTP);
+        saveDependency(tenantId, c, a, DependencyType.DECLARED, DependencyProtocol.HTTP);
+        graphViewRepository.refresh();
+
+        List<BlastRadiusRow> rows = graphViewRepository.findBlastRadius(tenantId, a, BlastRadiusDirection.UPSTREAM, 6);
+
+        assertThat(rows).extracting(BlastRadiusRow::serviceId, BlastRadiusRow::depth)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple(b, 1),
+                        org.assertj.core.groups.Tuple.tuple(c, 2));
+    }
+
+    @Test
+    void depthCapPeeksExactlyOneHopBeyondAndNoFurther() {
+        UUID tenantId = UUID.randomUUID();
+        UUID a = UUID.randomUUID();
+        UUID b = UUID.randomUUID();
+        UUID c = UUID.randomUUID();
+        UUID d = UUID.randomUUID();
+        saveDependency(tenantId, a, b, DependencyType.DECLARED, DependencyProtocol.HTTP);
+        saveDependency(tenantId, b, c, DependencyType.DECLARED, DependencyProtocol.HTTP);
+        saveDependency(tenantId, c, d, DependencyType.DECLARED, DependencyProtocol.HTTP);
+        graphViewRepository.refresh();
+
+        List<BlastRadiusRow> rows = graphViewRepository.findBlastRadius(tenantId, a, BlastRadiusDirection.UPSTREAM, 2);
+
+        assertThat(rows).extracting(BlastRadiusRow::serviceId, BlastRadiusRow::depth)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple(b, 1),
+                        org.assertj.core.groups.Tuple.tuple(c, 2),
+                        org.assertj.core.groups.Tuple.tuple(d, 3));
+        assertThat(rows).extracting(BlastRadiusRow::depth).allSatisfy(depth -> assertThat(depth).isLessThanOrEqualTo(3));
+    }
+
+    @Test
+    void downstreamIsTheMirrorOfUpstreamOnTheSameCycle() {
+        UUID tenantId = UUID.randomUUID();
+        UUID a = UUID.randomUUID();
+        UUID b = UUID.randomUUID();
+        UUID c = UUID.randomUUID();
+        saveDependency(tenantId, a, b, DependencyType.DECLARED, DependencyProtocol.HTTP);
+        saveDependency(tenantId, b, c, DependencyType.DECLARED, DependencyProtocol.HTTP);
+        saveDependency(tenantId, c, a, DependencyType.DECLARED, DependencyProtocol.HTTP);
+        graphViewRepository.refresh();
+
+        List<BlastRadiusRow> rows = graphViewRepository.findBlastRadius(tenantId, a, BlastRadiusDirection.DOWNSTREAM, 6);
+
+        assertThat(rows).extracting(BlastRadiusRow::serviceId, BlastRadiusRow::depth)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple(c, 1),
+                        org.assertj.core.groups.Tuple.tuple(b, 2));
+    }
+
+    @Test
+    void findBlastRadiusIsScopedToTenant() {
+        UUID tenantId = UUID.randomUUID();
+        UUID otherTenant = UUID.randomUUID();
+        UUID a = UUID.randomUUID();
+        UUID b = UUID.randomUUID();
+        saveDependency(otherTenant, a, b, DependencyType.DECLARED, DependencyProtocol.HTTP);
+        graphViewRepository.refresh();
+
+        List<BlastRadiusRow> rows = graphViewRepository.findBlastRadius(tenantId, a, BlastRadiusDirection.UPSTREAM, 6);
+
+        assertThat(rows).isEmpty();
+    }
+
+    @Test
+    void diamondFanInDedupesToShortestDistance() {
+        UUID tenantId = UUID.randomUUID();
+        UUID a = UUID.randomUUID();
+        UUID b = UUID.randomUUID();
+        UUID c = UUID.randomUUID();
+        UUID d = UUID.randomUUID();
+        saveDependency(tenantId, a, b, DependencyType.DECLARED, DependencyProtocol.HTTP);
+        saveDependency(tenantId, a, c, DependencyType.DECLARED, DependencyProtocol.HTTP);
+        saveDependency(tenantId, b, d, DependencyType.DECLARED, DependencyProtocol.HTTP);
+        saveDependency(tenantId, c, d, DependencyType.DECLARED, DependencyProtocol.HTTP);
+        graphViewRepository.refresh();
+
+        List<BlastRadiusRow> rows = graphViewRepository.findBlastRadius(tenantId, a, BlastRadiusDirection.UPSTREAM, 6);
+
+        assertThat(rows).filteredOn(row -> row.serviceId().equals(d)).hasSize(1)
+                .first().satisfies(row -> assertThat(row.depth()).isEqualTo(2));
     }
 }

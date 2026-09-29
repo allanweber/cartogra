@@ -125,7 +125,7 @@ export function AppLayout({
   }, [])
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
+    <div className="flex h-screen overflow-hidden bg-background text-foreground">
       {/* Skip to main content */}
       <a
         href="#main-content"
@@ -149,7 +149,7 @@ export function AppLayout({
       </aside>
 
       {/* Main content area */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background/90 px-4 backdrop-blur sm:px-6">
           {/* Mobile nav trigger */}
           <div className="md:hidden">
@@ -198,7 +198,7 @@ export function AppLayout({
           </div>
         </header>
 
-        <main id="main-content" className="flex-1 p-4 sm:p-6">
+        <main id="main-content" className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 sm:p-6">
           {children}
         </main>
       </div>

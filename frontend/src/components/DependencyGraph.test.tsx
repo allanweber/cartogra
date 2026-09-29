@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { DependencyGraph } from '#/components/DependencyGraph'
 
+import type { BlastRadiusHighlightMap } from '#/components/DependencyGraph'
 import type { Graph } from '#/lib/topology-types'
 
 function makeGraph(overrides: Partial<Graph> = {}): Graph {
@@ -64,6 +65,46 @@ describe('DependencyGraph', () => {
 
     node!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
     expect(onSelectNode).toHaveBeenCalledTimes(1)
+  })
+
+  it('applies blast-radius ring colors and dims uninvolved nodes/links once the highlight map is provided', () => {
+    const onSelectNode = vi.fn()
+    const highlight: BlastRadiusHighlightMap = new Map([['s2', 'downstream']])
+    const { container } = render(
+      <DependencyGraph
+        graph={makeGraph()}
+        selectedServiceId="s1"
+        onSelectNode={onSelectNode}
+        blastRadiusHighlight={highlight}
+      />,
+    )
+
+    const nodes = container.querySelectorAll('.graph-node')
+    const selectedRing = nodes[0].querySelector('circle.graph-node-highlight-ring')!
+    const downstreamRing = nodes[1].querySelector('circle.graph-node-highlight-ring')!
+
+    expect(selectedRing.getAttribute('stroke')).toBe('var(--ring)')
+    expect(downstreamRing.getAttribute('stroke')).toBe('var(--color-blast-downstream)')
+    expect((nodes[0] as HTMLElement).style.opacity).toBe('1')
+    expect((nodes[1] as HTMLElement).style.opacity).toBe('1')
+  })
+
+  it('falls back to full opacity and no ring while the highlight map is still loading (null)', () => {
+    const onSelectNode = vi.fn()
+    const { container } = render(
+      <DependencyGraph
+        graph={makeGraph()}
+        selectedServiceId="s1"
+        onSelectNode={onSelectNode}
+        blastRadiusHighlight={null}
+      />,
+    )
+
+    const nodes = container.querySelectorAll('.graph-node')
+    expect((nodes[0] as HTMLElement).style.opacity).toBe('1')
+    expect((nodes[1] as HTMLElement).style.opacity).toBe('1')
+    const downstreamRing = nodes[1].querySelector('circle.graph-node-highlight-ring')!
+    expect(downstreamRing.getAttribute('stroke')).toBe('none')
   })
 
   describe('reduced motion', () => {
