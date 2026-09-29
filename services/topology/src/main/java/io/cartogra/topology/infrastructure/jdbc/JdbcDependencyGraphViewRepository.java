@@ -117,4 +117,54 @@ public class JdbcDependencyGraphViewRepository implements DependencyGraphViewRep
                 .addValue("maxDepthPlusOne", maxDepth + 1);
         return namedJdbc.query(sql, params, BLAST_RADIUS_ROW_MAPPER);
     }
+
+    /**
+     * Closed directed walks that revisit no node before returning to their start. A {@code
+     * visited} array (same idiom as the blast-radius traversals above) both prunes non-elementary
+     * walks and, once flattened, becomes the response's member list. The base case starts from
+     * every edge rather than every node, since a cycle needs at least one edge and self-edges are
+     * already rejected at write time — so the shortest possible cycle is a 2-node mutual
+     * dependency, closing at depth 2.
+     */
+    private static final String CYCLES_SQL = """
+            WITH RECURSIVE walk AS (
+                SELECT source_service_id AS start_id, target_service_id AS current_id,
+                       ARRAY[source_service_id, target_service_id] AS visited, 1 AS depth
+                FROM dependency_graph_edges
+                WHERE tenant_id = :tenantId
+                  %s
+                UNION ALL
+                SELECT w.start_id, e.target_service_id, w.visited || e.target_service_id, w.depth + 1
+                FROM walk w
+                JOIN dependency_graph_edges e
+                  ON e.tenant_id = :tenantId AND e.source_service_id = w.current_id
+                  %s
+                WHERE w.current_id <> w.start_id
+                  AND w.depth < :maxLength
+                  AND (e.target_service_id = w.start_id OR e.target_service_id <> ALL(w.visited))
+            )
+            SELECT visited FROM walk WHERE current_id = start_id LIMIT :maxRows
+            """;
+
+    @Override
+    public List<List<UUID>> findCycles(UUID tenantId, @Nullable DependencyType type, int maxLength, int maxRows) {
+        String baseFilter = type != null ? "AND dependency_type = :type" : "";
+        String recursiveFilter = type != null ? "AND e.dependency_type = :type" : "";
+        String sql = CYCLES_SQL.formatted(baseFilter, recursiveFilter);
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("maxLength", maxLength)
+                .addValue("maxRows", maxRows);
+        if (type != null) {
+            params.addValue("type", type.toDbValue());
+        }
+        return namedJdbc.query(sql, params, CYCLE_PATH_MAPPER);
+    }
+
+    private static final RowMapper<List<UUID>> CYCLE_PATH_MAPPER = (rs, _) -> mapCyclePath(rs);
+
+    private static List<UUID> mapCyclePath(ResultSet rs) throws SQLException {
+        UUID[] visited = (UUID[]) rs.getArray("visited").getArray();
+        return List.of(visited);
+    }
 }

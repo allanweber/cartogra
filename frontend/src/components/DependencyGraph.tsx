@@ -126,16 +126,26 @@ export function linkOpacity(
   return involved(sourceId) || involved(targetId) ? 1 : 0.1
 }
 
+// A cross-cutting fact about a node (like blast-radius membership above), not part of its own
+// identity — driven into the canvas by the same non-structural effect that handles selection
+// and blast-radius highlighting, never the structural rebuild, so a cycle query that resolves
+// after the graph is already mounted still lights up the right nodes.
+export function isCycleMember(serviceId: string, cycleMemberIds: Set<string> | null): boolean {
+  return cycleMemberIds?.has(serviceId) ?? false
+}
+
 export function DependencyGraph({
   graph,
   selectedServiceId,
   onSelectNode,
   blastRadiusHighlight,
+  cycleMemberIds,
 }: {
   graph: Graph
   selectedServiceId: string | null
   onSelectNode: (serviceId: string | null) => void
   blastRadiusHighlight?: BlastRadiusHighlightMap | null
+  cycleMemberIds?: Set<string> | null
 }) {
   const svgRef = useRef<SVGSVGElement>(null)
   const onSelectNodeRef = useRef(onSelectNode)
@@ -256,6 +266,21 @@ export function DependencyGraph({
       .attr('fill', 'none')
       .attr('stroke-width', 0)
       .attr('pointer-events', 'none')
+
+    // Cycle-membership glyph, a distinct symbol (not just a color) at the node's top-right —
+    // toggled by opacity in the selection/highlight effect below, same as the ring above.
+    nodeSelection
+      .append('text')
+      .attr('class', 'graph-node-cycle-badge')
+      .attr('x', 11)
+      .attr('y', -9)
+      .attr('text-anchor', 'middle')
+      .attr('font-size', 10)
+      .attr('font-weight', 700)
+      .attr('fill', 'var(--color-critical)')
+      .attr('pointer-events', 'none')
+      .attr('opacity', 0)
+      .text('↻')
 
     // Non-color marker for the down state, in addition to the dashed outline for degraded below.
     nodeSelection
@@ -409,6 +434,7 @@ export function DependencyGraph({
     if (!svgEl) return
     const svg = select(svgEl)
     const highlightMap = blastRadiusHighlight ?? null
+    const cycleMembers = cycleMemberIds ?? null
 
     svg
       .selectAll<SVGGElement, SimNode>('.graph-node')
@@ -422,9 +448,22 @@ export function DependencyGraph({
         (node) => highlightRingAppearance(node.serviceId, selectedServiceId, highlightMap)?.strokeWidth ?? 0,
       )
     svg
+      .selectAll<SVGGElement, SimNode>('.graph-node')
+      .select<SVGTextElement>('text.graph-node-cycle-badge')
+      .attr('opacity', (node) => (isCycleMember(node.serviceId, cycleMembers) ? 1 : 0))
+    // Recomputed here rather than in applyNodeAppearance so a cycle query resolving after the
+    // graph is already mounted still updates the label — nodeAppearance() remains the single
+    // source of the health/tier portion, this only appends the cycle fact on top of it.
+    svg
+      .selectAll<SVGGElement, SimNode>('.graph-node')
+      .attr('aria-label', (node) => {
+        const base = nodeAppearance(node).ariaLabel
+        return isCycleMember(node.serviceId, cycleMembers) ? `${base}, part of a dependency cycle` : base
+      })
+    svg
       .selectAll<SVGLineElement, SimLink>('.graph-links line')
       .style('opacity', (link) => linkOpacity(endpointId(link.source), endpointId(link.target), selectedServiceId, highlightMap))
-  }, [selectedServiceId, blastRadiusHighlight, graph])
+  }, [selectedServiceId, blastRadiusHighlight, cycleMemberIds, graph])
 
   return (
     <svg

@@ -224,4 +224,53 @@ class JdbcDependencyGraphViewRepositoryIT extends AbstractTopologyIT {
         assertThat(rows).filteredOn(row -> row.serviceId().equals(d)).hasSize(1)
                 .first().satisfies(row -> assertThat(row.depth()).isEqualTo(2));
     }
+
+    @Test
+    void findCyclesReturnsOneRawPathPerStartingMemberWithClosingRepeat() {
+        UUID tenantId = UUID.randomUUID();
+        UUID a = UUID.randomUUID();
+        UUID b = UUID.randomUUID();
+        UUID c = UUID.randomUUID();
+        saveDependency(tenantId, a, b, DependencyType.DECLARED, DependencyProtocol.HTTP);
+        saveDependency(tenantId, b, c, DependencyType.DECLARED, DependencyProtocol.HTTP);
+        saveDependency(tenantId, c, a, DependencyType.DECLARED, DependencyProtocol.HTTP);
+        graphViewRepository.refresh();
+
+        List<List<UUID>> paths = graphViewRepository.findCycles(tenantId, null, 8, 100);
+
+        // Raw, pre-dedup shape: the same physical cycle walked from each of its 3 members —
+        // CycleService (unit-tested separately) is what collapses these to one canonical entry.
+        assertThat(paths).hasSize(3);
+        assertThat(paths).allSatisfy(path -> {
+            assertThat(path).hasSize(4);
+            assertThat(path.get(0)).isEqualTo(path.get(3));
+        });
+    }
+
+    @Test
+    void findCyclesRespectsTheLengthCap() {
+        UUID tenantId = UUID.randomUUID();
+        List<UUID> ids = List.of(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
+        for (int i = 0; i < ids.size(); i++) {
+            saveDependency(tenantId, ids.get(i), ids.get((i + 1) % ids.size()), DependencyType.DECLARED, DependencyProtocol.HTTP);
+        }
+        graphViewRepository.refresh();
+
+        List<List<UUID>> paths = graphViewRepository.findCycles(tenantId, null, 3, 100);
+
+        assertThat(paths).isEmpty();
+    }
+
+    @Test
+    void findCyclesFiltersByType() {
+        UUID tenantId = UUID.randomUUID();
+        UUID a = UUID.randomUUID();
+        UUID b = UUID.randomUUID();
+        saveDependency(tenantId, a, b, DependencyType.OBSERVED, DependencyProtocol.HTTP);
+        saveDependency(tenantId, b, a, DependencyType.OBSERVED, DependencyProtocol.HTTP);
+        graphViewRepository.refresh();
+
+        assertThat(graphViewRepository.findCycles(tenantId, DependencyType.DECLARED, 8, 100)).isEmpty();
+        assertThat(graphViewRepository.findCycles(tenantId, DependencyType.OBSERVED, 8, 100)).hasSize(2);
+    }
 }

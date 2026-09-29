@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   DependencyGraph,
   highlightRingAppearance,
+  isCycleMember,
   linkOpacity,
   nodeAppearance,
   nodeOpacity,
@@ -137,6 +138,20 @@ describe('linkOpacity', () => {
 
   it('dims a link with neither endpoint involved', () => {
     expect(linkOpacity('s8', 's9', 's1', map)).toBe(0.1)
+  })
+})
+
+describe('isCycleMember', () => {
+  it('is true when the set contains the service id', () => {
+    expect(isCycleMember('s1', new Set(['s1', 's2']))).toBe(true)
+  })
+
+  it('is false when the set does not contain the service id', () => {
+    expect(isCycleMember('s9', new Set(['s1', 's2']))).toBe(false)
+  })
+
+  it('is false when the set is null (loading or no cycle data)', () => {
+    expect(isCycleMember('s1', null)).toBe(false)
   })
 })
 

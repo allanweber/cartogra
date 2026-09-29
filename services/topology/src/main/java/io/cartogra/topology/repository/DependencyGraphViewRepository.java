@@ -35,4 +35,14 @@ public interface DependencyGraphViewRepository {
      * "downstream". See {@link io.cartogra.topology.domain.BlastRadiusService} Javadoc.
      */
     List<BlastRadiusRow> findBlastRadius(UUID tenantId, UUID serviceId, BlastRadiusDirection direction, int maxDepth);
+
+    /**
+     * Raw elementary-cycle paths (closed directed walks that revisit no interior node) up to
+     * {@code maxLength} edges, tenant-scoped, optionally filtered by type. Each returned path
+     * repeats its start id as the last element (e.g. {@code [A, B, C, A]}). The same physical
+     * cycle is emitted once per member walked as a starting point — callers must dedupe via a
+     * rotation-invariant key. Capped at {@code maxRows} raw rows as a backstop against a
+     * pathologically dense graph.
+     */
+    List<List<UUID>> findCycles(UUID tenantId, @Nullable DependencyType type, int maxLength, int maxRows);
 }

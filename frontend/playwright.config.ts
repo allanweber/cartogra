@@ -4,7 +4,9 @@ const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:3006'
 
 export default defineConfig({
   testDir: './e2e',
-  timeout: 60_000,
+  // 90s: demo-flow.spec.ts retries its cycle-badge checks against the topology MV's debounced
+  // refresh (up to 20s + 10s of that budget alone) on top of the rest of the flow.
+  timeout: 90_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
   workers: 1,

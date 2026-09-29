@@ -54,6 +54,8 @@ describe('InspectorPanel', () => {
         blastRadius={blastRadius()}
         isBlastRadiusLoading={false}
         blastRadiusError={null}
+        cycles={[]}
+        nodesById={new Map()}
       />,
     )
     expect(screen.getByRole('tab', { name: 'Blast Radius' })).toHaveAttribute('data-state', 'active')
@@ -68,6 +70,8 @@ describe('InspectorPanel', () => {
         blastRadius={blastRadius()}
         isBlastRadiusLoading={false}
         blastRadiusError={null}
+        cycles={[]}
+        nodesById={new Map()}
       />,
     )
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Details' }))
@@ -84,6 +88,8 @@ describe('InspectorPanel', () => {
         blastRadius={blastRadius()}
         isBlastRadiusLoading={false}
         blastRadiusError={null}
+        cycles={[]}
+        nodesById={new Map()}
       />,
     )
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Details' }))
@@ -117,6 +123,8 @@ describe('InspectorPanel', () => {
         })}
         isBlastRadiusLoading={false}
         blastRadiusError={null}
+        cycles={[]}
+        nodesById={new Map()}
       />,
     )
     expect(screen.getByText('Downstream — impacted if this service fails')).toBeInTheDocument()
@@ -140,6 +148,8 @@ describe('InspectorPanel', () => {
         })}
         isBlastRadiusLoading={false}
         blastRadiusError={null}
+        cycles={[]}
+        nodesById={new Map()}
       />,
     )
     expect(screen.getByText(/Truncated at 3 hops — 4\+ services beyond this depth/)).toBeInTheDocument()
@@ -154,6 +164,8 @@ describe('InspectorPanel', () => {
         blastRadius={blastRadius()}
         isBlastRadiusLoading={false}
         blastRadiusError={null}
+        cycles={[]}
+        nodesById={new Map()}
       />,
     )
     expect(screen.queryByText(/Truncated at/)).not.toBeInTheDocument()
@@ -162,7 +174,15 @@ describe('InspectorPanel', () => {
 
   it('shows a loading skeleton on the Blast Radius tab while the query is in flight', () => {
     const { container } = render(
-      <InspectorPanel node={node()} teamMap={teamMap} blastRadius={undefined} isBlastRadiusLoading={true} blastRadiusError={null} />,
+      <InspectorPanel
+        node={node()}
+        teamMap={teamMap}
+        blastRadius={undefined}
+        isBlastRadiusLoading={true}
+        blastRadiusError={null}
+        cycles={[]}
+        nodesById={new Map()}
+      />,
     )
     expect(container.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(0)
   })
@@ -175,6 +195,8 @@ describe('InspectorPanel', () => {
         blastRadius={undefined}
         isBlastRadiusLoading={false}
         blastRadiusError={new ApiError('SERVER_ERROR', 'Something broke', 'abc123')}
+        cycles={[]}
+        nodesById={new Map()}
       />,
     )
     expect(screen.getByText(/Something broke/)).toBeInTheDocument()
@@ -189,8 +211,40 @@ describe('InspectorPanel', () => {
         blastRadius={blastRadius()}
         isBlastRadiusLoading={false}
         blastRadiusError={null}
+        cycles={[]}
+        nodesById={new Map()}
       />,
     )
     expect(screen.getByRole('link', { name: /View in catalog/ })).toHaveAttribute('href', '/catalog/s1')
+  })
+
+  it('shows the cycle badge next to the node name when it is a cycle member', () => {
+    render(
+      <InspectorPanel
+        node={node()}
+        teamMap={teamMap}
+        blastRadius={blastRadius()}
+        isBlastRadiusLoading={false}
+        blastRadiusError={null}
+        cycles={[{ members: ['s1', 's2'], length: 2 }]}
+        nodesById={new Map([['s2', node({ serviceId: 's2', name: 'checkout-api' })]])}
+      />,
+    )
+    expect(screen.getByText('1 cycle')).toBeInTheDocument()
+  })
+
+  it('renders no cycle badge when the node is not a cycle member', () => {
+    render(
+      <InspectorPanel
+        node={node()}
+        teamMap={teamMap}
+        blastRadius={blastRadius()}
+        isBlastRadiusLoading={false}
+        blastRadiusError={null}
+        cycles={[{ members: ['s2', 's3'], length: 2 }]}
+        nodesById={new Map()}
+      />,
+    )
+    expect(screen.queryByText(/cycle/)).not.toBeInTheDocument()
   })
 })
