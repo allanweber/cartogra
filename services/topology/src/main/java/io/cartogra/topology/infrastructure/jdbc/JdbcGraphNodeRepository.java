@@ -109,6 +109,19 @@ public class JdbcGraphNodeRepository implements GraphNodeRepository {
         return jdbc.query(sql, params, GRAPH_NODE_MAPPER);
     }
 
+    @Override
+    public List<GraphNode> findOrphaned(UUID tenantId, int maxRows) {
+        String sql = """
+                SELECT * FROM graph_nodes
+                WHERE tenant_id = :tenantId AND deleted_at IS NULL AND team_id IS NULL
+                ORDER BY name ASC, service_id ASC LIMIT :maxRows
+                """;
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("maxRows", maxRows);
+        return jdbc.query(sql, params, GRAPH_NODE_MAPPER);
+    }
+
     private static final RowMapper<GraphNode> GRAPH_NODE_MAPPER = (rs, _) -> mapGraphNode(rs);
 
     private static GraphNode mapGraphNode(ResultSet rs) throws SQLException {

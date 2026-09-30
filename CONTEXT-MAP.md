@@ -82,7 +82,7 @@
 | Identity & Access | Topology | Open Host Service / Conformist | Declarative reverse proxy (`gateway/application.yml`, `Path=/api/v1/topology/**`); backfill, dependency CRUD, and graph read are live behind it — [1.1]–[1.3] |
 | Identity & Access | Contract | Open Host Service / Conformist | Declarative reverse proxy (Phase 5 — route not yet created) |
 | Identity & Access | Intelligence | Open Host Service / Conformist | Declarative reverse proxy (Phase 6 — route not yet created) |
-| Service Catalog (U) | Topology (D) | **Customer / Supplier** | Planned, Phase 1: Kafka `cartogra.registry.service.{registered,updated,deleted}`, plus a planned `ownership-changed` event for orphan risk only (ADR-0027). No consumer exists in Topology yet — Registry only produces the three lifecycle topics today, and `ownership-changed` does not exist in code at all |
+| Service Catalog (U) | Topology (D) | **Customer / Supplier** | Live: Kafka `cartogra.registry.service.{registered,updated,deleted}`, consumed by `GraphNodeEventConsumer` to project `graph_nodes` (including `team_id`/`tier`, used for orphan risk and SPOF scoring — ADR-0028). No separate `ownership-changed` topic exists or is needed (ADR-0028 supersedes ADR-0027's plan to add one) |
 | Service Catalog (U) | Contract (D) | Customer / Supplier | Planned, Phase 5: Kafka `cartogra.registry.service.deleted` |
 | Service Catalog (U) | Intelligence (D) | Customer / Supplier | Planned, Phase 6: Kafka registry events |
 | Ingestion (U) | Service Catalog (D) | **Published Language** | Live today: Kafka `cartogra.ingestion.service.discovered`, `ownership.resolved` |
@@ -96,18 +96,20 @@ Ingestion publish `cartogra.ingestion.dependency.observed` for Topology to consu
 record (`docs/roadmap.md` 3.1) instead has the OTel Collector export spans directly to
 `cartogra.observability.spans`, consumed by Topology's own `OtelSpanWorker` — Ingestion is not in that path.
 
-**Orphan-risk ownership source is unresolved between two docs.** ADR-0027 records the chosen mechanism as
-Registry publishing a new `cartogra.registry.service.ownership-changed` topic, consumed by Topology solely to
-flag orphan status. `docs/roadmap.md` 3.3 instead describes Topology consuming the already-existing
-`cartogra.ingestion.ownership.resolved` topic "without a registry round-trip," citing the same ADR. Neither
-topic is consumed by Topology today — this is Phase 3, unbuilt — so this map follows the ADR (the formal
-decision record) and flags the roadmap wording as needing reconciliation before 3.3 is implemented.
+**Orphan-risk ownership source, resolved (ADR-0028).** ADR-0027 originally proposed Registry publishing a new
+`cartogra.registry.service.ownership-changed` topic for this. `docs/roadmap.md` 3.3 instead described Topology
+consuming the already-existing `cartogra.ingestion.ownership.resolved` topic "without a registry round-trip."
+Neither was built: by the time 2.4/2.5 (SPOFs, Risks) shipped, `graph_nodes.team_id` was already live via the
+general `cartogra.registry.service.{registered,updated}` lifecycle sync (`GraphNodeEventConsumer`) — Registry's
+`assignOwner` already publishes `service.updated` on every ownership change, manual or CODEOWNERS-driven.
+ADR-0028 supersedes ADR-0027 on this basis; `#122` ("[3.3] Orphan risk from ownership events") describes a
+mechanism whose premise no longer holds.
 
 **Anti-corruption layer notes:**
 - Gateway strips any client-supplied `X-Tenant-Id` / `X-User-Id` before forwarding — protecting all downstream contexts from tenant spoofing.
 - Each Kafka consumer extracts `traceparent` via `W3CTraceContextPropagator` — trace context never bleeds across context boundaries unintentionally.
 - Cross-context references store IDs only (e.g. Topology stores `source_service_id` as a UUID, never a hydrated `Service` object from the Catalog context).
-- Exception: Topology will mirror `team_id` from a Registry ownership event solely to flag orphan risk on `/v1/risks` (planned, Phase 3 — ADR-0027; see the reconciliation note above on which topic) — a narrow, documented deviation, not a general hydration path.
+- Exception: Topology mirrors `team_id` from Registry's existing `service.{registered,updated}` lifecycle sync solely to flag orphan risk on `/v1/risks` (live since 2.4/2.5 — ADR-0028, superseding ADR-0027; see the note above) — a narrow, documented deviation, not a general hydration path.
 
 ---
 

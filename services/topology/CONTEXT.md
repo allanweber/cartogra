@@ -22,7 +22,7 @@ Topology maintains the live dependency graph of all Services within a tenant. It
 | **Drift** | A mismatch between declared and observed dependencies (`undeclared` = observed but not declared; `missing` = declared but not observed) |
 | **SPOF** | Single Point of Failure — a Service with no redundancy that sits on the critical path of many other Services |
 | **Graph snapshot** | The full dependency graph state at a point in time; published to Kafka after every update |
-| **Orphan** | A Service with no team owner (`team_id IS NULL`); ownership state mirrored from Registry via `ownership-changed` events (ADR-0027), used only to flag orphan risk |
+| **Orphan** | A Service with no team owner (`team_id IS NULL`); `team_id` is mirrored from Registry via the existing `service.{registered,updated}` lifecycle sync (ADR-0028, superseding ADR-0027's plan for a dedicated topic), used for orphan risk and SPOF severity |
 | **Risk** | A single finding surfaced on `/v1/risks`: one of SPOF, cycle, drift, or orphan, each carrying `severity`, `type`, `affectedServices[]` (IDs), `title`, `explanation`, and `fix` |
 
 ---
@@ -36,8 +36,8 @@ Topology maintains the live dependency graph of all Services within a tenant. It
 5. **Drift detection** — compare declared vs. observed sets per service; persist drift records
 6. **SPOF scoring** — identify highly-connected nodes on critical paths
 7. **Graph events** — publish `graph.updated`, `drift.detected`, `cycle.detected` to Kafka for Intelligence and Notification
-8. **Orphan flagging** — mirror `team_id` from Registry's `ownership-changed` events (ADR-0027) to flag orphan status; no other use of ownership data
-9. **Risk aggregation** — combine SPOF + cycle + drift + orphan into the paginated `/v1/risks` list
+8. **Orphan flagging** — read `team_id IS NULL` off the existing `graph_nodes` projection (ADR-0028) to flag orphan status; no separate ownership topic
+9. **Risk aggregation** — combine SPOF + cycle + drift + orphan into the paginated `/v1/risks` list — [2.4]/[2.5]
 
 ---
 
@@ -63,7 +63,7 @@ Cross-context references stored as IDs only — Topology never hydrates a `Servi
 
 ## Inbound Ports (API)
 
-Implemented: backfill, dependency CRUD, graph read (`[1.1]`–`[1.3]`), blast radius (`[2.1]`). Everything else below is still planned.
+Implemented: backfill, dependency CRUD, graph read (`[1.1]`–`[1.3]`), blast radius (`[2.1]`), cycles (`[2.3]`), SPOFs (`[2.4]`), risks (`[2.5]`). Drifts (`GET`/`resolve`) are still planned (Phase 3.2).
 
 | Method | Path | Description |
 |---|---|---|
@@ -74,11 +74,11 @@ Implemented: backfill, dependency CRUD, graph read (`[1.1]`–`[1.3]`), blast ra
 | DELETE | `/api/v1/topology/dependencies/{id}` | Remove a declared dependency (soft delete) — [1.2] |
 | GET | `/api/v1/topology/graph` | `{nodes[], edges[], truncated}` joining `graph_nodes` to the `dependency_graph_edges` MV; optional `teamId`/`type`/`limit`; 500-node hard cap; no per-team access control (read-only) — [1.3] |
 | GET | `/api/v1/topology/blast-radius/{serviceId}` | `{serviceId, upstream: {entries[], depthTruncated, nodesBeyondDepth, nodeCapTruncated, nodesBeyondCap}, downstream: {...}, maxDepth}`; recursive CTE over `dependency_graph_edges`, cycle-safe via a visited-path array; optional `direction` (`UPSTREAM`/`DOWNSTREAM`) and `depth` (default 3, clamped to max 6); 200-node cap per direction; 404 unknown/soft-deleted node, 400 `depth < 1` — [2.1]. **Direction naming is the opposite of the `/dependencies/{serviceId}` upstream/downstream above**: here `upstream` = what this service depends on, `downstream` = who is impacted if it fails — see `BlastRadiusService`'s Javadoc |
-| GET | `/api/v1/topology/cycles` | Current cycle list |
+| GET | `/api/v1/topology/cycles` | Elementary cycles, rotation-deduplicated; optional `type` filter — [2.3] |
 | GET | `/api/v1/topology/drifts` | Active drift records |
 | POST | `/api/v1/topology/drifts/{id}/resolve` | Mark a drift record resolved |
-| GET | `/api/v1/topology/spofs` | Current SPOF list (fan-in threshold + redundancy assumptions documented at implementation) |
-| GET | `/api/v1/topology/risks` | Paginated SPOF + cycle + drift + orphan findings |
+| GET | `/api/v1/topology/spofs` | Fan-in ≥ tenant-configurable threshold (default 5); severity escalates to CRITICAL for CRITICAL-tier or orphan services; threshold + rationale ship in the payload — [2.4] |
+| GET | `/api/v1/topology/risks` | Paginated SPOF + cycle + drift + orphan findings, severity-sorted — [2.5] |
 
 ---
 
@@ -89,10 +89,9 @@ Implemented: backfill, dependency CRUD, graph read (`[1.1]`–`[1.3]`), blast ra
 | Topic | Source | Action |
 |---|---|---|
 | `cartogra.registry.service.registered` | Registry | Create node in graph (no-op if already exists) |
-| `cartogra.registry.service.updated` | Registry | Refresh node metadata cache |
+| `cartogra.registry.service.updated` | Registry | Refresh node metadata cache, including `team_id`/`tier` (used for orphan risk and SPOF severity — ADR-0028) |
 | `cartogra.registry.service.deleted` | Registry | Soft-delete all edges for that service |
 | `cartogra.ingestion.dependency.observed` | Ingestion | Upsert observed edge; trigger drift detection |
-| `cartogra.registry.service.ownership-changed` | Registry | Mirror `team_id` (incl. `NULL`) to flag orphan status (ADR-0027) — no other use |
 
 **Produced:**
 
@@ -108,7 +107,7 @@ Implemented: backfill, dependency CRUD, graph read (`[1.1]`–`[1.3]`), blast ra
 
 | Neighbour | Relationship | Notes |
 |---|---|---|
-| Service Catalog (Registry) | Downstream (Conformist) | Consumes registry lifecycle events; references service IDs only. Also consumes `ownership-changed` for orphan risk flagging only (ADR-0027). Additionally calls Registry's internal `POST /internal/services/access` synchronously (direct service-to-service, bypasses the Gateway) to authorize declared-dependency mutations — "is this user a member of the team owning this service?" — fail closed on error — [1.2] |
+| Service Catalog (Registry) | Downstream (Conformist) | Consumes registry lifecycle events; references service IDs only. `team_id`/`tier` from those same events also feed orphan risk and SPOF severity (ADR-0028) — no separate topic. Additionally calls Registry's internal `POST /internal/services/access` synchronously (direct service-to-service, bypasses the Gateway) to authorize declared-dependency mutations — "is this user a member of the team owning this service?" — fail closed on error — [1.2] |
 | Ingestion | Downstream (Conformist) | Consumes observed dependency edges |
 | Intelligence | Upstream (Customer/Supplier) | Produces graph + drift + cycle events |
 | Identity & Access (Gateway) | Conformist | Receives proxied requests with `X-Tenant-Id` |
@@ -120,4 +119,5 @@ Implemented: backfill, dependency CRUD, graph read (`[1.1]`–`[1.3]`), blast ra
 
 - ADR-0001 — PostgreSQL + recursive CTEs (no graph database)
 - ADR-0016 — OTel span worker feeds `dependency.observed` events into Topology
-- ADR-0027 — Topology consumes Registry `ownership-changed` events for orphan risk (chosen over a client-side merge)
+- ADR-0027 — Topology consumes Registry `ownership-changed` events for orphan risk (chosen over a client-side merge) — **superseded by ADR-0028**
+- ADR-0028 — Topology reads `graph_nodes.team_id` directly for orphan risk (no new topic needed; the existing lifecycle sync already carries it)

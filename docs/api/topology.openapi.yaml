@@ -24,6 +24,12 @@ tags:
     description: Declare, edit, remove, and read service dependency edges
   - name: graph
     description: Tenant-wide dependency graph read
+  - name: cycles
+    description: Elementary cycle detection
+  - name: spofs
+    description: Single point of failure detection
+  - name: risks
+    description: Aggregated risk findings across cycles, SPOFs, orphans, and drift
   - name: health
     description: Liveness and readiness probes
 
@@ -237,6 +243,69 @@ paths:
                 $ref: "#/components/schemas/CyclesResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /spofs:
+    get:
+      summary: Find single points of failure in the tenant's dependency graph
+      description: |
+        A service is flagged when its fan-in (distinct services depending on it, declared and
+        observed combined) is at or above a tenant-configurable threshold (default 5). Severity
+        escalates to `critical` when the service is `CRITICAL`-tier or has no owning team
+        (orphan); `warning` otherwise. `threshold` and `rationale` travel in every response, not
+        just in docs.
+      operationId: getSpofs
+      tags: [spofs]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpofsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /risks:
+    get:
+      summary: Aggregated risk findings across the tenant's dependency graph
+      description: |
+        Combines cycle, SPOF, orphan, and drift findings into one severity-sorted, paginated
+        list. Each finding carries a deterministic `id` (stable across calls for the same
+        underlying state) so clients can track dismissal locally.
+      operationId: getRisks
+      tags: [risks]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RisksResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
 
@@ -527,6 +596,104 @@ components:
                     $ref: "#/components/schemas/CycleDto"
                 truncated:
                   type: boolean
+
+    # ── SPOFs ─────────────────────────────────────────────────────────────────
+
+    SpofDto:
+      type: object
+      required: [serviceId, name, healthStatus, fanIn, severity]
+      properties:
+        serviceId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        teamId:
+          type: string
+          format: uuid
+          nullable: true
+        tier:
+          type: string
+          enum: [CRITICAL, STANDARD, EXPERIMENTAL]
+          nullable: true
+        healthStatus:
+          type: string
+          enum: [HEALTHY, DEGRADED, UNHEALTHY, PROBE_AUTH_FAILED, UNKNOWN]
+        fanIn:
+          type: integer
+        severity:
+          $ref: "#/components/schemas/RiskSeverity"
+
+    SpofsResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [threshold, rationale, items]
+              properties:
+                threshold:
+                  type: integer
+                rationale:
+                  type: string
+                items:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/SpofDto"
+
+    # ── Risks ─────────────────────────────────────────────────────────────────
+
+    RiskSeverity:
+      type: string
+      enum: [critical, warning, info]
+
+    RiskType:
+      type: string
+      enum: [spof, cycle, orphan, drift]
+
+    RiskDto:
+      type: object
+      required: [id, type, severity, title, explanation, fix, affectedServices]
+      properties:
+        id:
+          type: string
+        type:
+          $ref: "#/components/schemas/RiskType"
+        severity:
+          $ref: "#/components/schemas/RiskSeverity"
+        title:
+          type: string
+        explanation:
+          type: string
+        fix:
+          type: string
+        affectedServices:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    RisksResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [items, total, limit, offset]
+              properties:
+                items:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/RiskDto"
+                total:
+                  type: integer
+                  format: int64
+                limit:
+                  type: integer
+                offset:
+                  type: integer
 
   responses:
     BadRequest:
