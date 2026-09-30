@@ -7,7 +7,7 @@ COPY infra/docker/settings.docker.gradle.kts ./settings.gradle.kts
 COPY shared/ shared/
 COPY services/topology/ services/topology/
 
-RUN --mount=type=cache,target=/root/.gradle chmod +x ./gradlew && ./gradlew -Ddocker.service=topology :services:topology:bootJar -x test --no-daemon
+RUN --mount=type=cache,target=/root/.gradle,sharing=locked chmod +x ./gradlew && ./gradlew -Ddocker.service=topology :services:topology:bootJar -x test --no-daemon
 
 FROM eclipse-temurin:25-jre-jammy AS runtime
 

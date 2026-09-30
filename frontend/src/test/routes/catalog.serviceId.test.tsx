@@ -6,7 +6,7 @@ import { Route } from '#/routes/_authenticated/catalog.$serviceId'
 import { apiFetch, ApiError } from '#/lib/api'
 
 import type { PageResult, RegistryService, RegistryTeam } from '#/lib/registry-types'
-import type { ServiceDependencies } from '#/lib/topology-types'
+import type { Cycles, Graph, ServiceDependencies } from '#/lib/topology-types'
 
 let mockServiceId = 'svc-1'
 
@@ -126,15 +126,21 @@ function renderPage() {
 }
 
 const EMPTY_DEPENDENCIES: ServiceDependencies = { upstream: [], downstream: [] }
+const EMPTY_CYCLES: Cycles = { cycles: [], truncated: false }
+const EMPTY_GRAPH: Graph = { nodes: [], edges: [], truncated: false }
 
 function mockSuccess(
   service = MOCK_SERVICE,
   myTeamIds: string[] = [],
   dependencies: ServiceDependencies = EMPTY_DEPENDENCIES,
+  cycles: Cycles = EMPTY_CYCLES,
+  graph: Graph = EMPTY_GRAPH,
 ) {
   vi.mocked(apiFetch).mockImplementation((path: string) => {
     if (path.includes('/v1/registry/teams/mine')) return Promise.resolve(myTeamIds)
     if (path.includes('/v1/registry/teams')) return Promise.resolve(EMPTY_TEAMS)
+    if (path.includes('/v1/topology/cycles')) return Promise.resolve(cycles)
+    if (path.includes('/v1/topology/graph')) return Promise.resolve(graph)
     if (path.includes('/dependencies')) return Promise.resolve(dependencies)
     return Promise.resolve(service)
   })
@@ -648,5 +654,32 @@ describe('ServiceDetailPage', () => {
     await waitFor(() => expect(deleteCalled).toBe(true))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(await screen.findByText('No declared dependencies yet.')).toBeInTheDocument()
+  })
+
+  it('shows the cycle badge next to the tier badge when this service is a cycle member', async () => {
+    const cycles: Cycles = { cycles: [{ members: ['svc-1', 'svc-2'], length: 2 }], truncated: false }
+    const graph: Graph = {
+      nodes: [
+        { serviceId: 'svc-1', name: 'payments-api', teamId: null, tier: null, healthStatus: 'HEALTHY' },
+        { serviceId: 'svc-2', name: 'checkout-api', teamId: null, tier: null, healthStatus: 'HEALTHY' },
+      ],
+      edges: [],
+      truncated: false,
+    }
+    mockSuccess(MOCK_SERVICE, [], EMPTY_DEPENDENCIES, cycles, graph)
+    renderPage()
+    await screen.findByRole('heading', { name: 'payments-api' })
+
+    const trigger = screen.getByRole('button', { name: /1 dependency cycle/i })
+    fireEvent.click(trigger)
+    expect(screen.getByText('payments-api → checkout-api → payments-api')).toBeInTheDocument()
+  })
+
+  it('renders no cycle badge when this service is not a cycle member', async () => {
+    mockSuccess()
+    renderPage()
+    await screen.findByRole('heading', { name: 'payments-api' })
+
+    expect(screen.queryByRole('button', { name: /dependency cycle/i })).not.toBeInTheDocument()
   })
 })

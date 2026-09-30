@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { z } from 'zod'
 
 import { AppLayout } from '#/components/AppLayout'
+import { CycleBadge } from '#/components/CycleBadge'
 import { DependencyGraph } from '#/components/DependencyGraph'
 import { InspectorPanel } from '#/components/InspectorPanel'
 import { Alert, AlertDescription } from '#/components/ui/alert'
@@ -17,7 +18,7 @@ import { ApiError, apiFetch } from '#/lib/api'
 
 import type { BlastRadiusHighlightMap } from '#/components/DependencyGraph'
 import type { PageResult, RegistryTeam } from '#/lib/registry-types'
-import type { BlastRadius, DependencyType, Graph, GraphNode } from '#/lib/topology-types'
+import type { BlastRadius, Cycles, DependencyType, Graph, GraphNode } from '#/lib/topology-types'
 
 const graphSearchSchema = z.object({
   service: z.string().optional(),
@@ -102,6 +103,19 @@ function GraphPage() {
     return map
   }, [blastRadius])
 
+  // Best-effort: a failed cycle fetch degrades to "no badges" rather than an Alert, since the
+  // graph itself (not cycle detection) is this page's primary content — same treatment as
+  // teamsPage above. staleTime: 0 like graph/blast-radius above — the QueryClient's global
+  // default is 5 minutes, which would otherwise cache an empty pre-mutation result as "fresh"
+  // and never refetch after a dependency change closes a cycle.
+  const { data: cyclesData } = useQuery({
+    queryKey: ['cycles', type],
+    queryFn: () => apiFetch<Cycles>(`/v1/topology/cycles?type=${type}`),
+    staleTime: 0,
+  })
+  const cycles = cyclesData?.cycles ?? []
+  const cycleMemberIds = useMemo(() => new Set(cycles.flatMap((c) => c.members)), [cycles])
+
   return (
     <AppLayout
       title="Graph"
@@ -137,6 +151,8 @@ function GraphPage() {
             ))}
           </SelectContent>
         </Select>
+
+        <CycleBadge cycles={cycles} nodesById={nodesById} />
       </div>
 
       {type === 'OBSERVED' && (
@@ -197,6 +213,7 @@ function GraphPage() {
               selectedServiceId={selectedServiceId}
               onSelectNode={setSelectedServiceId}
               blastRadiusHighlight={blastRadiusHighlight}
+              cycleMemberIds={cycleMemberIds}
             />
           </div>
 
@@ -209,6 +226,8 @@ function GraphPage() {
                 blastRadius={blastRadius}
                 isBlastRadiusLoading={isBlastRadiusLoading}
                 blastRadiusError={blastRadiusError}
+                cycles={cycles}
+                nodesById={nodesById}
               />
             ) : (
               <Card className="h-full border-dashed">

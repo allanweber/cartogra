@@ -107,6 +107,38 @@ describe('DependencyGraph', () => {
     expect(downstreamRing.getAttribute('stroke')).toBe('none')
   })
 
+  it('shows the cycle glyph and an aria-label mentioning the cycle only for a member node', () => {
+    const onSelectNode = vi.fn()
+    const { container } = render(
+      <DependencyGraph
+        graph={makeGraph()}
+        selectedServiceId={null}
+        onSelectNode={onSelectNode}
+        cycleMemberIds={new Set(['s1'])}
+      />,
+    )
+
+    const nodes = container.querySelectorAll('.graph-node')
+    const memberBadge = nodes[0].querySelector('text.graph-node-cycle-badge')!
+    const nonMemberBadge = nodes[1].querySelector('text.graph-node-cycle-badge')!
+
+    expect(memberBadge.getAttribute('opacity')).toBe('1')
+    expect(nonMemberBadge.getAttribute('opacity')).toBe('0')
+    expect(nodes[0].getAttribute('aria-label')).toContain('part of a dependency cycle')
+    expect(nodes[1].getAttribute('aria-label')).not.toContain('part of a dependency cycle')
+  })
+
+  it('hides the cycle glyph on every node when no cycle data is provided', () => {
+    const onSelectNode = vi.fn()
+    const { container } = render(
+      <DependencyGraph graph={makeGraph()} selectedServiceId={null} onSelectNode={onSelectNode} />,
+    )
+
+    container.querySelectorAll('text.graph-node-cycle-badge').forEach((badge) => {
+      expect(badge.getAttribute('opacity')).toBe('0')
+    })
+  })
+
   describe('reduced motion', () => {
     let originalMatchMedia: typeof window.matchMedia
 

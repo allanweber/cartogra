@@ -208,6 +208,38 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /cycles:
+    get:
+      summary: Find elementary cycles in the tenant's dependency graph
+      description: |
+        Returns every elementary cycle (a closed directed walk that revisits no interior node)
+        up to 8 members, normalized to a rotation-invariant key so the same cycle is never
+        listed twice regardless of which member it's discovered from. Capped at 200 distinct
+        cycles server-side; `truncated: true` when the cap was hit.
+      operationId: getCycles
+      tags: [cycles]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            $ref: "#/components/schemas/DependencyType"
+      responses:
+        "200":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CyclesResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   # ── Health ────────────────────────────────────────────────────────────────
 
   /actuator/health/live:
@@ -462,6 +494,37 @@ components:
                   type: array
                   items:
                     $ref: "#/components/schemas/GraphEdgeDto"
+                truncated:
+                  type: boolean
+
+    # ── Cycles ────────────────────────────────────────────────────────────────
+
+    CycleDto:
+      type: object
+      required: [members, length]
+      properties:
+        members:
+          description: Service IDs in cycle order, rotated to start at the smallest UUID
+          type: array
+          items:
+            type: string
+            format: uuid
+        length:
+          type: integer
+
+    CyclesResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [cycles, truncated]
+              properties:
+                cycles:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/CycleDto"
                 truncated:
                   type: boolean
 

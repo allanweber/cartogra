@@ -7,7 +7,7 @@ import { ApiError, apiFetch } from '#/lib/api'
 import { Route } from '#/routes/_authenticated/graph'
 
 import type { PageResult, RegistryTeam } from '#/lib/registry-types'
-import type { BlastRadius, Graph } from '#/lib/topology-types'
+import type { BlastRadius, Cycles, Graph } from '#/lib/topology-types'
 
 // Minimal reactive stand-in for TanStack Router's search-param state: real enough that
 // navigate({ search }) calls re-render the component with the updated filters/selection.
@@ -74,10 +74,17 @@ const EMPTY_BLAST_RADIUS: BlastRadius = {
   maxDepth: 3,
 }
 
-function mockGraphCalls(byQuery: (query: string) => Graph, blastRadius: BlastRadius = EMPTY_BLAST_RADIUS) {
+const EMPTY_CYCLES: Cycles = { cycles: [], truncated: false }
+
+function mockGraphCalls(
+  byQuery: (query: string) => Graph,
+  blastRadius: BlastRadius = EMPTY_BLAST_RADIUS,
+  cycles: Cycles = EMPTY_CYCLES,
+) {
   vi.mocked(apiFetch).mockImplementation((path: string) => {
     if (path.includes('/v1/registry/teams')) return Promise.resolve(EMPTY_TEAMS)
     if (path.includes('/v1/topology/blast-radius/')) return Promise.resolve(blastRadius)
+    if (path.includes('/v1/topology/cycles')) return Promise.resolve(cycles)
     const query = path.split('?')[1] ?? ''
     return Promise.resolve(byQuery(query))
   })
@@ -258,6 +265,28 @@ describe('GraphPage', () => {
     expect(screen.getByText(/has been truncated/i)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /dismiss/i }))
     expect(screen.queryByText(/has been truncated/i)).not.toBeInTheDocument()
+  })
+
+  it('shows the cycle badge in the toolbar and marks member nodes when cycles are found', async () => {
+    const cycles: Cycles = { cycles: [{ members: ['s1', 's2'], length: 2 }], truncated: false }
+    mockGraphCalls(() => makeGraph(), EMPTY_BLAST_RADIUS, cycles)
+    renderPage()
+    const svg = await screen.findByRole('group', { name: /service dependency graph/i })
+
+    expect(await screen.findByRole('button', { name: /1 dependency cycle/i })).toBeInTheDocument()
+    const nodeGroups = svg.querySelectorAll('.graph-node')
+    nodeGroups.forEach((el) => {
+      expect(el.querySelector('text.graph-node-cycle-badge')?.getAttribute('opacity')).toBe('1')
+      expect(el.getAttribute('aria-label')).toContain('part of a dependency cycle')
+    })
+  })
+
+  it('renders no cycle badge when the tenant has no cycles', async () => {
+    mockGraphCalls(() => makeGraph())
+    renderPage()
+    await screen.findByRole('group', { name: /service dependency graph/i })
+
+    expect(screen.queryByRole('button', { name: /dependency cycle/i })).not.toBeInTheDocument()
   })
 
   it('shows a dedicated empty state for a tenant with no services', async () => {

@@ -86,3 +86,13 @@ export interface BlastRadius {
   downstream: BlastRadiusDirectionResult
   maxDepth: number
 }
+
+export interface Cycle {
+  members: string[]
+  length: number
+}
+
+export interface Cycles {
+  cycles: Cycle[]
+  truncated: boolean
+}
