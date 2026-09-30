@@ -9,6 +9,7 @@ import { CycleBadge } from '#/components/CycleBadge'
 import { DependenciesList } from '#/components/DependenciesList'
 import { EditServiceDrawer } from '#/components/EditServiceDrawer'
 import { RiskScoreBadge } from '#/components/RiskScoreBadge'
+import { SpofBadge } from '#/components/SpofBadge'
 import { TierBadge } from '#/components/TierBadge'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
@@ -21,7 +22,7 @@ import { useAuthStore } from '#/stores/useAuthStore'
 import { cn } from '#/lib/utils'
 
 import type { PageResult, RegistryService, RegistryTeam, ServiceHealth } from '#/lib/registry-types'
-import type { Cycles, Graph } from '#/lib/topology-types'
+import type { Cycles, Graph, Spofs } from '#/lib/topology-types'
 
 type TabId = 'overview' | 'dependencies' | 'contracts' | 'activity'
 
@@ -155,6 +156,13 @@ function ServiceDetailPage() {
   })
   const cycleNodesById = new Map((graphData?.nodes ?? []).map((n) => [n.serviceId, n]))
 
+  // Same best-effort treatment as cyclesData above.
+  const { data: spofsData } = useQuery({
+    queryKey: ['spofs'],
+    queryFn: () => apiFetch<Spofs>('/v1/topology/spofs'),
+    staleTime: 0,
+  })
+
   if (isLoading) {
     return (
       <AppLayout title="Loading..." eyebrow="Service Catalog">
@@ -224,6 +232,7 @@ function ServiceDetailPage() {
                 <h1 className="text-2xl font-bold">{service.name}</h1>
                 <TierBadge tier={service.tier} />
                 <CycleBadge cycles={cyclesData?.cycles ?? []} nodesById={cycleNodesById} onlyForServiceId={service.id} />
+                <SpofBadge spofs={spofsData?.items ?? []} nodesById={cycleNodesById} onlyForServiceId={service.id} />
                 <span className={cn('inline-flex items-center gap-1.5', healthTextClass(health))}>
                   <span className={cn('size-2 rounded-full', healthDotClass(health))} aria-hidden="true" />
                   <span className="capitalize">{health}</span>

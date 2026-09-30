@@ -7,7 +7,7 @@ import { ApiError, apiFetch } from '#/lib/api'
 import { Route } from '#/routes/_authenticated/graph'
 
 import type { PageResult, RegistryTeam } from '#/lib/registry-types'
-import type { BlastRadius, Cycles, Graph } from '#/lib/topology-types'
+import type { BlastRadius, Cycles, Graph, Spofs } from '#/lib/topology-types'
 
 // Minimal reactive stand-in for TanStack Router's search-param state: real enough that
 // navigate({ search }) calls re-render the component with the updated filters/selection.
@@ -75,16 +75,19 @@ const EMPTY_BLAST_RADIUS: BlastRadius = {
 }
 
 const EMPTY_CYCLES: Cycles = { cycles: [], truncated: false }
+const EMPTY_SPOFS: Spofs = { threshold: 5, rationale: 'rationale', items: [] }
 
 function mockGraphCalls(
   byQuery: (query: string) => Graph,
   blastRadius: BlastRadius = EMPTY_BLAST_RADIUS,
   cycles: Cycles = EMPTY_CYCLES,
+  spofs: Spofs = EMPTY_SPOFS,
 ) {
   vi.mocked(apiFetch).mockImplementation((path: string) => {
     if (path.includes('/v1/registry/teams')) return Promise.resolve(EMPTY_TEAMS)
     if (path.includes('/v1/topology/blast-radius/')) return Promise.resolve(blastRadius)
     if (path.includes('/v1/topology/cycles')) return Promise.resolve(cycles)
+    if (path.includes('/v1/topology/spofs')) return Promise.resolve(spofs)
     const query = path.split('?')[1] ?? ''
     return Promise.resolve(byQuery(query))
   })
@@ -287,6 +290,33 @@ describe('GraphPage', () => {
     await screen.findByRole('group', { name: /service dependency graph/i })
 
     expect(screen.queryByRole('button', { name: /dependency cycle/i })).not.toBeInTheDocument()
+  })
+
+  it('shows the SPOF badge in the toolbar and marks flagged nodes', async () => {
+    const spofs: Spofs = {
+      threshold: 5,
+      rationale: 'rationale',
+      items: [{ serviceId: 's1', name: 'api-gateway', teamId: null, tier: 'CRITICAL', healthStatus: 'HEALTHY', fanIn: 6, severity: 'critical' }],
+    }
+    mockGraphCalls(() => makeGraph(), EMPTY_BLAST_RADIUS, EMPTY_CYCLES, spofs)
+    renderPage()
+    const svg = await screen.findByRole('group', { name: /service dependency graph/i })
+
+    expect(await screen.findByRole('button', { name: /1 single point of failure/i })).toBeInTheDocument()
+    const nodeGroups = svg.querySelectorAll('.graph-node')
+    const flagged = Array.from(nodeGroups).find((el) => el.getAttribute('aria-label')?.startsWith('api-gateway'))
+    expect(flagged?.querySelector('text.graph-node-spof-badge')?.getAttribute('opacity')).toBe('1')
+    expect(flagged?.getAttribute('aria-label')).toContain('a single point of failure')
+    const unflagged = Array.from(nodeGroups).find((el) => el.getAttribute('aria-label')?.startsWith('auth-service'))
+    expect(unflagged?.querySelector('text.graph-node-spof-badge')?.getAttribute('opacity')).toBe('0')
+  })
+
+  it('renders no SPOF badge when the tenant has no SPOFs', async () => {
+    mockGraphCalls(() => makeGraph())
+    renderPage()
+    await screen.findByRole('group', { name: /service dependency graph/i })
+
+    expect(screen.queryByRole('button', { name: /single point of failure/i })).not.toBeInTheDocument()
   })
 
   it('shows a dedicated empty state for a tenant with no services', async () => {

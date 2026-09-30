@@ -8,6 +8,7 @@ import { AppLayout } from '#/components/AppLayout'
 import { CycleBadge } from '#/components/CycleBadge'
 import { DependencyGraph } from '#/components/DependencyGraph'
 import { InspectorPanel } from '#/components/InspectorPanel'
+import { SpofBadge } from '#/components/SpofBadge'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
 import { Card, CardContent } from '#/components/ui/card'
@@ -18,7 +19,7 @@ import { ApiError, apiFetch } from '#/lib/api'
 
 import type { BlastRadiusHighlightMap } from '#/components/DependencyGraph'
 import type { PageResult, RegistryTeam } from '#/lib/registry-types'
-import type { BlastRadius, Cycles, DependencyType, Graph, GraphNode } from '#/lib/topology-types'
+import type { BlastRadius, Cycles, DependencyType, Graph, GraphNode, Spofs } from '#/lib/topology-types'
 
 const graphSearchSchema = z.object({
   service: z.string().optional(),
@@ -116,6 +117,16 @@ function GraphPage() {
   const cycles = cyclesData?.cycles ?? []
   const cycleMemberIds = useMemo(() => new Set(cycles.flatMap((c) => c.members)), [cycles])
 
+  // Same best-effort-degrade-on-failure treatment as cycles above — a failed SPOF fetch just
+  // means no badges, not a page-level Alert.
+  const { data: spofsData } = useQuery({
+    queryKey: ['spofs'],
+    queryFn: () => apiFetch<Spofs>('/v1/topology/spofs'),
+    staleTime: 0,
+  })
+  const spofs = spofsData?.items ?? []
+  const spofServiceIds = useMemo(() => new Set(spofs.map((s) => s.serviceId)), [spofs])
+
   return (
     <AppLayout
       title="Graph"
@@ -153,6 +164,7 @@ function GraphPage() {
         </Select>
 
         <CycleBadge cycles={cycles} nodesById={nodesById} />
+        <SpofBadge spofs={spofs} nodesById={nodesById} />
       </div>
 
       {type === 'OBSERVED' && (
@@ -214,6 +226,7 @@ function GraphPage() {
               onSelectNode={setSelectedServiceId}
               blastRadiusHighlight={blastRadiusHighlight}
               cycleMemberIds={cycleMemberIds}
+              spofServiceIds={spofServiceIds}
             />
           </div>
 
@@ -227,6 +240,7 @@ function GraphPage() {
                 isBlastRadiusLoading={isBlastRadiusLoading}
                 blastRadiusError={blastRadiusError}
                 cycles={cycles}
+                spofs={spofs}
                 nodesById={nodesById}
               />
             ) : (
