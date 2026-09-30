@@ -123,6 +123,70 @@ test('register services, declare a dependency, and see it on the graph', async (
 
   await expect(page.locator('text.graph-node-cycle-badge[opacity="1"]')).toHaveCount(3)
 
+  // SPOF: thirdService already has one dependent (downstreamService, from the cycle above).
+  // Register four more services, each declaring a dependency on thirdService, to cross the
+  // default fan-in threshold of 5.
+  const spofDependents = [uniqueName('svc-a'), uniqueName('svc-b'), uniqueName('svc-c'), uniqueName('svc-d')]
+  await page.getByRole('link', { name: 'Catalog', exact: true }).click()
+  for (const name of spofDependents) {
+    await page.getByRole('button', { name: 'Register service' }).click()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByLabel('Service name').fill(name)
+    await dialog.getByRole('button', { name: 'Register service' }).click()
+    await expect(dialog).not.toBeVisible()
+    await expect(page.getByRole('link', { name })).toBeVisible()
+  }
+  for (const name of spofDependents) {
+    await page.getByRole('link', { name }).click()
+    await expect(page.locator('#main-content').getByRole('heading', { name })).toBeVisible()
+    await page.getByRole('tab', { name: 'Dependencies' }).click()
+    await page.getByRole('button', { name: 'Add dependency' }).click()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByPlaceholder('Search services…').fill(thirdService)
+    await dialog.getByRole('option', { name: thirdService }).click()
+    await dialog.getByRole('button', { name: 'Add dependency' }).click()
+    await expect(dialog).not.toBeVisible()
+    await page.getByRole('link', { name: 'Service Catalog' }).click()
+  }
+
+  // Same debounced-MV-refresh reasoning as the cycle badge above: navigate away and back,
+  // retrying until the SPOF badge appears rather than guessing the refresh delay.
+  const spofBadgeMatcher = { name: /1 single point of failure/i }
+  await expect(async () => {
+    await page.getByRole('link', { name: 'Catalog', exact: true }).click()
+    await page.getByRole('link', { name: thirdService }).click()
+    await expect(page.locator('#main-content').getByRole('heading', { name: thirdService })).toBeVisible()
+    await expect(page.getByRole('button', spofBadgeMatcher)).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 20_000, intervals: [2_000] })
+
+  await page.getByRole('link', { name: 'Graph', exact: true }).click()
+  await expect(page.getByRole('group', { name: 'Service dependency graph' })).toBeVisible()
+  await expect(async () => {
+    await expect(page.getByRole('button', spofBadgeMatcher)).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 10_000, intervals: [2_000] })
+
+  const spofBadge = page.getByRole('button', spofBadgeMatcher)
+  await spofBadge.click()
+  const spofPopover = page.getByRole('dialog')
+  await expect(spofPopover.getByText(new RegExp(`${thirdService} —`))).toBeVisible()
+  await page.keyboard.press('Escape')
+
+  await expect(page.locator('text.graph-node-spof-badge[opacity="1"]')).toHaveCount(1)
+
+  // Risks page: both the cycle and the SPOF just created should surface here too, from the
+  // same underlying state — no separate seed needed.
+  await page.getByRole('link', { name: 'Risks', exact: true }).click()
+  await expect(async () => {
+    await expect(page.getByText(/circular dependency among 3 services/i)).toBeVisible({ timeout: 2_000 })
+    await expect(
+      page.getByText(new RegExp(`single point of failure: ${thirdService}`, 'i')),
+    ).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 10_000, intervals: [2_000] })
+
+  // Back to the graph for the remaining edge-mode/blast-radius checks below.
+  await page.getByRole('link', { name: 'Graph', exact: true }).click()
+  await expect(page.getByRole('group', { name: 'Service dependency graph' })).toBeVisible()
+
   await page.getByRole('radio', { name: 'Observed' }).click()
   await expect(page.getByText(/observed dependencies aren.t collected yet/i)).toBeVisible()
 
