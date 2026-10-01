@@ -13,6 +13,9 @@ export function useRisks() {
   return useQuery({
     queryKey: ['risks'],
     queryFn: () => apiFetch<PageResult<Risk>>(`/v1/topology/risks?limit=${RISKS_LIMIT}&offset=0`),
+    // Risks are derived live from topology state; the layout-mounted bell would otherwise seed a
+    // fresh-looking cache that hides new cycles/SPOFs from the Risks page and dashboard.
+    staleTime: 0,
   })
 }
 
