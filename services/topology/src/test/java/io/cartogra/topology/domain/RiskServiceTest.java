@@ -1,6 +1,5 @@
 package io.cartogra.topology.domain;
 
-import io.cartogra.common.api.PageResult;
 import io.cartogra.topology.repository.DependencyDriftRepository;
 import io.cartogra.topology.repository.GraphNodeRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,7 +45,7 @@ class RiskServiceTest {
 
     @Test
     void emptyEverythingReturnsEmptyPage() {
-        PageResult<Risk> result = service.list(tenantId, 20, 0);
+        RiskPage result = service.list(tenantId, 20, 0);
 
         assertThat(result.items()).isEmpty();
         assertThat(result.total()).isZero();
@@ -71,7 +70,7 @@ class RiskServiceTest {
                 Instant.now(), null, null);
         when(driftRepository.findActive(any(), anyInt(), anyInt())).thenReturn(List.of(drift));
 
-        PageResult<Risk> result = service.list(tenantId, 20, 0);
+        RiskPage result = service.list(tenantId, 20, 0);
 
         assertThat(result.total()).isEqualTo(4);
         assertThat(result.items()).extracting(Risk::type)
@@ -88,7 +87,7 @@ class RiskServiceTest {
         when(graphNodeRepository.findOrphaned(any(), anyInt()))
                 .thenReturn(List.of(node(orphanId, "a-svc", null, "CRITICAL")));
 
-        PageResult<Risk> result = service.list(tenantId, 20, 0);
+        RiskPage result = service.list(tenantId, 20, 0);
 
         assertThat(result.items()).hasSize(2);
         assertThat(result.items().get(0).severity()).isEqualTo(RiskSeverity.CRITICAL);
@@ -103,8 +102,8 @@ class RiskServiceTest {
                 node(UUID.randomUUID(), "svc-3", null, "STANDARD"));
         when(graphNodeRepository.findOrphaned(any(), anyInt())).thenReturn(orphans);
 
-        PageResult<Risk> firstPage = service.list(tenantId, 2, 0);
-        PageResult<Risk> secondPage = service.list(tenantId, 2, 2);
+        RiskPage firstPage = service.list(tenantId, 2, 0);
+        RiskPage secondPage = service.list(tenantId, 2, 2);
 
         assertThat(firstPage.total()).isEqualTo(3);
         assertThat(firstPage.items()).hasSize(2);
@@ -120,7 +119,7 @@ class RiskServiceTest {
                 node(critical, "critical-svc", UUID.randomUUID(), "CRITICAL"),
                 node(standard, "standard-svc", UUID.randomUUID(), "STANDARD")));
 
-        PageResult<Risk> result = service.list(tenantId, 20, 0);
+        RiskPage result = service.list(tenantId, 20, 0);
 
         assertThat(result.items()).singleElement().extracting(Risk::severity).isEqualTo(RiskSeverity.CRITICAL);
     }
@@ -134,7 +133,7 @@ class RiskServiceTest {
                 node(a, "a-svc", UUID.randomUUID(), "EXPERIMENTAL"),
                 node(b, "b-svc", UUID.randomUUID(), "EXPERIMENTAL")));
 
-        PageResult<Risk> result = service.list(tenantId, 20, 0);
+        RiskPage result = service.list(tenantId, 20, 0);
 
         assertThat(result.items()).singleElement().extracting(Risk::severity).isEqualTo(RiskSeverity.INFO);
     }
@@ -144,7 +143,7 @@ class RiskServiceTest {
         UUID id = UUID.randomUUID();
         when(graphNodeRepository.findOrphaned(any(), anyInt())).thenReturn(List.of(node(id, "svc", null, "EXPERIMENTAL")));
 
-        PageResult<Risk> result = service.list(tenantId, 20, 0);
+        RiskPage result = service.list(tenantId, 20, 0);
 
         assertThat(result.items()).singleElement().extracting(Risk::severity).isEqualTo(RiskSeverity.INFO);
     }
@@ -161,7 +160,7 @@ class RiskServiceTest {
                 Instant.now(), null, null);
         when(driftRepository.findActive(any(), anyInt(), anyInt())).thenReturn(List.of(undeclared, missing));
 
-        PageResult<Risk> result = service.list(tenantId, 20, 0);
+        RiskPage result = service.list(tenantId, 20, 0);
 
         assertThat(result.items()).filteredOn(r -> r.id().equals("drift:" + undeclared.id()))
                 .singleElement().extracting(Risk::severity).isEqualTo(RiskSeverity.WARNING);
@@ -174,9 +173,58 @@ class RiskServiceTest {
         UUID orphanId = UUID.randomUUID();
         when(graphNodeRepository.findOrphaned(any(), anyInt())).thenReturn(List.of(node(orphanId, "svc", null, "STANDARD")));
 
-        PageResult<Risk> first = service.list(tenantId, 20, 0);
-        PageResult<Risk> second = service.list(tenantId, 20, 0);
+        RiskPage first = service.list(tenantId, 20, 0);
+        RiskPage second = service.list(tenantId, 20, 0);
 
         assertThat(first.items().get(0).id()).isEqualTo(second.items().get(0).id());
+    }
+
+    @Test
+    void notTruncatedWhenNoSourceHitsItsCap() {
+        assertThat(service.list(tenantId, 20, 0).truncated()).isFalse();
+    }
+
+    @Test
+    void truncatedWhenCycleSourceWasCapped() {
+        when(cycleService.find(any(), any())).thenReturn(new Cycles(List.of(), true));
+
+        assertThat(service.list(tenantId, 20, 0).truncated()).isTrue();
+    }
+
+    @Test
+    void truncatedWhenSpofSourceWasCapped() {
+        when(spofService.detect(any())).thenReturn(new SpofResult(5, "rationale", List.of(), true));
+
+        assertThat(service.list(tenantId, 20, 0).truncated()).isTrue();
+    }
+
+    @Test
+    void orphanSourceOverTheCapIsTrimmedAndFlaggedTruncated() {
+        List<GraphNode> orphans = java.util.stream.IntStream.rangeClosed(0, SpofService.MAX_ROWS)
+                .mapToObj(i -> node(UUID.randomUUID(), "svc-" + i, null, "STANDARD"))
+                .toList();
+        when(graphNodeRepository.findOrphaned(any(), anyInt())).thenReturn(orphans);
+
+        RiskPage result = service.list(tenantId, 500, 0);
+
+        assertThat(result.total()).isEqualTo(SpofService.MAX_ROWS);
+        assertThat(result.truncated()).isTrue();
+    }
+
+    @Test
+    void equalSeverityTypeAndTitleOrderByIdSoPagingIsStable() {
+        UUID m1 = UUID.randomUUID();
+        UUID m2 = UUID.randomUUID();
+        UUID m3 = UUID.randomUUID();
+        UUID m4 = UUID.randomUUID();
+        Cycle c1 = new Cycle(List.of(m1, m2));
+        Cycle c2 = new Cycle(List.of(m3, m4));
+        when(cycleService.find(any(), any())).thenReturn(new Cycles(List.of(c1, c2), false));
+        RiskPage forward = service.list(tenantId, 20, 0);
+        when(cycleService.find(any(), any())).thenReturn(new Cycles(List.of(c2, c1), false));
+        RiskPage reversed = service.list(tenantId, 20, 0);
+
+        assertThat(reversed.items()).extracting(Risk::id).containsExactlyElementsOf(
+                forward.items().stream().map(Risk::id).toList());
     }
 }

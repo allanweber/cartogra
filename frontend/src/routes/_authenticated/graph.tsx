@@ -15,6 +15,7 @@ import { Card, CardContent } from '#/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#/components/ui/select'
 import { Skeleton } from '#/components/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
+import { useServiceNames } from '#/hooks/useRisks'
 import { ApiError, apiFetch } from '#/lib/api'
 import { cn } from '#/lib/utils'
 
@@ -82,6 +83,15 @@ function GraphPage() {
     graph?.nodes.forEach((node) => map.set(node.serviceId, node))
     return map
   }, [graph])
+
+  // Cycles and SPOFs are tenant-wide, but `graph` is team-filtered — fall back to registry names
+  // so badge popovers don't show raw UUIDs for members outside the filtered view.
+  const serviceNames = useServiceNames()
+  const badgeNodesById = useMemo(() => {
+    const map = new Map<string, { name: string }>([...serviceNames].map(([id, name]) => [id, { name }]))
+    nodesById.forEach((node, id) => map.set(id, node))
+    return map
+  }, [serviceNames, nodesById])
 
   const selectedNode = selectedServiceId ? (nodesById.get(selectedServiceId) ?? null) : null
   const [sheetExpanded, setSheetExpanded] = useState(false)
@@ -186,10 +196,10 @@ function GraphPage() {
           </SelectContent>
         </Select>
 
-        <CycleBadge cycles={cycles} nodesById={nodesById} />
+        <CycleBadge cycles={cycles} nodesById={badgeNodesById} truncated={cyclesData?.truncated} />
         <SpofBadge
           spofs={spofs}
-          nodesById={nodesById}
+          nodesById={badgeNodesById}
           threshold={spofsData?.threshold}
           rationale={spofsData?.rationale}
         />
@@ -273,10 +283,11 @@ function GraphPage() {
                 isBlastRadiusLoading={isBlastRadiusLoading}
                 blastRadiusError={blastRadiusError}
                 cycles={cycles}
+                cyclesTruncated={cyclesData?.truncated}
                 spofs={spofs}
                 spofThreshold={spofsData?.threshold}
                 spofRationale={spofsData?.rationale}
-                nodesById={nodesById}
+                nodesById={badgeNodesById}
                 onClose={() => setSelectedServiceId(null)}
                 expanded={sheetExpanded}
                 onToggleExpanded={() => setSheetExpanded((e) => !e)}

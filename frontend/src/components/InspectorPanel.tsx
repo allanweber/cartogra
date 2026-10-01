@@ -221,6 +221,7 @@ export function InspectorPanel({
   isBlastRadiusLoading,
   blastRadiusError,
   cycles,
+  cyclesTruncated,
   spofs,
   spofThreshold,
   spofRationale,
@@ -238,10 +239,11 @@ export function InspectorPanel({
   isBlastRadiusLoading: boolean
   blastRadiusError: Error | null
   cycles: Cycle[]
+  cyclesTruncated?: boolean
   spofs: Spof[]
   spofThreshold?: number
   spofRationale?: string
-  nodesById: Map<string, GraphNode>
+  nodesById: Map<string, { name: string }>
 }) {
   const [activeTab, setActiveTab] = useState<'details' | 'blast-radius'>('blast-radius')
   const teamName = teamMap.get(node.teamId ?? '') ?? null
@@ -250,7 +252,12 @@ export function InspectorPanel({
     <Card className="h-full">
       <CardHeader className="shrink-0 flex flex-row items-center gap-2 pb-2 pt-5">
         <CardTitle className="text-sm font-semibold">{node.name}</CardTitle>
-        <CycleBadge cycles={cycles} nodesById={nodesById} onlyForServiceId={node.serviceId} />
+        <CycleBadge
+          cycles={cycles}
+          nodesById={nodesById}
+          onlyForServiceId={node.serviceId}
+          truncated={cyclesTruncated}
+        />
         <SpofBadge
           spofs={spofs}
           nodesById={nodesById}

@@ -228,7 +228,12 @@ function ServiceDetailPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-bold">{service.name}</h1>
                 <TierBadge tier={service.tier} />
-                <CycleBadge cycles={cyclesData?.cycles ?? []} nodesById={cycleNodesById} onlyForServiceId={service.id} />
+                <CycleBadge
+                  cycles={cyclesData?.cycles ?? []}
+                  nodesById={cycleNodesById}
+                  onlyForServiceId={service.id}
+                  truncated={cyclesData?.truncated}
+                />
                 <SpofBadge
                   spofs={spofsData?.items ?? []}
                   nodesById={cycleNodesById}

@@ -29,7 +29,8 @@ This directory captures significant architectural decisions made during the deve
 | [0024](0024-gateway-circuit-breaking-via-route-filter-not-restclient.md) | Gateway circuit breaking is a Resilience4j route filter, not a per-service RestClient wrapper | Accepted | 2026-07-08 |
 | [0025](0025-team-membership-replaces-team-owner-role.md) | Team membership (live DB check) replaces the TEAM_OWNER role | Accepted | 2026-07-13 |
 | [0026](0026-accept-alpha-opentelemetry-logback-appender.md) | Accept `opentelemetry-logback-appender-1.0` as a permanently-alpha dependency | Accepted | 2026-07-17 |
-| [0027](0027-topology-consumes-ownership-events-for-orphan-risk.md) | Topology consumes a Registry ownership event to compute orphan risk | Proposed | 2026-08-05 |
+| [0027](0027-topology-consumes-ownership-events-for-orphan-risk.md) | Topology consumes a Registry ownership event to compute orphan risk | Superseded by 0028 | 2026-08-05 |
+| [0028](0028-topology-reads-team-id-directly-for-orphan-risk.md) | Topology reads `graph_nodes.team_id` directly for orphan risk, superseding ADR-0027 | Accepted | 2026-09-30 |
 
 ## Process
 

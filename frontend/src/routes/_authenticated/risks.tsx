@@ -141,6 +141,15 @@ function RisksPage() {
               />
             </div>
 
+            {risksPage.truncated && (
+              <Alert>
+                <AlertDescription>
+                  Some risk sources hit their 200-item cap — more risks exist than are listed, and the counts
+                  below understate them.
+                </AlertDescription>
+              </Alert>
+            )}
+
             {risksPage.total > risksPage.items.length && (
               <Alert>
                 <AlertDescription>

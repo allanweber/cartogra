@@ -56,4 +56,13 @@ describe('CycleBadge', () => {
     rerender(<CycleBadge cycles={cycles} nodesById={nodesById} onlyForServiceId="not-in-any-cycle" />)
     expect(container).toBeEmptyDOMElement()
   })
+
+  it('shows a plus count and a cap note when the cycle list is truncated', () => {
+    const cycles: Cycle[] = [{ members: ['s1', 's2'], length: 2 }]
+    render(<CycleBadge cycles={cycles} nodesById={nodesById} truncated />)
+
+    fireEvent.click(screen.getByRole('button', { name: /1\+ dependency cycles/i }))
+
+    expect(screen.getByText(/hit its cap/i)).toBeInTheDocument()
+  })
 })

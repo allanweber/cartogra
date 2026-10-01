@@ -82,8 +82,10 @@ function mockGraphCalls(
   blastRadius: BlastRadius = EMPTY_BLAST_RADIUS,
   cycles: Cycles = EMPTY_CYCLES,
   spofs: Spofs = EMPTY_SPOFS,
+  services: { id: string; name: string }[] = [],
 ) {
   vi.mocked(apiFetch).mockImplementation((path: string) => {
+    if (path.includes('/v1/registry/services')) return Promise.resolve({ items: services, total: services.length, limit: 1000, offset: 0 })
     if (path.includes('/v1/registry/teams')) return Promise.resolve(EMPTY_TEAMS)
     if (path.includes('/v1/topology/blast-radius/')) return Promise.resolve(blastRadius)
     if (path.includes('/v1/topology/cycles')) return Promise.resolve(cycles)
@@ -268,6 +270,19 @@ describe('GraphPage', () => {
     expect(screen.getByText(/graph capped/i)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /dismiss/i }))
     expect(screen.queryByText(/graph capped/i)).not.toBeInTheDocument()
+  })
+
+  it('names cycle members outside the team-filtered graph from the registry, not raw ids', async () => {
+    const cycles: Cycles = { cycles: [{ members: ['s1', 'other-team-svc'], length: 2 }], truncated: false }
+    mockGraphCalls(() => makeGraph(), EMPTY_BLAST_RADIUS, cycles, EMPTY_SPOFS, [
+      { id: 'other-team-svc', name: 'billing-api' },
+    ])
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: /1 dependency cycle/i }))
+
+    expect(await screen.findByText(/billing-api/)).toBeInTheDocument()
+    expect(screen.queryByText(/other-team-svc/)).not.toBeInTheDocument()
   })
 
   it('shows the cycle badge in the toolbar and marks member nodes when cycles are found', async () => {

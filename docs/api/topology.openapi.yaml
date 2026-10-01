@@ -277,7 +277,7 @@ paths:
       summary: Aggregated risk findings across the tenant's dependency graph
       description: |
         Combines cycle, SPOF, orphan, and drift findings into one severity-sorted, paginated
-        list. Each finding carries a deterministic `id` (stable across calls for the same
+        list. Ordering is deterministic (severity, type, title, id). Each finding carries a deterministic `id` (stable across calls for the same
         underlying state) so clients can track dismissal locally.
       operationId: getRisks
       tags: [risks]
@@ -681,7 +681,7 @@ components:
           properties:
             data:
               type: object
-              required: [items, total, limit, offset]
+              required: [items, total, limit, offset, truncated]
               properties:
                 items:
                   type: array
@@ -690,10 +690,14 @@ components:
                 total:
                   type: integer
                   format: int64
+                  description: Count across the capped sources; the true total is higher when `truncated` is true.
                 limit:
                   type: integer
                 offset:
                   type: integer
+                truncated:
+                  type: boolean
+                  description: True when any risk source (cycles, SPOFs, orphans, drift) hit its cap of 200.
 
   responses:
     BadRequest:

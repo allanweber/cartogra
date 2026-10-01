@@ -38,7 +38,9 @@ public class SpofService {
 
     public SpofResult detect(UUID tenantId) {
         int threshold = settingsRepository.findSpofThreshold(tenantId).orElse(DEFAULT_THRESHOLD);
-        List<FanInRow> fanInRows = graphViewRepository.findFanIn(tenantId, threshold, MAX_ROWS);
+        List<FanInRow> fetched = graphViewRepository.findFanIn(tenantId, threshold, MAX_ROWS + 1);
+        boolean truncated = fetched.size() > MAX_ROWS;
+        List<FanInRow> fanInRows = truncated ? fetched.subList(0, MAX_ROWS) : fetched;
 
         Set<UUID> ids = fanInRows.stream().map(FanInRow::serviceId).collect(Collectors.toCollection(LinkedHashSet::new));
         Map<UUID, GraphNode> nodesById = graphNodeRepository.findByServiceIds(tenantId, ids, ids.size()).stream()
@@ -52,7 +54,7 @@ public class SpofService {
                 })
                 .toList();
 
-        return new SpofResult(threshold, rationale(threshold), items);
+        return new SpofResult(threshold, rationale(threshold), items, truncated);
     }
 
     static RiskSeverity severityOf(GraphNode node) {
