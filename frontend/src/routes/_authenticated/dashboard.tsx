@@ -10,11 +10,9 @@ import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
 import { Skeleton } from '#/components/ui/skeleton'
+import { formatAffected, useRisks } from '#/hooks/useRisks'
 import { ApiError, apiFetch } from '#/lib/api'
-import {
-  MOCK_RISKS,
-  MOCK_TIMELINE,
-} from '#/lib/mock-data'
+import { MOCK_TIMELINE } from '#/lib/mock-data'
 import { normalizeHealth } from '#/lib/registry-types'
 import { cn } from '#/lib/utils'
 
@@ -26,6 +24,8 @@ export const Route = createFileRoute('/_authenticated/dashboard')({
 })
 
 // Mirrors catalog.index.tsx's isStale — not exported there, so duplicated here per convention.
+const SEVERITY_ORDER = { critical: 0, warning: 1, info: 2 } as const
+
 function isStale(dateStr: string | null): boolean {
   if (!dateStr) return false
   return Date.now() - new Date(dateStr).getTime() > 14 * 86400 * 1000
@@ -39,6 +39,8 @@ function DashboardPage() {
     queryFn: () => apiFetch<PageResult<RegistryService>>('/v1/registry/services?limit=200'),
   })
 
+  const { data: risksPage, isLoading: risksLoading, error: risksError } = useRisks()
+
   const { data: teamsPage, error: teamsError } = useQuery({
     queryKey: ['teams', 'count'],
     queryFn: () => apiFetch<PageResult<RegistryTeam>>('/v1/registry/teams?limit=1'),
@@ -51,8 +53,10 @@ function DashboardPage() {
   const criticalTier = services.filter((s) => s.tier === 'CRITICAL').length
   const staleServices = services.filter((s) => isStale(s.lastDeployedAt))
   const orphanServices = services.filter((s) => s.teamId === null)
-  const criticalRisks = MOCK_RISKS.filter((r) => r.severity === 'critical').length
-  const warningRisks = MOCK_RISKS.filter((r) => r.severity === 'warning').length
+  const risks = risksPage?.items ?? []
+  const serviceNames = new Map(services.map((s) => [s.id, s.name]))
+  const criticalRisks = risks.filter((r) => r.severity === 'critical').length
+  const warningRisks = risks.filter((r) => r.severity === 'warning').length
 
   const healthyCount = services.filter((s) => normalizeHealth(s.healthStatus) === 'healthy').length
   const degradedCount = services.filter((s) => normalizeHealth(s.healthStatus) === 'degraded').length
@@ -161,6 +165,7 @@ function DashboardPage() {
                 label="risks"
                 sub={`${criticalRisks} critical · ${warningRisks} warning`}
                 valueClass={criticalRisks > 0 ? 'health-down' : 'health-healthy'}
+                error={risksError}
               />
               <StatStrip
                 icon={<Users className="size-3.5" />}
@@ -185,15 +190,22 @@ function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-2">
-              {error ? (
+              {risksError ? (
                 <Alert variant="destructive">
                   <AlertDescription>
-                    {error.message}
-                    {error instanceof ApiError && ` (trace: ${error.traceId})`}
+                    {risksError.message}
+                    {risksError instanceof ApiError && ` (trace: ${risksError.traceId})`}
                   </AlertDescription>
                 </Alert>
+              ) : risksLoading ? (
+                Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)
+              ) : risks.length === 0 ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">No active risks</p>
               ) : (
-                MOCK_RISKS.slice(0, 4).map((risk) => (
+                [...risks]
+                  .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity])
+                  .slice(0, 4)
+                  .map((risk) => (
                   <div
                     key={risk.id}
                     className="flex items-start gap-3 rounded-lg bg-muted/40 p-3"
@@ -201,7 +213,7 @@ function DashboardPage() {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium leading-tight">{risk.title}</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">
-                        {risk.services.join(', ')}
+                        {formatAffected(risk.affectedServices, serviceNames)}
                       </p>
                     </div>
                     <SeverityBadge severity={risk.severity} />

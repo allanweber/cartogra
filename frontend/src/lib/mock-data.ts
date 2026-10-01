@@ -18,17 +18,6 @@ export interface Service {
   scmProvider: ScmProvider
 }
 
-export type RiskSeverity = 'critical' | 'warning' | 'info'
-
-export interface Risk {
-  id: string
-  severity: RiskSeverity
-  title: string
-  services: string[]
-  explanation: string
-  fix: string
-}
-
 export type ContractStatus = 'compatible' | 'breaking' | 'warning' | 'stale'
 
 export interface Contract {
@@ -89,16 +78,6 @@ export const MOCK_SERVICES: Service[] = [
   { id: 'svc-10', name: 'Config Service', health: 'healthy', owner: 'Platform', tier: 'standard', tech: ['Go', 'etcd', 'gRPC'], lastDeploy: '4d ago', riskScore: 9, deps: 0, warnings: [], description: 'Centralized feature flag and configuration management for all services.', scmProvider: 'github' },
   { id: 'svc-11', name: 'Report Service', health: 'healthy', owner: null, tier: 'standard', tech: ['Python', 'PostgreSQL', 'Celery'], lastDeploy: '8d ago', riskScore: 22, deps: 2, warnings: ['orphan'], description: 'Generates scheduled and on-demand reports in PDF and CSV formats.', scmProvider: 'bitbucket' },
   { id: 'svc-12', name: 'Media Service', health: 'degraded', owner: 'Core', tier: 'standard', tech: ['Node.js', 'S3', 'FFmpeg'], lastDeploy: '15d ago', riskScore: 44, deps: 2, warnings: ['stale'], description: 'Handles image and video upload, transcoding, and CDN distribution.', scmProvider: 'github' },
-]
-
-export const MOCK_RISKS: Risk[] = [
-  { id: 'r-1', severity: 'critical', title: 'Breaking change in Payment API v2.1', services: ['Payment Service', 'Billing Service', 'API Gateway'], explanation: 'The /charge endpoint removed the legacy_mode field, breaking 3 downstream consumers in prod.', fix: 'Pin consumers to v2.0 or update them to handle the new payload format immediately.' },
-  { id: 'r-2', severity: 'critical', title: 'Search Service offline — 20 days', services: ['Search Service'], explanation: 'No heartbeat received. 6 consumers are silently swallowing errors due to missing circuit breakers.', fix: 'Investigate Search Service health. Add circuit breaker to all 6 consumers.' },
-  { id: 'r-3', severity: 'warning', title: 'Analytics Engine stale — 12 days', services: ['Analytics Engine'], explanation: 'No deployment in 12 days. Direct dependencies on Payment Service have likely drifted.', fix: 'Trigger a sync deployment or mark as deprecated.' },
-  { id: 'r-4', severity: 'warning', title: 'Circular dependency: Auth ↔ User', services: ['Auth Service', 'User Service'], explanation: 'Auth depends on User which depends on Auth. This tight coupling makes deploys and incident response risky.', fix: 'Extract shared logic into a common lib or introduce an event bus.' },
-  { id: 'r-5', severity: 'warning', title: 'Orphaned services with no owner', services: ['Search Service', 'Report Service'], explanation: '2 services have no active team assignment. Incidents will go unacknowledged.', fix: 'Assign to an active team in Teams > Settings.' },
-  { id: 'r-6', severity: 'info', title: 'High fan-in on API Gateway (11 deps)', services: ['API Gateway'], explanation: '11 services depend directly on API Gateway. A single failure would cascade broadly.', fix: 'Consider introducing a service mesh or BFF layer to reduce coupling.' },
-  { id: 'r-7', severity: 'info', title: 'Payment Service uses deprecated K8s API', services: ['Payment Service'], explanation: 'The deployment manifest uses apps/v1beta1 removed in K8s 1.16+.', fix: 'Migrate to apps/v1 in the deployment manifest.' },
 ]
 
 export const MOCK_CONTRACTS: Contract[] = [

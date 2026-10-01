@@ -11,8 +11,11 @@ import {
   DropdownMenuTrigger,
 } from '#/components/ui/dropdown-menu'
 import { ScrollArea } from '#/components/ui/scroll-area'
-import { MOCK_RISKS, MOCK_EVENTS } from '#/lib/mock-data'
+import { formatAffected, useRisks, useServiceNames } from '#/hooks/useRisks'
+import { MOCK_EVENTS } from '#/lib/mock-data'
 import { cn } from '#/lib/utils'
+
+import type { Risk } from '#/lib/topology-types'
 
 interface Notification {
   id: string
@@ -24,14 +27,17 @@ interface Notification {
   read: boolean
 }
 
-function buildNotifications(): Notification[] {
-  const risks: Notification[] = MOCK_RISKS.filter(
+function buildNotifications(
+  riskItems: Risk[],
+  serviceNames: Map<string, string>,
+): Notification[] {
+  const risks: Notification[] = riskItems.filter(
     (r) => r.severity !== 'info',
   ).map((r) => ({
     id: `risk-${r.id}`,
     kind: 'risk' as const,
     title: r.title,
-    subtitle: r.services.join(', '),
+    subtitle: formatAffected(r.affectedServices, serviceNames),
     time: 'Active',
     severity: r.severity === 'critical' ? 'critical' : 'warning',
     read: false,
@@ -61,17 +67,21 @@ const severityConfig: Record<Notification['severity'], { dot: string; text: stri
 }
 
 export function NotificationBell() {
-  const [notifications, setNotifications] = useState<Notification[]>(buildNotifications)
+  const { data: risksPage } = useRisks()
+  const serviceNames = useServiceNames()
+  const [readIds, setReadIds] = useState<Set<string>>(new Set())
+  const notifications = buildNotifications(risksPage?.items ?? [], serviceNames).map((n) => ({
+    ...n,
+    read: readIds.has(n.id),
+  }))
   const unreadCount = notifications.filter((n) => !n.read).length
 
   function markAllRead() {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+    setReadIds(new Set(notifications.map((n) => n.id)))
   }
 
   function markRead(id: string) {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
-    )
+    setReadIds((prev) => new Set(prev).add(id))
   }
 
   return (
