@@ -145,6 +145,7 @@ class RiskControllerIT {
         assertThat(resp.statusCode()).isEqualTo(200);
         JsonNode data = objectMapper.readTree(resp.body()).get("data");
         assertThat(data.get("total").longValue()).isEqualTo(4);
+        assertThat(data.get("truncated").booleanValue()).isFalse();
         assertThat(types(data.get("items"))).containsExactlyInAnyOrder("cycle", "spof", "orphan", "drift");
         assertTraceIdHeaderMatchesBody(resp);
     }

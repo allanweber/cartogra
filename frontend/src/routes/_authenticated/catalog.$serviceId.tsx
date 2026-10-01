@@ -8,6 +8,7 @@ import { AppLayout } from '#/components/AppLayout'
 import { CycleBadge } from '#/components/CycleBadge'
 import { DependenciesList } from '#/components/DependenciesList'
 import { EditServiceDrawer } from '#/components/EditServiceDrawer'
+import { useServiceNames } from '#/hooks/useRisks'
 import { RiskScoreBadge } from '#/components/RiskScoreBadge'
 import { SpofBadge } from '#/components/SpofBadge'
 import { TierBadge } from '#/components/TierBadge'
@@ -22,7 +23,7 @@ import { useAuthStore } from '#/stores/useAuthStore'
 import { cn } from '#/lib/utils'
 
 import type { PageResult, RegistryService, RegistryTeam, ServiceHealth } from '#/lib/registry-types'
-import type { Cycles, Graph, Spofs } from '#/lib/topology-types'
+import type { Cycles, Spofs } from '#/lib/topology-types'
 
 type TabId = 'overview' | 'dependencies' | 'contracts' | 'activity'
 
@@ -139,7 +140,7 @@ function ServiceDetailPage() {
   const teamMap = new Map((teamsPage?.items ?? []).map((t) => [t.id, t.name]))
 
   // Best-effort, same treatment as teamsPage above — a failed fetch just means the badge
-  // doesn't render rather than blocking the page. graphData supplies names for a cycle's
+  // doesn't render rather than blocking the page. serviceNames supplies names for a cycle's
   // *other* members in CycleBadge's popover; the cycles themselves come from cyclesData.
   // staleTime: 0 — the QueryClient's global default is 5 minutes, which would otherwise cache
   // an empty pre-mutation result as "fresh" and never refetch after a dependency change closes
@@ -149,12 +150,8 @@ function ServiceDetailPage() {
     queryFn: () => apiFetch<Cycles>('/v1/topology/cycles'),
     staleTime: 0,
   })
-  const { data: graphData } = useQuery({
-    queryKey: ['graph', 'names-only'],
-    queryFn: () => apiFetch<Graph>('/v1/topology/graph'),
-    staleTime: 0,
-  })
-  const cycleNodesById = new Map((graphData?.nodes ?? []).map((n) => [n.serviceId, n]))
+  const serviceNames = useServiceNames()
+  const cycleNodesById = new Map([...serviceNames].map(([id, name]) => [id, { name }]))
 
   // Same best-effort treatment as cyclesData above.
   const { data: spofsData } = useQuery({
@@ -231,8 +228,19 @@ function ServiceDetailPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-bold">{service.name}</h1>
                 <TierBadge tier={service.tier} />
-                <CycleBadge cycles={cyclesData?.cycles ?? []} nodesById={cycleNodesById} onlyForServiceId={service.id} />
-                <SpofBadge spofs={spofsData?.items ?? []} nodesById={cycleNodesById} onlyForServiceId={service.id} />
+                <CycleBadge
+                  cycles={cyclesData?.cycles ?? []}
+                  nodesById={cycleNodesById}
+                  onlyForServiceId={service.id}
+                  truncated={cyclesData?.truncated}
+                />
+                <SpofBadge
+                  spofs={spofsData?.items ?? []}
+                  nodesById={cycleNodesById}
+                  onlyForServiceId={service.id}
+                  threshold={spofsData?.threshold}
+                  rationale={spofsData?.rationale}
+                />
                 <span className={cn('inline-flex items-center gap-1.5', healthTextClass(health))}>
                   <span className={cn('size-2 rounded-full', healthDotClass(health))} aria-hidden="true" />
                   <span className="capitalize">{health}</span>

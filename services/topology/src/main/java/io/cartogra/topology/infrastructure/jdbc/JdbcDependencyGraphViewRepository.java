@@ -125,7 +125,10 @@ public class JdbcDependencyGraphViewRepository implements DependencyGraphViewRep
      * walks and, once flattened, becomes the response's member list. The base case starts from
      * every edge rather than every node, since a cycle needs at least one edge and self-edges are
      * already rejected at write time — so the shortest possible cycle is a 2-node mutual
-     * dependency, closing at depth 2.
+     * dependency, closing at depth 2. Every walk is anchored at the smallest id in its cycle (all
+     * other members must compare greater than {@code start_id}), so each cycle is found exactly once
+     * instead of once per member, and {@code ORDER BY} makes the row cap cut off the same cycles on
+     * every call.
      */
     private static final String CYCLES_SQL = """
             WITH RECURSIVE walk AS (
@@ -133,6 +136,7 @@ public class JdbcDependencyGraphViewRepository implements DependencyGraphViewRep
                        ARRAY[source_service_id, target_service_id] AS visited, 1 AS depth
                 FROM dependency_graph_edges
                 WHERE tenant_id = :tenantId
+                  AND source_service_id < target_service_id
                   %s
                 UNION ALL
                 SELECT w.start_id, e.target_service_id, w.visited || e.target_service_id, w.depth + 1
@@ -142,9 +146,10 @@ public class JdbcDependencyGraphViewRepository implements DependencyGraphViewRep
                   %s
                 WHERE w.current_id <> w.start_id
                   AND w.depth < :maxLength
-                  AND (e.target_service_id = w.start_id OR e.target_service_id <> ALL(w.visited))
+                  AND (e.target_service_id = w.start_id
+                       OR (e.target_service_id > w.start_id AND e.target_service_id <> ALL(w.visited)))
             )
-            SELECT visited FROM walk WHERE current_id = start_id LIMIT :maxRows
+            SELECT DISTINCT visited FROM walk WHERE current_id = start_id ORDER BY visited LIMIT :maxRows
             """;
 
     @Override

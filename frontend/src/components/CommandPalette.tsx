@@ -85,7 +85,11 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       label: s.name,
       subtitle: `${s.teamId ? 'Owned' : 'Unowned'} · ${normalizeHealth(s.healthStatus)}`,
       icon: <FolderKanban className="size-4" />,
-      action: () => { navigate({ to: '/catalog/$serviceId', params: { serviceId: s.id } }); close() },
+      action: () => {
+        if (window.location.pathname === '/graph') navigate({ to: '/graph', search: { service: s.id } })
+        else navigate({ to: '/catalog/$serviceId', params: { serviceId: s.id } })
+        close()
+      },
       group: 'Services',
     }))
 
@@ -146,6 +150,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           onKeyDown={handleKeyDown}
           onOpenAutoFocus={(e) => { e.preventDefault(); inputRef.current?.focus() }}
         >
+          <Dialog.Title className="sr-only">Command palette</Dialog.Title>
+          <Dialog.Description className="sr-only">Search pages and services</Dialog.Description>
           {/* Search input */}
           <div className="flex items-center gap-3 border-b border-border px-4 py-3.5">
             <Search className="size-4 shrink-0 text-muted-foreground" />

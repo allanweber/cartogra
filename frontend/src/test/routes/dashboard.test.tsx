@@ -6,7 +6,7 @@ import { TooltipProvider } from '#/components/ui/tooltip'
 import { apiFetch, ApiError } from '#/lib/api'
 
 import type { PageResult, RegistryService } from '#/lib/registry-types'
-import type { Risk } from '#/lib/topology-types'
+import type { RisksPage } from '#/lib/topology-types'
 
 vi.mock('@tanstack/react-router', async () => ({
   ...await vi.importActual('@tanstack/react-router'),
@@ -67,9 +67,9 @@ function makeService(overrides: Partial<RegistryService>): RegistryService {
   }
 }
 
-const NO_RISKS: PageResult<Risk> = { items: [], total: 0, limit: 200, offset: 0 }
+const NO_RISKS: RisksPage = { items: [], total: 0, limit: 200, offset: 0, truncated: false }
 
-function mockApi(services: unknown, risks: PageResult<Risk> = NO_RISKS) {
+function mockApi(services: unknown, risks: RisksPage = NO_RISKS) {
   vi.mocked(apiFetch).mockImplementation(async (path: string) =>
     path.includes('/topology/risks') ? risks : services,
   )
@@ -135,6 +135,7 @@ describe('DashboardPage', () => {
         total: 2,
         limit: 200,
         offset: 0,
+        truncated: false,
       },
     )
     renderPage()

@@ -226,7 +226,7 @@ class JdbcDependencyGraphViewRepositoryIT extends AbstractTopologyIT {
     }
 
     @Test
-    void findCyclesReturnsOneRawPathPerStartingMemberWithClosingRepeat() {
+    void findCyclesReturnsEachCycleOnceAnchoredAtItsSmallestMember() {
         UUID tenantId = UUID.randomUUID();
         UUID a = UUID.randomUUID();
         UUID b = UUID.randomUUID();
@@ -238,13 +238,29 @@ class JdbcDependencyGraphViewRepositoryIT extends AbstractTopologyIT {
 
         List<List<UUID>> paths = graphViewRepository.findCycles(tenantId, null, 8, 100);
 
-        // Raw, pre-dedup shape: the same physical cycle walked from each of its 3 members —
-        // CycleService (unit-tested separately) is what collapses these to one canonical entry.
-        assertThat(paths).hasSize(3);
-        assertThat(paths).allSatisfy(path -> {
-            assertThat(path).hasSize(4);
-            assertThat(path.get(0)).isEqualTo(path.get(3));
-        });
+        assertThat(paths).hasSize(1);
+        List<UUID> path = paths.getFirst();
+        assertThat(path).hasSize(4);
+        assertThat(path.get(0)).isEqualTo(path.get(3));
+        assertThat(path).containsExactlyInAnyOrder(a, b, c, path.get(0));
+    }
+
+    @Test
+    void findCyclesOrdersRowsSoTheRowCapIsDeterministic() {
+        UUID tenantId = UUID.randomUUID();
+        for (int i = 0; i < 4; i++) {
+            UUID x = UUID.randomUUID();
+            UUID y = UUID.randomUUID();
+            saveDependency(tenantId, x, y, DependencyType.DECLARED, DependencyProtocol.HTTP);
+            saveDependency(tenantId, y, x, DependencyType.DECLARED, DependencyProtocol.HTTP);
+        }
+        graphViewRepository.refresh();
+
+        List<List<UUID>> all = graphViewRepository.findCycles(tenantId, null, 8, 100);
+        List<List<UUID>> capped = graphViewRepository.findCycles(tenantId, null, 8, 2);
+
+        assertThat(all).hasSize(4);
+        assertThat(capped).isEqualTo(all.subList(0, 2));
     }
 
     @Test
@@ -271,6 +287,6 @@ class JdbcDependencyGraphViewRepositoryIT extends AbstractTopologyIT {
         graphViewRepository.refresh();
 
         assertThat(graphViewRepository.findCycles(tenantId, DependencyType.DECLARED, 8, 100)).isEmpty();
-        assertThat(graphViewRepository.findCycles(tenantId, DependencyType.OBSERVED, 8, 100)).hasSize(2);
+        assertThat(graphViewRepository.findCycles(tenantId, DependencyType.OBSERVED, 8, 100)).hasSize(1);
     }
 }

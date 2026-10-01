@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { Network, X } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
 
 import { AppLayout } from '#/components/AppLayout'
@@ -15,11 +15,13 @@ import { Card, CardContent } from '#/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#/components/ui/select'
 import { Skeleton } from '#/components/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
+import { useServiceNames } from '#/hooks/useRisks'
 import { ApiError, apiFetch } from '#/lib/api'
+import { cn } from '#/lib/utils'
 
 import type { BlastRadiusHighlightMap } from '#/components/DependencyGraph'
 import type { PageResult, RegistryTeam } from '#/lib/registry-types'
-import type { BlastRadius, Cycles, DependencyType, Graph, GraphNode, Spofs } from '#/lib/topology-types'
+import type { BlastRadius, Cycle, Cycles, Spof, DependencyType, Graph, GraphNode, Spofs } from '#/lib/topology-types'
 
 const graphSearchSchema = z.object({
   service: z.string().optional(),
@@ -33,6 +35,8 @@ export const Route = createFileRoute('/_authenticated/graph')({
 })
 
 const ALL_TEAMS = 'ALL'
+const NO_CYCLES: Cycle[] = []
+const NO_SPOFS: Spof[] = []
 
 function GraphPage() {
   const search = Route.useSearch()
@@ -80,7 +84,36 @@ function GraphPage() {
     return map
   }, [graph])
 
+  // Cycles and SPOFs are tenant-wide, but `graph` is team-filtered — fall back to registry names
+  // so badge popovers don't show raw UUIDs for members outside the filtered view.
+  const serviceNames = useServiceNames()
+  const badgeNodesById = useMemo(() => {
+    const map = new Map<string, { name: string }>([...serviceNames].map(([id, name]) => [id, { name }]))
+    nodesById.forEach((node, id) => map.set(id, node))
+    return map
+  }, [serviceNames, nodesById])
+
   const selectedNode = selectedServiceId ? (nodesById.get(selectedServiceId) ?? null) : null
+  const [sheetExpanded, setSheetExpanded] = useState(false)
+  const graphRef = useRef<HTMLDivElement>(null)
+  // isLoading is already provably false whenever graph is defined (TanStack Query v5's
+  // UseQueryResult is a discriminated union on status — a defined `data` means isLoading
+  // can't be true), so checking it here would be dead weight, not a real guard.
+  const selectionMissing = !!selectedServiceId && !!graph && !selectedNode
+
+  useEffect(() => {
+    if (!selectedServiceId || !window.matchMedia('(max-width: 1023px)').matches) return
+    graphRef.current?.scrollIntoView({ block: 'start' })
+  }, [selectedServiceId])
+
+  useEffect(() => {
+    if (!selectedServiceId) return
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setSelectedServiceId(null)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [selectedServiceId])
 
   const {
     data: blastRadius,
@@ -89,7 +122,7 @@ function GraphPage() {
   } = useQuery({
     queryKey: ['blast-radius', selectedServiceId],
     queryFn: () => apiFetch<BlastRadius>(`/v1/topology/blast-radius/${selectedServiceId}`),
-    enabled: !!selectedServiceId,
+    enabled: !!selectedServiceId && !selectionMissing,
     staleTime: 0,
   })
 
@@ -114,7 +147,7 @@ function GraphPage() {
     queryFn: () => apiFetch<Cycles>(`/v1/topology/cycles?type=${type}`),
     staleTime: 0,
   })
-  const cycles = cyclesData?.cycles ?? []
+  const cycles = cyclesData?.cycles ?? NO_CYCLES
   const cycleMemberIds = useMemo(() => new Set(cycles.flatMap((c) => c.members)), [cycles])
 
   // Same best-effort-degrade-on-failure treatment as cycles above — a failed SPOF fetch just
@@ -124,7 +157,7 @@ function GraphPage() {
     queryFn: () => apiFetch<Spofs>('/v1/topology/spofs'),
     staleTime: 0,
   })
-  const spofs = spofsData?.items ?? []
+  const spofs = spofsData?.items ?? NO_SPOFS
   const spofServiceIds = useMemo(() => new Set(spofs.map((s) => s.serviceId)), [spofs])
 
   return (
@@ -150,7 +183,7 @@ function GraphPage() {
           value={teamId ?? ALL_TEAMS}
           onValueChange={(value) => setTeamId(value === ALL_TEAMS ? null : value)}
         >
-          <SelectTrigger className="w-48" size="sm">
+          <SelectTrigger className="w-48" size="sm" aria-label="Team filter">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -163,15 +196,19 @@ function GraphPage() {
           </SelectContent>
         </Select>
 
-        <CycleBadge cycles={cycles} nodesById={nodesById} />
-        <SpofBadge spofs={spofs} nodesById={nodesById} />
+        <CycleBadge cycles={cycles} nodesById={badgeNodesById} truncated={cyclesData?.truncated} />
+        <SpofBadge
+          spofs={spofs}
+          nodesById={badgeNodesById}
+          threshold={spofsData?.threshold}
+          rationale={spofsData?.rationale}
+        />
       </div>
 
       {type === 'OBSERVED' && (
         <Alert className="mb-4 shrink-0">
           <AlertDescription>
-            Observed dependencies aren&apos;t collected yet — this view will populate once span data lands in
-            Phase 3.
+            No observed dependencies yet — this view populates once span data is ingested.
           </AlertDescription>
         </Alert>
       )}
@@ -179,7 +216,7 @@ function GraphPage() {
       {graph?.truncated && !bannerDismissed && (
         <Alert className="mb-4 shrink-0">
           <AlertDescription className="flex items-center justify-between gap-4">
-            <span>This graph has been truncated — not every service is shown.</span>
+            <span>Graph capped — not every service is drawn. Filter by team to see the rest.</span>
             <Button variant="ghost" size="icon-sm" onClick={() => setBannerDismissed(true)}>
               <X className="size-3.5" />
               <span className="sr-only">Dismiss</span>
@@ -218,8 +255,8 @@ function GraphPage() {
       )}
 
       {!isLoading && graph && graph.nodes.length > 0 && (
-        <div className="grid min-h-[480px] flex-1 grid-cols-1 grid-rows-1 gap-4 lg:grid-cols-[1fr_320px]">
-          <div className="h-full min-h-0 rounded-xl border border-border bg-card">
+        <div className="grid min-h-[480px] flex-1 grid-cols-1 grid-rows-1 gap-4 lg:grid-cols-[1fr_380px]">
+          <div ref={graphRef} className="h-full min-h-0 rounded-xl border border-border bg-card">
             <DependencyGraph
               graph={graph}
               selectedServiceId={selectedServiceId}
@@ -230,7 +267,13 @@ function GraphPage() {
             />
           </div>
 
-          <div className="h-full min-h-0">
+          <div
+            className={cn(
+              'h-full min-h-0',
+              selectedNode && 'max-lg:fixed max-lg:inset-x-2 max-lg:bottom-2 max-lg:z-20 max-lg:shadow-xl',
+              selectedNode && (sheetExpanded ? 'max-lg:h-[80vh]' : 'max-lg:h-[42vh]'),
+            )}
+          >
             {selectedNode ? (
               <InspectorPanel
                 key={selectedNode.serviceId}
@@ -240,19 +283,28 @@ function GraphPage() {
                 isBlastRadiusLoading={isBlastRadiusLoading}
                 blastRadiusError={blastRadiusError}
                 cycles={cycles}
+                cyclesTruncated={cyclesData?.truncated}
                 spofs={spofs}
-                nodesById={nodesById}
+                spofThreshold={spofsData?.threshold}
+                spofRationale={spofsData?.rationale}
+                nodesById={badgeNodesById}
+                onClose={() => setSelectedServiceId(null)}
+                expanded={sheetExpanded}
+                onToggleExpanded={() => setSheetExpanded((e) => !e)}
               />
             ) : (
               <Card className="h-full border-dashed">
                 <CardContent className="flex h-full items-center justify-center py-8 text-center text-sm text-muted-foreground">
-                  Select a node to see its details.
+                  {selectionMissing
+                    ? 'That service isn’t in this view — try All teams or Declared.'
+                    : 'Select a service to see what breaks if it goes down.'}
                 </CardContent>
               </Card>
             )}
           </div>
         </div>
       )}
+      {selectedNode && <div className="h-[42vh] shrink-0 lg:hidden" aria-hidden="true" />}
     </AppLayout>
   )
 }
