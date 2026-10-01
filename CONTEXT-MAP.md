@@ -12,7 +12,7 @@
 | **Identity & Access** | `services/gateway` | Live (Phase 0/1) |
 | **Service Catalog** | `services/registry` | Live (Phase 0/1) |
 | **Ingestion** | `services/ingestion` | Live (Phase 0/1) |
-| **Topology** | `services/topology` | Live (Phase 1 in progress: backfill, dependency CRUD, and graph read shipped — [1.1]–[1.3]; blast-radius/cycles/drifts/spofs/risks still planned) |
+| **Topology** | `services/topology` | Live (Phase 1 complete — backfill, dependency CRUD, graph read; Phase 2 mostly complete — blast radius [2.1], impact panel [2.2], cycles [2.3], SPOFs [2.4], risks [2.5] shipped; performance evidence [2.6] in progress) |
 | **Contract** | `services/contract` | Empty directory (Phase 5) |
 | **Intelligence** | `services/intelligence` | Empty directory (Phase 6) |
 | **Frontend Shell** | `frontend/` | Partial (Phase 1) |
@@ -40,7 +40,7 @@
           ▼         ▼                      ▼
   ╔════════════╗  ╔════════════╗   ╔══════════════╗
   ║  Service   ║  ║  Topology  ║   ║   Contract   ║
-  ║  Catalog   ║  ║  (Ph. 1)   ║   ║   (Ph. 5)    ║
+  ║  Catalog   ║  ║  (Ph. 1-2) ║   ║   (Ph. 5)    ║
   ║ (Registry) ║  ╚═════╤══════╝   ╚══════╤═══════╝
   ╚═════╤══════╝         │                 │
         │                └────────┬────────┘
@@ -79,7 +79,7 @@
 | Upstream (U) | Downstream (D) | Relationship | Integration point |
 |---|---|---|---|
 | Identity & Access | Service Catalog | **Open Host Service / Conformist** | Declarative reverse proxy (Spring Cloud Gateway route, circuit-breaker guarded); Gateway forwards `X-Tenant-Id` derived from JWT |
-| Identity & Access | Topology | Open Host Service / Conformist | Declarative reverse proxy (`gateway/application.yml`, `Path=/api/v1/topology/**`); backfill, dependency CRUD, and graph read are live behind it — [1.1]–[1.3] |
+| Identity & Access | Topology | Open Host Service / Conformist | Declarative reverse proxy (`gateway/application.yml`, `Path=/api/v1/topology/**`); backfill, dependency CRUD, graph read, blast radius, cycles, SPOFs, and risks are all live behind it — [1.1]–[1.6], [2.1]–[2.5] |
 | Identity & Access | Contract | Open Host Service / Conformist | Declarative reverse proxy (Phase 5 — route not yet created) |
 | Identity & Access | Intelligence | Open Host Service / Conformist | Declarative reverse proxy (Phase 6 — route not yet created) |
 | Service Catalog (U) | Topology (D) | **Customer / Supplier** | Live: Kafka `cartogra.registry.service.{registered,updated,deleted}`, consumed by `GraphNodeEventConsumer` to project `graph_nodes` (including `team_id`/`tier`, used for orphan risk and SPOF scoring — ADR-0028). No separate `ownership-changed` topic exists or is needed (ADR-0028 supersedes ADR-0027's plan to add one) |
@@ -152,7 +152,7 @@ no consumer, and no code (`docs/roadmap.md` §12).
 - `services/gateway/CONTEXT.md` — Identity & Access context
 - `services/registry/CONTEXT.md` — Service Catalog context
 - `services/ingestion/CONTEXT.md` — Ingestion context
-- `services/topology/CONTEXT.md` — Topology context (Phase 1 in progress)
+- `services/topology/CONTEXT.md` — Topology context (Phase 1 complete, Phase 2 mostly complete)
 - `services/contract/CONTEXT.md` — Contract context (planned)
 - `services/intelligence/CONTEXT.md` — Intelligence context (planned)
 - `frontend/CONTEXT.md` — Frontend Shell context
