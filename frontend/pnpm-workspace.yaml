@@ -13,4 +13,9 @@ overrides:
   fast-uri: "^3.1.6" # CVE-2026-75899, CVE-2026-75931, CVE-2026-75975, CVE-2026-76172 (supersedes the ^3.1.2 override)
   browserslist: "^4.28.7" # CVE-2026-73088, CVE-2026-73089
   js-yaml: "^4.3.2" # CVE-2026-84375
-  brace-expansion: "^5.0.11" # CVE-2026-102276, CVE-2026-102278
+  # Scoped to the 5.x line only (`name@range` syntax) — a blanket `brace-expansion:`
+  # override collapsed the unrelated 1.x line (minimatch@3.1.5's dependency, pulled in
+  # by eslint's older deps) onto 5.x too, and minimatch@3.1.5 calls the 1.x API shape
+  # directly, breaking with "TypeError: expand is not a function". Only 5.0.9 was
+  # flagged by Trivy; the 1.x line was never vulnerable to this CVE.
+  brace-expansion@5: "^5.0.11" # CVE-2026-102276, CVE-2026-102278
