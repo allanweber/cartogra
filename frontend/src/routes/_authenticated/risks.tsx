@@ -44,16 +44,15 @@ function RisksPage() {
   }, [])
 
   function toggleDismissed(id: string) {
-    setDismissed((prev) => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      try {
-        localStorage.setItem(DISMISSED_KEY, JSON.stringify([...next]))
-      } catch {
-        // per-viewer convenience only — ignore write failures
-      }
-      return next
-    })
+    const next = new Set(dismissed)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setDismissed(next)
+    try {
+      localStorage.setItem(DISMISSED_KEY, JSON.stringify([...next]))
+    } catch {
+      // per-viewer convenience only — ignore write failures
+    }
   }
 
   const {
@@ -88,6 +87,7 @@ function RisksPage() {
     .filter((r) => showDismissed || !dismissed.has(r.id))
     .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity])
 
+  const hasActiveFilters = severityFilter !== 'all' || typeFilter !== 'all'
   const dismissedCount = risks.filter((r) => dismissed.has(r.id)).length
 
   return (
@@ -141,6 +141,15 @@ function RisksPage() {
               />
             </div>
 
+            {risksPage.total > risksPage.items.length && (
+              <Alert>
+                <AlertDescription>
+                  Showing {risksPage.items.length} of {risksPage.total} risks — counts and filters cover only
+                  these.
+                </AlertDescription>
+              </Alert>
+            )}
+
             {/* Risk-type filter */}
             <ToggleGroup
               type="single"
@@ -166,7 +175,7 @@ function RisksPage() {
                   onClick={() => setShowDismissed((s) => !s)}
                   className="h-auto gap-1.5 px-2 py-1 text-xs text-muted-foreground"
                 >
-                  {showDismissed ? 'Hide' : 'Show'} {dismissedCount} dismissed
+                  {showDismissed ? 'Hide' : 'Show'} {dismissedCount} dismissed (this browser)
                 </Button>
               </div>
             )}
@@ -175,12 +184,27 @@ function RisksPage() {
             {filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16 text-center">
                 <ShieldCheck className="mb-3 size-8 text-muted-foreground/50" aria-hidden="true" />
-                <p className="text-sm font-medium">No active risks</p>
+                <p className="text-sm font-medium">{hasActiveFilters ? 'No matching risks' : 'No active risks'}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {dismissed.size > 0 && !showDismissed
-                    ? 'All risks in this filter have been dismissed.'
-                    : 'Nothing matches this filter right now.'}
+                  {hasActiveFilters
+                    ? 'Nothing matches these filters.'
+                    : dismissed.size > 0 && !showDismissed
+                      ? 'All risks have been dismissed in this browser.'
+                      : 'Nothing to act on right now.'}
                 </p>
+                {hasActiveFilters && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    onClick={() => {
+                      setSeverityFilter('all')
+                      setTypeFilter('all')
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="space-y-2">
@@ -219,6 +243,7 @@ function SummaryCard({
     <Button
       variant="ghost"
       onClick={onClick}
+      aria-pressed={active}
       className={cn(
         'h-auto rounded-xl border p-4 text-left transition-all',
         active && variant === 'critical' && 'border-critical bg-critical-subtle',
@@ -257,20 +282,20 @@ function RiskCard({
 
   return (
     <Card className={cn('overflow-hidden', dismissed && 'opacity-60')}>
-      <Button
-        variant="ghost"
-        className="h-auto w-full justify-start rounded-none p-0 text-left hover:bg-transparent"
-        onClick={() => setExpanded((e) => !e)}
-        aria-expanded={expanded}
-      >
-        <CardContent className="flex items-start gap-3 p-4">
-          <span
-            aria-hidden
-            className={cn('mt-1.5 size-2 shrink-0 rounded-full bg-current', `severity-${risk.severity}`)}
-          />
-          <div className="flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="font-semibold">{risk.title}</p>
+      <CardContent className="flex items-start gap-3 p-4">
+        <span
+          aria-hidden
+          className={cn('mt-1.5 size-2 shrink-0 rounded-full bg-current', `severity-${risk.severity}`)}
+        />
+        <div className="min-w-0 flex-1">
+          <Button
+            variant="ghost"
+            className="h-auto w-full items-start justify-between gap-3 rounded-md p-0 text-left hover:bg-transparent"
+            onClick={() => setExpanded((e) => !e)}
+            aria-expanded={expanded}
+          >
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold">{risk.title}</span>
               <Badge
                 variant="outline"
                 className={cn('border-current text-xs font-semibold uppercase', `severity-${risk.severity}`)}
@@ -285,25 +310,26 @@ function RiskCard({
                   Dismissed
                 </Badge>
               )}
-            </div>
-            <div className="mt-1.5 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
-              {risk.affectedServices.map((serviceId) => (
-                <Link
-                  key={serviceId}
-                  to="/graph"
-                  search={{ service: serviceId }}
-                  className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground hover:bg-muted/70 hover:text-foreground"
-                >
-                  {servicesById.get(serviceId)?.name ?? serviceId}
-                </Link>
-              ))}
-            </div>
+            </span>
+            <span className="shrink-0 text-muted-foreground" aria-hidden="true">
+              {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+            </span>
+          </Button>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {risk.affectedServices.map((serviceId) => (
+              <Link
+                key={serviceId}
+                to="/graph"
+                search={{ service: serviceId }}
+                className="relative rounded-md bg-muted px-1.5 py-0.5 text-xs after:absolute after:-inset-y-2.5 after:inset-x-0 font-medium text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+              >
+                {servicesById.get(serviceId)?.name ?? serviceId}
+              </Link>
+            ))}
           </div>
-          <div className="shrink-0 text-muted-foreground">
-            {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-          </div>
-        </CardContent>
-      </Button>
+          {!expanded && <p className="mt-1.5 truncate text-xs text-muted-foreground">Fix: {risk.fix}</p>}
+        </div>
+      </CardContent>
 
       {expanded && (
         <CardContent className="space-y-3 border-t border-border p-4">
@@ -314,7 +340,7 @@ function RiskCard({
             <p className="mt-1 text-sm">{risk.explanation}</p>
           </div>
           <div className="flex items-start gap-2 rounded-lg bg-muted/50 p-3">
-            <Wrench className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+            <Wrench className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Suggested fix

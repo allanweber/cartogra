@@ -6,7 +6,7 @@
 
 ---
 
-## 1. Where we actually are
+## Where we actually are
 
 <details>
 
@@ -33,7 +33,7 @@ Phases 0+1 (gateway + registry + ingestion + auth/catalog UI) cost roughly 10 we
 ---
 </details>
 
-## 2. Rules this roadmap follows
+## Rules this roadmap follows
 
 <details>
 
@@ -75,7 +75,7 @@ The old checklist broke each of these; that is why it stopped being usable.
 </details>
 
 
-## 3. Phase 0 — Make the repo honest (≈1 week)
+## Phase 0 — Make the repo honest (≈1 week)
 
 <details>
 
@@ -119,7 +119,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 ---
 </details>
 
-## 4. Phase 1 — See the map (≈4 weeks)
+## Phase 1 — See the map (≈4 weeks)
 
 <details>
 
@@ -163,7 +163,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 ---
 </details>
 
-## 5. Phase 2 — Answer impact questions (≈4 weeks)
+## Phase 2 — Answer impact questions (≈4 weeks)
 <details>
 
 <summary>Open</summary>
@@ -182,16 +182,16 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 **Gate**
 
-- [ ] Blast radius returns exactly the fixture's known fan-out; a 3-node cycle terminates; depth cap and truncation flag both exercised.
-- [ ] Cycles are rotation-deduplicated; the SPOF threshold and its rationale travel in the response payload.
-- [ ] Risks page runs on `GET /v1/risks`; `MOCK_RISKS` is deleted.
-- [ ] p95 for graph read and blast radius recorded in `topology-performance.md` with the hardware named.
+- [x] Blast radius returns exactly the fixture's known fan-out; a 3-node cycle terminates; depth cap and truncation flag both exercised.
+- [x] Cycles are rotation-deduplicated; the SPOF threshold and its rationale travel in the response payload.
+- [x] Risks page runs on `GET /v1/risks`; `MOCK_RISKS` is deleted.
+- [x] p95 for graph read and blast radius recorded in `topology-performance.md` with the hardware named.
 
 *Standing checks (§2 — Definition of done):*
 
-- [ ] Every story in this phase passed `/code-review` and `/security-review` before merge.
-- [ ] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
-- [ ] `/impeccable critique` run over every screen this phase touched; findings fixed or recorded.
+- [x] Every story in this phase passed `/code-review` and `/security-review` before merge.
+- [x] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
+- [x] `/impeccable critique` run over every screen this phase touched; findings fixed or recorded.
 - [ ] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
 - [ ] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
 
@@ -205,7 +205,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 ---
 </details>
 
-## 6. Phase 3 — The map maintains itself (≈5 weeks)
+## Phase 3 — The map maintains itself (≈5 weeks)
 
 <details>
 
@@ -245,7 +245,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 </details>
 
-## 7. Phase 4 — A product a stranger can try (≈4 weeks)
+## Phase 4 — A product a stranger can try (≈4 weeks)
 
 <details>
 
@@ -288,7 +288,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 </details>
 
-## 8. Phase 5 — Change safety: contracts (≈7 weeks)
+## Phase 5 — Change safety: contracts (≈7 weeks)
 
 <details>
 
@@ -336,7 +336,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 </details>
 
-## 9. Phase 6 — Intelligence (≈5 weeks)
+## Phase 6 — Intelligence (≈5 weeks)
 
 <details>
 
@@ -383,7 +383,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 </details>
 
-## 10. Phase 7 — Production hardening (≈5 weeks)
+## Phase 7 — Production hardening (≈5 weeks)
 
 <details>
 
@@ -429,7 +429,7 @@ Triggered by real users, not by a calendar. Before this, Phase 4's single host i
 
 <details>
 
-## 11. Phase 8 — Commercial (only when someone wants to pay)
+## Phase 8 — Commercial (only when someone wants to pay)
 
 <details>
 
@@ -467,7 +467,7 @@ Moved out of the old Phase 3 because none of it tests the product hypothesis, an
 
 ---
 
-## 12. Not in the plan
+## Not in the plan
 
 **Content is inside the phases now, not here.** The old checklist carried 31 build-in-public items as numbered backlog entries and made every phase gate depend on them ("minimum BIP set shipped"). Each phase above ends with *Worth writing about* — as many pieces as that phase actually earns, sometimes four, sometimes two — sitting outside the gate checklist. Items whose subject got cut (dual-marketplace, one-check-two-CI-systems, the marketplace listing) are gone with it.
 
@@ -487,7 +487,7 @@ Moved out of the old Phase 3 because none of it tests the product hypothesis, an
 
 <details>
 
-## 13. Sequencing at a glance
+## Sequencing at a glance
 
 <details>
 

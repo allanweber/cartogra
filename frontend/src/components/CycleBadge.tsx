@@ -34,7 +34,7 @@ export function CycleBadge({
   return (
     <Popover>
       <PopoverTrigger
-        className={cn(badgeVariants({ variant: 'destructive' }), 'cursor-pointer')}
+        className={cn(badgeVariants({ variant: 'outline' }), 'relative cursor-pointer border-current text-critical after:absolute after:-inset-x-1 after:-inset-y-3.5')}
         aria-label={`${relevant.length} dependency ${relevant.length === 1 ? 'cycle' : 'cycles'}. View details.`}
       >
         <Repeat aria-hidden="true" />

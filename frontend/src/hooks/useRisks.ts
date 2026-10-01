@@ -9,13 +9,13 @@ import type { Risk } from '#/lib/topology-types'
 // count across the whole list instead of page-flipping.
 export const RISKS_LIMIT = 200
 
-export function useRisks() {
+export function useRisks({ staleTime = 0 }: { staleTime?: number } = {}) {
   return useQuery({
     queryKey: ['risks'],
     queryFn: () => apiFetch<PageResult<Risk>>(`/v1/topology/risks?limit=${RISKS_LIMIT}&offset=0`),
-    // Risks are derived live from topology state; the layout-mounted bell would otherwise seed a
-    // fresh-looking cache that hides new cycles/SPOFs from the Risks page and dashboard.
-    staleTime: 0,
+    // Risks are derived live from topology state. staleTime is per-observer, so the layout-mounted
+    // bell can poll gently (see NotificationBell) while the Risks page and dashboard stay always-stale.
+    staleTime,
   })
 }
 

@@ -127,7 +127,7 @@ describe('GraphPage', () => {
     mockGraphCalls(() => makeGraph())
     renderPage()
     expect(await screen.findByRole('group', { name: /service dependency graph/i })).toBeInTheDocument()
-    expect(screen.getByText('Select a node to see its details.')).toBeInTheDocument()
+    expect(screen.getByText('Select a service to see what breaks if it goes down.')).toBeInTheDocument()
     expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('type=DECLARED'))
   })
 
@@ -253,7 +253,7 @@ describe('GraphPage', () => {
     await screen.findByRole('group', { name: /service dependency graph/i })
     vi.mocked(apiFetch).mockClear()
 
-    fireEvent.click(screen.getByRole('combobox'))
+    fireEvent.click(screen.getByRole('combobox', { name: /team filter/i }))
     fireEvent.click(await screen.findByRole('option', { name: 'Platform' }))
 
     expect(await screen.findByRole('group', { name: /service dependency graph/i })).toBeInTheDocument()
@@ -265,9 +265,9 @@ describe('GraphPage', () => {
     renderPage()
     await screen.findByRole('group', { name: /service dependency graph/i })
 
-    expect(screen.getByText(/has been truncated/i)).toBeInTheDocument()
+    expect(screen.getByText(/graph capped/i)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /dismiss/i }))
-    expect(screen.queryByText(/has been truncated/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/graph capped/i)).not.toBeInTheDocument()
   })
 
   it('shows the cycle badge in the toolbar and marks member nodes when cycles are found', async () => {

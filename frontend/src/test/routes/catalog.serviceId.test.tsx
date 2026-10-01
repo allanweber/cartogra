@@ -143,7 +143,10 @@ function mockSuccess(
     if (path.includes('/v1/registry/teams')) return Promise.resolve(EMPTY_TEAMS)
     if (path.includes('/v1/topology/cycles')) return Promise.resolve(cycles)
     if (path.includes('/v1/topology/spofs')) return Promise.resolve(spofs)
-    if (path.includes('/v1/topology/graph')) return Promise.resolve(graph)
+    if (path.includes('/v1/registry/services?limit=1000')) {
+      const items = graph.nodes.map((n) => ({ id: n.serviceId, name: n.name }))
+      return Promise.resolve({ items, total: items.length, limit: 1000, offset: 0 })
+    }
     if (path.includes('/dependencies')) return Promise.resolve(dependencies)
     return Promise.resolve(service)
   })

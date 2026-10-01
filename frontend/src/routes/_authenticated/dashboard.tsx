@@ -161,10 +161,10 @@ function DashboardPage() {
               />
               <StatStrip
                 icon={<AlertTriangle className="size-3.5" />}
-                value={String(criticalRisks + warningRisks)}
+                value={risksLoading || risksError ? '—' : String(criticalRisks + warningRisks)}
                 label="risks"
-                sub={`${criticalRisks} critical · ${warningRisks} warning`}
-                valueClass={criticalRisks > 0 ? 'health-down' : 'health-healthy'}
+                sub={risksLoading || risksError ? 'unavailable' : `${criticalRisks} critical · ${warningRisks} warning`}
+                valueClass={risksLoading || risksError ? undefined : criticalRisks > 0 ? 'health-down' : 'health-healthy'}
                 error={risksError}
               />
               <StatStrip
