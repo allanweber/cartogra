@@ -11,8 +11,12 @@ RUN --mount=type=cache,target=/root/.gradle,sharing=locked chmod +x ./gradlew &&
 
 FROM eclipse-temurin:25-jre-jammy AS runtime
 
+# --only-upgrade libssl3 pulls the jammy-security fix (CVE-2026-84782) for whatever's
+# already on the base image, without a general `apt-get upgrade -y` pulling in
+# unrelated package churn.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --only-upgrade libssl3 \
     && rm -rf /var/lib/apt/lists/* \
     && useradd -m -u 1000 appuser
 
