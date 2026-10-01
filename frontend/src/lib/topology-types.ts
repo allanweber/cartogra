@@ -96,3 +96,32 @@ export interface Cycles {
   cycles: Cycle[]
   truncated: boolean
 }
+
+export interface Spof {
+  serviceId: string
+  name: string
+  teamId: string | null
+  tier: ServiceTierValue | null
+  healthStatus: ServiceHealthStatus
+  fanIn: number
+  severity: RiskSeverity
+}
+
+export interface Spofs {
+  threshold: number
+  rationale: string
+  items: Spof[]
+}
+
+export type RiskSeverity = 'critical' | 'warning' | 'info'
+export type RiskType = 'spof' | 'cycle' | 'orphan' | 'drift'
+
+export interface Risk {
+  id: string
+  type: RiskType
+  severity: RiskSeverity
+  title: string
+  explanation: string
+  fix: string
+  affectedServices: string[]
+}

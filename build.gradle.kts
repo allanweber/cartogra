@@ -77,8 +77,8 @@ subprojects {
             dependency("org.apache.tomcat.embed:tomcat-embed-core:11.0.25") // CVE-2026-65182, CVE-2026-65905, CVE-2026-68525 (supersedes the 11.0.22 override for CVE-2026-41293)
             dependency("org.apache.tomcat.embed:tomcat-embed-el:11.0.25")
             dependency("org.apache.tomcat.embed:tomcat-embed-websocket:11.0.25")
-            dependency("com.fasterxml.jackson.core:jackson-databind:2.21.6") // CVE-2026-68497 (supersedes the 2.21.4 override for CVE-2026-54512, CVE-2026-54513)
-            dependency("tools.jackson.core:jackson-databind:3.1.6") // CVE-2026-68497 (supersedes the 3.1.4 override for CVE-2026-54512, CVE-2026-54513)
+            dependency("com.fasterxml.jackson.core:jackson-databind:2.21.7") // CVE-2026-91776, CVE-2026-91777 (supersedes the 2.21.6 override for CVE-2026-68497)
+            dependency("tools.jackson.core:jackson-databind:3.1.7") // CVE-2026-91776, CVE-2026-91777 (supersedes the 3.1.6 override for CVE-2026-68497)
             dependency("com.fasterxml.jackson.core:jackson-core:2.21.4") // GHSA-r7wm-3cxj-wff9
             dependency("tools.jackson.core:jackson-core:3.1.4") // GHSA-r7wm-3cxj-wff9
             dependency("io.micrometer:micrometer-core:1.16.6") // CVE-2026-40983, CVE-2026-40984

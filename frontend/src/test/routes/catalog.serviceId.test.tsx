@@ -6,7 +6,7 @@ import { Route } from '#/routes/_authenticated/catalog.$serviceId'
 import { apiFetch, ApiError } from '#/lib/api'
 
 import type { PageResult, RegistryService, RegistryTeam } from '#/lib/registry-types'
-import type { Cycles, Graph, ServiceDependencies } from '#/lib/topology-types'
+import type { Cycles, Graph, ServiceDependencies, Spofs } from '#/lib/topology-types'
 
 let mockServiceId = 'svc-1'
 
@@ -128,6 +128,7 @@ function renderPage() {
 const EMPTY_DEPENDENCIES: ServiceDependencies = { upstream: [], downstream: [] }
 const EMPTY_CYCLES: Cycles = { cycles: [], truncated: false }
 const EMPTY_GRAPH: Graph = { nodes: [], edges: [], truncated: false }
+const EMPTY_SPOFS: Spofs = { threshold: 5, rationale: 'rationale', items: [] }
 
 function mockSuccess(
   service = MOCK_SERVICE,
@@ -135,11 +136,13 @@ function mockSuccess(
   dependencies: ServiceDependencies = EMPTY_DEPENDENCIES,
   cycles: Cycles = EMPTY_CYCLES,
   graph: Graph = EMPTY_GRAPH,
+  spofs: Spofs = EMPTY_SPOFS,
 ) {
   vi.mocked(apiFetch).mockImplementation((path: string) => {
     if (path.includes('/v1/registry/teams/mine')) return Promise.resolve(myTeamIds)
     if (path.includes('/v1/registry/teams')) return Promise.resolve(EMPTY_TEAMS)
     if (path.includes('/v1/topology/cycles')) return Promise.resolve(cycles)
+    if (path.includes('/v1/topology/spofs')) return Promise.resolve(spofs)
     if (path.includes('/v1/topology/graph')) return Promise.resolve(graph)
     if (path.includes('/dependencies')) return Promise.resolve(dependencies)
     return Promise.resolve(service)
@@ -681,5 +684,26 @@ describe('ServiceDetailPage', () => {
     await screen.findByRole('heading', { name: 'payments-api' })
 
     expect(screen.queryByRole('button', { name: /dependency cycle/i })).not.toBeInTheDocument()
+  })
+
+  it('shows the SPOF badge next to the tier badge when this service is flagged', async () => {
+    const spofs: Spofs = {
+      threshold: 5,
+      rationale: 'rationale',
+      items: [{ serviceId: 'svc-1', name: 'payments-api', teamId: null, tier: 'CRITICAL', healthStatus: 'HEALTHY', fanIn: 6, severity: 'critical' }],
+    }
+    mockSuccess(MOCK_SERVICE, [], EMPTY_DEPENDENCIES, EMPTY_CYCLES, EMPTY_GRAPH, spofs)
+    renderPage()
+    await screen.findByRole('heading', { name: 'payments-api' })
+
+    expect(screen.getByRole('button', { name: /1 single point of failure/i })).toBeInTheDocument()
+  })
+
+  it('renders no SPOF badge when this service is not flagged', async () => {
+    mockSuccess()
+    renderPage()
+    await screen.findByRole('heading', { name: 'payments-api' })
+
+    expect(screen.queryByRole('button', { name: /single point of failure/i })).not.toBeInTheDocument()
   })
 })

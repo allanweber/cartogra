@@ -45,4 +45,11 @@ public interface DependencyGraphViewRepository {
      * pathologically dense graph.
      */
     List<List<UUID>> findCycles(UUID tenantId, @Nullable DependencyType type, int maxLength, int maxRows);
+
+    /**
+     * Services whose fan-in (count of distinct services depending on them, declared and observed
+     * combined) is at least {@code minFanIn}, ordered by fan-in descending. Capped at {@code
+     * maxRows} as a backstop against a pathologically dense graph.
+     */
+    List<FanInRow> findFanIn(UUID tenantId, int minFanIn, int maxRows);
 }

@@ -6,6 +6,7 @@ import io.cartogra.topology.domain.DependencyType;
 import io.cartogra.topology.domain.GraphEdge;
 import io.cartogra.topology.repository.BlastRadiusRow;
 import io.cartogra.topology.repository.DependencyGraphViewRepository;
+import io.cartogra.topology.repository.FanInRow;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -166,5 +167,27 @@ public class JdbcDependencyGraphViewRepository implements DependencyGraphViewRep
     private static List<UUID> mapCyclePath(ResultSet rs) throws SQLException {
         UUID[] visited = (UUID[]) rs.getArray("visited").getArray();
         return List.of(visited);
+    }
+
+    private static final String FAN_IN_SQL = """
+            SELECT target_service_id AS service_id, COUNT(DISTINCT source_service_id) AS fan_in
+            FROM dependency_graph_edges
+            WHERE tenant_id = :tenantId
+            GROUP BY target_service_id
+            HAVING COUNT(DISTINCT source_service_id) >= :minFanIn
+            ORDER BY fan_in DESC, target_service_id
+            LIMIT :maxRows
+            """;
+
+    private static final RowMapper<FanInRow> FAN_IN_ROW_MAPPER =
+            (rs, _) -> new FanInRow(UUID.fromString(rs.getString("service_id")), rs.getInt("fan_in"));
+
+    @Override
+    public List<FanInRow> findFanIn(UUID tenantId, int minFanIn, int maxRows) {
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("minFanIn", minFanIn)
+                .addValue("maxRows", maxRows);
+        return namedJdbc.query(FAN_IN_SQL, params, FAN_IN_ROW_MAPPER);
     }
 }

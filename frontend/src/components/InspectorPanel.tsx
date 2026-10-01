@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 
 import { CycleBadge } from '#/components/CycleBadge'
+import { SpofBadge } from '#/components/SpofBadge'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Badge } from '#/components/ui/badge'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '#/components/ui/card'
@@ -12,7 +13,7 @@ import { ApiError } from '#/lib/api'
 import { normalizeHealth } from '#/lib/registry-types'
 import { cn } from '#/lib/utils'
 
-import type { BlastRadius, BlastRadiusDirectionResult, BlastRadiusEntry, Cycle, GraphNode } from '#/lib/topology-types'
+import type { BlastRadius, BlastRadiusDirectionResult, BlastRadiusEntry, Cycle, GraphNode, Spof } from '#/lib/topology-types'
 
 // Mirrors BlastRadiusService.MAX_NODES_PER_DIRECTION on the backend — the cap is a fixed
 // constant per direction, not something derivable from a single response's entry counts.
@@ -190,6 +191,7 @@ export function InspectorPanel({
   isBlastRadiusLoading,
   blastRadiusError,
   cycles,
+  spofs,
   nodesById,
 }: {
   node: GraphNode
@@ -198,6 +200,7 @@ export function InspectorPanel({
   isBlastRadiusLoading: boolean
   blastRadiusError: Error | null
   cycles: Cycle[]
+  spofs: Spof[]
   nodesById: Map<string, GraphNode>
 }) {
   const [activeTab, setActiveTab] = useState<'details' | 'blast-radius'>('blast-radius')
@@ -208,6 +211,7 @@ export function InspectorPanel({
       <CardHeader className="shrink-0 flex flex-row items-center gap-2 pb-2 pt-5">
         <CardTitle className="text-sm font-semibold">{node.name}</CardTitle>
         <CycleBadge cycles={cycles} nodesById={nodesById} onlyForServiceId={node.serviceId} />
+        <SpofBadge spofs={spofs} nodesById={nodesById} onlyForServiceId={node.serviceId} />
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col pb-3 pt-0">
         <Tabs

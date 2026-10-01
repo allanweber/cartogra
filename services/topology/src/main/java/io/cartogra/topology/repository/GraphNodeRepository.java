@@ -23,4 +23,7 @@ public interface GraphNodeRepository {
 
     /** Live nodes matching any of the given service ids, ordered by name; up to {@code limit} rows. */
     List<GraphNode> findByServiceIds(UUID tenantId, Collection<UUID> serviceIds, int limit);
+
+    /** Live nodes with no team owner ({@code team_id IS NULL}), ordered by name; up to {@code maxRows} rows. */
+    List<GraphNode> findOrphaned(UUID tenantId, int maxRows);
 }

@@ -134,18 +134,25 @@ export function isCycleMember(serviceId: string, cycleMemberIds: Set<string> | n
   return cycleMemberIds?.has(serviceId) ?? false
 }
 
+// Same cross-cutting-fact treatment as isCycleMember above, for SPOF status.
+export function isSpof(serviceId: string, spofServiceIds: Set<string> | null): boolean {
+  return spofServiceIds?.has(serviceId) ?? false
+}
+
 export function DependencyGraph({
   graph,
   selectedServiceId,
   onSelectNode,
   blastRadiusHighlight,
   cycleMemberIds,
+  spofServiceIds,
 }: {
   graph: Graph
   selectedServiceId: string | null
   onSelectNode: (serviceId: string | null) => void
   blastRadiusHighlight?: BlastRadiusHighlightMap | null
   cycleMemberIds?: Set<string> | null
+  spofServiceIds?: Set<string> | null
 }) {
   const svgRef = useRef<SVGSVGElement>(null)
   const onSelectNodeRef = useRef(onSelectNode)
@@ -281,6 +288,22 @@ export function DependencyGraph({
       .attr('pointer-events', 'none')
       .attr('opacity', 0)
       .text('↻')
+
+    // SPOF-status glyph, top-left (mirrors the cycle badge's top-right placement) so the two
+    // standing-risk markers never overlap — a "standing property of the node, like health"
+    // per the design brief, not the same visual channel as the cycle highlight above.
+    nodeSelection
+      .append('text')
+      .attr('class', 'graph-node-spof-badge')
+      .attr('x', -11)
+      .attr('y', -9)
+      .attr('text-anchor', 'middle')
+      .attr('font-size', 10)
+      .attr('font-weight', 700)
+      .attr('fill', 'var(--color-warning)')
+      .attr('pointer-events', 'none')
+      .attr('opacity', 0)
+      .text('▲')
 
     // Non-color marker for the down state, in addition to the dashed outline for degraded below.
     nodeSelection
@@ -435,6 +458,7 @@ export function DependencyGraph({
     const svg = select(svgEl)
     const highlightMap = blastRadiusHighlight ?? null
     const cycleMembers = cycleMemberIds ?? null
+    const spofs = spofServiceIds ?? null
 
     svg
       .selectAll<SVGGElement, SimNode>('.graph-node')
@@ -451,19 +475,25 @@ export function DependencyGraph({
       .selectAll<SVGGElement, SimNode>('.graph-node')
       .select<SVGTextElement>('text.graph-node-cycle-badge')
       .attr('opacity', (node) => (isCycleMember(node.serviceId, cycleMembers) ? 1 : 0))
-    // Recomputed here rather than in applyNodeAppearance so a cycle query resolving after the
-    // graph is already mounted still updates the label — nodeAppearance() remains the single
-    // source of the health/tier portion, this only appends the cycle fact on top of it.
+    svg
+      .selectAll<SVGGElement, SimNode>('.graph-node')
+      .select<SVGTextElement>('text.graph-node-spof-badge')
+      .attr('opacity', (node) => (isSpof(node.serviceId, spofs) ? 1 : 0))
+    // Recomputed here rather than in applyNodeAppearance so a cycle/SPOF query resolving after
+    // the graph is already mounted still updates the label — nodeAppearance() remains the
+    // single source of the health/tier portion, this only appends these facts on top of it.
     svg
       .selectAll<SVGGElement, SimNode>('.graph-node')
       .attr('aria-label', (node) => {
-        const base = nodeAppearance(node).ariaLabel
-        return isCycleMember(node.serviceId, cycleMembers) ? `${base}, part of a dependency cycle` : base
+        let label = nodeAppearance(node).ariaLabel
+        if (isCycleMember(node.serviceId, cycleMembers)) label += ', part of a dependency cycle'
+        if (isSpof(node.serviceId, spofs)) label += ', a single point of failure'
+        return label
       })
     svg
       .selectAll<SVGLineElement, SimLink>('.graph-links line')
       .style('opacity', (link) => linkOpacity(endpointId(link.source), endpointId(link.target), selectedServiceId, highlightMap))
-  }, [selectedServiceId, blastRadiusHighlight, cycleMemberIds, graph])
+  }, [selectedServiceId, blastRadiusHighlight, cycleMemberIds, spofServiceIds, graph])
 
   return (
     <svg

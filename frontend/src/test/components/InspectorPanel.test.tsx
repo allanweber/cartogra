@@ -55,6 +55,7 @@ describe('InspectorPanel', () => {
         isBlastRadiusLoading={false}
         blastRadiusError={null}
         cycles={[]}
+        spofs={[]}
         nodesById={new Map()}
       />,
     )
@@ -71,6 +72,7 @@ describe('InspectorPanel', () => {
         isBlastRadiusLoading={false}
         blastRadiusError={null}
         cycles={[]}
+        spofs={[]}
         nodesById={new Map()}
       />,
     )
@@ -89,6 +91,7 @@ describe('InspectorPanel', () => {
         isBlastRadiusLoading={false}
         blastRadiusError={null}
         cycles={[]}
+        spofs={[]}
         nodesById={new Map()}
       />,
     )
@@ -124,6 +127,7 @@ describe('InspectorPanel', () => {
         isBlastRadiusLoading={false}
         blastRadiusError={null}
         cycles={[]}
+        spofs={[]}
         nodesById={new Map()}
       />,
     )
@@ -149,6 +153,7 @@ describe('InspectorPanel', () => {
         isBlastRadiusLoading={false}
         blastRadiusError={null}
         cycles={[]}
+        spofs={[]}
         nodesById={new Map()}
       />,
     )
@@ -165,6 +170,7 @@ describe('InspectorPanel', () => {
         isBlastRadiusLoading={false}
         blastRadiusError={null}
         cycles={[]}
+        spofs={[]}
         nodesById={new Map()}
       />,
     )
@@ -181,6 +187,7 @@ describe('InspectorPanel', () => {
         isBlastRadiusLoading={true}
         blastRadiusError={null}
         cycles={[]}
+        spofs={[]}
         nodesById={new Map()}
       />,
     )
@@ -196,6 +203,7 @@ describe('InspectorPanel', () => {
         isBlastRadiusLoading={false}
         blastRadiusError={new ApiError('SERVER_ERROR', 'Something broke', 'abc123')}
         cycles={[]}
+        spofs={[]}
         nodesById={new Map()}
       />,
     )
@@ -212,6 +220,7 @@ describe('InspectorPanel', () => {
         isBlastRadiusLoading={false}
         blastRadiusError={null}
         cycles={[]}
+        spofs={[]}
         nodesById={new Map()}
       />,
     )
@@ -227,6 +236,7 @@ describe('InspectorPanel', () => {
         isBlastRadiusLoading={false}
         blastRadiusError={null}
         cycles={[{ members: ['s1', 's2'], length: 2 }]}
+        spofs={[]}
         nodesById={new Map([['s2', node({ serviceId: 's2', name: 'checkout-api' })]])}
       />,
     )
@@ -242,9 +252,42 @@ describe('InspectorPanel', () => {
         isBlastRadiusLoading={false}
         blastRadiusError={null}
         cycles={[{ members: ['s2', 's3'], length: 2 }]}
+        spofs={[]}
         nodesById={new Map()}
       />,
     )
     expect(screen.queryByText(/cycle/)).not.toBeInTheDocument()
+  })
+
+  it('shows the SPOF badge next to the node name when it is flagged', () => {
+    render(
+      <InspectorPanel
+        node={node()}
+        teamMap={teamMap}
+        blastRadius={blastRadius()}
+        isBlastRadiusLoading={false}
+        blastRadiusError={null}
+        cycles={[]}
+        spofs={[{ serviceId: 's1', name: 'payments-api', teamId: 't1', tier: 'CRITICAL', healthStatus: 'HEALTHY', fanIn: 6, severity: 'critical' }]}
+        nodesById={new Map()}
+      />,
+    )
+    expect(screen.getByText('1 single point of failure')).toBeInTheDocument()
+  })
+
+  it('renders no SPOF badge when the node is not flagged', () => {
+    render(
+      <InspectorPanel
+        node={node()}
+        teamMap={teamMap}
+        blastRadius={blastRadius()}
+        isBlastRadiusLoading={false}
+        blastRadiusError={null}
+        cycles={[]}
+        spofs={[{ serviceId: 's2', name: 'checkout-api', teamId: 't1', tier: 'CRITICAL', healthStatus: 'HEALTHY', fanIn: 6, severity: 'critical' }]}
+        nodesById={new Map()}
+      />,
+    )
+    expect(screen.queryByText(/single point of failure/)).not.toBeInTheDocument()
   })
 })
