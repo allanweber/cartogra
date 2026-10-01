@@ -6,6 +6,7 @@ import { TooltipProvider } from '#/components/ui/tooltip'
 import { apiFetch, ApiError } from '#/lib/api'
 
 import type { PageResult, RegistryService } from '#/lib/registry-types'
+import type { Risk } from '#/lib/topology-types'
 
 vi.mock('@tanstack/react-router', async () => ({
   ...await vi.importActual('@tanstack/react-router'),
@@ -66,6 +67,14 @@ function makeService(overrides: Partial<RegistryService>): RegistryService {
   }
 }
 
+const NO_RISKS: PageResult<Risk> = { items: [], total: 0, limit: 200, offset: 0 }
+
+function mockApi(services: unknown, risks: PageResult<Risk> = NO_RISKS) {
+  vi.mocked(apiFetch).mockImplementation(async (path: string) =>
+    path.includes('/topology/risks') ? risks : services,
+  )
+}
+
 function renderPage() {
   const Page = (Route as any).component
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -107,12 +116,31 @@ describe('DashboardPage', () => {
       limit: 200,
       offset: 0,
     }
-    vi.mocked(apiFetch).mockResolvedValue(page)
+    mockApi(page)
     renderPage()
 
     // 1 healthy of 3 -> 33%
     expect(await screen.findByText('33%')).toBeInTheDocument()
     expect(screen.getByText(/1 of 3 services healthy/)).toBeInTheDocument()
+  })
+
+  it('renders live risks with resolved service names and severity counts', async () => {
+    mockApi(
+      { items: [makeService({ id: 's1', name: 'checkout-api' })], total: 1, limit: 200, offset: 0 },
+      {
+        items: [
+          { id: 'r1', type: 'spof', severity: 'critical', title: 'SPOF: checkout-api', explanation: '', fix: '', affectedServices: ['s1'] },
+          { id: 'r2', type: 'orphan', severity: 'warning', title: 'Orphan service', explanation: '', fix: '', affectedServices: ['s1'] },
+        ],
+        total: 2,
+        limit: 200,
+        offset: 0,
+      },
+    )
+    renderPage()
+
+    expect(await screen.findByText('SPOF: checkout-api')).toBeInTheDocument()
+    expect(screen.getByText('1 critical · 1 warning')).toBeInTheDocument()
   })
 
   it('flags a service as stale when lastDeployedAt is older than 14 days', async () => {
@@ -123,7 +151,7 @@ describe('DashboardPage', () => {
       limit: 200,
       offset: 0,
     }
-    vi.mocked(apiFetch).mockResolvedValue(page)
+    mockApi(page)
     renderPage()
 
     expect(await screen.findByText('stale-svc')).toBeInTheDocument()
@@ -136,7 +164,7 @@ describe('DashboardPage', () => {
       limit: 200,
       offset: 0,
     }
-    vi.mocked(apiFetch).mockResolvedValue(page)
+    mockApi(page)
     renderPage()
 
     expect(await screen.findByText('No stale services.')).toBeInTheDocument()
@@ -149,7 +177,7 @@ describe('DashboardPage', () => {
       limit: 200,
       offset: 0,
     }
-    vi.mocked(apiFetch).mockResolvedValue(page)
+    mockApi(page)
     renderPage()
 
     expect(await screen.findByText(/showing the first/i)).toBeInTheDocument()
@@ -165,7 +193,7 @@ describe('DashboardPage', () => {
       limit: 200,
       offset: 0,
     }
-    vi.mocked(apiFetch).mockResolvedValue(page)
+    mockApi(page)
     renderPage()
 
     await screen.findByText(/2 of 2 services healthy/)

@@ -10,6 +10,7 @@ import { Button } from '#/components/ui/button'
 import { Card, CardContent } from '#/components/ui/card'
 import { Skeleton } from '#/components/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
+import { useRisks } from '#/hooks/useRisks'
 import { ApiError, apiFetch } from '#/lib/api'
 import { cn } from '#/lib/utils'
 
@@ -25,11 +26,6 @@ type TypeFilter = RiskType | 'all'
 
 const SEVERITY_ORDER: Record<RiskSeverity, number> = { critical: 0, warning: 1, info: 2 }
 const DISMISSED_KEY = 'cartogra:risks:dismissed'
-// Generous enough to cover any realistic tenant's combined risk count in one request (each
-// source is independently capped at 200 server-side) — severity/type filtering needs to see
-// the whole list, not one server page, so this is a single bounded fetch rather than
-// page-flipping pagination, matching how graph.tsx/teams.tsx fetch other bounded resources.
-const LIMIT = 200
 const TYPE_LABELS: Record<RiskType, string> = { spof: 'SPOF', cycle: 'Cycle', orphan: 'Orphan', drift: 'Drift' }
 
 function RisksPage() {
@@ -64,11 +60,7 @@ function RisksPage() {
     data: risksPage,
     isLoading,
     error,
-  } = useQuery({
-    queryKey: ['risks'],
-    queryFn: () => apiFetch<PageResult<Risk>>(`/v1/topology/risks?limit=${LIMIT}&offset=0`),
-    staleTime: 0,
-  })
+  } = useRisks()
 
   // Best-effort: a failed services fetch degrades to showing raw IDs on the chip row rather
   // than blocking the page — risks themselves are this page's primary content.
