@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { useSyncExternalStore } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -194,6 +194,46 @@ describe('GraphPage', () => {
     expect(await screen.findByText(/partial blast radius/i)).toBeInTheDocument()
     const opacities = [...svg.querySelectorAll<SVGGElement>('.graph-node')].map((g) => g.style.opacity)
     expect(opacities.every((o) => o === '' || o === '1')).toBe(true)
+  })
+
+  it('a slow blast-radius response for a previous selection never overwrites the current one', async () => {
+    const entry = (serviceId: string, name: string) => ({
+      serviceId, name, teamId: null, tier: null, healthStatus: 'HEALTHY' as const, distance: 1,
+    })
+    const result = (serviceId: string, name: string): BlastRadius => ({
+      ...EMPTY_BLAST_RADIUS,
+      serviceId,
+      downstream: { ...EMPTY_BLAST_RADIUS.downstream, entries: [entry(`x-${serviceId}`, name)] },
+    })
+    let resolveFirst: (value: BlastRadius) => void = () => {}
+    const firstPending = new Promise<BlastRadius>((resolve) => {
+      resolveFirst = resolve
+    })
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path.includes('/v1/registry/services')) return Promise.resolve({ items: [], total: 0, limit: 1000, offset: 0 })
+      if (path.includes('/v1/registry/teams')) return Promise.resolve(EMPTY_TEAMS)
+      if (path.includes('/v1/topology/blast-radius/s1')) return firstPending
+      if (path.includes('/v1/topology/blast-radius/s2')) return Promise.resolve(result('s2', 'impacted-by-auth'))
+      if (path.includes('/v1/topology/cycles')) return Promise.resolve(EMPTY_CYCLES)
+      if (path.includes('/v1/topology/spofs')) return Promise.resolve(EMPTY_SPOFS)
+      return Promise.resolve(makeGraph())
+    })
+    mockSearch = { service: 's1' }
+    renderPage()
+    await screen.findByRole('group', { name: /service dependency graph/i })
+
+    act(() => {
+      navigateMock({ search: { service: 's2' } })
+    })
+    expect(await screen.findByText('impacted-by-auth')).toBeInTheDocument()
+
+    await act(async () => {
+      resolveFirst(result('s1', 'stale-from-api-gateway'))
+      await firstPending
+    })
+
+    expect(screen.getByText('impacted-by-auth')).toBeInTheDocument()
+    expect(screen.queryByText('stale-from-api-gateway')).not.toBeInTheDocument()
   })
 
   it('Escape that was already handled by an overlay does not clear the selection', async () => {
