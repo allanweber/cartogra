@@ -37,22 +37,22 @@ public class SpofService {
     }
 
     public SpofResult detect(UUID tenantId) {
-        int threshold = settingsRepository.findSpofThreshold(tenantId).orElse(DEFAULT_THRESHOLD);
-        List<FanInRow> fetched = graphViewRepository.findFanIn(tenantId, threshold, MAX_ROWS + 1);
-        boolean truncated = fetched.size() > MAX_ROWS;
-        List<FanInRow> fanInRows = truncated ? fetched.subList(0, MAX_ROWS) : fetched;
+        int threshold = Math.max(1, settingsRepository.findSpofThreshold(tenantId).orElse(DEFAULT_THRESHOLD));
+        List<FanInRow> fanInRows = graphViewRepository.findFanIn(tenantId, threshold, MAX_ROWS + 1);
 
         Set<UUID> ids = fanInRows.stream().map(FanInRow::serviceId).collect(Collectors.toCollection(LinkedHashSet::new));
         Map<UUID, GraphNode> nodesById = graphNodeRepository.findByServiceIds(tenantId, ids, ids.size()).stream()
                 .collect(Collectors.toMap(GraphNode::serviceId, Function.identity()));
 
-        List<Spof> items = fanInRows.stream()
+        List<Spof> live = fanInRows.stream()
                 .filter(row -> nodesById.get(row.serviceId()) != null)
                 .map(row -> {
                     GraphNode node = nodesById.get(row.serviceId());
                     return new Spof(node, row.fanIn(), severityOf(node));
                 })
                 .toList();
+        boolean truncated = live.size() > MAX_ROWS;
+        List<Spof> items = truncated ? live.subList(0, MAX_ROWS) : live;
 
         return new SpofResult(threshold, rationale(threshold), items, truncated);
     }

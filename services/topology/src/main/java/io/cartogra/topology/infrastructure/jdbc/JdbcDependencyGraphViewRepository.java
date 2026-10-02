@@ -23,12 +23,18 @@ import java.util.UUID;
 @Repository
 public class JdbcDependencyGraphViewRepository implements DependencyGraphViewRepository {
 
+    private static final int TRAVERSAL_TIMEOUT_SECONDS = 10;
+
     private final JdbcTemplate jdbc;
     private final NamedParameterJdbcTemplate namedJdbc;
+    private final NamedParameterJdbcTemplate traversalJdbc;
 
     public JdbcDependencyGraphViewRepository(JdbcTemplate jdbc, NamedParameterJdbcTemplate namedJdbc) {
         this.jdbc = jdbc;
         this.namedJdbc = namedJdbc;
+        JdbcTemplate bounded = new JdbcTemplate(jdbc.getDataSource());
+        bounded.setQueryTimeout(TRAVERSAL_TIMEOUT_SECONDS);
+        this.traversalJdbc = new NamedParameterJdbcTemplate(bounded);
     }
 
     @Override
@@ -116,7 +122,7 @@ public class JdbcDependencyGraphViewRepository implements DependencyGraphViewRep
                 .addValue("tenantId", tenantId)
                 .addValue("serviceId", serviceId)
                 .addValue("maxDepthPlusOne", maxDepth + 1);
-        return namedJdbc.query(sql, params, BLAST_RADIUS_ROW_MAPPER);
+        return traversalJdbc.query(sql, params, BLAST_RADIUS_ROW_MAPPER);
     }
 
     /**
@@ -125,25 +131,28 @@ public class JdbcDependencyGraphViewRepository implements DependencyGraphViewRep
      * walks and, once flattened, becomes the response's member list. The base case starts from
      * every edge rather than every node, since a cycle needs at least one edge and self-edges are
      * already rejected at write time — so the shortest possible cycle is a 2-node mutual
-     * dependency, closing at depth 2. Every walk is anchored at the smallest id in its cycle (all
+     * dependency, closing at depth 2. The walk runs over distinct (source, target) pairs, not raw view
+     * rows, so parallel edges (same pair, different type or protocol) don't multiply the fan-out per
+     * hop. Every walk is anchored at the smallest id in its cycle (all
      * other members must compare greater than {@code start_id}), so each cycle is found exactly once
      * instead of once per member, and {@code ORDER BY} makes the row cap cut off the same cycles on
      * every call.
      */
     private static final String CYCLES_SQL = """
-            WITH RECURSIVE walk AS (
-                SELECT source_service_id AS start_id, target_service_id AS current_id,
-                       ARRAY[source_service_id, target_service_id] AS visited, 1 AS depth
+            WITH RECURSIVE pairs AS (
+                SELECT DISTINCT source_service_id, target_service_id
                 FROM dependency_graph_edges
                 WHERE tenant_id = :tenantId
-                  AND source_service_id < target_service_id
                   %s
+            ), walk AS (
+                SELECT source_service_id AS start_id, target_service_id AS current_id,
+                       ARRAY[source_service_id, target_service_id] AS visited, 1 AS depth
+                FROM pairs
+                WHERE source_service_id < target_service_id
                 UNION ALL
                 SELECT w.start_id, e.target_service_id, w.visited || e.target_service_id, w.depth + 1
                 FROM walk w
-                JOIN dependency_graph_edges e
-                  ON e.tenant_id = :tenantId AND e.source_service_id = w.current_id
-                  %s
+                JOIN pairs e ON e.source_service_id = w.current_id
                 WHERE w.current_id <> w.start_id
                   AND w.depth < :maxLength
                   AND (e.target_service_id = w.start_id
@@ -155,8 +164,7 @@ public class JdbcDependencyGraphViewRepository implements DependencyGraphViewRep
     @Override
     public List<List<UUID>> findCycles(UUID tenantId, @Nullable DependencyType type, int maxLength, int maxRows) {
         String baseFilter = type != null ? "AND dependency_type = :type" : "";
-        String recursiveFilter = type != null ? "AND e.dependency_type = :type" : "";
-        String sql = CYCLES_SQL.formatted(baseFilter, recursiveFilter);
+        String sql = CYCLES_SQL.formatted(baseFilter);
         var params = new MapSqlParameterSource()
                 .addValue("tenantId", tenantId)
                 .addValue("maxLength", maxLength)
@@ -164,7 +172,7 @@ public class JdbcDependencyGraphViewRepository implements DependencyGraphViewRep
         if (type != null) {
             params.addValue("type", type.toDbValue());
         }
-        return namedJdbc.query(sql, params, CYCLE_PATH_MAPPER);
+        return traversalJdbc.query(sql, params, CYCLE_PATH_MAPPER);
     }
 
     private static final RowMapper<List<UUID>> CYCLE_PATH_MAPPER = (rs, _) -> mapCyclePath(rs);

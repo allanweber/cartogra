@@ -22,6 +22,8 @@ import java.util.stream.Stream;
 @org.springframework.stereotype.Service
 public class RiskService {
 
+    public static final int MAX_PAGE_SIZE = 1000;
+
     private static final int SOURCE_CAP = SpofService.MAX_ROWS;
 
     private final CycleService cycleService;
@@ -48,6 +50,12 @@ public class RiskService {
      * when any source hit its cap, so the true total may be higher.
      */
     public RiskPage list(UUID tenantId, int limit, int offset) {
+        if (limit < 1 || limit > MAX_PAGE_SIZE) {
+            throw new IllegalArgumentException("limit must be between 1 and " + MAX_PAGE_SIZE);
+        }
+        if (offset < 0) {
+            throw new IllegalArgumentException("offset must not be negative");
+        }
         List<Found> sources = List.of(cycleRisks(tenantId), spofRisks(tenantId),
                 orphanRisks(tenantId), driftRisks(tenantId));
         List<Risk> risks = new ArrayList<>();
@@ -75,6 +83,7 @@ public class RiskService {
         Map<UUID, GraphNode> nodesById = nodesById(tenantId, memberIds);
 
         List<Risk> risks = cycles.cycles().stream()
+                .filter(cycle -> cycle.members().stream().allMatch(nodesById::containsKey))
                 .map(cycle -> {
                     List<UUID> members = cycle.members();
                     String id = "cycle:" + members.stream().map(UUID::toString).collect(Collectors.joining(","));

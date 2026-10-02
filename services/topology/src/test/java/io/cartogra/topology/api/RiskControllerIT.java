@@ -169,6 +169,15 @@ class RiskControllerIT {
     }
 
     @Test
+    void invalidPagingParamsAreRejectedWith400() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+
+        assertThat(getRisks(tenantId, "?limit=0").statusCode()).isEqualTo(400);
+        assertThat(getRisks(tenantId, "?limit=1001").statusCode()).isEqualTo(400);
+        assertThat(getRisks(tenantId, "?offset=-1").statusCode()).isEqualTo(400);
+    }
+
+    @Test
     void emptyGraphReturnsEmptyPage() throws Exception {
         UUID tenantId = UUID.randomUUID();
         graphViewRepository.refresh();

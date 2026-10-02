@@ -4,9 +4,9 @@ import io.cartogra.topology.domain.SpofResult;
 
 import java.util.List;
 
-public record SpofsResponse(int threshold, String rationale, List<SpofResponse> items) {
+public record SpofsResponse(int threshold, String rationale, List<SpofResponse> items, boolean truncated) {
     public static SpofsResponse from(SpofResult result) {
         return new SpofsResponse(result.threshold(), result.rationale(),
-                result.items().stream().map(SpofResponse::from).toList());
+                result.items().stream().map(SpofResponse::from).toList(), result.truncated());
     }
 }

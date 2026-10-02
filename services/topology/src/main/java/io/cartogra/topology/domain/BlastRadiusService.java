@@ -66,18 +66,18 @@ public class BlastRadiusService {
         int nodesBeyondDepth = (int) rows.stream().filter(row -> row.depth() == maxDepth + 1).count();
         List<BlastRadiusRow> withinDepth = rows.stream().filter(row -> row.depth() <= maxDepth).toList();
 
-        boolean nodeCapTruncated = withinDepth.size() > MAX_NODES_PER_DIRECTION;
-        int nodesBeyondCap = nodeCapTruncated ? withinDepth.size() - MAX_NODES_PER_DIRECTION : 0;
-        List<BlastRadiusRow> capped = nodeCapTruncated ? withinDepth.subList(0, MAX_NODES_PER_DIRECTION) : withinDepth;
-
-        Set<UUID> ids = capped.stream().map(BlastRadiusRow::serviceId).collect(Collectors.toCollection(LinkedHashSet::new));
+        Set<UUID> ids = withinDepth.stream().map(BlastRadiusRow::serviceId).collect(Collectors.toCollection(LinkedHashSet::new));
         Map<UUID, GraphNode> nodesById = graphNodeRepository.findByServiceIds(tenantId, ids, ids.size()).stream()
                 .collect(Collectors.toMap(GraphNode::serviceId, Function.identity()));
 
-        List<BlastRadiusEntry> entries = capped.stream()
+        List<BlastRadiusEntry> live = withinDepth.stream()
                 .filter(row -> nodesById.get(row.serviceId()) != null)
                 .map(row -> new BlastRadiusEntry(nodesById.get(row.serviceId()), row.depth()))
                 .toList();
+
+        boolean nodeCapTruncated = live.size() > MAX_NODES_PER_DIRECTION;
+        int nodesBeyondCap = nodeCapTruncated ? live.size() - MAX_NODES_PER_DIRECTION : 0;
+        List<BlastRadiusEntry> entries = nodeCapTruncated ? live.subList(0, MAX_NODES_PER_DIRECTION) : live;
 
         return new BlastRadiusDirectionResult(entries, nodesBeyondDepth > 0, nodesBeyondDepth, nodeCapTruncated, nodesBeyondCap);
     }

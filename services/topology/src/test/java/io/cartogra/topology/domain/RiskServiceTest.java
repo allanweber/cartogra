@@ -52,10 +52,38 @@ class RiskServiceTest {
     }
 
     @Test
+    void cyclesThroughDeletedOrMissingNodesAreNotReported() {
+        UUID live = UUID.randomUUID();
+        UUID gone = UUID.randomUUID();
+        when(cycleService.find(any(), any())).thenReturn(new Cycles(List.of(new Cycle(List.of(live, gone))), false));
+        when(graphNodeRepository.findByServiceIds(any(), any(), anyInt())).thenReturn(List.of(
+                node(live, "live-svc", UUID.randomUUID(), "CRITICAL")));
+
+        RiskPage result = service.list(tenantId, 20, 0);
+
+        assertThat(result.items()).isEmpty();
+    }
+
+    @Test
+    @org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
+    void rejectsOutOfRangePaging() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.list(tenantId, 0, 0))
+                .isInstanceOf(IllegalArgumentException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.list(tenantId, RiskService.MAX_PAGE_SIZE + 1, 0))
+                .isInstanceOf(IllegalArgumentException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.list(tenantId, 20, -1))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void combinesAllFourSources() {
         UUID cycleMember1 = UUID.randomUUID();
         UUID cycleMember2 = UUID.randomUUID();
         when(cycleService.find(any(), any())).thenReturn(new Cycles(List.of(new Cycle(List.of(cycleMember1, cycleMember2))), false));
+
+        when(graphNodeRepository.findByServiceIds(any(), any(), anyInt())).thenReturn(List.of(
+                node(cycleMember1, "cycle-a", UUID.randomUUID(), "STANDARD"),
+                node(cycleMember2, "cycle-b", UUID.randomUUID(), "STANDARD")));
 
         UUID spofId = UUID.randomUUID();
         when(spofService.detect(any())).thenReturn(new SpofResult(5, "rationale",
