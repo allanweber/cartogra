@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { ChevronDown, ChevronUp, ShieldCheck, Wrench } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 import { AppLayout } from '#/components/AppLayout'
 import { Alert, AlertDescription } from '#/components/ui/alert'
@@ -10,6 +10,7 @@ import { Button } from '#/components/ui/button'
 import { Card, CardContent } from '#/components/ui/card'
 import { Skeleton } from '#/components/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
+import { useRiskDismissals } from '#/hooks/useRiskDismissals'
 import { useRisks } from '#/hooks/useRisks'
 import { ApiError, apiFetch } from '#/lib/api'
 import { cn } from '#/lib/utils'
@@ -25,35 +26,12 @@ type SeverityFilter = RiskSeverity | 'all'
 type TypeFilter = RiskType | 'all'
 
 const SEVERITY_ORDER: Record<RiskSeverity, number> = { critical: 0, warning: 1, info: 2 }
-const DISMISSED_KEY = 'cartogra:risks:dismissed'
 const TYPE_LABELS: Record<RiskType, string> = { spof: 'SPOF', cycle: 'Cycle', orphan: 'Orphan', drift: 'Drift' }
 
 function RisksPage() {
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all')
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set())
   const [showDismissed, setShowDismissed] = useState(false)
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(DISMISSED_KEY)
-      if (raw) setDismissed(new Set(JSON.parse(raw) as string[]))
-    } catch {
-      // per-viewer convenience only — ignore read failures
-    }
-  }, [])
-
-  function toggleDismissed(id: string) {
-    const next = new Set(dismissed)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
-    setDismissed(next)
-    try {
-      localStorage.setItem(DISMISSED_KEY, JSON.stringify([...next]))
-    } catch {
-      // per-viewer convenience only — ignore write failures
-    }
-  }
 
   const {
     data: risksPage,
@@ -70,21 +48,23 @@ function RisksPage() {
   const servicesById = new Map((servicesPage?.items ?? []).map((s) => [s.id, s]))
 
   const risks = risksPage?.items ?? []
+  const { dismissed, toggle: toggleDismissed } = useRiskDismissals(risksPage?.items, !risksPage?.truncated)
 
-  const criticalCount = risks.filter((r) => r.severity === 'critical').length
-  const warningCount = risks.filter((r) => r.severity === 'warning').length
-  const infoCount = risks.filter((r) => r.severity === 'info').length
+  // Counts follow the same visibility rule as the list, so a card never promises more than a click shows.
+  const visibleRisks = risks.filter((r) => showDismissed || !dismissed.has(r.id))
+  const criticalCount = visibleRisks.filter((r) => r.severity === 'critical').length
+  const warningCount = visibleRisks.filter((r) => r.severity === 'warning').length
+  const infoCount = visibleRisks.filter((r) => r.severity === 'info').length
   const typeCounts: Record<RiskType, number> = {
-    spof: risks.filter((r) => r.type === 'spof').length,
-    cycle: risks.filter((r) => r.type === 'cycle').length,
-    orphan: risks.filter((r) => r.type === 'orphan').length,
-    drift: risks.filter((r) => r.type === 'drift').length,
+    spof: visibleRisks.filter((r) => r.type === 'spof').length,
+    cycle: visibleRisks.filter((r) => r.type === 'cycle').length,
+    orphan: visibleRisks.filter((r) => r.type === 'orphan').length,
+    drift: visibleRisks.filter((r) => r.type === 'drift').length,
   }
 
-  const filtered = risks
+  const filtered = visibleRisks
     .filter((r) => severityFilter === 'all' || r.severity === severityFilter)
     .filter((r) => typeFilter === 'all' || r.type === typeFilter)
-    .filter((r) => showDismissed || !dismissed.has(r.id))
     .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity])
 
   const hasActiveFilters = severityFilter !== 'all' || typeFilter !== 'all'

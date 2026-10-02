@@ -173,6 +173,43 @@ describe('GraphPage', () => {
     expect(screen.getByText('View in catalog →')).toBeInTheDocument()
   })
 
+  it('warns and stops dimming when the blast radius is truncated', async () => {
+    const blastRadius: BlastRadius = {
+      serviceId: 's1',
+      upstream: { entries: [], depthTruncated: false, nodesBeyondDepth: 0, nodeCapTruncated: false, nodesBeyondCap: 0 },
+      downstream: {
+        entries: [{ serviceId: 's2', name: 'auth-service', teamId: null, tier: null, healthStatus: 'HEALTHY', distance: 1 }],
+        depthTruncated: true,
+        nodesBeyondDepth: 4,
+        nodeCapTruncated: false,
+        nodesBeyondCap: 0,
+      },
+      maxDepth: 3,
+    }
+    mockGraphCalls(() => makeGraph(), blastRadius)
+    mockSearch = { service: 's1' }
+    renderPage()
+    const svg = await screen.findByRole('group', { name: /service dependency graph/i })
+
+    expect(await screen.findByText(/partial blast radius/i)).toBeInTheDocument()
+    const opacities = [...svg.querySelectorAll<SVGGElement>('.graph-node')].map((g) => g.style.opacity)
+    expect(opacities.every((o) => o === '' || o === '1')).toBe(true)
+  })
+
+  it('Escape that was already handled by an overlay does not clear the selection', async () => {
+    mockGraphCalls(() => makeGraph())
+    mockSearch = { service: 's1' }
+    renderPage()
+    await screen.findByRole('group', { name: /service dependency graph/i })
+    expect(await screen.findAllByText('api-gateway')).not.toHaveLength(0)
+
+    const handled = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true })
+    handled.preventDefault()
+    window.dispatchEvent(handled)
+    expect(screen.getAllByText('api-gateway')).not.toHaveLength(0)
+    expect(screen.queryByText(/select a service/i)).not.toBeInTheDocument()
+  })
+
   it('selecting a node via keyboard (Enter) shows the same panel as a click', async () => {
     mockGraphCalls(() => makeGraph())
     renderPage()

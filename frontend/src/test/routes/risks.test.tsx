@@ -185,6 +185,23 @@ describe('RisksPage', () => {
     expect(await screen.findByText('Unowned service: checkout-api')).toBeInTheDocument()
   })
 
+  it('summary counts exclude dismissed risks until they are shown again', async () => {
+    mockRisksCalls([
+      risk({ id: 'r-a', severity: 'critical', title: 'Critical A' }),
+      risk({ id: 'r-b', severity: 'critical', title: 'Critical B' }),
+    ])
+    renderPage()
+    const criticalCard = (await screen.findByText('Critical', { selector: 'p, span, div' })).closest('button')!
+    expect(criticalCard).toHaveTextContent('2')
+
+    fireEvent.click(screen.getByText('Critical A').closest('button')!)
+    fireEvent.click(screen.getByRole('button', { name: /dismiss/i }))
+
+    expect(screen.getByText('Critical', { selector: 'p, span, div' }).closest('button')).toHaveTextContent('1')
+    fireEvent.click(screen.getByText(/show 1 dismissed/i))
+    expect(screen.getByText('Critical', { selector: 'p, span, div' }).closest('button')).toHaveTextContent('2')
+  })
+
   it('resolves affected-service chips to names and deep-links to the graph', async () => {
     mockRisksCalls(
       [risk({ id: 'r-1', affectedServices: ['s1'] })],

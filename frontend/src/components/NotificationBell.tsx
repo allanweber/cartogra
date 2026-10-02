@@ -11,7 +11,9 @@ import {
   DropdownMenuTrigger,
 } from '#/components/ui/dropdown-menu'
 import { ScrollArea } from '#/components/ui/scroll-area'
+import { useRiskDismissals } from '#/hooks/useRiskDismissals'
 import { formatAffected, useRisks, useServiceNames } from '#/hooks/useRisks'
+import { useAuthStore } from '#/stores/useAuthStore'
 import { cn } from '#/lib/utils'
 
 import type { Risk } from '#/lib/topology-types'
@@ -25,7 +27,7 @@ interface Notification {
   read: boolean
 }
 
-function buildNotifications(
+export function buildNotifications(
   riskItems: Risk[],
   serviceNames: Map<string, string>,
 ): Notification[] {
@@ -56,7 +58,7 @@ function buildNotifications(
   return [...others, grouped]
 }
 
-const READ_KEY = 'cartogra:bell:read'
+const READ_KEY_PREFIX = 'cartogra:bell:read'
 
 const severityConfig: Record<Notification['severity'], { dot: string; text: string }> = {
   critical: { dot: 'bg-critical', text: 'text-critical' },
@@ -69,26 +71,34 @@ export function NotificationBell() {
   const navigate = useNavigate()
   const { data: risksPage } = useRisks({ staleTime: 60_000 })
   const serviceNames = useServiceNames()
+  const user = useAuthStore((s) => s.user)
+  const readKey = `${READ_KEY_PREFIX}:${user?.tenantId ?? 'anon'}:${user?.id ?? 'anon'}`
+  const { dismissed } = useRiskDismissals(risksPage?.items, !risksPage?.truncated)
   const [readIds, setReadIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(READ_KEY)
-      if (raw) setReadIds(new Set(JSON.parse(raw) as string[]))
+      const raw = localStorage.getItem(readKey)
+      setReadIds(raw ? new Set(JSON.parse(raw) as string[]) : new Set())
     } catch {
       // per-viewer convenience only
     }
-  }, [])
+  }, [readKey])
 
+  // Only ids of notifications that still exist are persisted, so the stored set can't grow forever.
   function persistRead(next: Set<string>) {
-    setReadIds(next)
+    const liveIds = new Set(notifications.map((n) => n.id))
+    const pruned = new Set([...next].filter((id) => liveIds.has(id)))
+    setReadIds(pruned)
     try {
-      localStorage.setItem(READ_KEY, JSON.stringify([...next]))
+      localStorage.setItem(readKey, JSON.stringify([...pruned]))
     } catch {
       // per-viewer convenience only
     }
   }
-  const notifications = buildNotifications(risksPage?.items ?? [], serviceNames).map((n) => ({
+  // A risk dismissed on the Risks page stays out of the bell too.
+  const visibleRisks = (risksPage?.items ?? []).filter((r) => !dismissed.has(r.id))
+  const notifications = buildNotifications(visibleRisks, serviceNames).map((n) => ({
     ...n,
     read: readIds.has(n.id),
   }))

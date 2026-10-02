@@ -17,10 +17,6 @@ import { cn } from '#/lib/utils'
 
 import type { BlastRadius, BlastRadiusDirectionResult, BlastRadiusEntry, Cycle, GraphNode, Spof } from '#/lib/topology-types'
 
-// Mirrors BlastRadiusService.MAX_NODES_PER_DIRECTION on the backend — the cap is a fixed
-// constant per direction, not something derivable from a single response's entry counts.
-const NODE_CAP_PER_DIRECTION = 200
-
 function healthDotClass(healthStatus: GraphNode['healthStatus']): string {
   const health = normalizeHealth(healthStatus)
   if (health === 'down') return 'bg-critical'
@@ -136,7 +132,7 @@ function BlastRadiusDirectionSection({
       {result.nodeCapTruncated && (
         <Alert>
           <AlertDescription>
-            Showing the closest {NODE_CAP_PER_DIRECTION} services — {result.nodesBeyondCap} more exist beyond this
+            Showing the closest {result.entries.length} services — {result.nodesBeyondCap} more exist beyond this
             list.
           </AlertDescription>
         </Alert>

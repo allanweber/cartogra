@@ -109,7 +109,9 @@ function GraphPage() {
   useEffect(() => {
     if (!selectedServiceId) return
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setSelectedServiceId(null)
+      // Radix overlays (popovers, selects, menus) preventDefault the Escape that closes them —
+      // that keypress must not also drop the selection.
+      if (event.key === 'Escape' && !event.defaultPrevented) setSelectedServiceId(null)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -125,6 +127,10 @@ function GraphPage() {
     enabled: !!selectedServiceId && !selectionMissing,
     staleTime: 0,
   })
+
+  const blastRadiusPartial =
+    !!blastRadius &&
+    [blastRadius.upstream, blastRadius.downstream].some((d) => d.depthTruncated || d.nodeCapTruncated)
 
   const blastRadiusHighlight = useMemo<BlastRadiusHighlightMap | null>(() => {
     if (!blastRadius) return null
@@ -254,6 +260,14 @@ function GraphPage() {
         </div>
       )}
 
+      {blastRadiusPartial && (
+        <Alert>
+          <AlertDescription>
+            Partial blast radius — the result was truncated, so services not highlighted may still be affected.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {!isLoading && graph && graph.nodes.length > 0 && (
         <div className="grid min-h-[480px] flex-1 grid-cols-1 grid-rows-1 gap-4 lg:grid-cols-[1fr_380px]">
           <div ref={graphRef} className="h-full min-h-0 rounded-xl border border-border bg-card">
@@ -262,6 +276,7 @@ function GraphPage() {
               selectedServiceId={selectedServiceId}
               onSelectNode={setSelectedServiceId}
               blastRadiusHighlight={blastRadiusHighlight}
+              blastRadiusPartial={blastRadiusPartial}
               cycleMemberIds={cycleMemberIds}
               spofServiceIds={spofServiceIds}
             />

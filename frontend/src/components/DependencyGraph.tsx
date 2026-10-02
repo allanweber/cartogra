@@ -144,6 +144,7 @@ export function DependencyGraph({
   selectedServiceId,
   onSelectNode,
   blastRadiusHighlight,
+  blastRadiusPartial,
   cycleMemberIds,
   spofServiceIds,
 }: {
@@ -151,6 +152,8 @@ export function DependencyGraph({
   selectedServiceId: string | null
   onSelectNode: (serviceId: string | null) => void
   blastRadiusHighlight?: BlastRadiusHighlightMap | null
+  // Truncated blast radius: an unlisted node may still be affected, so never dim it as "unaffected".
+  blastRadiusPartial?: boolean
   cycleMemberIds?: Set<string> | null
   spofServiceIds?: Set<string> | null
 }) {
@@ -496,12 +499,13 @@ export function DependencyGraph({
     if (!svgEl) return
     const svg = select(svgEl)
     const highlightMap = blastRadiusHighlight ?? null
+    const dimMap = blastRadiusPartial ? null : highlightMap
     const cycleMembers = cycleMemberIds ?? null
     const spofs = spofServiceIds ?? null
 
     svg
       .selectAll<SVGGElement, SimNode>('.graph-node')
-      .style('opacity', (node) => nodeOpacity(node.serviceId, selectedServiceId, highlightMap))
+      .style('opacity', (node) => nodeOpacity(node.serviceId, selectedServiceId, dimMap))
     svg
       .selectAll<SVGGElement, SimNode>('.graph-node')
       .select<SVGCircleElement>('circle.graph-node-highlight-ring')
@@ -539,8 +543,8 @@ export function DependencyGraph({
       })
     svg
       .selectAll<SVGLineElement, SimLink>('.graph-links line')
-      .style('opacity', (link) => linkOpacity(endpointId(link.source), endpointId(link.target), selectedServiceId, highlightMap))
-  }, [selectedServiceId, blastRadiusHighlight, cycleMemberIds, spofServiceIds, graph])
+      .style('opacity', (link) => linkOpacity(endpointId(link.source), endpointId(link.target), selectedServiceId, dimMap))
+  }, [selectedServiceId, blastRadiusHighlight, blastRadiusPartial, cycleMemberIds, spofServiceIds, graph])
 
   return (
     <svg
