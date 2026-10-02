@@ -30,19 +30,23 @@
 -- protocol) rather than duplicating them.
 --
 -- HOW TO RUN
--- Plain SQL. Either paste into any DBMS client connected to the "cartogra"
--- database after editing the tenant UUID below, or run non-interactively:
+-- psql only (the tenant id is a psql variable, and the REFRESH ... CONCURRENTLY at
+-- the end can't run inside a transaction block). Use a throwaway tenant UUID, never a
+-- real one — the seed writes straight into the shared dev database:
 --
---   psql "$DATABASE_URL" -v tenant_id="'<uuid>'" -f perf/graph-perf-200-seed.sql
+--   docker exec -i cartogra-postgres psql -U cartogra -d cartogra \
+--       -v tenant_id=<uuid> < perf/graph-perf-200-seed.sql
 --
--- (perf/bench.sh does this for you against the local docker-compose stack.)
---
--- If your client errors on "REFRESH MATERIALIZED VIEW CONCURRENTLY ... cannot
--- run inside a transaction block" (some GUIs wrap script runs in one
--- transaction), run everything above that statement first, then run it by
--- itself afterward.
+-- Then measure with `TENANT_ID=<uuid> perf/bench.sh` (bench.sh does not seed), and
+-- remove the fixture afterwards with perf/graph-perf-200-teardown.sql.
 
-SET app.current_tenant_id = '00000000-0000-0000-0000-000000000000'; -- <-- replace with your tenant id
+\if :{?tenant_id}
+\else
+    \echo 'error: pass -v tenant_id=<uuid> (a throwaway tenant, not a real one)'
+    \quit
+\endif
+
+SET app.current_tenant_id = :'tenant_id';
 
 -- 130 services ------------------------------------------------------------
 
