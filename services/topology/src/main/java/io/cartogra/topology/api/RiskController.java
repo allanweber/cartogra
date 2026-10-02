@@ -1,10 +1,10 @@
 package io.cartogra.topology.api;
 
 import io.cartogra.common.api.ApiResponse;
+import io.cartogra.web.api.TracedResponse;
 import io.cartogra.topology.api.dto.RiskPageResponse;
 import io.cartogra.topology.domain.RiskPage;
 import io.cartogra.topology.domain.RiskService;
-import io.opentelemetry.api.trace.Span;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -30,13 +30,6 @@ public class RiskController {
             @RequestParam(defaultValue = "20") int limit,
             @RequestParam(defaultValue = "0") int offset) {
         RiskPage page = riskService.list(tenantId, limit, offset);
-        String traceId = traceId();
-        return ResponseEntity.ok()
-                .header("X-Trace-Id", traceId)
-                .body(new ApiResponse<>(RiskPageResponse.from(page), traceId));
-    }
-
-    private static String traceId() {
-        return Span.current().getSpanContext().getTraceId();
+        return TracedResponse.ok(RiskPageResponse.from(page));
     }
 }

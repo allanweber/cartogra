@@ -1,11 +1,11 @@
 package io.cartogra.topology.api;
 
 import io.cartogra.common.api.ApiResponse;
+import io.cartogra.web.api.TracedResponse;
 import io.cartogra.topology.api.dto.BlastRadiusResponse;
 import io.cartogra.topology.domain.BlastRadius;
 import io.cartogra.topology.domain.BlastRadiusDirection;
 import io.cartogra.topology.domain.BlastRadiusService;
-import io.opentelemetry.api.trace.Span;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,13 +34,6 @@ public class BlastRadiusController {
             @RequestParam(required = false) @Nullable BlastRadiusDirection direction,
             @RequestParam(required = false) @Nullable Integer depth) {
         BlastRadius result = blastRadiusService.compute(tenantId, serviceId, direction, depth);
-        String traceId = traceId();
-        return ResponseEntity.ok()
-                .header("X-Trace-Id", traceId)
-                .body(new ApiResponse<>(BlastRadiusResponse.from(result), traceId));
-    }
-
-    private static String traceId() {
-        return Span.current().getSpanContext().getTraceId();
+        return TracedResponse.ok(BlastRadiusResponse.from(result));
     }
 }
