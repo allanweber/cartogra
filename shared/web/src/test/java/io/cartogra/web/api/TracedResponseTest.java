@@ -47,4 +47,15 @@ class TracedResponseTest {
             assertThat(response.getBody()).isNull();
         }
     }
+
+    @Test
+    void acceptedHasTheTraceHeaderAndNoBody() {
+        try (Scope _ = span().makeCurrent()) {
+            var response = TracedResponse.accepted();
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+            assertThat(response.getHeaders().getFirst("X-Trace-Id")).isEqualTo(TRACE_ID);
+            assertThat(response.getBody()).isNull();
+        }
+    }
 }

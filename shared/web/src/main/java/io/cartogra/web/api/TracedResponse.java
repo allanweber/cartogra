@@ -24,6 +24,10 @@ public final class TracedResponse {
         return respond(HttpStatus.CREATED, data);
     }
 
+    public static ResponseEntity<Void> accepted() {
+        return ResponseEntity.accepted().header(TRACE_ID_HEADER, currentTraceId()).build();
+    }
+
     public static ResponseEntity<Void> noContent() {
         return ResponseEntity.noContent().header(TRACE_ID_HEADER, currentTraceId()).build();
     }
