@@ -123,6 +123,22 @@ test('register services, declare a dependency, and see it on the graph', async (
 
   await expect(page.locator('text.graph-node-cycle-badge[opacity="1"]')).toHaveCount(3)
 
+  // Blast radius must terminate against a live cyclic graph, not hang or error — the
+  // recursive CTE's visited-path guard is what prevents an infinite walk here. Selecting a
+  // cycle member (thirdService) should resolve promptly and surface both other members,
+  // which only happens if the traversal actually walked the cycle instead of erroring out.
+  // Click the hit-target circle, not the enclosing <g> — Playwright's click-point
+  // computation on an SVG <g> with a transform attribute lands on the raw canvas instead
+  // of the node (same reason the earlier `.graph-node circle` click above targets a circle).
+  const thirdNode = page.getByRole('button', { name: new RegExp(`^${thirdService},`) })
+  await thirdNode.locator('circle.graph-node-hit').click()
+  // Both other cycle members appear in both directions here (a 3-cycle walked either way
+  // reaches the same two other nodes), hence .first() rather than a single unique match.
+  const cycleBlastRadiusPanel = page.getByRole('tabpanel')
+  await expect(cycleBlastRadiusPanel.getByText(upstreamService).first()).toBeVisible()
+  await expect(cycleBlastRadiusPanel.getByText(downstreamService).first()).toBeVisible()
+  await expect(cycleBlastRadiusPanel.getByText(/failed to load/i)).not.toBeVisible()
+
   // SPOF: thirdService already has one dependent (downstreamService, from the cycle above).
   // Register four more services, each declaring a dependency on thirdService, to cross the
   // default fan-in threshold of 5.
@@ -159,16 +175,26 @@ test('register services, declare a dependency, and see it on the graph', async (
     await expect(page.getByRole('button', spofBadgeMatcher)).toBeVisible({ timeout: 2_000 })
   }).toPass({ timeout: 20_000, intervals: [2_000] })
 
+  const spofsResponsePromise = page.waitForResponse(
+    (res) => res.url().includes('/api/v1/topology/spofs') && res.status() === 200,
+  )
   await page.getByRole('link', { name: 'Graph', exact: true }).click()
   await expect(page.getByRole('group', { name: 'Service dependency graph' })).toBeVisible()
   await expect(async () => {
     await expect(page.getByRole('button', spofBadgeMatcher)).toBeVisible({ timeout: 2_000 })
   }).toPass({ timeout: 10_000, intervals: [2_000] })
 
+  // threshold/rationale travel in the GET /v1/topology/spofs payload — assert the wire
+  // response directly, then the popover below surfaces them.
+  const spofsBody = await (await spofsResponsePromise).json()
+  expect(spofsBody.data.threshold).toBeGreaterThan(0)
+  expect(spofsBody.data.rationale).toContain(String(spofsBody.data.threshold))
+
   const spofBadge = page.getByRole('button', spofBadgeMatcher)
   await spofBadge.click()
   const spofPopover = page.getByRole('dialog')
   await expect(spofPopover.getByText(new RegExp(`${thirdService} —`))).toBeVisible()
+  await expect(spofPopover.getByText(new RegExp(`Flagged at ${spofsBody.data.threshold}\\+ dependents`))).toBeVisible()
   await page.keyboard.press('Escape')
 
   await expect(page.locator('text.graph-node-spof-badge[opacity="1"]')).toHaveCount(1)
@@ -188,7 +214,7 @@ test('register services, declare a dependency, and see it on the graph', async (
   await expect(page.getByRole('group', { name: 'Service dependency graph' })).toBeVisible()
 
   await page.getByRole('radio', { name: 'Observed' }).click()
-  await expect(page.getByText(/observed dependencies aren.t collected yet/i)).toBeVisible()
+  await expect(page.getByText(/no observed dependencies yet/i)).toBeVisible()
 
   await page.getByRole('radio', { name: 'Declared' }).click()
   await expect(page.getByRole('group', { name: 'Service dependency graph' })).toBeVisible()
@@ -202,4 +228,43 @@ test('register services, declare a dependency, and see it on the graph', async (
   await page.locator('.graph-node').nth(1).focus()
   await page.keyboard.press('Enter')
   await expect(page.getByRole('tab', { name: 'Blast Radius' })).toBeVisible()
+
+  // Depth-cap truncation: a chain longer than the default depth (3) must surface the
+  // "Truncated at N hops" banner, not silently stop at whatever the CTE happened to return.
+  // The tenant plan caps services at 10, so the chain reuses the four SPOF dependents
+  // (svc-a -> svc-b -> svc-c -> svc-d) and adds one new head: chain-head -> svc-a -> ... -> svc-d
+  // puts svc-d 4 hops from the head, one past the default depth.
+  const chainHeadName = uniqueName('chain-head')
+  const chainServices = [chainHeadName, ...spofDependents]
+  await page.getByRole('link', { name: 'Catalog', exact: true }).click()
+  await page.getByRole('button', { name: 'Register service' }).click()
+  const headDialog = page.getByRole('dialog')
+  await headDialog.getByLabel('Service name').fill(chainHeadName)
+  await headDialog.getByRole('button', { name: 'Register service' }).click()
+  await expect(headDialog).not.toBeVisible()
+  await expect(page.getByRole('link', { name: chainHeadName })).toBeVisible()
+  for (let i = 0; i < chainServices.length - 1; i++) {
+    await page.getByRole('link', { name: chainServices[i] }).click()
+    await expect(page.locator('#main-content').getByRole('heading', { name: chainServices[i] })).toBeVisible()
+    await page.getByRole('tab', { name: 'Dependencies' }).click()
+    await page.getByRole('button', { name: 'Add dependency' }).click()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByPlaceholder('Search services…').fill(chainServices[i + 1])
+    await dialog.getByRole('option', { name: chainServices[i + 1] }).click()
+    await dialog.getByRole('button', { name: 'Add dependency' }).click()
+    await expect(dialog).not.toBeVisible()
+    await page.getByRole('link', { name: 'Service Catalog' }).click()
+  }
+
+  // Same debounced-MV-refresh reasoning as the cycle/SPOF badges above: navigate away and
+  // back, retrying until the truncation banner appears rather than guessing the delay.
+  const chainHead = page.getByRole('button', { name: new RegExp(`^${chainServices[0]},`) })
+  await expect(async () => {
+    await page.getByRole('link', { name: 'Catalog', exact: true }).click()
+    await page.getByRole('link', { name: 'Graph', exact: true }).click()
+    await expect(page.getByRole('group', { name: 'Service dependency graph' })).toBeVisible()
+    await chainHead.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByText(/Truncated at \d+ hops/)).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 20_000, intervals: [2_000] })
 })

@@ -1,4 +1,4 @@
-import type { ServiceHealthStatus, ServiceTierValue } from '#/lib/registry-types'
+import type { PageResult, ServiceHealthStatus, ServiceTierValue } from '#/lib/registry-types'
 
 export type DependencyType = 'DECLARED' | 'OBSERVED'
 export type DependencyProtocol = 'HTTP' | 'GRPC' | 'KAFKA' | 'DB'
@@ -115,6 +115,10 @@ export interface Spofs {
 
 export type RiskSeverity = 'critical' | 'warning' | 'info'
 export type RiskType = 'spof' | 'cycle' | 'orphan' | 'drift'
+
+export interface RisksPage extends PageResult<Risk> {
+  truncated: boolean
+}
 
 export interface Risk {
   id: string

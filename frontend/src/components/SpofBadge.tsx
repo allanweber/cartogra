@@ -17,10 +17,14 @@ export function SpofBadge({
   spofs,
   nodesById,
   onlyForServiceId,
+  threshold,
+  rationale,
 }: {
   spofs: Spof[]
   nodesById: Map<string, { name: string }>
   onlyForServiceId?: string
+  threshold?: number
+  rationale?: string
 }) {
   const relevant = onlyForServiceId ? spofs.filter((spof) => spof.serviceId === onlyForServiceId) : spofs
   if (relevant.length === 0) return null
@@ -33,7 +37,7 @@ export function SpofBadge({
       <PopoverTrigger
         className={cn(
           badgeVariants({ variant: 'outline' }),
-          'cursor-pointer border-current',
+          'relative cursor-pointer border-current after:absolute after:-inset-x-1 after:-inset-y-3.5',
           highestSeverity === 'critical' ? 'text-critical' : 'text-warning',
         )}
         aria-label={`${relevant.length} single point of ${relevant.length === 1 ? 'failure' : 'failures'}. View details.`}
@@ -53,6 +57,12 @@ export function SpofBadge({
               </li>
             ))}
           </ul>
+          {(rationale || threshold !== undefined) && (
+            <p className="border-t border-border pt-2 text-xs text-muted-foreground">
+              {threshold !== undefined && <span className="font-medium">Flagged at {threshold}+ dependents. </span>}
+              {rationale}
+            </p>
+          )}
         </div>
       </PopoverContent>
     </Popover>

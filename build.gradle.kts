@@ -79,8 +79,8 @@ subprojects {
             dependency("org.apache.tomcat.embed:tomcat-embed-websocket:11.0.25")
             dependency("com.fasterxml.jackson.core:jackson-databind:2.21.7") // CVE-2026-91776, CVE-2026-91777 (supersedes the 2.21.6 override for CVE-2026-68497)
             dependency("tools.jackson.core:jackson-databind:3.1.7") // CVE-2026-91776, CVE-2026-91777 (supersedes the 3.1.6 override for CVE-2026-68497)
-            dependency("com.fasterxml.jackson.core:jackson-core:2.21.4") // GHSA-r7wm-3cxj-wff9
-            dependency("tools.jackson.core:jackson-core:3.1.4") // GHSA-r7wm-3cxj-wff9
+            dependency("com.fasterxml.jackson.core:jackson-core:2.21.7") // CVE-2026-89407, CVE-2026-89425 (supersedes the 2.21.4 override for GHSA-r7wm-3cxj-wff9)
+            dependency("tools.jackson.core:jackson-core:3.1.7") // CVE-2026-89407, CVE-2026-89425 (supersedes the 3.1.4 override for GHSA-r7wm-3cxj-wff9)
             dependency("io.micrometer:micrometer-core:1.16.6") // CVE-2026-40983, CVE-2026-40984
             dependency("org.springframework.data:spring-data-commons:4.0.6") // CVE-2026-41695, CVE-2026-41716
             dependency("org.springframework:spring-expression:7.0.8") // CVE-2026-41850

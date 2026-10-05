@@ -6,6 +6,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -31,7 +33,20 @@ public class DependencyGraphViewRefreshScheduler {
         this.lockRepository = lockRepository;
     }
 
+    /**
+     * Inside a transaction the flag is set only after commit: a tick that cleared it and refreshed
+     * between the write and its commit would read the pre-commit snapshot and never re-dirty.
+     */
     public void markDirty() {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    dirty.set(true);
+                }
+            });
+            return;
+        }
         dirty.set(true);
     }
 

@@ -4,7 +4,7 @@ import io.cartogra.common.api.ApiResponse;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.registry.api.dto.ServiceResponse;
 import io.cartogra.registry.domain.ServiceService;
-import io.opentelemetry.api.trace.Span;
+import io.cartogra.web.api.TracedResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -32,12 +32,9 @@ public class ServiceInternalController {
     public ResponseEntity<ApiResponse<PageResult<ServiceResponse>>> listAllActive(
             @RequestParam(defaultValue = "200") int limit,
             @RequestParam(defaultValue = "0") int offset) {
-        String traceId = Span.current().getSpanContext().getTraceId();
         var page = service.listAllActive(limit, offset);
         var mapped = PageResult.of(page.items().stream().map(ServiceResponse::from).toList(),
                 page.total(), page.limit(), page.offset());
-        return ResponseEntity.ok()
-                .header("X-Trace-Id", traceId)
-                .body(new ApiResponse<>(mapped, traceId));
+        return TracedResponse.ok(mapped);
     }
 }

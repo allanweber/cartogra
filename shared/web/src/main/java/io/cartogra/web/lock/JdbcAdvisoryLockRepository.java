@@ -1,5 +1,7 @@
 package io.cartogra.web.lock;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.datasource.DataSourceUtils;
 
@@ -16,6 +18,8 @@ import java.sql.SQLException;
  * {@code LockConfig} in that service's {@code config} package.
  */
 public class JdbcAdvisoryLockRepository implements AdvisoryLockRepository {
+
+    private static final Logger LOG = LoggerFactory.getLogger(JdbcAdvisoryLockRepository.class);
 
     // pg_try_advisory_lock/pg_advisory_unlock are session-scoped: acquire and release must run on the
     // same physical connection, so this bypasses the pooled NamedParameterJdbcTemplate and pins one
@@ -60,9 +64,22 @@ public class JdbcAdvisoryLockRepository implements AdvisoryLockRepository {
             ps.setLong(1, key);
             ps.execute();
         } catch (SQLException e) {
+            dropAllSessionLocks(connection);
             throw new DataAccessResourceFailureException("Failed to release advisory lock " + key, e);
         } finally {
             DataSourceUtils.releaseConnection(connection, dataSource);
+        }
+    }
+
+    /**
+     * A failed unlock must not hand a still-locked session back to the pool, where every other
+     * instance would skip the guarded work until that connection happened to be recycled.
+     */
+    private static void dropAllSessionLocks(Connection connection) {
+        try (PreparedStatement ps = connection.prepareStatement("SELECT pg_advisory_unlock_all()")) {
+            ps.execute();
+        } catch (SQLException e) {
+            LOG.warn("Could not drop session advisory locks; a broken session releases them server-side", e);
         }
     }
 }

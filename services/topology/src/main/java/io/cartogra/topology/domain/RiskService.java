@@ -1,6 +1,5 @@
 package io.cartogra.topology.domain;
 
-import io.cartogra.common.api.PageResult;
 import io.cartogra.topology.repository.DependencyDriftRepository;
 import io.cartogra.topology.repository.GraphNodeRepository;
 
@@ -23,6 +22,10 @@ import java.util.stream.Stream;
 @org.springframework.stereotype.Service
 public class RiskService {
 
+    public static final int MAX_PAGE_SIZE = 1000;
+
+    private static final int SOURCE_CAP = SpofService.MAX_ROWS;
+
     private final CycleService cycleService;
     private final SpofService spofService;
     private final DependencyDriftRepository driftRepository;
@@ -36,33 +39,51 @@ public class RiskService {
         this.graphNodeRepository = graphNodeRepository;
     }
 
-    public PageResult<Risk> list(UUID tenantId, int limit, int offset) {
+    private record Found(List<Risk> risks, boolean truncated) {
+        static Found of(List<Risk> risks) {
+            return new Found(risks, false);
+        }
+    }
+
+    /**
+     * {@code total} counts only what each source returned under its cap; {@code truncated} is true
+     * when any source hit its cap, so the true total may be higher.
+     */
+    public RiskPage list(UUID tenantId, int limit, int offset) {
+        if (limit < 1 || limit > MAX_PAGE_SIZE) {
+            throw new IllegalArgumentException("limit must be between 1 and " + MAX_PAGE_SIZE);
+        }
+        if (offset < 0) {
+            throw new IllegalArgumentException("offset must not be negative");
+        }
+        List<Found> sources = List.of(cycleRisks(tenantId), spofRisks(tenantId),
+                orphanRisks(tenantId), driftRisks(tenantId));
         List<Risk> risks = new ArrayList<>();
-        risks.addAll(cycleRisks(tenantId));
-        risks.addAll(spofRisks(tenantId));
-        risks.addAll(orphanRisks(tenantId));
-        risks.addAll(driftRisks(tenantId));
+        sources.forEach(source -> risks.addAll(source.risks()));
+        boolean truncated = sources.stream().anyMatch(Found::truncated);
 
         risks.sort(Comparator.comparing(Risk::severity)
                 .thenComparing(Risk::type)
-                .thenComparing(Risk::title));
+                .thenComparing(Risk::title)
+                .thenComparing(Risk::id));
 
         int total = risks.size();
         List<Risk> page = risks.stream().skip(offset).limit(limit).toList();
-        return PageResult.of(page, total, limit, offset);
+        return new RiskPage(page, total, limit, offset, truncated);
     }
 
-    private List<Risk> cycleRisks(UUID tenantId) {
+    private Found cycleRisks(UUID tenantId) {
         Cycles cycles = cycleService.find(tenantId, null);
         if (cycles.cycles().isEmpty()) {
-            return List.of();
+            return new Found(List.of(), cycles.truncated());
         }
         Set<UUID> memberIds = cycles.cycles().stream()
                 .flatMap(cycle -> cycle.members().stream())
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         Map<UUID, GraphNode> nodesById = nodesById(tenantId, memberIds);
 
-        return cycles.cycles().stream()
+        List<Risk> risks = cycles.cycles().stream()
+                .filter(cycle -> cycle.members().stream().allMatch(nodesById::containsKey))
                 .map(cycle -> {
                     List<UUID> members = cycle.members();
                     String id = "cycle:" + members.stream().map(UUID::toString).collect(Collectors.joining(","));
@@ -74,6 +95,7 @@ public class RiskService {
                     return new Risk(id, RiskType.CYCLE, severity, title, explanation, fix, members);
                 })
                 .toList();
+        return new Found(risks, cycles.truncated());
     }
 
     private static RiskSeverity cycleSeverity(List<UUID> members, Map<UUID, GraphNode> nodesById) {
@@ -89,9 +111,9 @@ public class RiskService {
         return node != null && tier.equals(node.tier());
     }
 
-    private List<Risk> spofRisks(UUID tenantId) {
+    private Found spofRisks(UUID tenantId) {
         SpofResult result = spofService.detect(tenantId);
-        return result.items().stream()
+        List<Risk> risks = result.items().stream()
                 .map(spof -> {
                     GraphNode node = spof.node();
                     String id = "spof:" + node.serviceId();
@@ -103,10 +125,13 @@ public class RiskService {
                             List.of(node.serviceId()));
                 })
                 .toList();
+        return new Found(risks, result.truncated());
     }
 
-    private List<Risk> orphanRisks(UUID tenantId) {
-        return graphNodeRepository.findOrphaned(tenantId, SpofService.MAX_ROWS).stream()
+    private Found orphanRisks(UUID tenantId) {
+        List<GraphNode> fetched = graphNodeRepository.findOrphaned(tenantId, SOURCE_CAP + 1);
+        boolean truncated = fetched.size() > SOURCE_CAP;
+        List<Risk> risks = fetched.stream().limit(SOURCE_CAP)
                 .map(node -> {
                     String id = "orphan:" + node.serviceId();
                     RiskSeverity severity = orphanSeverity(node);
@@ -117,6 +142,7 @@ public class RiskService {
                             List.of(node.serviceId()));
                 })
                 .toList();
+        return new Found(risks, truncated);
     }
 
     private static RiskSeverity orphanSeverity(GraphNode node) {
@@ -129,17 +155,19 @@ public class RiskService {
         return RiskSeverity.WARNING;
     }
 
-    private List<Risk> driftRisks(UUID tenantId) {
-        List<DependencyDrift> drifts = driftRepository.findActive(tenantId, SpofService.MAX_ROWS, 0);
+    private Found driftRisks(UUID tenantId) {
+        List<DependencyDrift> fetched = driftRepository.findActive(tenantId, SOURCE_CAP + 1, 0);
+        boolean truncated = fetched.size() > SOURCE_CAP;
+        List<DependencyDrift> drifts = truncated ? fetched.subList(0, SOURCE_CAP) : fetched;
         if (drifts.isEmpty()) {
-            return List.of();
+            return Found.of(List.of());
         }
         Set<UUID> ids = drifts.stream()
                 .flatMap(drift -> Stream.of(drift.sourceServiceId(), drift.targetServiceId()))
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         Map<UUID, GraphNode> nodesById = nodesById(tenantId, ids);
 
-        return drifts.stream()
+        List<Risk> risks = drifts.stream()
                 .map(drift -> {
                     String source = nameOf(nodesById, drift.sourceServiceId());
                     String target = nameOf(nodesById, drift.targetServiceId());
@@ -161,6 +189,7 @@ public class RiskService {
                     };
                 })
                 .toList();
+        return new Found(risks, truncated);
     }
 
     private static String nameOf(Map<UUID, GraphNode> nodesById, UUID serviceId) {

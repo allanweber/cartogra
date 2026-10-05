@@ -94,11 +94,11 @@ export function highlightRingAppearance(
   serviceId: string,
   selectedServiceId: string | null,
   highlightMap: BlastRadiusHighlightMap | null,
-): { stroke: string; strokeWidth: number } | null {
-  if (serviceId === selectedServiceId) return { stroke: 'var(--ring)', strokeWidth: 3 }
+): { stroke: string; strokeWidth: number; strokeDasharray: string } | null {
+  if (serviceId === selectedServiceId) return { stroke: 'var(--ring)', strokeWidth: 3, strokeDasharray: 'none' }
   const kind = highlightMap?.get(serviceId)
-  if (kind === 'upstream') return { stroke: 'var(--color-blast-upstream)', strokeWidth: 2.5 }
-  if (kind === 'downstream') return { stroke: 'var(--color-blast-downstream)', strokeWidth: 2.5 }
+  if (kind === 'upstream') return { stroke: 'var(--color-blast-upstream)', strokeWidth: 2.5, strokeDasharray: '4 3' }
+  if (kind === 'downstream') return { stroke: 'var(--color-blast-downstream)', strokeWidth: 2.5, strokeDasharray: 'none' }
   return null
 }
 
@@ -112,7 +112,7 @@ export function nodeOpacity(
   highlightMap: BlastRadiusHighlightMap | null,
 ): number {
   if (!selectedServiceId || !highlightMap) return 1
-  return serviceId === selectedServiceId || highlightMap.has(serviceId) ? 1 : 0.15
+  return serviceId === selectedServiceId || highlightMap.has(serviceId) ? 1 : 0.25
 }
 
 export function linkOpacity(
@@ -144,6 +144,7 @@ export function DependencyGraph({
   selectedServiceId,
   onSelectNode,
   blastRadiusHighlight,
+  blastRadiusPartial,
   cycleMemberIds,
   spofServiceIds,
 }: {
@@ -151,6 +152,8 @@ export function DependencyGraph({
   selectedServiceId: string | null
   onSelectNode: (serviceId: string | null) => void
   blastRadiusHighlight?: BlastRadiusHighlightMap | null
+  // Truncated blast radius: an unlisted node may still be affected, so never dim it as "unaffected".
+  blastRadiusPartial?: boolean
   cycleMemberIds?: Set<string> | null
   spofServiceIds?: Set<string> | null
 }) {
@@ -206,6 +209,39 @@ export function DependencyGraph({
       .translate(-target.x, -target.y)
 
     svg.call(zoomBehavior.transform, transform)
+  }
+
+  // Zooms out (never in) so every node plus its label fits the viewport — without this a
+  // narrow canvas (phone width) opens with part of the layout outside the visible area.
+  function fitToView() {
+    const svgEl = svgRef.current
+    const zoomBehavior = zoomBehaviorRef.current
+    if (!svgEl || !zoomBehavior) return
+    const width = svgEl.clientWidth || 800
+    const height = svgEl.clientHeight || 600
+    const labelAllowance = 240
+    let minX = Infinity
+    let maxX = -Infinity
+    let minY = Infinity
+    let maxY = -Infinity
+    select(svgEl)
+      .selectAll<SVGGElement, SimNode>('.graph-node')
+      .each((node) => {
+        if (node.x == null || node.y == null) return
+        minX = Math.min(minX, node.x - 20)
+        maxX = Math.max(maxX, node.x + 20 + labelAllowance)
+        minY = Math.min(minY, node.y - 20)
+        maxY = Math.max(maxY, node.y + 20)
+      })
+    if (!Number.isFinite(minX)) return
+    const boundsWidth = maxX - minX
+    const boundsHeight = maxY - minY
+    const scale = Math.min(1, Math.max(0.4, Math.min(width / boundsWidth, height / boundsHeight)))
+    const transform = zoomIdentity
+      .translate(width / 2, height / 2)
+      .scale(scale)
+      .translate(-(minX + boundsWidth / 2), -(minY + boundsHeight / 2))
+    select(svgEl).call(zoomBehavior.transform, transform)
   }
 
   useEffect(() => {
@@ -376,12 +412,18 @@ export function DependencyGraph({
         simulation.tick()
       }
       renderTick()
-      if (!hasCenteredOnMountRef.current && selectedServiceId) centerOnService(selectedServiceId)
+      if (!hasCenteredOnMountRef.current) {
+        if (selectedServiceId) centerOnService(selectedServiceId)
+        else fitToView()
+      }
       hasCenteredOnMountRef.current = true
     } else {
       simulation.on('tick', renderTick)
       simulation.on('end', () => {
-        if (!hasCenteredOnMountRef.current && selectedServiceId) centerOnService(selectedServiceId)
+        if (!hasCenteredOnMountRef.current) {
+          if (selectedServiceId) centerOnService(selectedServiceId)
+          else fitToView()
+        }
         hasCenteredOnMountRef.current = true
       })
     }
@@ -457,12 +499,13 @@ export function DependencyGraph({
     if (!svgEl) return
     const svg = select(svgEl)
     const highlightMap = blastRadiusHighlight ?? null
+    const dimMap = blastRadiusPartial ? null : highlightMap
     const cycleMembers = cycleMemberIds ?? null
     const spofs = spofServiceIds ?? null
 
     svg
       .selectAll<SVGGElement, SimNode>('.graph-node')
-      .style('opacity', (node) => nodeOpacity(node.serviceId, selectedServiceId, highlightMap))
+      .style('opacity', (node) => nodeOpacity(node.serviceId, selectedServiceId, dimMap))
     svg
       .selectAll<SVGGElement, SimNode>('.graph-node')
       .select<SVGCircleElement>('circle.graph-node-highlight-ring')
@@ -470,6 +513,10 @@ export function DependencyGraph({
       .attr(
         'stroke-width',
         (node) => highlightRingAppearance(node.serviceId, selectedServiceId, highlightMap)?.strokeWidth ?? 0,
+      )
+      .attr(
+        'stroke-dasharray',
+        (node) => highlightRingAppearance(node.serviceId, selectedServiceId, highlightMap)?.strokeDasharray ?? 'none',
       )
     svg
       .selectAll<SVGGElement, SimNode>('.graph-node')
@@ -486,14 +533,18 @@ export function DependencyGraph({
       .selectAll<SVGGElement, SimNode>('.graph-node')
       .attr('aria-label', (node) => {
         let label = nodeAppearance(node).ariaLabel
+        if (selectedServiceId && node.serviceId !== selectedServiceId) {
+          const kind = highlightMap?.get(node.serviceId)
+          if (kind) label += `, ${kind} of the selected service`
+        }
         if (isCycleMember(node.serviceId, cycleMembers)) label += ', part of a dependency cycle'
         if (isSpof(node.serviceId, spofs)) label += ', a single point of failure'
         return label
       })
     svg
       .selectAll<SVGLineElement, SimLink>('.graph-links line')
-      .style('opacity', (link) => linkOpacity(endpointId(link.source), endpointId(link.target), selectedServiceId, highlightMap))
-  }, [selectedServiceId, blastRadiusHighlight, cycleMemberIds, spofServiceIds, graph])
+      .style('opacity', (link) => linkOpacity(endpointId(link.source), endpointId(link.target), selectedServiceId, dimMap))
+  }, [selectedServiceId, blastRadiusHighlight, blastRadiusPartial, cycleMemberIds, spofServiceIds, graph])
 
   return (
     <svg

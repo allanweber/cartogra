@@ -67,13 +67,14 @@ describe('highlightRingAppearance', () => {
   ])
 
   it('gives the selected node the ring color regardless of the highlight map', () => {
-    expect(highlightRingAppearance('s1', 's1', map)).toEqual({ stroke: 'var(--ring)', strokeWidth: 3 })
+    expect(highlightRingAppearance('s1', 's1', map)).toEqual({ stroke: 'var(--ring)', strokeWidth: 3, strokeDasharray: 'none' })
   })
 
   it('gives an upstream node the upstream color', () => {
     expect(highlightRingAppearance('s2', 's1', map)).toEqual({
       stroke: 'var(--color-blast-upstream)',
       strokeWidth: 2.5,
+      strokeDasharray: '4 3',
     })
   })
 
@@ -81,6 +82,7 @@ describe('highlightRingAppearance', () => {
     expect(highlightRingAppearance('s3', 's1', map)).toEqual({
       stroke: 'var(--color-blast-downstream)',
       strokeWidth: 2.5,
+      strokeDasharray: 'none',
     })
   })
 
@@ -113,7 +115,7 @@ describe('nodeOpacity', () => {
   })
 
   it('dims a node outside the selection and the highlight map', () => {
-    expect(nodeOpacity('s9', 's1', map)).toBe(0.15)
+    expect(nodeOpacity('s9', 's1', map)).toBe(0.25)
   })
 })
 

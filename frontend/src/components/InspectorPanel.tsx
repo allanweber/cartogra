@@ -1,10 +1,12 @@
 import { Link } from '@tanstack/react-router'
+import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import { useState } from 'react'
 
 import { CycleBadge } from '#/components/CycleBadge'
 import { SpofBadge } from '#/components/SpofBadge'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Badge } from '#/components/ui/badge'
+import { Button } from '#/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '#/components/ui/card'
 import { ScrollArea } from '#/components/ui/scroll-area'
 import { Skeleton } from '#/components/ui/skeleton'
@@ -14,10 +16,6 @@ import { normalizeHealth } from '#/lib/registry-types'
 import { cn } from '#/lib/utils'
 
 import type { BlastRadius, BlastRadiusDirectionResult, BlastRadiusEntry, Cycle, GraphNode, Spof } from '#/lib/topology-types'
-
-// Mirrors BlastRadiusService.MAX_NODES_PER_DIRECTION on the backend — the cap is a fixed
-// constant per direction, not something derivable from a single response's entry counts.
-const NODE_CAP_PER_DIRECTION = 200
 
 function healthDotClass(healthStatus: GraphNode['healthStatus']): string {
   const health = normalizeHealth(healthStatus)
@@ -36,12 +34,28 @@ function groupByDistance(entries: BlastRadiusEntry[]): [number, BlastRadiusEntry
   return [...byDistance.entries()].sort(([a], [b]) => a - b)
 }
 
+function countByTeam(entries: BlastRadiusEntry[], teamMap: Map<string, string>): [string, number][] {
+  const counts = new Map<string, number>()
+  entries.forEach((entry) => {
+    const team = teamMap.get(entry.teamId ?? '') ?? 'Unassigned'
+    counts.set(team, (counts.get(team) ?? 0) + 1)
+  })
+  return [...counts.entries()].sort(([, a], [, b]) => b - a)
+}
+
 function BlastRadiusEntryRow({ entry, teamMap }: { entry: BlastRadiusEntry; teamMap: Map<string, string> }) {
   const teamName = teamMap.get(entry.teamId ?? '') ?? 'Unassigned'
   return (
     <li className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5">
       <div className="flex min-w-0 items-center gap-2">
         <span className={cn('size-2 shrink-0 rounded-full', healthDotClass(entry.healthStatus))} aria-hidden="true" />
+        {normalizeHealth(entry.healthStatus) === 'healthy' ? (
+          <span className="sr-only">Health: healthy</span>
+        ) : (
+          <span className="shrink-0 text-xs font-medium capitalize text-muted-foreground">
+            {normalizeHealth(entry.healthStatus)}
+          </span>
+        )}
         <Link
           to="/catalog/$serviceId"
           params={{ serviceId: entry.serviceId }}
@@ -61,7 +75,9 @@ function BlastRadiusDirectionSection({
   ringColorClassName,
   teamMap,
   maxDepth,
+  showTeams = false,
 }: {
+  showTeams?: boolean
   title: string
   result: BlastRadiusDirectionResult
   ringColorClassName: string
@@ -69,12 +85,21 @@ function BlastRadiusDirectionSection({
   maxDepth: number
 }) {
   const groups = groupByDistance(result.entries)
+  const teamCounts = countByTeam(result.entries, teamMap)
   return (
     <div className="space-y-2">
-      <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">
+      <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
         <span className={cn('size-2 rounded-full', ringColorClassName)} aria-hidden="true" />
         {title}
       </p>
+      {showTeams && teamCounts.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          <span className="font-semibold text-foreground">
+            {result.entries.length} impacted · {teamCounts.length} {teamCounts.length === 1 ? 'team' : 'teams'}:{' '}
+          </span>
+          {teamCounts.map(([team, count]) => `${team} (${count})`).join(' · ')}
+        </p>
+      )}
       {groups.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">
           No affected services in this direction.
@@ -107,7 +132,7 @@ function BlastRadiusDirectionSection({
       {result.nodeCapTruncated && (
         <Alert>
           <AlertDescription>
-            Showing the closest {NODE_CAP_PER_DIRECTION} services — {result.nodesBeyondCap} more exist beyond this
+            Showing the closest {result.entries.length} services — {result.nodesBeyondCap} more exist beyond this
             list.
           </AlertDescription>
         </Alert>
@@ -148,7 +173,7 @@ function BlastRadiusTab({
   }
 
   return (
-    <ScrollArea className="h-full">
+    <ScrollArea className="h-full [&>[data-slot=scroll-area-viewport]>div]:!block">
       <div className="space-y-5 pr-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
@@ -156,8 +181,8 @@ function BlastRadiusTab({
             Selected
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-blast-upstream" aria-hidden="true" />
-            Upstream
+            <span className="size-2 rounded-full border border-dashed border-blast-upstream" aria-hidden="true" />
+            Upstream (dashed)
           </span>
           <span className="flex items-center gap-1.5">
             <span className="size-2 rounded-full bg-blast-downstream" aria-hidden="true" />
@@ -169,6 +194,7 @@ function BlastRadiusTab({
           title="Downstream — impacted if this service fails"
           result={blastRadius.downstream}
           ringColorClassName="bg-blast-downstream"
+          showTeams
           teamMap={teamMap}
           maxDepth={blastRadius.maxDepth}
         />
@@ -191,17 +217,29 @@ export function InspectorPanel({
   isBlastRadiusLoading,
   blastRadiusError,
   cycles,
+  cyclesTruncated,
   spofs,
+  spofThreshold,
+  spofRationale,
   nodesById,
+  onClose,
+  expanded,
+  onToggleExpanded,
 }: {
+  onClose?: () => void
+  expanded?: boolean
+  onToggleExpanded?: () => void
   node: GraphNode
   teamMap: Map<string, string>
   blastRadius: BlastRadius | undefined
   isBlastRadiusLoading: boolean
   blastRadiusError: Error | null
   cycles: Cycle[]
+  cyclesTruncated?: boolean
   spofs: Spof[]
-  nodesById: Map<string, GraphNode>
+  spofThreshold?: number
+  spofRationale?: string
+  nodesById: Map<string, { name: string }>
 }) {
   const [activeTab, setActiveTab] = useState<'details' | 'blast-radius'>('blast-radius')
   const teamName = teamMap.get(node.teamId ?? '') ?? null
@@ -210,8 +248,37 @@ export function InspectorPanel({
     <Card className="h-full">
       <CardHeader className="shrink-0 flex flex-row items-center gap-2 pb-2 pt-5">
         <CardTitle className="text-sm font-semibold">{node.name}</CardTitle>
-        <CycleBadge cycles={cycles} nodesById={nodesById} onlyForServiceId={node.serviceId} />
-        <SpofBadge spofs={spofs} nodesById={nodesById} onlyForServiceId={node.serviceId} />
+        <CycleBadge
+          cycles={cycles}
+          nodesById={nodesById}
+          onlyForServiceId={node.serviceId}
+          truncated={cyclesTruncated}
+        />
+        <SpofBadge
+          spofs={spofs}
+          nodesById={nodesById}
+          onlyForServiceId={node.serviceId}
+          threshold={spofThreshold}
+          rationale={spofRationale}
+        />
+        {onToggleExpanded && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="ml-auto lg:hidden"
+            onClick={onToggleExpanded}
+            aria-expanded={!!expanded}
+          >
+            {expanded ? <ChevronDown className="size-3.5" aria-hidden="true" /> : <ChevronUp className="size-3.5" aria-hidden="true" />}
+            <span className="sr-only">{expanded ? 'Collapse panel' : 'Expand panel'}</span>
+          </Button>
+        )}
+        {onClose && (
+          <Button variant="ghost" size="icon-sm" className={onToggleExpanded ? 'lg:ml-auto' : 'ml-auto'} onClick={onClose}>
+            <X className="size-3.5" aria-hidden="true" />
+            <span className="sr-only">Close inspector</span>
+          </Button>
+        )}
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col pb-3 pt-0">
         <Tabs

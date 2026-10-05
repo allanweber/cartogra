@@ -3,7 +3,7 @@ package io.cartogra.registry.api;
 import io.cartogra.common.api.ApiResponse;
 import io.cartogra.registry.api.dto.ServiceAccessRequest;
 import io.cartogra.registry.domain.ServiceService;
-import io.opentelemetry.api.trace.Span;
+import io.cartogra.web.api.TracedResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -34,13 +34,10 @@ public class ServiceAccessInternalController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<Map<UUID, Boolean>>> checkAccess(@Valid @RequestBody ServiceAccessRequest request) {
-        String traceId = Span.current().getSpanContext().getTraceId();
         Map<UUID, Boolean> result = new LinkedHashMap<>();
         for (UUID serviceId : request.serviceIds()) {
             result.put(serviceId, service.isAccessibleBy(request.tenantId(), request.userId(), serviceId));
         }
-        return ResponseEntity.ok()
-                .header("X-Trace-Id", traceId)
-                .body(new ApiResponse<>(result, traceId));
+        return TracedResponse.ok(result);
     }
 }

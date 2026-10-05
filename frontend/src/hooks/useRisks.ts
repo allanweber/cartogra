@@ -3,19 +3,19 @@ import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '#/lib/api'
 
 import type { PageResult, RegistryService } from '#/lib/registry-types'
-import type { Risk } from '#/lib/topology-types'
+import type { RisksPage } from '#/lib/topology-types'
 
 // Each risk source is capped at 200 server-side; one bounded fetch lets callers filter and
 // count across the whole list instead of page-flipping.
 export const RISKS_LIMIT = 200
 
-export function useRisks() {
+export function useRisks({ staleTime = 0 }: { staleTime?: number } = {}) {
   return useQuery({
     queryKey: ['risks'],
-    queryFn: () => apiFetch<PageResult<Risk>>(`/v1/topology/risks?limit=${RISKS_LIMIT}&offset=0`),
-    // Risks are derived live from topology state; the layout-mounted bell would otherwise seed a
-    // fresh-looking cache that hides new cycles/SPOFs from the Risks page and dashboard.
-    staleTime: 0,
+    queryFn: () => apiFetch<RisksPage>(`/v1/topology/risks?limit=${RISKS_LIMIT}&offset=0`),
+    // Risks are derived live from topology state. staleTime is per-observer, so the layout-mounted
+    // bell can poll gently (see NotificationBell) while the Risks page and dashboard stay always-stale.
+    staleTime,
   })
 }
 

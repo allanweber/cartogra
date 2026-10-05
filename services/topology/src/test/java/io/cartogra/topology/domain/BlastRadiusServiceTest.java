@@ -122,8 +122,7 @@ class BlastRadiusServiceTest {
                 .thenReturn(rows);
         when(dependencyGraphViewRepository.findBlastRadius(eq(tenantId), eq(serviceId), eq(BlastRadiusDirection.DOWNSTREAM), anyInt()))
                 .thenReturn(List.of());
-        List<GraphNode> cappedNodes = ids.subList(0, BlastRadiusService.MAX_NODES_PER_DIRECTION).stream()
-                .map(id -> node(id, "svc-" + id)).toList();
+        List<GraphNode> cappedNodes = ids.stream().map(id -> node(id, "svc-" + id)).toList();
         when(graphNodeRepository.findByServiceIds(eq(tenantId), any(), anyInt())).thenReturn(cappedNodes);
 
         BlastRadius result = service.compute(tenantId, serviceId, null, null);
@@ -172,5 +171,22 @@ class BlastRadiusServiceTest {
 
         assertThat(result.upstream().entries()).extracting(BlastRadiusEntry::node).extracting(GraphNode::serviceId)
                 .containsExactly(present);
+    }
+
+    @Test
+    void deletedNodesAreFilteredBeforeTheNodeCapIsApplied() {
+        stubLiveNode();
+        int total = BlastRadiusService.MAX_NODES_PER_DIRECTION + 10;
+        List<UUID> ids = java.util.stream.Stream.generate(UUID::randomUUID).limit(total).toList();
+        List<BlastRadiusRow> rows = ids.stream().map(id -> new BlastRadiusRow(id, 1)).toList();
+        when(dependencyGraphViewRepository.findBlastRadius(eq(tenantId), eq(serviceId), any(), anyInt())).thenReturn(rows);
+        List<GraphNode> liveFirstTenMissing = ids.stream().skip(10).map(id -> node(id, "svc")).toList();
+        when(graphNodeRepository.findByServiceIds(eq(tenantId), any(), anyInt())).thenReturn(liveFirstTenMissing);
+
+        BlastRadius result = service.compute(tenantId, serviceId, BlastRadiusDirection.DOWNSTREAM, null);
+
+        assertThat(result.downstream().entries()).hasSize(BlastRadiusService.MAX_NODES_PER_DIRECTION);
+        assertThat(result.downstream().nodeCapTruncated()).isFalse();
+        assertThat(result.downstream().nodesBeyondCap()).isZero();
     }
 }

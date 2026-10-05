@@ -8,7 +8,8 @@
 # Assumes the local dev stack is already up (infra/docker-compose + the
 # registry/topology services running, e.g. via `./gradlew :services:topology:bootRun`)
 # and that perf/graph-perf-200-seed.sql has already been applied for TENANT_ID
-# (this script does not reseed, so reruns measure the same fixture).
+# (this script does not seed, so reruns measure the same fixture; remove the fixture
+# afterwards with perf/graph-perf-200-teardown.sql).
 #
 # Usage:
 #   TENANT_ID=<uuid> ./perf/bench.sh
@@ -31,6 +32,10 @@
 set -euo pipefail
 
 TENANT_ID="${TENANT_ID:?set TENANT_ID to the tenant perf/graph-perf-200-seed.sql was run for}"
+if ! [[ "$TENANT_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+    echo "error: TENANT_ID must be a UUID" >&2
+    exit 1
+fi
 TOPOLOGY_BASE_URL="${TOPOLOGY_BASE_URL:-http://localhost:8082/api/v1/topology}"
 PG_CONTAINER="${PG_CONTAINER:-cartogra-postgres}"
 PG_DB="${PG_DB:-cartogra}"

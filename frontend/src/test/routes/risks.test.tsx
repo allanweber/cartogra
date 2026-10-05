@@ -6,7 +6,7 @@ import { ApiError, apiFetch } from '#/lib/api'
 import { Route } from '#/routes/_authenticated/risks'
 
 import type { PageResult, RegistryService } from '#/lib/registry-types'
-import type { Risk } from '#/lib/topology-types'
+import type { Risk, RisksPage } from '#/lib/topology-types'
 
 vi.mock('@tanstack/react-router', async () => ({
   ...(await vi.importActual('@tanstack/react-router')),
@@ -49,11 +49,15 @@ function risk(overrides: Partial<Risk> = {}): Risk {
 
 const EMPTY_SERVICES: PageResult<RegistryService> = { items: [], total: 0, limit: 1000, offset: 0 }
 
-function mockRisksCalls(risks: Risk[], services: PageResult<RegistryService> = EMPTY_SERVICES) {
+function mockRisksCalls(
+  risks: Risk[],
+  services: PageResult<RegistryService> = EMPTY_SERVICES,
+  truncated = false,
+) {
   vi.mocked(apiFetch).mockImplementation((path: string) => {
     if (path.includes('/v1/registry/services')) return Promise.resolve(services)
     if (path.includes('/v1/topology/risks')) {
-      const page: PageResult<Risk> = { items: risks, total: risks.length, limit: 200, offset: 0 }
+      const page: RisksPage = { items: risks, total: risks.length, limit: 200, offset: 0, truncated }
       return Promise.resolve(page)
     }
     return Promise.reject(new Error(`unexpected path: ${path}`))
@@ -91,6 +95,19 @@ describe('RisksPage', () => {
     renderPage()
     expect(await screen.findByText(/risks unavailable/i)).toBeInTheDocument()
     expect(await screen.findByText(/trace-risks-1/i)).toBeInTheDocument()
+  })
+
+  it('warns that counts understate when a risk source hit its cap', async () => {
+    mockRisksCalls([risk()], EMPTY_SERVICES, true)
+    renderPage()
+    expect(await screen.findByText(/hit their 200-item cap/i)).toBeInTheDocument()
+  })
+
+  it('shows no cap warning when nothing was truncated', async () => {
+    mockRisksCalls([risk()])
+    renderPage()
+    await screen.findByText('Unowned service: checkout-api')
+    expect(screen.queryByText(/hit their 200-item cap/i)).not.toBeInTheDocument()
   })
 
   it('shows the empty state when there are no risks', async () => {
@@ -166,6 +183,23 @@ describe('RisksPage', () => {
 
     fireEvent.click(screen.getByText(/show 1 dismissed/i))
     expect(await screen.findByText('Unowned service: checkout-api')).toBeInTheDocument()
+  })
+
+  it('summary counts exclude dismissed risks until they are shown again', async () => {
+    mockRisksCalls([
+      risk({ id: 'r-a', severity: 'critical', title: 'Critical A' }),
+      risk({ id: 'r-b', severity: 'critical', title: 'Critical B' }),
+    ])
+    renderPage()
+    const criticalCard = (await screen.findByText('Critical', { selector: 'p, span, div' })).closest('button')!
+    expect(criticalCard).toHaveTextContent('2')
+
+    fireEvent.click(screen.getByText('Critical A').closest('button')!)
+    fireEvent.click(screen.getByRole('button', { name: /dismiss/i }))
+
+    expect(screen.getByText('Critical', { selector: 'p, span, div' }).closest('button')).toHaveTextContent('1')
+    fireEvent.click(screen.getByText(/show 1 dismissed/i))
+    expect(screen.getByText('Critical', { selector: 'p, span, div' }).closest('button')).toHaveTextContent('2')
   })
 
   it('resolves affected-service chips to names and deep-links to the graph', async () => {

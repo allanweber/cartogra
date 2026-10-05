@@ -24,6 +24,8 @@ tags:
     description: Declare, edit, remove, and read service dependency edges
   - name: graph
     description: Tenant-wide dependency graph read
+  - name: blast-radius
+    description: Bounded upstream/downstream impact traversal from one service
   - name: cycles
     description: Elementary cycle detection
   - name: spofs
@@ -214,6 +216,61 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /blast-radius/{serviceId}:
+    get:
+      summary: Services affected by, or depended on by, a service
+      description: |
+        Bounded traversal of the dependency graph from `serviceId`. **Direction naming is the
+        opposite of `/services/{serviceId}/dependencies`:** `upstream` here is "what this service
+        depends on"; `downstream` is "who is impacted if this service fails". Each service is
+        reported once at its shortest distance. `depth` defaults to 3 and is clamped to 6.
+        Results are capped at 200 live services per direction. `depthTruncated` /
+        `nodesBeyondDepth` report services one hop past the depth cap; `nodeCapTruncated` /
+        `nodesBeyondCap` report services dropped by the 200 cap. Soft-deleted services are
+        excluded before the cap is applied.
+      operationId: getBlastRadius
+      tags: [blast-radius]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: direction
+          in: query
+          description: Restrict to one direction; the other comes back empty. Omit for both.
+          schema:
+            type: string
+            enum: [UPSTREAM, DOWNSTREAM]
+        - name: depth
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 6
+            default: 3
+      responses:
+        "200":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlastRadiusResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          description: The traversal exceeded its time budget
+
   /cycles:
     get:
       summary: Find elementary cycles in the tenant's dependency graph
@@ -277,7 +334,7 @@ paths:
       summary: Aggregated risk findings across the tenant's dependency graph
       description: |
         Combines cycle, SPOF, orphan, and drift findings into one severity-sorted, paginated
-        list. Each finding carries a deterministic `id` (stable across calls for the same
+        list. Ordering is deterministic (severity, type, title, id). Each finding carries a deterministic `id` (stable across calls for the same
         underlying state) so clients can track dismissal locally.
       operationId: getRisks
       tags: [risks]
@@ -290,6 +347,7 @@ paths:
           schema:
             type: integer
             minimum: 1
+            maximum: 1000
             default: 20
         - name: offset
           in: query
@@ -306,6 +364,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RisksResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
 
@@ -568,6 +628,65 @@ components:
 
     # ── Cycles ────────────────────────────────────────────────────────────────
 
+    BlastRadiusEntryDto:
+      type: object
+      required: [serviceId, name, healthStatus, distance]
+      properties:
+        serviceId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        teamId:
+          type: string
+          format: uuid
+          nullable: true
+        tier:
+          type: string
+          enum: [CRITICAL, STANDARD, EXPERIMENTAL]
+          nullable: true
+        healthStatus:
+          type: string
+        distance:
+          type: integer
+          minimum: 1
+
+    BlastRadiusDirectionDto:
+      type: object
+      required: [entries, depthTruncated, nodesBeyondDepth, nodeCapTruncated, nodesBeyondCap]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlastRadiusEntryDto"
+        depthTruncated:
+          type: boolean
+        nodesBeyondDepth:
+          type: integer
+        nodeCapTruncated:
+          type: boolean
+        nodesBeyondCap:
+          type: integer
+
+    BlastRadiusResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [serviceId, upstream, downstream, maxDepth]
+              properties:
+                serviceId:
+                  type: string
+                  format: uuid
+                upstream:
+                  $ref: "#/components/schemas/BlastRadiusDirectionDto"
+                downstream:
+                  $ref: "#/components/schemas/BlastRadiusDirectionDto"
+                maxDepth:
+                  type: integer
+
     CycleDto:
       type: object
       required: [members, length]
@@ -631,7 +750,7 @@ components:
           properties:
             data:
               type: object
-              required: [threshold, rationale, items]
+              required: [threshold, rationale, items, truncated]
               properties:
                 threshold:
                   type: integer
@@ -641,6 +760,9 @@ components:
                   type: array
                   items:
                     $ref: "#/components/schemas/SpofDto"
+                truncated:
+                  type: boolean
+                  description: True when more than 200 services met the threshold; the list is the top 200 by fan-in.
 
     # ── Risks ─────────────────────────────────────────────────────────────────
 
@@ -681,7 +803,7 @@ components:
           properties:
             data:
               type: object
-              required: [items, total, limit, offset]
+              required: [items, total, limit, offset, truncated]
               properties:
                 items:
                   type: array
@@ -690,10 +812,14 @@ components:
                 total:
                   type: integer
                   format: int64
+                  description: Count across the capped sources; the true total is higher when `truncated` is true.
                 limit:
                   type: integer
                 offset:
                   type: integer
+                truncated:
+                  type: boolean
+                  description: True when any risk source (cycles, SPOFs, orphans, drift) hit its cap of 200.
 
   responses:
     BadRequest:

@@ -3,7 +3,7 @@ package io.cartogra.registry.api;
 import io.cartogra.common.api.ApiResponse;
 import io.cartogra.registry.api.dto.PlanLimitsResponse;
 import io.cartogra.registry.domain.PlanLimitService;
-import io.opentelemetry.api.trace.Span;
+import io.cartogra.web.api.TracedResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,10 +30,7 @@ public class PlanLimitInternalController {
 
     @GetMapping("/{tenantId}")
     public ResponseEntity<ApiResponse<PlanLimitsResponse>> get(@PathVariable UUID tenantId) {
-        String traceId = Span.current().getSpanContext().getTraceId();
         PlanLimitsResponse result = PlanLimitsResponse.from(planLimitService.getLimits(tenantId));
-        return ResponseEntity.ok()
-                .header("X-Trace-Id", traceId)
-                .body(new ApiResponse<>(result, traceId));
+        return TracedResponse.ok(result);
     }
 }

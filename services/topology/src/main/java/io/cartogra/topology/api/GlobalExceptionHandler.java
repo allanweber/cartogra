@@ -13,6 +13,7 @@ import io.opentelemetry.api.trace.Span;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
@@ -59,6 +60,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DuplicateDependencyException.class)
     public ResponseEntity<ApiErrorResponse> handleDuplicateDependency(DuplicateDependencyException ex) {
         return respond(HttpStatus.CONFLICT, ErrorCodes.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(QueryTimeoutException.class)
+    public ResponseEntity<ApiErrorResponse> handleQueryTimeout(QueryTimeoutException ex) {
+        logger.warn("Graph query exceeded its time budget", ex);
+        return respond(HttpStatus.SERVICE_UNAVAILABLE, ErrorCodes.SERVICE_UNAVAILABLE,
+                "The graph is too dense to analyze within the time budget");
     }
 
     @ExceptionHandler(RestClientException.class)

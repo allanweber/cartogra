@@ -38,7 +38,9 @@ directed edges:
   Phase 1 shape so this fixture isn't a bare cycle — not load-bearing for these measurements (SPOF
   detection itself is covered by issues #116/#117).
 
-Seeded for tenant `99999999-9999-4999-8999-999999999999` directly against `registry.services` /
+Seeded for tenant `99999999-9999-4999-8999-999999999999` (a throwaway tenant; the seed takes it as
+`-v tenant_id=<uuid>`, see the header of `perf/graph-perf-200-seed.sql`, and `perf/graph-perf-200-teardown.sql`
+removes it again) directly against `registry.services` /
 `topology.graph_nodes` / `topology.dependencies`, bypassing the registry API and Kafka sync. Verified via
 `GET /graph`: 133 nodes, 200 edges, `truncated: false`.
 

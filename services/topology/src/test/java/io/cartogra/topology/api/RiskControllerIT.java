@@ -145,6 +145,7 @@ class RiskControllerIT {
         assertThat(resp.statusCode()).isEqualTo(200);
         JsonNode data = objectMapper.readTree(resp.body()).get("data");
         assertThat(data.get("total").longValue()).isEqualTo(4);
+        assertThat(data.get("truncated").booleanValue()).isFalse();
         assertThat(types(data.get("items"))).containsExactlyInAnyOrder("cycle", "spof", "orphan", "drift");
         assertTraceIdHeaderMatchesBody(resp);
     }
@@ -165,6 +166,15 @@ class RiskControllerIT {
         assertThat(data.get("items")).hasSize(2);
         assertThat(data.get("limit").intValue()).isEqualTo(2);
         assertThat(data.get("offset").intValue()).isEqualTo(2);
+    }
+
+    @Test
+    void invalidPagingParamsAreRejectedWith400() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+
+        assertThat(getRisks(tenantId, "?limit=0").statusCode()).isEqualTo(400);
+        assertThat(getRisks(tenantId, "?limit=1001").statusCode()).isEqualTo(400);
+        assertThat(getRisks(tenantId, "?offset=-1").statusCode()).isEqualTo(400);
     }
 
     @Test

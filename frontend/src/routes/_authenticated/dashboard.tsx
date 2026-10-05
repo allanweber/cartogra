@@ -10,7 +10,8 @@ import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
 import { Skeleton } from '#/components/ui/skeleton'
-import { formatAffected, useRisks } from '#/hooks/useRisks'
+import { useRiskDismissals } from '#/hooks/useRiskDismissals'
+import { formatAffected, useRisks, useServiceNames } from '#/hooks/useRisks'
 import { ApiError, apiFetch } from '#/lib/api'
 import { MOCK_TIMELINE } from '#/lib/mock-data'
 import { normalizeHealth } from '#/lib/registry-types'
@@ -53,8 +54,11 @@ function DashboardPage() {
   const criticalTier = services.filter((s) => s.tier === 'CRITICAL').length
   const staleServices = services.filter((s) => isStale(s.lastDeployedAt))
   const orphanServices = services.filter((s) => s.teamId === null)
-  const risks = risksPage?.items ?? []
-  const serviceNames = new Map(services.map((s) => [s.id, s.name]))
+  const { dismissed } = useRiskDismissals(risksPage?.items, !risksPage?.truncated)
+  const risks = (risksPage?.items ?? []).filter((r) => !dismissed.has(r.id))
+  const risksTruncated = !!risksPage?.truncated
+  const more = risksTruncated ? '+' : ''
+  const serviceNames = useServiceNames()
   const criticalRisks = risks.filter((r) => r.severity === 'critical').length
   const warningRisks = risks.filter((r) => r.severity === 'warning').length
 
@@ -161,10 +165,10 @@ function DashboardPage() {
               />
               <StatStrip
                 icon={<AlertTriangle className="size-3.5" />}
-                value={String(criticalRisks + warningRisks)}
+                value={risksLoading || risksError ? '—' : `${criticalRisks + warningRisks}${more}`}
                 label="risks"
-                sub={`${criticalRisks} critical · ${warningRisks} warning`}
-                valueClass={criticalRisks > 0 ? 'health-down' : 'health-healthy'}
+                sub={risksLoading || risksError ? 'unavailable' : `${criticalRisks}${more} critical · ${warningRisks}${more} warning`}
+                valueClass={risksLoading || risksError ? undefined : criticalRisks > 0 ? 'health-down' : 'health-healthy'}
                 error={risksError}
               />
               <StatStrip

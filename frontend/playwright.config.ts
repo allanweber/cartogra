@@ -15,6 +15,7 @@ export default defineConfig({
     ? [['html', { open: 'never' }], ['github']]
     : [['html', { open: 'never' }], ['list']],
   globalSetup: './e2e/global-setup.ts',
+  globalTeardown: './e2e/global-teardown.ts',
   use: {
     baseURL,
     storageState: './e2e/.auth/storage-state.json',

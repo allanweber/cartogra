@@ -1,12 +1,13 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { dismissedStorageKey } from '#/hooks/useRiskDismissals'
 import { Route } from '#/routes/_authenticated/dashboard'
 import { TooltipProvider } from '#/components/ui/tooltip'
 import { apiFetch, ApiError } from '#/lib/api'
 
 import type { PageResult, RegistryService } from '#/lib/registry-types'
-import type { Risk } from '#/lib/topology-types'
+import type { RisksPage } from '#/lib/topology-types'
 
 vi.mock('@tanstack/react-router', async () => ({
   ...await vi.importActual('@tanstack/react-router'),
@@ -67,9 +68,9 @@ function makeService(overrides: Partial<RegistryService>): RegistryService {
   }
 }
 
-const NO_RISKS: PageResult<Risk> = { items: [], total: 0, limit: 200, offset: 0 }
+const NO_RISKS: RisksPage = { items: [], total: 0, limit: 200, offset: 0, truncated: false }
 
-function mockApi(services: unknown, risks: PageResult<Risk> = NO_RISKS) {
+function mockApi(services: unknown, risks: RisksPage = NO_RISKS) {
   vi.mocked(apiFetch).mockImplementation(async (path: string) =>
     path.includes('/topology/risks') ? risks : services,
   )
@@ -135,12 +136,51 @@ describe('DashboardPage', () => {
         total: 2,
         limit: 200,
         offset: 0,
+        truncated: false,
       },
     )
     renderPage()
 
     expect(await screen.findByText('SPOF: checkout-api')).toBeInTheDocument()
     expect(screen.getByText('1 critical · 1 warning')).toBeInTheDocument()
+  })
+
+  it('marks risk counts with + when the risk list was truncated', async () => {
+    mockApi(
+      { items: [makeService({ id: 's1', name: 'checkout-api' })], total: 1, limit: 200, offset: 0 },
+      {
+        items: [{ id: 'r1', type: 'spof', severity: 'critical', title: 'SPOF: checkout-api', explanation: '', fix: '', affectedServices: ['s1'] }],
+        total: 1,
+        limit: 200,
+        offset: 0,
+        truncated: true,
+      },
+    )
+    renderPage()
+
+    expect(await screen.findByText('1+ critical · 0+ warning')).toBeInTheDocument()
+  })
+
+  it('leaves risks dismissed on the Risks page out of the counts and the list', async () => {
+    localStorage.setItem(dismissedStorageKey(undefined, undefined), JSON.stringify(['r1']))
+    mockApi(
+      { items: [makeService({ id: 's1', name: 'checkout-api' })], total: 1, limit: 200, offset: 0 },
+      {
+        items: [
+          { id: 'r1', type: 'spof', severity: 'critical', title: 'SPOF: checkout-api', explanation: '', fix: '', affectedServices: ['s1'] },
+          { id: 'r2', type: 'orphan', severity: 'warning', title: 'Orphan service', explanation: '', fix: '', affectedServices: ['s1'] },
+        ],
+        total: 2,
+        limit: 200,
+        offset: 0,
+        truncated: false,
+      },
+    )
+    renderPage()
+
+    expect(await screen.findByText('Orphan service')).toBeInTheDocument()
+    expect(screen.queryByText('SPOF: checkout-api')).not.toBeInTheDocument()
+    expect(screen.getByText('0 critical · 1 warning')).toBeInTheDocument()
   })
 
   it('flags a service as stale when lastDeployedAt is older than 14 days', async () => {
