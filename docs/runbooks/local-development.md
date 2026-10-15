@@ -250,37 +250,117 @@ Open `http://localhost:3001` → Explore → Tempo Search to browse traces. Clic
 
 ## Testing observed edges (OTel spans)
 
-Observed edges (ADR-0029) come from OTLP spans: collector → Kafka `cartogra.observability.spans` → Topology `OtelSpanWorker`. Dev is single-tenant: the collector stamps `cartogra.tenant.id` from `CARTOGRA_TENANT_ID` (compose default `unset`, which Topology quarantines to the DLQ as `TENANT_MALFORMED`).
+Observed edges (`dependency_type = 'observed'`, [ADR-0029](../adr/0029-observed-edges-from-otel-spans.md)) are built from OpenTelemetry spans. There is no UI to enable it yet — the setup below is manual until roadmap 5.9 (see [Limitations](#limitations)).
 
-1. Restart Topology after pulling (migration `V011`, new listener). Kafka must be up.
-2. Register two services in the UI, e.g. `checkout` and `payments`.
-3. Get your tenant id:
+### How it flows
+
+```
+instrumented service ──OTLP──▶ otel-collector ──▶ Kafka cartogra.observability.spans ──▶ Topology OtelSpanWorker
+                               (stamps tenant)                                           │ resolves CLIENT spans to catalog services
+                                                                                         ▼
+                                              topology.dependencies (observed) ──▶ dependency_graph_view ──▶ /graph?type=OBSERVED
+```
+
+- The collector has two trace pipelines: `traces` (→ Tempo, unchanged) and `traces/spans` (→ Kafka). The second stamps the resource attribute `cartogra.tenant.id` and drops Topology's own spans (`service.name == "topology"`), otherwise consuming a record would create the next one.
+- Only **CLIENT** spans with `http.request.method` / `http.method` (→ `http`) or `rpc.system=grpc` (→ `grpc`) become edges. Everything else (INTERNAL, messaging, DB) is skipped.
+- Source = the span's `service.name`. Target = `peer.service`, else the host of `server.address` (port stripped). Both are matched against catalog service names, case-insensitively.
+- If the target is an IP or unknown host, Topology waits for the matching SERVER span (same trace, `parentSpanId` = the client's `spanId`) and takes the target from that span's `service.name`. Unmatched halves are kept in `topology.pending_span_links` for 5 minutes.
+
+### Configuration reference
+
+| Setting | Where | Default | Meaning |
+|---------|-------|---------|---------|
+| `CARTOGRA_TENANT_ID` | collector container env (`docker-compose.dev.yml`) | `unset` | Tenant UUID stamped on spans that don't already carry `cartogra.tenant.id`. `unset` is deliberately invalid: Topology sends such batches to the DLQ as `TENANT_MALFORMED`. Read only at container start. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | each service | `http://localhost:4318` | Where services send OTLP/HTTP. Already points at the dev collector. |
+| `KAFKA_BOOTSTRAP_SERVERS` | Topology | `localhost:9092` | Same Kafka the collector exports to (`kafka:29092` inside the compose network). |
+| `topology.span-links.ttl` | Topology `application.yml` | `PT5M` | How long an unmatched CLIENT/SERVER half waits for its partner. |
+| `topology.span-links.reap-interval` | same | `PT1M` | How often expired halves are deleted. |
+| `topology.span-links.max-unresolved-per-tenant` | same | `1000` | Cap on distinct unknown peer names recorded per tenant. |
+
+The Kafka topic `cartogra.observability.spans` (and `.dlq`) is auto-created by the dev broker on first use.
+
+### Procedure
+
+1. **Start the infrastructure and Topology.** Kafka must be healthy before the collector (the compose file enforces it). Restart Topology after pulling so Flyway applies `V011__observed_edges.sql`.
+2. **Register two services** in the UI (Catalog), e.g. `checkout` and `payments`.
+3. **Find your tenant id** (`tenant_id` column, not `id`):
    ```bash
-   psql postgresql://cartogra:cartogra@localhost:5436/cartogra -c "select tenant_id, name from registry.tenants"
+   docker exec cartogra-postgres psql -U cartogra -d cartogra -c "select tenant_id, name from registry.tenants"
    ```
-4. Recreate the collector with it (it only reads the variable at start):
+   Adjust user/database to your `.env` if different. The JWT `tid` claim is the same value.
+4. **Recreate the collector with the tenant** (a plain restart keeps the old env):
    ```bash
-   CARTOGRA_TENANT_ID=<tenant-uuid> docker compose -f infra/docker-compose/docker-compose.dev.yml up -d --force-recreate otel-collector
+   CARTOGRA_TENANT_ID=<tenant-uuid> docker compose -f infra/docker-compose/docker-compose.dev.yml \
+     up -d --force-recreate otel-collector
+   docker logs cartogra-otel-collector --tail 20   # expect "Everything is ready"
    ```
-5. Send a CLIENT span (`__SOURCE__` = `service.name`, caller; `__TARGET__` = `peer.service`, callee; both must match catalog names, case-insensitive):
+   Put `CARTOGRA_TENANT_ID` in your `.env` to avoid retyping it.
+5. **Send a test span.** The fixture `services/topology/src/test/resources/otel/client-peer-service.json` is an OTLP/JSON body with placeholders: `__SOURCE__` (caller `service.name`), `__TARGET__` (`peer.service`), `__TENANT__`, `__TRACE__` (32 hex), `__CLIENT_SPAN__` (16 hex).
    ```bash
    sed -e "s/__TENANT__/<tenant-uuid>/" -e "s/__SOURCE__/checkout/" -e "s/__TARGET__/payments/" \
        -e "s/__TRACE__/$(openssl rand -hex 16)/" -e "s/__CLIENT_SPAN__/$(openssl rand -hex 8)/" \
        services/topology/src/test/resources/otel/client-peer-service.json \
      | curl -s -i -X POST localhost:4318/v1/traces -H 'Content-Type: application/json' -d @-
    ```
-6. Wait ~10 s (collector batch ≤5 s + view refresh ≤5 s), open `/graph?type=OBSERVED`: one `checkout → payments` edge.
+   `200` with `{"partialSuccess":{}}` means the collector accepted it. The span carries its own tenant, so step 4 is only needed for spans from real services.
+6. **Verify.** Wait ~10 s (collector batch ≤5 s + graph view refresh ≤5 s), then open `/graph?type=OBSERVED`: one `checkout → payments` edge and no "No observed dependencies yet" alert. Blast radius and SPOF analysis include observed edges.
+   ```sql
+   select d.dependency_type, d.protocol, d.last_seen_at
+   from topology.dependencies d where d.dependency_type = 'observed' and d.deleted_at is null;
+   ```
 
-Debugging (no collector UI exists; use Kafka UI at `http://localhost:8086`):
+### Other scenarios
 
-| Symptom | Check |
-|---------|-------|
-| No edge | Message on `cartogra.observability.spans`? Row in `topology.unresolved_span_services` = peer name not in catalog |
-| `TENANT_MALFORMED` in Topology log | Record has `cartogra.tenant.id=unset`: collector was started without `CARTOGRA_TENANT_ID` (old records stay on the DLQ `cartogra.observability.spans.dlq`) |
-| Registry/Ingestion scheduler spans on the DLQ | Same cause; they are INTERNAL spans and never make edges |
-| IP target (`server.address` is an IP) | Edge appears only once the matching SERVER span (`server-child.json`) arrives; see `topology.pending_span_links` |
+| Scenario | How | Expected |
+|----------|-----|----------|
+| Unknown target | `__TARGET__` = a name not in the catalog | no edge; row in `topology.unresolved_span_services` (`seen_count` grows) |
+| IP target + SERVER half | send `client-ip-target.json` (`__SOURCE__`, `__TENANT__`, `__TRACE__`, `__CLIENT_SPAN__`), then `server-child.json` (`__TARGET__` = the server's `service.name`, `__SERVER_SPAN__` 16 hex, **same** `__TENANT__`/`__TRACE__`/`__CLIENT_SPAN__` values) | edge created; `topology.pending_span_links` empty again |
+| Missing/invalid tenant | send `no-tenant.json` with the collector started without `CARTOGRA_TENANT_ID` | record on `cartogra.observability.spans.dlq`, Topology logs `Span batch quarantined: TENANT_MALFORMED` |
+| Real traffic | set `OTEL_EXPORTER_OTLP_ENDPOINT` on your own instrumented services | edges for each CLIENT span whose peer is in the catalog |
 
-Writes go to the persistent dev DB; the collector must not be exposed beyond localhost (tenant attribute is unauthenticated until roadmap 5.9).
+### Inspecting each hop
+
+There is no collector UI. Use:
+
+| What | How |
+|------|-----|
+| Collector accepted the span | HTTP `200` from `curl`; `docker logs cartogra-otel-collector` |
+| Span reached Kafka | Kafka UI `http://localhost:8086` → topic `cartogra.observability.spans` |
+| Span was rejected | Kafka UI → `cartogra.observability.spans.dlq`; header `kafka_dlt-exception-message` holds the reason |
+| Topology outcome | counters (below) via Prometheus `http://localhost:9090`; tables `dependencies`, `unresolved_span_services`, `pending_span_links` |
+
+Counters: `cartogra_spans_edges_total{result}` (created/updated/unchanged), `cartogra_spans_skipped_total{reason}` (unsupported_protocol, unresolved_source, unresolved_target, self), `cartogra_spans_fallback_matched_total`, `cartogra_spans_quarantined_total{reason}`.
+
+### Troubleshooting
+
+| Symptom | Cause / fix |
+|---------|-------------|
+| `TENANT_MALFORMED` in the Topology log | Record has `cartogra.tenant.id=unset` or a non-UUID. The collector was started without `CARTOGRA_TENANT_ID` (recreate it, step 4). Old records stay on the DLQ. |
+| Registry/Ingestion scheduler spans (`healthProbeScheduler.probe`, …) on the DLQ | Same cause. They are INTERNAL spans and never produce edges, but they are quarantined until the tenant is set. |
+| `TENANT_MISSING` | Span has no `cartogra.tenant.id` and the collector didn't add one (spans sent straight to Kafka, or a custom collector config). |
+| Collector exits on start | `docker logs cartogra-otel-collector`. An empty `CARTOGRA_TENANT_ID` fails validation (compose defaults it to `unset`); Kafka must be healthy. |
+| `200` from curl but no edge | Check Kafka UI for the message. Then `unresolved_span_services` (name not in catalog), then `cartogra_spans_skipped_total` (kind/protocol/self). Source and target must differ and both be live catalog services. |
+| Edge in the DB but not in the graph | The view refreshes at most every 5 s; check `dependency_graph_view` and that the UI is on the **Observed** tab. |
+| IP-target edge never appears | The SERVER span must share the trace id and have `parentSpanId` = the client's `spanId`, and arrive within 5 minutes. |
+
+### Cleanup
+
+Test edges persist in the dev database. Soft-delete them:
+
+```sql
+update topology.dependencies set deleted_at = now()
+where dependency_type = 'observed' and deleted_at is null;
+delete from topology.pending_span_links;
+update topology.unresolved_span_services set deleted_at = now() where deleted_at is null;
+```
+
+`demo-flow.spec.ts` (Playwright) also posts a span to `localhost:4318` and writes to this same database.
+
+### Limitations
+
+- `cartogra.tenant.id` is **unauthenticated**: anyone who can reach the collector or the Kafka topic can attribute spans to any tenant UUID that has live nodes. Keep ports 4317/4318 on localhost.
+- One collector = one tenant. Multi-tenant intake and the Settings → Connections → OpenTelemetry card (currently an inactive placeholder) arrive with roadmap 5.9 (`X-Cartogra-Api-Key`, scope `spans:write`).
+- Cartogra's own services mostly emit no CLIENT spans yet (roadmap 7.9), so the dev stack won't produce edges by itself; use the fixtures or your own instrumented services.
 
 ## Service Auto-Discovery
 

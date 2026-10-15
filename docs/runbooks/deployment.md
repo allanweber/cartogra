@@ -335,4 +335,67 @@ Webhook responses are **not** wrapped in the standard response envelope.
 
 ## 11. Observed edges / OTel intake
 
-Not deployable yet. `otel-collector` exists only in `docker-compose.dev.yml` and trusts an unauthenticated `cartogra.tenant.id`, so exposing it publicly lets anyone attribute spans to any tenant. Do not open ports 4317/4318 or the `cartogra.observability.spans` topic externally. Roadmap 4.4 adds the collector to the deployable compose; 5.9 adds the authenticated gateway intake (`X-Cartogra-Api-Key`). Local procedure: `local-development.md` → "Testing observed edges".
+Observed dependency edges ([ADR-0029](../adr/0029-observed-edges-from-otel-spans.md)) need an OTel collector that exports spans to Kafka. **No deployable environment has that yet.** Local procedure: [`local-development.md` → Testing observed edges](local-development.md#testing-observed-edges-otel-spans).
+
+### Current state per environment
+
+| Environment | Collector | Spans → Kafka | Observed edges |
+|-------------|-----------|---------------|----------------|
+| Local (`docker-compose.dev.yml`) | yes, single tenant via `CARTOGRA_TENANT_ID` | yes | works |
+| `docker-compose.yml` (deployable) | none (roadmap 4.4) | no | no edges; Observed graph shows the empty-state alert |
+| Kubernetes (`infra/k8s/infra/otel-collector`) | yes, 2 replicas, config in `configmap.yml` | **no** — pipelines go only to Tempo/Prometheus/Loki | no edges |
+
+Topology is safe to deploy anyway: the `OtelSpanWorker` simply idles when `cartogra.observability.spans` receives nothing.
+
+### Deploying the Topology change
+
+- **Migration `V011__observed_edges.sql`** is additive and backward-compatible (nullable `dependencies.last_seen_at`, new tables `pending_span_links` and `unresolved_span_services` with RLS, one index). Old pods keep working during the rolling update; follow section 3, no expand/contract needed.
+- **Kafka access:** Topology's consumer group `topology-consumer` needs read on `cartogra.observability.spans`, plus write on `cartogra.observability.spans.dlq` for quarantined records. The dev broker auto-creates both topics; **create them explicitly** in any environment where auto-create is off.
+- **Rollback:** rolling Topology back is safe. The new tables and column are ignored by old code. Do not drop them on rollback; the `OtelSpanWorker` simply stops.
+- **Metrics to watch after enabling:** `cartogra_spans_quarantined_total` (must stay ~0 once the tenant stamp is correct), `cartogra_spans_edges_total`, consumer lag on `cartogra.observability.spans`.
+
+### Enabling the span feed (before 4.4 / 5.9 land)
+
+Do this only on a private network. The tenant attribute is unauthenticated: anyone who can reach the collector (4317/4318) or the topic can attribute spans to **any tenant UUID that has live nodes**. Never expose those ports through an Ingress or LoadBalancer, and restrict the topic with Kafka ACLs to the collector (write) and Topology (read).
+
+The config is the same as `infra/docker-compose/otel-collector.yml`. For the Kubernetes collector, add to `configmap.yml`:
+
+```yaml
+processors:
+  resource/tenant:
+    attributes:
+      - { action: insert, key: cartogra.tenant.id, value: "${env:CARTOGRA_TENANT_ID}" }
+  filter/no-self:
+    error_mode: ignore
+    traces:
+      span:
+        - 'resource.attributes["service.name"] == "topology"'
+exporters:
+  kafka/spans:
+    brokers: [<kafka-bootstrap>:9092]
+    traces:
+      topic: cartogra.observability.spans
+      encoding: otlp_json
+service:
+  pipelines:
+    traces/spans:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, resource/tenant, filter/no-self, batch]
+      exporters: [kafka/spans]
+```
+
+and set `CARTOGRA_TENANT_ID` (a non-secret UUID) on the collector Deployment. Keep the existing `traces` pipeline for Tempo. The collector serves exactly one tenant, so this only suits a single-tenant environment. After applying, `kubectl -n infra rollout restart deployment/otel-collector` and check `kubectl -n infra logs deployment/otel-collector` for startup errors.
+
+### Verification after enabling
+
+1. Collector logs show no Kafka exporter errors.
+2. Message count on `cartogra.observability.spans` grows (Kafka UI or `kafka-console-consumer`).
+3. `cartogra_spans_quarantined_total` stays flat; if `reason=tenant_malformed` rises, the tenant env var is missing or invalid.
+4. After real CLIENT traffic between catalogued services, `select count(*) from topology.dependencies where dependency_type='observed'` increases and the Observed graph shows edges (allow ~10 s).
+
+### Planned
+
+| Roadmap | Change |
+|---------|--------|
+| 4.4 | `otel-collector` added to the deployable `docker-compose.yml`; every service's `OTEL_EXPORTER_OTLP_ENDPOINT` wired to it; `kafka` dependency. |
+| 5.9 | Authenticated gateway intake `POST /v1/otlp/traces` (`X-Cartogra-Api-Key`, scope `spans:write`); the gateway overwrites `cartogra.tenant.id` from the key and the collector stops accepting external traffic. `CARTOGRA_TENANT_ID` is dropped. Settings → Connections → OpenTelemetry card for keys, endpoint and status. |
