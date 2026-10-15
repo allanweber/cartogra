@@ -8,6 +8,10 @@ Be extremely concise. Sacrifice grammar for the sake of concision.
 
 ideation-output: C:\Users\allan\Documents\Allan\Notes\Ideation
 
+## Plans
+
+Every implementation plan is saved in the project at `plans/NNN-<slug>.md` (next number), never only in `~/.claude/plans`.
+
 ## Agent skills
 
 ### Issue tracker

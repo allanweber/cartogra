@@ -1,0 +1,5 @@
+{"resourceSpans":[{"resource":{"attributes":[
+  {"key":"service.name","value":{"stringValue":"__TARGET__"}},
+  {"key":"cartogra.tenant.id","value":{"stringValue":"__TENANT__"}}]},
+ "scopeSpans":[{"spans":[{"traceId":"__TRACE__","spanId":"__SERVER_SPAN__","parentSpanId":"__CLIENT_SPAN__","name":"GET /pay","kind":2,
+  "attributes":[{"key":"http.request.method","value":{"stringValue":"GET"}}]}]}]}]}

@@ -8,8 +8,12 @@ import io.cartogra.topology.repository.DependencyFilter;
 import io.cartogra.topology.repository.DependencyRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import io.cartogra.topology.repository.UpsertOutcome;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -24,6 +28,9 @@ class JdbcDependencyRepositoryIT extends AbstractTopologyIT {
 
     @Autowired
     private DependencyRepository repository;
+
+    @Autowired
+    private NamedParameterJdbcTemplate jdbc;
 
     @Test
     void insertAndFindById() {
@@ -152,5 +159,54 @@ class JdbcDependencyRepositoryIT extends AbstractTopologyIT {
     private Dependency newDependency(UUID source, UUID target, DependencyType type, DependencyProtocol protocol) {
         Instant now = Instant.now();
         return new Dependency(UUID.randomUUID(), TENANT, source, target, type, protocol, null, now, now, null);
+    }
+
+    @Test
+    void upsertObservedInsertsThenThrottlesRefreshes() {
+        UUID source = UUID.randomUUID();
+        UUID target = UUID.randomUUID();
+        Instant t0 = Instant.now().minus(Duration.ofHours(1));
+
+        assertThat(repository.upsertObserved(TENANT, source, target, DependencyProtocol.HTTP, t0))
+                .isEqualTo(UpsertOutcome.INSERTED);
+        assertThat(repository.upsertObserved(TENANT, source, target, DependencyProtocol.HTTP, t0.plusSeconds(30)))
+                .isEqualTo(UpsertOutcome.UNCHANGED);
+        assertThat(repository.upsertObserved(TENANT, source, target, DependencyProtocol.HTTP, t0.plusSeconds(120)))
+                .isEqualTo(UpsertOutcome.REFRESHED);
+
+        Dependency edge = repository.findByEdgeIdentity(TENANT, source, target,
+                DependencyType.OBSERVED, DependencyProtocol.HTTP).orElseThrow();
+        assertThat(lastSeenAt(edge.id())).isAfter(t0.plusSeconds(100));
+        assertThat(repository.count(TENANT, new DependencyFilter(source, DependencyType.OBSERVED, null))).isEqualTo(1);
+    }
+
+    @Test
+    void upsertObservedKeepsDistinctProtocolsAsDistinctEdges() {
+        UUID source = UUID.randomUUID();
+        UUID target = UUID.randomUUID();
+
+        assertThat(repository.upsertObserved(TENANT, source, target, DependencyProtocol.HTTP, Instant.now()))
+                .isEqualTo(UpsertOutcome.INSERTED);
+        assertThat(repository.upsertObserved(TENANT, source, target, DependencyProtocol.GRPC, Instant.now()))
+                .isEqualTo(UpsertOutcome.INSERTED);
+    }
+
+    @Test
+    void upsertObservedLeavesDeclaredEdgeAlone() {
+        UUID source = UUID.randomUUID();
+        UUID target = UUID.randomUUID();
+        Dependency declared = repository.save(newDependency(source, target, DependencyType.DECLARED, DependencyProtocol.HTTP));
+
+        assertThat(repository.upsertObserved(TENANT, source, target, DependencyProtocol.HTTP, Instant.now()))
+                .isEqualTo(UpsertOutcome.INSERTED);
+
+        assertThat(repository.findById(TENANT, declared.id())).isPresent();
+        assertThat(lastSeenAt(declared.id())).isNull();
+    }
+
+    private Instant lastSeenAt(UUID id) {
+        java.sql.Timestamp ts = jdbc.queryForObject("SELECT last_seen_at FROM dependencies WHERE id = :id",
+                new MapSqlParameterSource("id", id), java.sql.Timestamp.class);
+        return ts != null ? ts.toInstant() : null;
     }
 }

@@ -6,6 +6,7 @@ import org.jspecify.annotations.Nullable;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -26,4 +27,9 @@ public interface GraphNodeRepository {
 
     /** Live nodes with no team owner ({@code team_id IS NULL}), ordered by name; up to {@code maxRows} rows. */
     List<GraphNode> findOrphaned(UUID tenantId, int maxRows);
+
+    /** Live nodes whose lower(name) is in {@code lowerNames}, keyed by lower-cased name to Registry service id. */
+    Map<String, UUID> findLiveByLowerNames(UUID tenantId, Collection<String> lowerNames);
+
+    boolean existsLiveForTenant(UUID tenantId);
 }

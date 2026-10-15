@@ -315,6 +315,29 @@ describe('GraphPage', () => {
     expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('type=OBSERVED'))
   })
 
+  it('Observed view with no edges shows the "no observed dependencies" alert', async () => {
+    mockSearch = { type: 'OBSERVED' }
+    mockGraphCalls(() => makeGraph({ edges: [] }))
+    renderPage()
+    await screen.findByRole('group', { name: /service dependency graph/i })
+
+    expect(screen.getByText(/no observed dependencies yet/i)).toBeInTheDocument()
+  })
+
+  it('Observed view with edges hides the alert and renders the edge', async () => {
+    mockSearch = { type: 'OBSERVED' }
+    mockGraphCalls(() =>
+      makeGraph({
+        edges: [{ source: 's1', target: 's2', dependencyType: 'OBSERVED', protocol: 'HTTP', metadata: null }],
+      }),
+    )
+    renderPage()
+    const svg = await screen.findByRole('group', { name: /service dependency graph/i })
+
+    expect(screen.queryByText(/no observed dependencies yet/i)).not.toBeInTheDocument()
+    expect(svg.querySelectorAll('.graph-link')).toHaveLength(1)
+  })
+
   it('picking a team triggers a server refetch scoped by teamId', async () => {
     vi.mocked(apiFetch).mockImplementation((path: string) => {
       if (path.includes('/v1/registry/teams')) {

@@ -1,5 +1,6 @@
 package io.cartogra.topology.config;
 
+import io.cartogra.topology.domain.exception.UnattributedSpanBatchException;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -60,7 +61,7 @@ public class KafkaConfig {
         var recoverer = new DeadLetterPublishingRecoverer(dlqKafkaTemplate,
                 (record, ex) -> new TopicPartition(record.topic() + ".dlq", record.partition()));
         var errorHandler = new DefaultErrorHandler(recoverer, new FixedBackOff(1000L, 3));
-        errorHandler.addNotRetryableExceptions(JacksonException.class);
+        errorHandler.addNotRetryableExceptions(JacksonException.class, UnattributedSpanBatchException.class);
         return errorHandler;
     }
 }

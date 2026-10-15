@@ -31,7 +31,7 @@ import java.util.stream.StreamSupport;
 @Component
 public class GraphNodeEventConsumer {
 
-    private static final TextMapGetter<Headers> HEADERS_GETTER = new TextMapGetter<>() {
+    static final TextMapGetter<Headers> HEADERS_GETTER = new TextMapGetter<>() {
         @Override
         public Iterable<String> keys(Headers carrier) {
             return () -> StreamSupport.stream(carrier.spliterator(), false)
@@ -57,6 +57,7 @@ public class GraphNodeEventConsumer {
     }
 
     @KafkaListener(
+            id = "graphNodeEventConsumer",
             topics = {
                     "cartogra.registry.service.registered",
                     "cartogra.registry.service.updated",

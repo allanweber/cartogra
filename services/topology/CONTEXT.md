@@ -16,7 +16,7 @@ Topology maintains the live dependency graph of all Services within a tenant. It
 |---|---|
 | **Dependency** | A directional edge from a **source** Service to a **target** Service; has a type (declared/observed) and a protocol |
 | **Declared dependency** | A dependency explicitly registered by a developer (via the API or spec file) |
-| **Observed dependency** | A dependency inferred from OTel trace spans collected by the Ingestion worker (ADR-0016) |
+| **Observed dependency** | A dependency inferred from OTel trace spans by `OtelSpanWorker` in Topology (ADR-0029); carries `last_seen_at` |
 | **Blast radius** | The set of Services reachable from a given Service within a bounded hop count, in both directions: `upstream` (what it depends on, forward traversal) and `downstream` (what would be affected if it degraded or went down, backward traversal) — computed via a recursive CTE over `dependency_graph_edges`. Note: this `upstream`/`downstream` pairing is the opposite of the one used by the 1-hop `/dependencies/{serviceId}` endpoint |
 | **Cycle** | A set of Services in a circular dependency chain; indicates an architectural anti-pattern |
 | **Drift** | A mismatch between declared and observed dependencies (`undeclared` = observed but not declared; `missing` = declared but not observed) |
@@ -30,7 +30,7 @@ Topology maintains the live dependency graph of all Services within a tenant. It
 ## Core Responsibilities
 
 1. **Dependency CRUD** — create, read, soft-delete declared dependencies
-2. **Observed edge ingestion** — consume `dependency.observed` events from Ingestion; upsert observed edges
+2. **Observed edge ingestion** — `OtelSpanWorker` consumes raw OTLP/JSON from `cartogra.observability.spans` and upserts observed edges (ADR-0029)
 3. **Blast radius computation** — recursive CTE traversal downstream from a given node
 4. **Cycle detection** — recursive CTE looking for back-edges
 5. **Drift detection** — compare declared vs. observed sets per service; persist drift records
@@ -91,7 +91,7 @@ Implemented: backfill, dependency CRUD, graph read (`[1.1]`–`[1.3]`), blast ra
 | `cartogra.registry.service.registered` | Registry | Create node in graph (no-op if already exists) |
 | `cartogra.registry.service.updated` | Registry | Refresh node metadata cache, including `team_id`/`tier` (used for orphan risk and SPOF severity — ADR-0028) |
 | `cartogra.registry.service.deleted` | Registry | Soft-delete all edges for that service |
-| `cartogra.ingestion.dependency.observed` | Ingestion | Upsert observed edge; trigger drift detection |
+| `cartogra.observability.spans` | OTel Collector | Raw OTLP/JSON, not an `EventEnvelope`; upsert observed edges; unattributable records go to `cartogra.observability.spans.dlq` (ADR-0029) |
 
 **Produced:**
 
@@ -108,7 +108,7 @@ Implemented: backfill, dependency CRUD, graph read (`[1.1]`–`[1.3]`), blast ra
 | Neighbour | Relationship | Notes |
 |---|---|---|
 | Service Catalog (Registry) | Downstream (Conformist) | Consumes registry lifecycle events; references service IDs only. `team_id`/`tier` from those same events also feed orphan risk and SPOF severity (ADR-0028) — no separate topic. Additionally calls Registry's internal `POST /internal/services/access` synchronously (direct service-to-service, bypasses the Gateway) to authorize declared-dependency mutations — "is this user a member of the team owning this service?" — fail closed on error — [1.2] |
-| Ingestion | Downstream (Conformist) | Consumes observed dependency edges |
+| OTel Collector | Downstream (Conformist) | Consumes its OTLP/JSON span export; Ingestion is not on this path |
 | Intelligence | Upstream (Customer/Supplier) | Produces graph + drift + cycle events |
 | Identity & Access (Gateway) | Conformist | Receives proxied requests with `X-Tenant-Id` |
 | Shared Kernel | Shared Kernel | `EventEnvelope`, `ApiResponse`, `ErrorCodes` |
@@ -118,6 +118,7 @@ Implemented: backfill, dependency CRUD, graph read (`[1.1]`–`[1.3]`), blast ra
 ## ADRs
 
 - ADR-0001 — PostgreSQL + recursive CTEs (no graph database)
-- ADR-0016 — OTel span worker feeds `dependency.observed` events into Topology
+- ADR-0016 — OTel span worker ingestion path — **superseded by ADR-0029**
+- ADR-0029 — Observed edges from OTel spans: raw OTLP topic, tenant stamping, span-id join fallback
 - ADR-0027 — Topology consumes Registry `ownership-changed` events for orphan risk (chosen over a client-side merge) — **superseded by ADR-0028**
 - ADR-0028 — Topology reads `graph_nodes.team_id` directly for orphan risk (no new topic needed; the existing lifecycle sync already carries it)

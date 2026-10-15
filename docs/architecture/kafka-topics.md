@@ -81,13 +81,13 @@ table, as authoritative on exact timing, and re-check the wording there before r
 
 | Topic | Direction | Roadmap story | Status |
 | ----- | --------- | -------------- | ------ |
-| `cartogra.observability.spans` | OTel Collector → Topology (`OtelSpanWorker`) | 3.1 | Replaces an earlier plan where Ingestion forwarded observed dependencies; Ingestion is not on this path |
-| `cartogra.registry.service.ownership-changed` | Registry → Topology, orphan-risk flagging only | ADR-0027 | **Conflicts with roadmap 3.3**, which instead describes Topology consuming the already-real `cartogra.ingestion.ownership.resolved`. See the reconciliation note in `CONTEXT-MAP.md`. Do not implement either side until that's resolved |
+| `cartogra.observability.spans` | OTel Collector → Topology (`OtelSpanWorker`) | 3.1 | **Implemented in 3.1** (consumer side; the collector is the producer). Payload is raw OTLP/JSON from the collector's `kafka` exporter — a documented exception to the envelope rule (ADR-0029). Tenant comes from resource attribute `cartogra.tenant.id`; unattributable records go to `cartogra.observability.spans.dlq`. Ingestion is not on this path |
+| `cartogra.registry.service.ownership-changed` | Registry → Topology, orphan-risk flagging only | ADR-0027 | **Conflicts with roadmap 3.4**, which instead describes Topology consuming the already-real `cartogra.ingestion.ownership.resolved`. See the reconciliation note in `CONTEXT-MAP.md`. Do not implement either side until that's resolved |
 | `cartogra.platform.audit.recorded` | Topology → Registry | 4.1 | Registry writes audit events directly; Topology publishes this for Registry's consumer |
 | `cartogra.ingestion.spec.discovered` | Ingestion → Contract | 5.8 | Named `spec.discovered`, not `spec.updated` as an earlier version of this document had it |
 | `cartogra.platform.dead-letter` | platform-wide DLQ replay | 7.5 | Distinct from the per-service `.dlq` topics above |
 
-Topology's own future producer topics (3.4, deferred to Phase 6 per the roadmap's "no topic without a
+Topology's own future producer topics (3.5, deferred to Phase 6 per the roadmap's "no topic without a
 consumer" rule — Intelligence is the consumer and doesn't exist yet): `dependency.declared`,
 `dependency.observed`, `dependency.removed`, `drift.detected`. Exact `cartogra.topology.*` names are not yet
 committed in the roadmap text, so none are asserted here.

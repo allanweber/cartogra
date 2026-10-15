@@ -5,6 +5,7 @@ import io.cartogra.topology.domain.DependencyProtocol;
 import io.cartogra.topology.domain.DependencyType;
 import io.cartogra.topology.repository.DependencyFilter;
 import io.cartogra.topology.repository.DependencyRepository;
+import io.cartogra.topology.repository.UpsertOutcome;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Repository;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -138,6 +140,33 @@ public class JdbcDependencyRepository implements DependencyRepository {
                 .addValue("type", type.toDbValue())
                 .addValue("protocol", protocol.toDbValue());
         return jdbc.query(sql, params, DEPENDENCY_MAPPER).stream().findFirst();
+    }
+
+    @Override
+    public UpsertOutcome upsertObserved(UUID tenantId, UUID sourceServiceId, UUID targetServiceId,
+            DependencyProtocol protocol, Instant seenAt) {
+        String sql = """
+                INSERT INTO dependencies (tenant_id, source_service_id, target_service_id,
+                                          dependency_type, protocol, last_seen_at)
+                VALUES (:tenantId, :sourceServiceId, :targetServiceId, 'observed', :protocol, :seenAt)
+                ON CONFLICT (tenant_id, source_service_id, target_service_id, dependency_type, protocol)
+                    WHERE deleted_at IS NULL
+                DO UPDATE SET last_seen_at = EXCLUDED.last_seen_at, updated_at = now()
+                    WHERE dependencies.last_seen_at IS NULL
+                       OR dependencies.last_seen_at < EXCLUDED.last_seen_at - interval '1 minute'
+                RETURNING (xmax = 0) AS inserted
+                """;
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("sourceServiceId", sourceServiceId)
+                .addValue("targetServiceId", targetServiceId)
+                .addValue("protocol", protocol.toDbValue())
+                .addValue("seenAt", Timestamp.from(seenAt));
+        List<Boolean> rows = jdbc.query(sql, params, (rs, _) -> rs.getBoolean("inserted"));
+        if (rows.isEmpty()) {
+            return UpsertOutcome.UNCHANGED;
+        }
+        return rows.getFirst() ? UpsertOutcome.INSERTED : UpsertOutcome.REFRESHED;
     }
 
     private void applyFilter(StringBuilder sql, MapSqlParameterSource params, DependencyFilter filter) {
