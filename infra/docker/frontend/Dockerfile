@@ -52,9 +52,10 @@ RUN pnpm install --frozen-lockfile --prod --ignore-scripts \
 
 # --only-upgrade libpcre2-8-0 pulls the Debian 12 security-repo fix (CVE-2026-86145,
 # CVE-2026-89161) for whatever's already on the base image, without a general
-# `apt-get upgrade -y` pulling in unrelated package churn.
+# `apt-get upgrade -y` pulling in unrelated package churn. perl-base likewise
+# (CVE-2026-13221, CVE-2026-8376 and others fixed in 5.36.0-7+deb12u4).
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
-    && apt-get install -y --only-upgrade libpcre2-8-0 \
+    && apt-get install -y --only-upgrade libpcre2-8-0 perl-base \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder --chown=node:node /app/frontend/dist ./dist

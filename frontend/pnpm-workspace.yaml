@@ -19,3 +19,6 @@ overrides:
   # directly, breaking with "TypeError: expand is not a function". Only 5.0.9 was
   # flagged by Trivy; the 1.x line was never vulnerable to this CVE.
   brace-expansion@5: "^5.0.11" # CVE-2026-102276, CVE-2026-102278
+  "@modelcontextprotocol/sdk": "^1.31.0" # CVE-2026-104850
+  proxy-addr: "^2.0.8" # CVE-2026-90711
+  seroval: "^1.6.3" # CVE-2026-104845, CVE-2026-104846
