@@ -332,3 +332,7 @@ Real-time sync is driven by SCM webhooks. The gateway exposes the receiver publi
 | No webhook registration / unknown provider | `404` (`WEBHOOK_CONNECTION_NOT_FOUND`) |
 
 Webhook responses are **not** wrapped in the standard response envelope.
+
+## 11. Observed edges / OTel intake
+
+Not deployable yet. `otel-collector` exists only in `docker-compose.dev.yml` and trusts an unauthenticated `cartogra.tenant.id`, so exposing it publicly lets anyone attribute spans to any tenant. Do not open ports 4317/4318 or the `cartogra.observability.spans` topic externally. Roadmap 4.4 adds the collector to the deployable compose; 5.9 adds the authenticated gateway intake (`X-Cartogra-Api-Key`). Local procedure: `local-development.md` → "Testing observed edges".

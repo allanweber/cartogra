@@ -248,6 +248,40 @@ curl "http://localhost:9090/api/v1/query?query=cartogra_jvm_memory_used_bytes"
 
 Open `http://localhost:3001` → Explore → Tempo Search to browse traces. Click any span to navigate to correlated Loki logs and RED metrics panels.
 
+## Testing observed edges (OTel spans)
+
+Observed edges (ADR-0029) come from OTLP spans: collector → Kafka `cartogra.observability.spans` → Topology `OtelSpanWorker`. Dev is single-tenant: the collector stamps `cartogra.tenant.id` from `CARTOGRA_TENANT_ID` (compose default `unset`, which Topology quarantines to the DLQ as `TENANT_MALFORMED`).
+
+1. Restart Topology after pulling (migration `V011`, new listener). Kafka must be up.
+2. Register two services in the UI, e.g. `checkout` and `payments`.
+3. Get your tenant id:
+   ```bash
+   psql postgresql://cartogra:cartogra@localhost:5436/cartogra -c "select tenant_id, name from registry.tenants"
+   ```
+4. Recreate the collector with it (it only reads the variable at start):
+   ```bash
+   CARTOGRA_TENANT_ID=<tenant-uuid> docker compose -f infra/docker-compose/docker-compose.dev.yml up -d --force-recreate otel-collector
+   ```
+5. Send a CLIENT span (`__SOURCE__` = `service.name`, caller; `__TARGET__` = `peer.service`, callee; both must match catalog names, case-insensitive):
+   ```bash
+   sed -e "s/__TENANT__/<tenant-uuid>/" -e "s/__SOURCE__/checkout/" -e "s/__TARGET__/payments/" \
+       -e "s/__TRACE__/$(openssl rand -hex 16)/" -e "s/__CLIENT_SPAN__/$(openssl rand -hex 8)/" \
+       services/topology/src/test/resources/otel/client-peer-service.json \
+     | curl -s -i -X POST localhost:4318/v1/traces -H 'Content-Type: application/json' -d @-
+   ```
+6. Wait ~10 s (collector batch ≤5 s + view refresh ≤5 s), open `/graph?type=OBSERVED`: one `checkout → payments` edge.
+
+Debugging (no collector UI exists; use Kafka UI at `http://localhost:8086`):
+
+| Symptom | Check |
+|---------|-------|
+| No edge | Message on `cartogra.observability.spans`? Row in `topology.unresolved_span_services` = peer name not in catalog |
+| `TENANT_MALFORMED` in Topology log | Record has `cartogra.tenant.id=unset`: collector was started without `CARTOGRA_TENANT_ID` (old records stay on the DLQ `cartogra.observability.spans.dlq`) |
+| Registry/Ingestion scheduler spans on the DLQ | Same cause; they are INTERNAL spans and never make edges |
+| IP target (`server.address` is an IP) | Edge appears only once the matching SERVER span (`server-child.json`) arrives; see `topology.pending_span_links` |
+
+Writes go to the persistent dev DB; the collector must not be exposed beyond localhost (tenant attribute is unauthenticated until roadmap 5.9).
+
 ## Service Auto-Discovery
 
 ### Namespace label contract (Kubernetes)
