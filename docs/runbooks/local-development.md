@@ -354,7 +354,7 @@ delete from topology.pending_span_links;
 update topology.unresolved_span_services set deleted_at = now() where deleted_at is null;
 ```
 
-`demo-flow.spec.ts` (Playwright) also posts a span to `localhost:4318` and writes to this same database.
+`demo-flow.spec.ts` (Playwright) writes to this same database. Its observed-edge step posts a span to `localhost:4318` and only runs with `E2E_OBSERVED=true` (collector up, as above); CI leaves it off because the deployable compose has no collector until roadmap 4.4.
 
 ### Limitations
 
