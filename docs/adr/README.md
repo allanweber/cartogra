@@ -18,7 +18,7 @@ This directory captures significant architectural decisions made during the deve
 | [ADR-0013](ADR-0013-guest-demo-access-deferred.md) | Guest demo access deferred to Phase 5 | Accepted | 2026-05-20 |
 | [ADR-0014](ADR-0014-sync-command-idempotency.md) | Sync command idempotency: concurrent-execution guard | Accepted | 2026-05-20 |
 | [ADR-0015](ADR-0015-codeowners-persistence-shape.md) | CODEOWNERS persistence shape (auto-assign on `services.team_id`) | Proposed | 2026-05-20 |
-| [ADR-0016](ADR-0016-otel-span-worker-ingestion.md) | OtelSpanWorker ingestion path (Kafka topic from OTel Collector) | Proposed | 2026-05-20 |
+| [ADR-0016](ADR-0016-otel-span-worker-ingestion.md) | OtelSpanWorker ingestion path (Kafka topic from OTel Collector) | Superseded by 0029 | 2026-05-20 |
 | [ADR-0017](ADR-0017-audit-events-ownership-port.md) | Audit events: registry-owned table + `AuditEventPort` in shared:common | Proposed | 2026-05-20 |
 | [ADR-0018](ADR-0018-spec-discovery-transport.md) | Spec discovery transport (Kafka topic from ingestion) | Proposed | 2026-05-20 |
 | [ADR-0019](ADR-0019-guest-enforcement-mechanism.md) | Guest enforcement via special JWT role (no anonymous path) | Proposed | 2026-05-20 |
@@ -31,6 +31,7 @@ This directory captures significant architectural decisions made during the deve
 | [0026](0026-accept-alpha-opentelemetry-logback-appender.md) | Accept `opentelemetry-logback-appender-1.0` as a permanently-alpha dependency | Accepted | 2026-07-17 |
 | [0027](0027-topology-consumes-ownership-events-for-orphan-risk.md) | Topology consumes a Registry ownership event to compute orphan risk | Superseded by 0028 | 2026-08-05 |
 | [0028](0028-topology-reads-team-id-directly-for-orphan-risk.md) | Topology reads `graph_nodes.team_id` directly for orphan risk, superseding ADR-0027 | Accepted | 2026-09-30 |
+| [0029](0029-observed-edges-from-otel-spans.md) | Observed edges from OTel spans: raw OTLP/JSON topic, tenant stamping, span-id join fallback, supersedes ADR-0016 | Accepted | 2026-10-07 |
 
 ## Process
 

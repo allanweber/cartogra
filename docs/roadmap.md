@@ -53,6 +53,7 @@ The old checklist broke each of these; that is why it stopped being usable.
 
 **Every story, before it merges:**
 
+- **Seed data.** A story that needs data to be demoable or testable extends the Acme Fintech seed (3.2) and says so in its roadmap item.
 - `/code-review` on the story's diff — every correctness finding fixed, or answered in the PR with a reason.
 - `/security-review` on the same diff — anything above informational fixed before merge, or recorded as an accepted risk naming the compensating control.
 
@@ -75,7 +76,7 @@ The old checklist broke each of these; that is why it stopped being usable.
 </details>
 
 
-## Phase 0 — Make the repo honest (≈1 week)
+## Phase 0 — Make the repo honest (≈1 week) DONE
 
 <details>
 
@@ -119,7 +120,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 ---
 </details>
 
-## Phase 1 — See the map (≈4 weeks)
+## Phase 1 — See the map (≈4 weeks) DONE
 
 <details>
 
@@ -163,7 +164,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 ---
 </details>
 
-## Phase 2 — Answer impact questions (≈4 weeks)
+## Phase 2 — Answer impact questions (≈4 weeks) DONE
 <details>
 
 <summary>Open</summary>
@@ -205,7 +206,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 ---
 </details>
 
-## Phase 3 — The map maintains itself (≈5 weeks)
+## Phase 3 — The map maintains itself (≈5 weeks) DOING
 
 <details>
 
@@ -213,17 +214,21 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 **Goal:** remove manual upkeep — the reason internal service catalogs die.
 
-- **3.1 — Observed edges from traces.** OTel Collector exports spans to `cartogra.observability.spans` (config in `infra/docker-compose/otel-collector.yml`); `OtelSpanWorker` derives `dependency_type='observed'` edges idempotently on the existing edge-identity index. Synthetic span fixtures work without a live collector. ADR-0028.
-- **3.2 — Drift detection.** Declared-without-observed and observed-without-declared written to `dependency_drifts`; `GET /v1/drifts` + `POST /v1/drifts/{id}/resolve` (accept observed / remove declared / dismiss). Overlay on the graph plus a drift list.
-- **3.3 — Orphan risk from ownership events.** Consume `cartogra.ingestion.ownership.resolved` (ADR-0027) so ownership changes update `graph_nodes.team_id` without a registry round-trip; orphans feed the risk list from 2.5.
-- **3.4 — Topology events *(only if a consumer exists)*.** `dependency.declared/observed/removed` and `drift.detected` are **deferred to Phase 6**, where Intelligence consumes them. Rule 4.
+- **3.1 — Observed edges from traces.** OTel Collector exports spans (OTLP/JSON) to `cartogra.observability.spans` (config in `infra/docker-compose/otel-collector.yml`); `OtelSpanWorker` derives `dependency_type='observed'` edges idempotently on the existing edge-identity index, with `last_seen_at` freshness. Synthetic span fixtures work without a live collector. ADR-0029.
+- **3.2 — Acme Fintech seed.** `seed/seed-data.json`: 20 services, 5 teams, 3 orphans, 2 cycles, 1 god service (12 dependents), 1 declared/observed drift. Idempotent loader against the real APIs. Replaces `seed/graph-perf-seed.sql`; observed edges and drift are fed as spans through the collector.
+- **3.3 — Drift detection.** Declared-without-observed and observed-without-declared written to `dependency_drifts`; `GET /v1/drifts` + `POST /v1/drifts/{id}/resolve` (accept observed / remove declared / dismiss). Overlay on the graph plus a drift list.
+- **3.4 — Orphan risk from ownership events.** Consume `cartogra.ingestion.ownership.resolved` (ADR-0027) so ownership changes update `graph_nodes.team_id` without a registry round-trip; orphans feed the risk list from 2.5.
+- **3.5 — Topology events *(only if a consumer exists)*.** `dependency.declared/observed/removed` and `drift.detected` are **deferred to Phase 6**, where Intelligence consumes them. Rule 4.
+- **3.6 — Unresolved span services.** `GET /v1/unresolved-span-services` (paginated, sorted by `seen_count`) + `POST …/{id}/dismiss` (soft delete). A list in the UI next to drift, with a "create service" shortcut that pre-fills the registry form. Reads the table 3.1 fills.
+- **3.7 — Messaging and DB edges.** PRODUCER/CONSUMER spans joined on `messaging.destination.name` give `kafka` edges between the services on each side. CLIENT spans with `db.system` give `db` edges, only when the DB matches a catalog service by name. Reuses `pending_span_links`.
 
-**Demo:** run the seed traffic generator, watch an edge appear on the graph that nobody declared, resolve the drift.
+**Demo:** load the Acme Fintech seed and run its traffic generator, watch an edge appear on the graph that nobody declared, resolve the drift.
 
 **Gate**
 
 - [ ] A synthetic span fixture produces an observed edge with no live collector running.
 - [ ] Declared-without-observed and observed-without-declared drift are both raised; accept / remove / dismiss all covered by ITs.
+- [ ] The Acme seed loader run twice leaves identical state.
 - [ ] An ownership event updates `graph_nodes.team_id`, and the resulting orphan appears in `GET /v1/risks`.
 - [ ] No new Kafka topic exists without a consumer — topology lifecycle events remain deferred.
 
@@ -255,9 +260,9 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 - **4.1 — Audit trail.** `audit_events` migration in registry (`entity_type`, `entity_id`, `action`, `actor_id`, `payload` JSONB, RLS, GIN); `AuditEventPort` in `shared:common`; registry writes directly, topology publishes `cartogra.platform.audit.recorded` for registry to consume. Admin `GET /v1/audit-events` filterable + paginated. `timeline.tsx` drops `MOCK_TIMELINE`.
 - **4.2 — Dashboard on real data.** Health summary from registry, top risks from 2.5, recent activity from 4.1. `dashboard.tsx` drops all `MOCK_*`. Vitest covers loading/error/empty.
-- **4.3 — Acme Fintech seed.** `seed/seed-data.json`: 20 services, 5 teams, 3 orphans, 2 cycles, 1 god service (12 dependents), 1 declared/observed drift. Idempotent loader against the real APIs.
-- **4.4 — Guest read-only mode.** Gateway issues a short-lived `roles=["guest"]` token bound to the demo tenant; no anonymous path. Audit every mutating endpoint in registry + topology for `@PreAuthorize`; IT proves guest reads succeed and every write is 403. ADR-0029.
-- **4.5 — One public environment.** Cheapest thing that holds the demo: the existing `docker-compose.yml` on a single host behind TLS on `cartogra.dev`, documented in `docs/runbooks/deployment.md`. Kubernetes waits for Phase 7 — do not build a cluster to host a demo.
+- **4.3 — Guest read-only mode.** Gateway issues a short-lived `roles=["guest"]` token bound to the demo tenant; no anonymous path. Audit every mutating endpoint in registry + topology for `@PreAuthorize`; IT proves guest reads succeed and every write is 403. ADR-0030.
+- **4.4 — Collector in the deployable compose.** Add `otel-collector` (same `otel-collector.yml`) to `docker-compose.yml`, wire every service's `OTEL_EXPORTER_OTLP_ENDPOINT` to it, and add a `kafka` dependency, so observed edges work in the public environment.
+- **4.5 — One public environment.** Cheapest thing that holds the demo: the existing `docker-compose.yml` on a single host behind TLS on `cartogra.dev`, documented in `docs/runbooks/deployment.md`. Depends on 4.4. Kubernetes waits for Phase 7 — do not build a cluster to host a demo.
 
 **Demo:** send someone a link. They browse Acme Fintech, run a blast radius, and cannot change anything.
 
@@ -266,7 +271,6 @@ No user-facing value. It exists because the next phases are unverifiable without
 - [ ] A public URL serves the Acme tenant over TLS, and the runbook rebuilds that host from scratch.
 - [ ] Guest token reads succeed and every mutating endpoint returns 403 — the IT enumerates the routes rather than sampling them.
 - [ ] Dashboard and Timeline mocks deleted; `mock-data.ts` retains only fixtures for unshipped screens.
-- [ ] The seed loader run twice leaves identical state.
 - [ ] Audit events are written by both registry and topology mutations; the admin list is paginated.
 
 *Standing checks (§2 — Definition of done):*
@@ -304,6 +308,8 @@ No user-facing value. It exists because the next phases are unverifiable without
 - **5.6 — GitHub Action.** One CI integration, published under `ci-extensions/`, blocking on breaking changes. Azure Pipelines only when a user asks for it.
 - **5.7 — Slack notification on breaking checks.** One channel end to end (Resend email already exists as the second). `notification_rules` + `notification_log` + the settings drawer replacing the stub. Teams on demand.
 - **5.8 — Spec discovery.** Ingestion publishes `cartogra.ingestion.spec.discovered` after each sync; contract consumes idempotently on `(tenant_id, file_path, content_sha256)` into 5.1. Last, because it is worthless until the pipeline it feeds works.
+
+- **5.9 — Trusted OTLP intake.** A gateway OTLP/HTTP endpoint `POST /v1/otlp/traces`, authenticated by `X-Cartogra-Api-Key` with a new scope `spans:write`. The gateway overwrites `cartogra.tenant.id` from the key and forwards to the collector; once it exists the collector stops accepting unauthenticated external traffic. Settings → Connections → OpenTelemetry card (currently an inactive placeholder, `settings.connections.tsx`): create/revoke a `spans:write` key (hashed, shown once), show the endpoint URL and a copy-paste snippet (`OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS=X-Cartogra-Api-Key=<key>`), and status (last span received, edges created, quarantined count from the `cartogra.spans.*` counters). With 4.4 the collector becomes one shared internal component and the per-tenant `CARTOGRA_TENANT_ID` env var is dropped. Depends on 5.5. Appended so 5.6–5.8 keep their numbers.
 
 **Demo:** open a PR that deletes a required field; CI fails with the affected consumers named; Slack shows it.
 
@@ -345,12 +351,12 @@ No user-facing value. It exists because the next phases are unverifiable without
 **Goal:** explanation on top of evidence. Deliberately after Phases 1–5, because an LLM narrating an empty graph is a demo, not a product.
 
 - **6.1 — Deterministic findings.** Intelligence service + `analysis_runs`, `anti_pattern_findings`. Circular dependency, god service, orphaned service — each with structured evidence (cycle path, fan-in count, days since last commit). Fixture ITs assert exact findings on known shapes.
-- **6.2 — Narrative layer.** Claude client with externalized prompts, Redis cache, per-tenant rate limits, token/latency persisted per request. The model writes prose over 6.1's evidence and never invents a fact. ADR-0030.
+- **6.2 — Narrative layer.** Claude client with externalized prompts, Redis cache, per-tenant rate limits, token/latency persisted per request. The model writes prose over 6.1's evidence and never invents a fact. ADR-0031.
 - **6.3 — Findings feed.** `POST /v1/intelligence/analyze`, `GET /findings`, acknowledge/resolve. `intelligence.tsx` replaces its placeholder.
 - **6.4 — NL query, guarded.** Allowlisted views only, read-only role, bound parameters, row limit, statement timeout. `POST /v1/intelligence/query` returns `{answer, data?, generated_sql?, query_id}` + feedback endpoint. Committed eval set under `src/test/resources/nl-eval/` with a stated pass bar.
 - **6.5 — Health score + weekly digest**, persisted as trends, surfaced in the same panel.
 - **6.6 — Observed consumers** (deferred from 5.4): match span peer URLs against contract servers/base paths to populate `contract_consumers` with `evidence_type='observed'`.
-- **6.7 — Topology events published** (deferred from 3.4), now that Intelligence consumes them.
+- **6.7 — Topology events published** (deferred from 3.5), now that Intelligence consumes them.
 
 **Cut from the old plan, with reasons:** *AI ownership suggestions* assumed `ScmProvider.getCommitHistory` — the interface has `getLastCommit` only, so the prerequisite is a new SCM API and 90 days of commit aggregation; it is not a story until someone builds that. *Anomaly detection* assumed `services.last_deploy_at` history — no such column, no deploy-event ingestion, no history table. Both return as candidates once their data sources exist.
 
@@ -399,6 +405,8 @@ Triggered by real users, not by a calendar. Before this, Phase 4's single host i
 - **7.6** Grafana dashboards auto-provisioned per service + platform overview; alerts on consumer lag, error rate, MV refresh duration.
 - **7.7** Playwright E2E (guest browse, graph exploration, contract check, one NL query) + k6 thresholds committed under `perf/results/`.
 - **7.8** Docs site with the ADR index and runbooks.
+
+- **7.9** Cartogra emits its own CLIENT spans. Replace the static `RestClient.builder()` calls (topology `RegistryGraphNodeClient`/`RegistryMembershipClient`, ingestion `RegistryPlanLimitClient`, registry `HttpClientConfig`) with the injected, instrumented `RestClient.Builder`; drop the gateway `AppConfig` builder override; turn on Kafka template/listener observation. IT asserts a CLIENT span with `server.address`.
 
 **Demo:** kill a pod mid-demo; readiness pulls it, Grafana shows it, nothing user-visible breaks.
 
@@ -507,6 +515,6 @@ P0 repo truth  →  P1 see the map  →  P2 answer impact  →  P3 self-maintain
 
 Cumulative: **P0–P4 ≈ 18 weeks** to a public, self-maintaining dependency map with an audit trail — the smallest thing that is recognisably Cartogra rather than a catalog. P5 adds the contract pillar, P6 the intelligence pillar.
 
-Estimates assume one developer at the June–July pace (~30 commits/month). At August's pace they are meaningless — if the gap persists, cut Phase 3 to 3.1+3.2 and Phase 5 to 5.1–5.3 rather than stretching every phase.
+Estimates assume one developer at the June–July pace (~30 commits/month). At August's pace they are meaningless — if the gap persists, cut Phase 3 to 3.1+3.3 and Phase 5 to 5.1–5.3 rather than stretching every phase.
 
 <details>

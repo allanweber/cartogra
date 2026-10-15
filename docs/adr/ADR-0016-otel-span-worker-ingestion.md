@@ -1,6 +1,6 @@
 # ADR-0016 — OtelSpanWorker ingestion path
 
-**Status**: Proposed
+**Status**: Superseded by [ADR-0029](0029-observed-edges-from-otel-spans.md)
 **Date**: 2026-05-20
 **Deciders**: Allan Weber
 

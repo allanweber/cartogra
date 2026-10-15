@@ -1,10 +1,38 @@
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
+
 import { expect, test } from '@playwright/test'
+import { Client } from 'pg'
+
+import { runInfoPath } from './global-setup'
+
+const dbUrl = process.env.E2E_DB_URL ?? 'postgresql://cartogra:cartogra@localhost:5436/cartogra'
+const otlpTracesUrl = process.env.E2E_OTLP_TRACES_URL ?? 'http://localhost:4318/v1/traces'
+
+async function lookupE2eTenantId() {
+  const { orgName } = JSON.parse(await readFile(runInfoPath, 'utf8')) as { orgName: string }
+  const client = new Client({ connectionString: dbUrl })
+  await client.connect()
+  try {
+    const result = await client.query<{ tenant_id: string }>(
+      'SELECT tenant_id FROM registry.tenants WHERE name = $1',
+      [orgName],
+    )
+    return result.rows[0].tenant_id
+  } finally {
+    await client.end()
+  }
+}
+
+function hexId(bytes: number) {
+  return Array.from({ length: bytes }, () => Math.floor(Math.random() * 256).toString(16).padStart(2, '0')).join('')
+}
 
 function uniqueName(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`
 }
 
-test('register services, declare a dependency, and see it on the graph', async ({ page }) => {
+test('register services, declare a dependency, and see it on the graph', async ({ page, request }) => {
   const upstreamService = uniqueName('checkout')
   const downstreamService = uniqueName('payments')
   const thirdService = uniqueName('ledger')
@@ -215,6 +243,29 @@ test('register services, declare a dependency, and see it on the graph', async (
 
   await page.getByRole('radio', { name: 'Observed' }).click()
   await expect(page.getByText(/no observed dependencies yet/i)).toBeVisible()
+
+  // Feed one CLIENT span through the real collector -> Kafka -> Topology path. The span carries
+  // its own cartogra.tenant.id, which the collector's `insert` leaves alone.
+  const spanTemplate = await readFile(path.join(import.meta.dirname, 'fixtures', 'client-peer-service.json'), 'utf8')
+  const spanPayload = spanTemplate
+    .replaceAll('__TENANT__', await lookupE2eTenantId())
+    .replaceAll('__SOURCE__', upstreamService)
+    .replaceAll('__TARGET__', downstreamService)
+    .replaceAll('__TRACE__', hexId(16))
+    .replaceAll('__CLIENT_SPAN__', hexId(8))
+  const otlpResponse = await request.post(otlpTracesUrl, {
+    data: spanPayload,
+    headers: { 'Content-Type': 'application/json' },
+  })
+  expect(otlpResponse.ok()).toBe(true)
+
+  // Collector batch (<=5s) + debounced MV refresh (<=5s): toggle until the observed edge is drawn.
+  await expect(async () => {
+    await page.getByRole('radio', { name: 'Declared' }).click()
+    await page.getByRole('radio', { name: 'Observed' }).click()
+    await expect(page.locator('.graph-link')).toHaveCount(1, { timeout: 2_000 })
+  }).toPass({ timeout: 40_000, intervals: [3_000] })
+  await expect(page.getByText(/no observed dependencies yet/i)).not.toBeVisible()
 
   await page.getByRole('radio', { name: 'Declared' }).click()
   await expect(page.getByRole('group', { name: 'Service dependency graph' })).toBeVisible()

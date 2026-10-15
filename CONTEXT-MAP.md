@@ -87,7 +87,7 @@
 | Service Catalog (U) | Intelligence (D) | Customer / Supplier | Planned, Phase 6: Kafka registry events |
 | Ingestion (U) | Service Catalog (D) | **Published Language** | Live today: Kafka `cartogra.ingestion.service.discovered`, `ownership.resolved` |
 | Ingestion (U) | Contract (D) | Published Language | Planned, Phase 5 (5.8): Kafka `cartogra.ingestion.spec.discovered` |
-| Topology (U) | Intelligence (D) | Customer / Supplier | Planned, deferred to Phase 6 per roadmap 3.4 — exact topic names TBD, see `docs/roadmap.md` §6/§9 |
+| Topology (U) | Intelligence (D) | Customer / Supplier | Planned, deferred to Phase 6 per roadmap 3.5 — exact topic names TBD, see `docs/roadmap.md` §6/§9 |
 | Contract (U) | Intelligence (D) | Customer / Supplier | Planned, Phase 6 — no topic names committed yet in `docs/roadmap.md` |
 | Shared Kernel | All JVM modules | **Shared Kernel** | Gradle dep `:shared:common` |
 
@@ -97,12 +97,12 @@ record (`docs/roadmap.md` 3.1) instead has the OTel Collector export spans direc
 `cartogra.observability.spans`, consumed by Topology's own `OtelSpanWorker` — Ingestion is not in that path.
 
 **Orphan-risk ownership source, resolved (ADR-0028).** ADR-0027 originally proposed Registry publishing a new
-`cartogra.registry.service.ownership-changed` topic for this. `docs/roadmap.md` 3.3 instead described Topology
+`cartogra.registry.service.ownership-changed` topic for this. `docs/roadmap.md` 3.4 instead described Topology
 consuming the already-existing `cartogra.ingestion.ownership.resolved` topic "without a registry round-trip."
 Neither was built: by the time 2.4/2.5 (SPOFs, Risks) shipped, `graph_nodes.team_id` was already live via the
 general `cartogra.registry.service.{registered,updated}` lifecycle sync (`GraphNodeEventConsumer`) — Registry's
 `assignOwner` already publishes `service.updated` on every ownership change, manual or CODEOWNERS-driven.
-ADR-0028 supersedes ADR-0027 on this basis; `#122` ("[3.3] Orphan risk from ownership events") describes a
+ADR-0028 supersedes ADR-0027 on this basis; `#122` ("[3.4] Orphan risk from ownership events") describes a
 mechanism whose premise no longer holds.
 
 **Anti-corruption layer notes:**

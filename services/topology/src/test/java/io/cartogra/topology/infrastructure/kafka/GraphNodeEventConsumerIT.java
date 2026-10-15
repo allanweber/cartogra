@@ -88,9 +88,8 @@ class GraphNodeEventConsumerIT {
 
     @BeforeEach
     void waitForConsumerAssignment() {
-        for (MessageListenerContainer container : kafkaListenerEndpointRegistry.getListenerContainers()) {
-            ContainerTestUtils.waitForAssignment(container, SUBSCRIBED_PARTITIONS);
-        }
+        MessageListenerContainer container = kafkaListenerEndpointRegistry.getListenerContainer("graphNodeEventConsumer");
+        ContainerTestUtils.waitForAssignment(container, SUBSCRIBED_PARTITIONS);
     }
 
     private KafkaTemplate<String, String> stringKafkaTemplate() {

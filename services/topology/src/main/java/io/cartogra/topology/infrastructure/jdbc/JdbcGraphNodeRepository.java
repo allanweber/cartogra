@@ -13,7 +13,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -120,6 +122,34 @@ public class JdbcGraphNodeRepository implements GraphNodeRepository {
                 .addValue("tenantId", tenantId)
                 .addValue("maxRows", maxRows);
         return jdbc.query(sql, params, GRAPH_NODE_MAPPER);
+    }
+
+    @Override
+    public Map<String, UUID> findLiveByLowerNames(UUID tenantId, Collection<String> lowerNames) {
+        if (lowerNames.isEmpty()) {
+            return Map.of();
+        }
+        String sql = """
+                SELECT lower(name) AS lname, service_id FROM graph_nodes
+                WHERE tenant_id = :tenantId AND deleted_at IS NULL AND lower(name) IN (:names)
+                """;
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("names", lowerNames);
+        Map<String, UUID> result = new HashMap<>();
+        jdbc.query(sql, params, rs -> {
+            result.put(rs.getString("lname"), UUID.fromString(rs.getString("service_id")));
+        });
+        return result;
+    }
+
+    @Override
+    public boolean existsLiveForTenant(UUID tenantId) {
+        String sql = """
+                SELECT EXISTS (SELECT 1 FROM graph_nodes WHERE tenant_id = :tenantId AND deleted_at IS NULL)
+                """;
+        Boolean exists = jdbc.queryForObject(sql, new MapSqlParameterSource("tenantId", tenantId), Boolean.class);
+        return Boolean.TRUE.equals(exists);
     }
 
     private static final RowMapper<GraphNode> GRAPH_NODE_MAPPER = (rs, _) -> mapGraphNode(rs);

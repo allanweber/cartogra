@@ -164,6 +164,8 @@ services:
     image: otel/opentelemetry-collector-contrib:0.151.0
     container_name: cartogra-otel-collector
     command: ["--config=/etc/otel-collector.yml"]
+    environment:
+      CARTOGRA_TENANT_ID: ${CARTOGRA_TENANT_ID:-unset}
     volumes:
       - ./otel-collector.yml:/etc/otel-collector.yml:ro
     ports:
@@ -173,6 +175,8 @@ services:
       tempo:
         condition: service_healthy
       loki:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:13133/ > /dev/null 2>&1 || exit 1"]

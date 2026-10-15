@@ -211,7 +211,7 @@ function GraphPage() {
         />
       </div>
 
-      {type === 'OBSERVED' && (
+      {type === 'OBSERVED' && graph && graph.edges.length === 0 && (
         <Alert className="mb-4 shrink-0">
           <AlertDescription>
             No observed dependencies yet — this view populates once span data is ingested.

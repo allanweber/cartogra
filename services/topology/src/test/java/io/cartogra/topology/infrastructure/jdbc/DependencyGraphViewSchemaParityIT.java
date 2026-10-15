@@ -28,9 +28,11 @@ class DependencyGraphViewSchemaParityIT extends AbstractTopologyIT {
      * - created_at / updated_at: bookkeeping timestamps graph traversals never filter or join on.
      * - deleted_at: the view's WHERE clause consumes this to select live rows; it's the
      *   mechanism, not a value graph queries read.
+     * - last_seen_at: observed-edge freshness for drift detection (3.3), read from {@code dependencies}
+     *   directly; no graph traversal needs it (revisit if the graph UI starts showing staleness).
      */
     private static final Set<String> INTENTIONALLY_EXCLUDED_COLUMNS =
-            Set.of("id", "created_at", "updated_at", "deleted_at");
+            Set.of("id", "created_at", "updated_at", "deleted_at", "last_seen_at");
 
     @Autowired
     private JdbcTemplate jdbc;
