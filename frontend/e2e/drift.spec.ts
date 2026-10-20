@@ -90,6 +90,7 @@ test('triage drift from the graph: accept, remove declared and dismiss', async (
   await expect(missingRow).toBeVisible()
   await missingRow.getByRole('button', { name: 'Remove declared' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Remove declared' }).click()
+  await expect(page.getByRole('dialog')).not.toBeVisible()
   await expect(missingRow).not.toBeVisible()
   expect(resolveBodies.at(-1)).toEqual({ id: '22222222-2222-2222-2222-222222222222', action: 'REMOVE_DECLARED' })
 
@@ -98,6 +99,7 @@ test('triage drift from the graph: accept, remove declared and dismiss', async (
   const dismissRow = page.getByRole('listitem').filter({ hasText: 'Undeclared' })
   await dismissRow.getByRole('button', { name: 'Dismiss' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Dismiss' }).click()
+  await expect(page.getByRole('dialog')).not.toBeVisible()
   await expect(dismissRow).not.toBeVisible()
   expect(resolveBodies.at(-1)).toEqual({ id: '33333333-3333-3333-3333-333333333333', action: 'DISMISS' })
   await expect(page.getByText(/no drift/i).first()).toBeVisible()
