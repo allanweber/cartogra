@@ -1,0 +1,27 @@
+{
+  "name": "acme-fintech-seed",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Acme Fintech: simulated customer stack monitored by Cartogra (kind cluster)",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "acme": "node src/cli.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.223.0",
+    "@opentelemetry/resources": "^2.12.0",
+    "@opentelemetry/sdk-trace-base": "^2.12.0",
+    "@opentelemetry/sdk-trace-node": "^2.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.4"
+  }
+}

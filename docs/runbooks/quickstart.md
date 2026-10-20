@@ -49,5 +49,5 @@ Full env var table, troubleshooting → [`local-development.md`](local-developme
 
 Two separate things, don't conflate:
 
-- **Testing k8s discovery** (ingestion's `KubernetesWorker`) — fully scripted, no image builds, no secrets: [`seed/install-kind-kubectl.md`](../../seed/install-kind-kubectl.md) (cluster) → [`seed/k8s-discovery-test.md`](../../seed/k8s-discovery-test.md) (`kubectl apply -f seed/k8s-discovery-manifests.yaml` deploys 8 nginx stand-in services + registers the cluster + verifies Kafka events). Teardown: `bash seed/k8s-discovery-teardown.sh`.
+- **Testing k8s and SCM discovery, risks, drift** (ingestion's `KubernetesWorker`, GitHub/Azure sync, topology) — the Acme Fintech seed, the only seed: [`seed/install-kind-kubectl.md`](../../seed/install-kind-kubectl.md) (cluster) → [`seed/acme-fintech/README.md`](../../seed/acme-fintech/README.md) (tenant, 20 fake services in kind, repos, loader, verify, discovery behaviour checks).
 - **Deploying Cartogra's own services** (`infra/k8s/base` + `overlays/dev`) — not local-dev ready: ConfigMaps point at in-cluster `postgres`/`kafka` that aren't in the manifests, and images are `ghcr.io/cartogra/*` you'd have to build/push yourself. Skip for local dev — Compose (§1) is the real local stack.

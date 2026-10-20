@@ -1,0 +1,475 @@
+{
+  "name": "Acme Fintech",
+  "namespace": "acme-fintech",
+  "teams": [
+    "Payments",
+    "Ledger",
+    "Risk",
+    "Platform",
+    "Growth"
+  ],
+  "services": [
+    {
+      "name": "api-gateway",
+      "team": "Platform",
+      "tier": "CRITICAL",
+      "description": "Public edge: routes customer and partner traffic",
+      "repo": {
+        "provider": "azure",
+        "stack": "java",
+        "port": 8101
+      }
+    },
+    {
+      "name": "auth-service",
+      "team": "Platform",
+      "tier": "CRITICAL",
+      "description": "Authentication and session tokens",
+      "repo": {
+        "provider": "azure",
+        "stack": "java",
+        "port": 8102
+      }
+    },
+    {
+      "name": "notification-service",
+      "team": "Platform",
+      "tier": "STANDARD",
+      "description": "Email, SMS and push delivery",
+      "repo": {
+        "provider": "azure",
+        "stack": "node",
+        "port": 8103
+      }
+    },
+    {
+      "name": "user-service",
+      "team": "Growth",
+      "tier": "STANDARD",
+      "description": "Customer profiles",
+      "repo": {
+        "provider": "azure",
+        "stack": "node",
+        "port": 8104
+      }
+    },
+    {
+      "name": "onboarding-service",
+      "team": "Growth",
+      "tier": "STANDARD",
+      "description": "New customer onboarding flow",
+      "repo": {
+        "provider": "azure",
+        "stack": "node",
+        "port": 8105
+      }
+    },
+    {
+      "name": "loyalty-service",
+      "team": "Growth",
+      "tier": "EXPERIMENTAL",
+      "description": "Points and rewards balances",
+      "repo": {
+        "provider": "azure",
+        "stack": "python",
+        "port": 8106
+      }
+    },
+    {
+      "name": "payments-service",
+      "team": "Payments",
+      "tier": "CRITICAL",
+      "description": "Payment orchestration",
+      "repo": {
+        "provider": "azure",
+        "stack": "java",
+        "port": 8107
+      }
+    },
+    {
+      "name": "card-service",
+      "team": "Payments",
+      "tier": "CRITICAL",
+      "description": "Card issuing and authorisation",
+      "repo": {
+        "provider": "azure",
+        "stack": "java",
+        "port": 8108
+      }
+    },
+    {
+      "name": "transfer-service",
+      "team": "Payments",
+      "tier": "CRITICAL",
+      "description": "Domestic and international transfers",
+      "repo": {
+        "provider": "azure",
+        "stack": "java",
+        "port": 8109
+      }
+    },
+    {
+      "name": "billing-service",
+      "team": "Payments",
+      "tier": "STANDARD",
+      "description": "Invoicing and fees",
+      "repo": {
+        "provider": "azure",
+        "stack": "java",
+        "port": 8110
+      }
+    },
+    {
+      "name": "ledger-service",
+      "team": "Ledger",
+      "tier": "CRITICAL",
+      "description": "Double-entry ledger, system of record for balances",
+      "repo": {
+        "provider": "azure",
+        "stack": "java",
+        "port": 8111
+      }
+    },
+    {
+      "name": "reporting-service",
+      "team": "Ledger",
+      "tier": "STANDARD",
+      "description": "Regulatory and management reporting",
+      "repo": {
+        "provider": "azure",
+        "stack": "python",
+        "port": 8112
+      }
+    },
+    {
+      "name": "fx-service",
+      "team": "Ledger",
+      "tier": "STANDARD",
+      "description": "Foreign exchange rates and conversion",
+      "repo": {
+        "provider": "azure",
+        "stack": "python",
+        "port": 8113
+      }
+    },
+    {
+      "name": "statements-service",
+      "team": "Ledger",
+      "tier": "STANDARD",
+      "description": "Customer statements",
+      "repo": {
+        "provider": "azure",
+        "stack": "node",
+        "port": 8114
+      }
+    },
+    {
+      "name": "fraud-service",
+      "team": "Risk",
+      "tier": "CRITICAL",
+      "description": "Real-time fraud scoring",
+      "repo": {
+        "provider": "azure",
+        "stack": "python",
+        "port": 8115
+      }
+    },
+    {
+      "name": "kyc-service",
+      "team": "Risk",
+      "tier": "CRITICAL",
+      "description": "Know-your-customer checks",
+      "repo": {
+        "provider": "azure",
+        "stack": "python",
+        "port": 8116
+      }
+    },
+    {
+      "name": "limits-service",
+      "team": "Risk",
+      "tier": "STANDARD",
+      "description": "Spending and transfer limits",
+      "repo": {
+        "provider": "azure",
+        "stack": "java",
+        "port": 8117
+      }
+    },
+    {
+      "name": "legacy-batch",
+      "team": null,
+      "tier": "STANDARD",
+      "description": "Nightly batch jobs inherited from the old platform",
+      "repo": {
+        "provider": "azure",
+        "stack": "java",
+        "port": 8118
+      }
+    },
+    {
+      "name": "webhook-relay",
+      "team": null,
+      "tier": "STANDARD",
+      "description": "Relays partner webhooks",
+      "repo": {
+        "provider": "azure",
+        "stack": "node",
+        "port": 8119
+      }
+    },
+    {
+      "name": "rewards-calculator",
+      "team": null,
+      "tier": "EXPERIMENTAL",
+      "description": "Cashback experiment",
+      "repo": {
+        "provider": "azure",
+        "stack": "python",
+        "port": 8120
+      }
+    }
+  ],
+  "calls": [
+    {
+      "from": "api-gateway",
+      "to": "auth-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "api-gateway",
+      "to": "user-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "api-gateway",
+      "to": "payments-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "api-gateway",
+      "to": "card-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "api-gateway",
+      "to": "transfer-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "api-gateway",
+      "to": "onboarding-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "auth-service",
+      "to": "user-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "payments-service",
+      "to": "fraud-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "payments-service",
+      "to": "billing-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "payments-service",
+      "to": "notification-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "fraud-service",
+      "to": "limits-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "limits-service",
+      "to": "payments-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "card-service",
+      "to": "fraud-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "transfer-service",
+      "to": "payments-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "transfer-service",
+      "to": "fx-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "transfer-service",
+      "to": "notification-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "billing-service",
+      "to": "notification-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "statements-service",
+      "to": "reporting-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "loyalty-service",
+      "to": "user-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "rewards-calculator",
+      "to": "loyalty-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "legacy-batch",
+      "to": "billing-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "webhook-relay",
+      "to": "payments-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "user-service",
+      "to": "kyc-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "user-service",
+      "to": "notification-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "kyc-service",
+      "to": "onboarding-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "onboarding-service",
+      "to": "user-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "onboarding-service",
+      "to": "notification-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "payments-service",
+      "to": "ledger-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "fraud-service",
+      "to": "ledger-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "limits-service",
+      "to": "ledger-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "card-service",
+      "to": "ledger-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "transfer-service",
+      "to": "ledger-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "billing-service",
+      "to": "ledger-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "reporting-service",
+      "to": "ledger-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "fx-service",
+      "to": "ledger-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "statements-service",
+      "to": "ledger-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "loyalty-service",
+      "to": "ledger-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "rewards-calculator",
+      "to": "ledger-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "legacy-batch",
+      "to": "ledger-service",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "reporting-service",
+      "to": "payments-service",
+      "declared": false,
+      "enabled": false
+    }
+  ]
+}
