@@ -466,8 +466,26 @@
       "enabled": true
     },
     {
+      "from": "loyalty-service",
+      "to": "fx-service",
+      "declared": true,
+      "enabled": false
+    },
+    {
       "from": "reporting-service",
       "to": "payments-service",
+      "declared": false,
+      "enabled": false
+    },
+    {
+      "from": "webhook-relay",
+      "to": "fraud-service",
+      "declared": false,
+      "enabled": false
+    },
+    {
+      "from": "legacy-batch",
+      "to": "notification-service",
       "declared": false,
       "enabled": false
     }

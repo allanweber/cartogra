@@ -2,14 +2,19 @@ import { spawn } from 'node:child_process'
 import { createServer } from 'node:net'
 import { dormantCalls, type SeedCall, type SeedData } from './schema.ts'
 
-export function driftCall(seed: SeedData): SeedCall {
-  const [call] = dormantCalls(seed)
-  if (!call) throw new Error('seed-data.json has no dormant (undeclared) call')
-  return call
+export function driftCalls(seed: SeedData): SeedCall[] {
+  const calls = dormantCalls(seed)
+  if (calls.length === 0) throw new Error('seed-data.json has no dormant (undeclared) call')
+  return calls
 }
 
-export async function setDrift(seed: SeedData, enable: boolean): Promise<SeedCall> {
-  const call = driftCall(seed)
+export async function setDrift(seed: SeedData, enable: boolean): Promise<SeedCall[]> {
+  const calls = driftCalls(seed)
+  for (const call of calls) await toggleCall(seed, call, enable)
+  return calls
+}
+
+async function toggleCall(seed: SeedData, call: SeedCall, enable: boolean): Promise<void> {
   const port = await freePort()
   const forward = spawn(
     'kubectl',
@@ -31,7 +36,6 @@ export async function setDrift(seed: SeedData, enable: boolean): Promise<SeedCal
     forward.removeAllListeners('exit')
     forward.kill()
   }
-  return call
 }
 
 function freePort(): Promise<number> {

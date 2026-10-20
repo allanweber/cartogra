@@ -1,6 +1,7 @@
 import type { PageResult, ServiceHealthStatus, ServiceTierValue } from '#/lib/registry-types'
 
 export type DependencyType = 'DECLARED' | 'OBSERVED'
+export type EdgeMode = DependencyType | 'ALL' | 'DRIFT'
 export type DependencyProtocol = 'HTTP' | 'GRPC' | 'KAFKA' | 'DB'
 
 export interface GraphNode {
@@ -129,3 +130,19 @@ export interface Risk {
   fix: string
   affectedServices: string[]
 }
+
+export type DriftType = 'UNDECLARED' | 'MISSING'
+export type DriftAction = 'ACCEPT_OBSERVED' | 'REMOVE_DECLARED' | 'DISMISS'
+export type DriftResolution = 'ACCEPTED' | 'REMOVED' | 'DISMISSED' | 'AUTO'
+
+export interface Drift {
+  id: string
+  type: DriftType
+  sourceServiceId: string
+  targetServiceId: string
+  detectedAt: string
+  resolvedAt: string | null
+  resolution: DriftResolution | null
+}
+
+export type DriftsPage = PageResult<Drift>

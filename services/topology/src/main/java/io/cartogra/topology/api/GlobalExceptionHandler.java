@@ -5,7 +5,9 @@ import io.cartogra.common.api.ApiErrorResponse;
 import io.cartogra.common.api.ErrorCodes;
 import io.cartogra.topology.domain.exception.BackfillFailedException;
 import io.cartogra.topology.domain.exception.DependencyNotFoundException;
+import io.cartogra.topology.domain.exception.DriftAlreadyResolvedException;
 import io.cartogra.topology.domain.exception.DriftNotFoundException;
+import io.cartogra.topology.domain.exception.InvalidDriftActionException;
 import io.cartogra.topology.domain.exception.DuplicateDependencyException;
 import io.cartogra.topology.domain.exception.SelfDependencyException;
 import io.cartogra.topology.domain.exception.UnknownServiceNodeException;
@@ -45,6 +47,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DriftNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleDriftNotFound(DriftNotFoundException ex) {
         return respond(HttpStatus.NOT_FOUND, ErrorCodes.NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(DriftAlreadyResolvedException.class)
+    public ResponseEntity<ApiErrorResponse> handleDriftAlreadyResolved(DriftAlreadyResolvedException ex) {
+        return respond(HttpStatus.CONFLICT, ErrorCodes.DRIFT_ALREADY_RESOLVED, ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidDriftActionException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidDriftAction(InvalidDriftActionException ex) {
+        return respond(HttpStatus.UNPROCESSABLE_CONTENT, ErrorCodes.INVALID_DRIFT_ACTION, ex.getMessage());
     }
 
     @ExceptionHandler(SelfDependencyException.class)

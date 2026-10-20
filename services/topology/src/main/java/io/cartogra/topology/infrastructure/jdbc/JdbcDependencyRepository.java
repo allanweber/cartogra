@@ -5,6 +5,7 @@ import io.cartogra.topology.domain.DependencyProtocol;
 import io.cartogra.topology.domain.DependencyType;
 import io.cartogra.topology.repository.DependencyFilter;
 import io.cartogra.topology.repository.DependencyRepository;
+import io.cartogra.topology.repository.EdgePairStat;
 import io.cartogra.topology.repository.UpsertOutcome;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -196,6 +197,68 @@ public class JdbcDependencyRepository implements DependencyRepository {
                 .addValue("createdAt", Timestamp.from(d.createdAt()))
                 .addValue("updatedAt", Timestamp.from(d.updatedAt()))
                 .addValue("deletedAt", d.deletedAt() != null ? Timestamp.from(d.deletedAt()) : null);
+    }
+
+    @Override
+    public List<EdgePairStat> findLivePairs(UUID tenantId, DependencyType type) {
+        String sql = """
+                SELECT source_service_id, target_service_id,
+                       MIN(created_at) AS first_created_at,
+                       MAX(COALESCE(last_seen_at, created_at)) AS last_active_at
+                FROM dependencies
+                WHERE tenant_id = :tenantId AND dependency_type = :type AND deleted_at IS NULL
+                GROUP BY source_service_id, target_service_id
+                """;
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("type", type.toDbValue());
+        return jdbc.query(sql, params, (rs, _) -> new EdgePairStat(
+                UUID.fromString(rs.getString("source_service_id")),
+                UUID.fromString(rs.getString("target_service_id")),
+                rs.getTimestamp("first_created_at").toInstant(),
+                rs.getTimestamp("last_active_at").toInstant()));
+    }
+
+    @Override
+    public boolean existsLive(UUID tenantId, DependencyType type) {
+        String sql = """
+                SELECT EXISTS (SELECT 1 FROM dependencies
+                               WHERE tenant_id = :tenantId AND dependency_type = :type AND deleted_at IS NULL)
+                """;
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("type", type.toDbValue());
+        return Boolean.TRUE.equals(jdbc.queryForObject(sql, params, Boolean.class));
+    }
+
+    @Override
+    public List<DependencyProtocol> findLiveProtocols(UUID tenantId, UUID sourceServiceId, UUID targetServiceId,
+            DependencyType type) {
+        String sql = """
+                SELECT DISTINCT protocol FROM dependencies
+                WHERE tenant_id = :tenantId AND source_service_id = :sourceServiceId
+                  AND target_service_id = :targetServiceId AND dependency_type = :type AND deleted_at IS NULL
+                """;
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("sourceServiceId", sourceServiceId)
+                .addValue("targetServiceId", targetServiceId)
+                .addValue("type", type.toDbValue());
+        return jdbc.query(sql, params, (rs, _) -> DependencyProtocol.fromDbValue(rs.getString("protocol")));
+    }
+
+    @Override
+    public int softDeleteDeclaredPair(UUID tenantId, UUID sourceServiceId, UUID targetServiceId) {
+        String sql = """
+                UPDATE dependencies SET deleted_at = now(), updated_at = now()
+                WHERE tenant_id = :tenantId AND source_service_id = :sourceServiceId
+                  AND target_service_id = :targetServiceId AND dependency_type = 'declared'
+                  AND deleted_at IS NULL
+                """;
+        return jdbc.update(sql, new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("sourceServiceId", sourceServiceId)
+                .addValue("targetServiceId", targetServiceId));
     }
 
     private static final RowMapper<Dependency> DEPENDENCY_MAPPER = (rs, _) -> mapDependency(rs);

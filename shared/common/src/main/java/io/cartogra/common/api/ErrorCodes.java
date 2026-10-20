@@ -20,4 +20,6 @@ public final class ErrorCodes {
     public static final String SERVICE_UNAVAILABLE           = "SERVICE_UNAVAILABLE";
     public static final String PLAN_LIMIT_EXCEEDED           = "PLAN_LIMIT_EXCEEDED";
     public static final String SELF_DEPENDENCY                = "SELF_DEPENDENCY";
+    public static final String INVALID_DRIFT_ACTION           = "INVALID_DRIFT_ACTION";
+    public static final String DRIFT_ALREADY_RESOLVED         = "DRIFT_ALREADY_RESOLVED";
 }

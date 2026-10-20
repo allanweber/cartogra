@@ -41,4 +41,18 @@ public interface DependencyRepository {
      */
     UpsertOutcome upsertObserved(UUID tenantId, UUID sourceServiceId, UUID targetServiceId,
             DependencyProtocol protocol, Instant seenAt);
+
+    /**
+     * Distinct live source/target pairs of one edge type, protocol collapsed. {@code lastActiveAt}
+     * is the newest {@code last_seen_at} (falling back to {@code created_at}) across the pair's edges.
+     */
+    List<EdgePairStat> findLivePairs(UUID tenantId, DependencyType type);
+
+    boolean existsLive(UUID tenantId, DependencyType type);
+
+    List<DependencyProtocol> findLiveProtocols(UUID tenantId, UUID sourceServiceId, UUID targetServiceId,
+            DependencyType type);
+
+    /** Soft-deletes every live declared edge of the pair, whatever its protocol. */
+    int softDeleteDeclaredPair(UUID tenantId, UUID sourceServiceId, UUID targetServiceId);
 }

@@ -191,7 +191,7 @@ public class DependencyService {
                 });
     }
 
-    private void requireEitherSideAccess(UUID tenantId, @Nullable UUID userId, UUID sourceServiceId, UUID targetServiceId) {
+    void requireEitherSideAccess(UUID tenantId, @Nullable UUID userId, UUID sourceServiceId, UUID targetServiceId) {
         if (isAdmin()) {
             return;
         }
