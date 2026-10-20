@@ -7,25 +7,38 @@ import { z } from 'zod'
 import { AppLayout } from '#/components/AppLayout'
 import { CycleBadge } from '#/components/CycleBadge'
 import { DependencyGraph } from '#/components/DependencyGraph'
+import { DriftTab, driftKey } from '#/components/DriftTab'
 import { InspectorPanel } from '#/components/InspectorPanel'
 import { SpofBadge } from '#/components/SpofBadge'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
-import { Card, CardContent } from '#/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#/components/ui/select'
 import { Skeleton } from '#/components/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
+import { useDrifts } from '#/hooks/useDrifts'
 import { useServiceNames } from '#/hooks/useRisks'
 import { ApiError, apiFetch } from '#/lib/api'
 import { cn } from '#/lib/utils'
 
 import type { BlastRadiusHighlightMap } from '#/components/DependencyGraph'
 import type { PageResult, RegistryTeam } from '#/lib/registry-types'
-import type { BlastRadius, Cycle, Cycles, Spof, DependencyType, Graph, GraphNode, Spofs } from '#/lib/topology-types'
+import type {
+  BlastRadius,
+  Cycle,
+  Cycles,
+  Drift,
+  DriftType,
+  EdgeMode,
+  Graph,
+  GraphNode,
+  Spof,
+  Spofs,
+} from '#/lib/topology-types'
 
 const graphSearchSchema = z.object({
   service: z.string().optional(),
-  type: z.enum(['DECLARED', 'OBSERVED']).optional(),
+  type: z.enum(['ALL', 'DECLARED', 'OBSERVED', 'DRIFT']).optional(),
   team: z.string().optional(),
 })
 
@@ -37,6 +50,11 @@ export const Route = createFileRoute('/_authenticated/graph')({
 const ALL_TEAMS = 'ALL'
 const NO_CYCLES: Cycle[] = []
 const NO_SPOFS: Spof[] = []
+
+// ALL and DRIFT read every edge type; DRIFT narrows client-side to the drifted pairs.
+function typeQuery(mode: EdgeMode): string | null {
+  return mode === 'DECLARED' || mode === 'OBSERVED' ? mode : null
+}
 
 function GraphPage() {
   const search = Route.useSearch()
@@ -50,7 +68,7 @@ function GraphPage() {
   function setSelectedServiceId(id: string | null) {
     navigate({ search: (prev) => ({ ...prev, service: id ?? undefined }), replace: true })
   }
-  function setType(next: DependencyType) {
+  function setType(next: EdgeMode) {
     navigate({ search: (prev) => ({ ...prev, type: next === 'DECLARED' ? undefined : next }), replace: true })
   }
   function setTeamId(next: string | null) {
@@ -64,10 +82,12 @@ function GraphPage() {
 
   const teamMap = useMemo(() => new Map((teamsPage?.items ?? []).map((t) => [t.id, t.name])), [teamsPage])
 
-  const { data: graph, isLoading, error } = useQuery({
+  const { data: fetchedGraph, isLoading, error } = useQuery({
     queryKey: ['graph', type, teamId],
     queryFn: () => {
-      const params = new URLSearchParams({ type })
+      const params = new URLSearchParams()
+      const apiType = typeQuery(type)
+      if (apiType) params.set('type', apiType)
       if (teamId) params.set('teamId', teamId)
       return apiFetch<Graph>(`/v1/topology/graph?${params.toString()}`)
     },
@@ -77,6 +97,26 @@ function GraphPage() {
   useEffect(() => {
     setBannerDismissed(false)
   }, [type, teamId])
+
+  // Best-effort like cycles/SPOFs: a failed drift fetch only drops the overlay.
+  const { data: driftsData } = useDrifts()
+  const drifts = driftsData?.items
+  const driftEdges = useMemo(() => {
+    const map = new Map<string, DriftType>()
+    drifts?.forEach((d) => map.set(driftKey(d), d.type))
+    return map
+  }, [drifts])
+  const [selectedDriftKey, setSelectedDriftKey] = useState<string | null>(null)
+  const [selectedDriftId, setSelectedDriftId] = useState<string | null>(null)
+  function selectDrift(drift: Drift | null) {
+    setSelectedDriftId(drift?.id ?? null)
+    setSelectedDriftKey(drift ? driftKey(drift) : null)
+  }
+
+  const graph = useMemo<Graph | undefined>(() => {
+    if (!fetchedGraph || type !== 'DRIFT') return fetchedGraph
+    return { ...fetchedGraph, edges: fetchedGraph.edges.filter((e) => driftEdges.has(`${e.source}>${e.target}`)) }
+  }, [fetchedGraph, type, driftEdges])
 
   const nodesById = useMemo(() => {
     const map = new Map<string, GraphNode>()
@@ -150,7 +190,10 @@ function GraphPage() {
   // and never refetch after a dependency change closes a cycle.
   const { data: cyclesData } = useQuery({
     queryKey: ['cycles', type],
-    queryFn: () => apiFetch<Cycles>(`/v1/topology/cycles?type=${type}`),
+    queryFn: () => {
+      const apiType = typeQuery(type)
+      return apiFetch<Cycles>(apiType ? `/v1/topology/cycles?type=${apiType}` : '/v1/topology/cycles')
+    },
     staleTime: 0,
   })
   const cycles = cyclesData?.cycles ?? NO_CYCLES
@@ -176,13 +219,16 @@ function GraphPage() {
           type="single"
           value={type}
           onValueChange={(value) => {
-            if (value) setType(value as DependencyType)
+            if (value) setType(value as EdgeMode)
           }}
+          aria-label="Edge mode"
           variant="outline"
           size="sm"
         >
+          <ToggleGroupItem value="ALL">All</ToggleGroupItem>
           <ToggleGroupItem value="DECLARED">Declared</ToggleGroupItem>
           <ToggleGroupItem value="OBSERVED">Observed</ToggleGroupItem>
+          <ToggleGroupItem value="DRIFT">Drift</ToggleGroupItem>
         </ToggleGroup>
 
         <Select
@@ -216,6 +262,12 @@ function GraphPage() {
           <AlertDescription>
             No observed dependencies yet — this view populates once span data is ingested.
           </AlertDescription>
+        </Alert>
+      )}
+
+      {type === 'DRIFT' && graph && graph.edges.length === 0 && (
+        <Alert className="mb-4 shrink-0">
+          <AlertDescription>No drift. Declared and observed dependencies agree.</AlertDescription>
         </Alert>
       )}
 
@@ -279,6 +331,8 @@ function GraphPage() {
               blastRadiusPartial={blastRadiusPartial}
               cycleMemberIds={cycleMemberIds}
               spofServiceIds={spofServiceIds}
+              driftEdges={driftEdges}
+              highlightedDriftKey={selectedDriftKey}
             />
           </div>
 
@@ -303,16 +357,24 @@ function GraphPage() {
                 spofThreshold={spofsData?.threshold}
                 spofRationale={spofsData?.rationale}
                 nodesById={badgeNodesById}
+                selectedDriftId={selectedDriftId}
+                onSelectDrift={selectDrift}
                 onClose={() => setSelectedServiceId(null)}
                 expanded={sheetExpanded}
                 onToggleExpanded={() => setSheetExpanded((e) => !e)}
               />
             ) : (
-              <Card className="h-full border-dashed">
-                <CardContent className="flex h-full items-center justify-center py-8 text-center text-sm text-muted-foreground">
-                  {selectionMissing
-                    ? 'That service isn’t in this view — try All teams or Declared.'
-                    : 'Select a service to see what breaks if it goes down.'}
+              <Card className="h-full overflow-y-auto">
+                <CardHeader className="pb-2 pt-5">
+                  <CardTitle className="text-sm font-semibold">Drift</CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    {selectionMissing
+                      ? 'That service isn’t in this view — try All teams or Declared.'
+                      : 'Select a service to see what breaks if it goes down.'}
+                  </p>
+                </CardHeader>
+                <CardContent className="pb-4">
+                  <DriftTab nodesById={badgeNodesById} selectedDriftId={selectedDriftId} onSelectDrift={selectDrift} />
                 </CardContent>
               </Card>
             )}

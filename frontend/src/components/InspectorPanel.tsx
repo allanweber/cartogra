@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import { useState } from 'react'
 
 import { CycleBadge } from '#/components/CycleBadge'
+import { DriftTab } from '#/components/DriftTab'
 import { SpofBadge } from '#/components/SpofBadge'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Badge } from '#/components/ui/badge'
@@ -15,7 +16,9 @@ import { ApiError } from '#/lib/api'
 import { normalizeHealth } from '#/lib/registry-types'
 import { cn } from '#/lib/utils'
 
-import type { BlastRadius, BlastRadiusDirectionResult, BlastRadiusEntry, Cycle, GraphNode, Spof } from '#/lib/topology-types'
+import type { BlastRadius, BlastRadiusDirectionResult, BlastRadiusEntry, Cycle, Drift, GraphNode, Spof } from '#/lib/topology-types'
+
+function noop() {}
 
 function healthDotClass(healthStatus: GraphNode['healthStatus']): string {
   const health = normalizeHealth(healthStatus)
@@ -225,7 +228,11 @@ export function InspectorPanel({
   onClose,
   expanded,
   onToggleExpanded,
+  selectedDriftId = null,
+  onSelectDrift = noop,
 }: {
+  selectedDriftId?: string | null
+  onSelectDrift?: (drift: Drift | null) => void
   onClose?: () => void
   expanded?: boolean
   onToggleExpanded?: () => void
@@ -241,7 +248,7 @@ export function InspectorPanel({
   spofRationale?: string
   nodesById: Map<string, { name: string }>
 }) {
-  const [activeTab, setActiveTab] = useState<'details' | 'blast-radius'>('blast-radius')
+  const [activeTab, setActiveTab] = useState<'details' | 'blast-radius' | 'drift'>('blast-radius')
   const teamName = teamMap.get(node.teamId ?? '') ?? null
 
   return (
@@ -283,12 +290,13 @@ export function InspectorPanel({
       <CardContent className="flex min-h-0 flex-1 flex-col pb-3 pt-0">
         <Tabs
           value={activeTab}
-          onValueChange={(value) => setActiveTab(value as 'details' | 'blast-radius')}
+          onValueChange={(value) => setActiveTab(value as 'details' | 'blast-radius' | 'drift')}
           className="h-full min-h-0"
         >
           <TabsList className="shrink-0">
             <TabsTrigger value="details">Details</TabsTrigger>
             <TabsTrigger value="blast-radius">Blast Radius</TabsTrigger>
+            <TabsTrigger value="drift">Drift</TabsTrigger>
           </TabsList>
           <TabsContent value="details" className="space-y-4 pt-3 text-sm">
             <div className="space-y-1">
@@ -313,6 +321,9 @@ export function InspectorPanel({
               error={blastRadiusError}
               teamMap={teamMap}
             />
+          </TabsContent>
+          <TabsContent value="drift" className="min-h-0 overflow-y-auto pt-3">
+            <DriftTab nodesById={nodesById} selectedDriftId={selectedDriftId} onSelectDrift={onSelectDrift} />
           </TabsContent>
         </Tabs>
       </CardContent>

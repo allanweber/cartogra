@@ -13,9 +13,11 @@ project: no imports from Cartogra code, own `package.json`. It runs in the **kin
 This is the only seed in the repo. It replaces `graph-perf-seed.sql`, `create-test-repos.sh`,
 `k8s-discovery-manifests.yaml` / `k8s-discovery-teardown.sh` and `k8s-discovery-test.md` (see git history).
 
-`seed-data.json` is the single source of truth: 5 teams, 20 services (3 orphans), 39 declared calls
-containing exactly 2 cycles, 1 god service (`ledger-service`, 12 dependents), and 1 dormant undeclared
-call (`reporting-service -> payments-service`) that produces the drift when switched on.
+`seed-data.json` is the single source of truth: 5 teams, 20 services (3 orphans), 40 declared calls
+containing exactly 2 cycles, 1 god service (`ledger-service`, 12 dependents), and 3 dormant undeclared
+calls (`reporting-service -> payments-service`, `webhook-relay -> fraud-service`, `legacy-batch -> notification-service`)
+that produce undeclared drift when switched on. One declared call (`loyalty-service -> fx-service`) is never made, so it
+becomes missing drift once `topology.drift.missing-after` has passed.
 
 ## Prerequisites
 
@@ -180,12 +182,14 @@ exits non-zero and lists the missing ones.
 
 ```bash
 pnpm acme verify                 # load twice + identical-state diff, /cycles = 2, SPOF, 3 orphans, observed edges
-pnpm acme verify --with-drift    # also switches the undeclared call on and waits for the observed edge
-pnpm acme drift on               # demo: watch an edge nobody declared appear on /graph
+pnpm acme verify --with-drift    # also switches the 3 undeclared calls on and waits for the observed edges and 4 drift records
+pnpm acme drift on               # demo: watch 3 edges nobody declared appear on /graph (Drift edge mode)
 pnpm acme drift off
 ```
 
-Observed edges take up to ~60 s (collector batch 5 s, graph view refresh 5 s, worker latency).
+Observed edges take up to ~60 s (collector batch 5 s, graph view refresh 5 s, worker latency). Drift appears on the next
+sweep: start Topology with `TOPOLOGY_DRIFT_SWEEP_INTERVAL=PT15S TOPOLOGY_DRIFT_MISSING_AFTER=PT2M` for the demo
+(defaults are 5 minutes and 7 days). Resolve each drift from the graph's Drift tab: accept one, dismiss one, remove the declared one.
 
 ## Discovery behaviour checks
 
@@ -245,7 +249,7 @@ Clean up the scratch namespaces: `kubectl delete namespace no-tenant late-adopte
 | `pnpm acme repos` | Generates and pushes the 20 source repos (idempotent) |
 | `pnpm acme load` | Teams, owners, tiers, declared edges via the gateway |
 | `pnpm acme verify [--with-drift] [--no-spans]` | End-to-end checks against the live stack |
-| `pnpm acme drift on\|off` | `kubectl port-forward` to the caller and toggles the dormant call |
+| `pnpm acme drift on\|off` | `kubectl port-forward` to each caller and toggles the dormant calls |
 | `pnpm test` / `pnpm typecheck` | Unit tests (no network) / types |
 
 ## Environment

@@ -67,8 +67,7 @@ async function main(): Promise<number> {
 
     case 'drift': {
       if (arg !== 'on' && arg !== 'off') throw new Error('usage: drift on|off')
-      const call = await setDrift(seed, arg === 'on')
-      console.log(`${call.from} -> ${call.to}: ${arg}`)
+      for (const call of await setDrift(seed, arg === 'on')) console.log(`${call.from} -> ${call.to}: ${arg}`)
       return 0
     }
 

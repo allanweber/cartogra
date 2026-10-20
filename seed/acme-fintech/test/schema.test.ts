@@ -2,7 +2,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   allCycles, declaredCalls, declaredCycles, dependentsOf, dormantCalls, findElementaryCycles,
-  loadSeedFile, unownedServices, validateSeed, type SeedData,
+  loadSeedFile, silentDeclaredCalls, unownedServices, validateSeed, type SeedData,
 } from '../src/schema.ts'
 
 const seed = loadSeedFile(resolve(import.meta.dirname, '../seed-data.json'))
@@ -28,9 +28,17 @@ describe('seed-data.json', () => {
     expect([...fanIn.values()].filter((n) => n >= 12)).toHaveLength(1)
   })
 
-  it('has one dormant undeclared call that adds no cycle', () => {
-    expect(dormantCalls(seed)).toHaveLength(1)
+  it('has three dormant undeclared calls that add no cycle', () => {
+    expect(dormantCalls(seed)).toHaveLength(3)
     expect(allCycles(seed)).toHaveLength(2)
+  })
+
+  it('has one declared call the fake services never make', () => {
+    expect(silentDeclaredCalls(seed).map((c) => `${c.from}>${c.to}`)).toEqual(['loyalty-service>fx-service'])
+  })
+
+  it('declares 40 calls', () => {
+    expect(declaredCalls(seed)).toHaveLength(40)
   })
 
   it('only references real services', () => {

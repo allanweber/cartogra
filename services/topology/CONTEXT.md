@@ -55,7 +55,7 @@ Cross-context references stored as IDs only — Topology never hydrates a `Servi
 | Table | Purpose |
 |---|---|
 | `dependencies` | Directional edges; `dependency_type`: declared/observed; `protocol`: http/grpc/kafka/db |
-| `dependency_drifts` | Drift records: `drift_type`: undeclared/missing; `detected_at`/`resolved_at` |
+| `dependency_drifts` | Drift records: `drift_type`: undeclared/missing; `detected_at`/`resolved_at`/`resolved_by`; `resolution`: accepted/removed/dismissed/auto (auto = condition cleared on its own) |
 | `graph_nodes` | Local projection of Registry services (`GraphNodeEventConsumer` — [1.1]); one row per (tenant_id, service_id), soft-deleted on `service.deleted` |
 | `processed_events` | Consumer-side idempotency ledger, keyed `(tenant_id, event_id)` — a replayed envelope is a no-op |
 
@@ -63,7 +63,7 @@ Cross-context references stored as IDs only — Topology never hydrates a `Servi
 
 ## Inbound Ports (API)
 
-Implemented: backfill, dependency CRUD, graph read (`[1.1]`–`[1.3]`), blast radius (`[2.1]`), cycles (`[2.3]`), SPOFs (`[2.4]`), risks (`[2.5]`). Drifts (`GET`/`resolve`) are still planned (Phase 3.2).
+Implemented: backfill, dependency CRUD, graph read (`[1.1]`–`[1.3]`), blast radius (`[2.1]`), cycles (`[2.3]`), SPOFs (`[2.4]`), risks (`[2.5]`). Drift detection and resolution (`[3.3]`).
 
 | Method | Path | Description |
 |---|---|---|
@@ -75,8 +75,8 @@ Implemented: backfill, dependency CRUD, graph read (`[1.1]`–`[1.3]`), blast ra
 | GET | `/api/v1/topology/graph` | `{nodes[], edges[], truncated}` joining `graph_nodes` to the `dependency_graph_edges` MV; optional `teamId`/`type`/`limit`; 500-node hard cap; no per-team access control (read-only) — [1.3] |
 | GET | `/api/v1/topology/blast-radius/{serviceId}` | `{serviceId, upstream: {entries[], depthTruncated, nodesBeyondDepth, nodeCapTruncated, nodesBeyondCap}, downstream: {...}, maxDepth}`; recursive CTE over `dependency_graph_edges`, cycle-safe via a visited-path array; optional `direction` (`UPSTREAM`/`DOWNSTREAM`) and `depth` (default 3, clamped to max 6); 200-node cap per direction; 404 unknown/soft-deleted node, 400 `depth < 1` — [2.1]. **Direction naming is the opposite of the `/dependencies/{serviceId}` upstream/downstream above**: here `upstream` = what this service depends on, `downstream` = who is impacted if it fails — see `BlastRadiusService`'s Javadoc |
 | GET | `/api/v1/topology/cycles` | Elementary cycles, rotation-deduplicated; optional `type` filter — [2.3] |
-| GET | `/api/v1/topology/drifts` | Active drift records |
-| POST | `/api/v1/topology/drifts/{id}/resolve` | Mark a drift record resolved |
+| GET | `/api/v1/topology/drifts` | Active drift records, paginated (`limit` ≤ 200, `offset`) — [3.3] |
+| POST | `/api/v1/topology/drifts/{id}/resolve` | `{action: ACCEPT_OBSERVED \| REMOVE_DECLARED \| DISMISS}`; accept only for `undeclared`, remove only for `missing` (422 `INVALID_DRIFT_ACTION`); already resolved 409 `DRIFT_ALREADY_RESOLVED`; ADMIN or team member on either side; dismissed drift is never re-raised — [3.3] |
 | GET | `/api/v1/topology/spofs` | Fan-in ≥ tenant-configurable threshold (default 5); severity escalates to CRITICAL for CRITICAL-tier or orphan services; threshold + rationale ship in the payload — [2.4] |
 | GET | `/api/v1/topology/risks` | Paginated SPOF + cycle + drift + orphan findings, severity-sorted — [2.5] |
 
@@ -98,7 +98,7 @@ Implemented: backfill, dependency CRUD, graph read (`[1.1]`–`[1.3]`), blast ra
 | Topic | Trigger |
 |---|---|
 | `cartogra.topology.graph.updated` | After any dependency change |
-| `cartogra.topology.drift.detected` | When new drift record created |
+| `cartogra.topology.drift.detected` | Deferred to Phase 6 (roadmap 3.5): no consumer yet |
 | `cartogra.topology.cycle.detected` | When cycle found in graph |
 
 ---

@@ -44,6 +44,9 @@ topology:
   registry:
     base-url: ${REGISTRY_URI:http://localhost:8081}/api/v1/registry
     timeout: ${TOPOLOGY_REGISTRY_TIMEOUT:PT3S}
+  drift:
+    sweep-interval: ${TOPOLOGY_DRIFT_SWEEP_INTERVAL:PT5M}
+    missing-after: ${TOPOLOGY_DRIFT_MISSING_AFTER:P7D}
   processed-events:
     retention: ${TOPOLOGY_PROCESSED_EVENTS_RETENTION:P30D}
     reaper-interval: ${TOPOLOGY_PROCESSED_EVENTS_REAPER_INTERVAL:PT1H}

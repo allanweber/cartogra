@@ -1,6 +1,6 @@
 import type { CartograApi } from './api.ts'
 import { loadSeed, type LoadOptions } from './load.ts'
-import { allCycles, declaredCalls, declaredCycles, dormantCalls, unownedServices, type SeedData } from './schema.ts'
+import { allCycles, declaredCalls, declaredCycles, dormantCalls, silentDeclaredCalls, unownedServices, type SeedData } from './schema.ts'
 
 export interface Snapshot {
   teams: string[]
@@ -18,6 +18,7 @@ export interface VerifyOptions extends LoadOptions {
   withDrift?: { enable: () => Promise<void>; disable: () => Promise<void> }
   skipObserved?: boolean
   observedTimeoutMs?: number
+  driftTimeoutMs?: number
 }
 
 export async function snapshot(api: CartograApi, seed: SeedData): Promise<Snapshot> {
@@ -67,21 +68,26 @@ export async function verify(api: CartograApi, seed: SeedData, options: VerifyOp
     new Set((await api.graph('OBSERVED')).edges.map((e) => `${nodeName.get(e.source)}>${nodeName.get(e.target)}`))
 
   if (!options.skipObserved) {
-    const expected = declaredCalls(seed).map((c) => `${c.from}>${c.to}`)
+    const silent = new Set(silentDeclaredCalls(seed).map((c) => `${c.from}>${c.to}`))
+    const expected = declaredCalls(seed).map((c) => `${c.from}>${c.to}`).filter((key) => !silent.has(key))
     const missing = await pollMissing(expected, observedPairs, options.observedTimeoutMs ?? 90_000, sleep)
     add('declared calls observed from spans', missing.length === 0, missing.join(', '))
   }
 
   if (options.withDrift) {
-    const [dormant] = dormantCalls(seed)
-    const key = `${dormant.from}>${dormant.to}`
+    const dormant = dormantCalls(seed).map((c) => `${c.from}>${c.to}`)
+    const silent = silentDeclaredCalls(seed).map((c) => `${c.from}>${c.to}`)
     await options.withDrift.enable()
     try {
-      const missing = await pollMissing([key], observedPairs, options.observedTimeoutMs ?? 90_000, sleep)
+      const missing = await pollMissing(dormant, observedPairs, options.observedTimeoutMs ?? 90_000, sleep)
       const declared = new Set((await api.graph('DECLARED')).edges.map((e) => `${nodeName.get(e.source)}>${nodeName.get(e.target)}`))
-      add(`undeclared edge ${key} observed`, missing.length === 0)
-      add(`${key} stays undeclared`, !declared.has(key))
+      add(`${dormant.length} undeclared edges observed`, missing.length === 0, missing.join(', '))
+      add('undeclared edges stay undeclared', dormant.every((key) => !declared.has(key)))
       add('cycle count unchanged with drift on', (await api.cycles()).length === allCycles(seed).length)
+
+      const wanted = [...dormant.map((key) => `UNDECLARED ${key}`), ...silent.map((key) => `MISSING ${key}`)]
+      const absent = await pollDrifts(api, nodeName, wanted, options.driftTimeoutMs ?? 300_000, sleep)
+      add(`${wanted.length} drift records raised`, absent.length === 0, absent.join(', '))
     } finally {
       await options.withDrift.disable()
     }
@@ -115,6 +121,24 @@ async function pollMissing(
     const have = await observed()
     const missing = expected.filter((e) => !have.has(e))
     if (missing.length === 0 || Date.now() >= deadline) return missing
+    await sleep(3000)
+  }
+}
+
+async function pollDrifts(
+  api: CartograApi,
+  nodeName: Map<string, string>,
+  expected: string[],
+  timeoutMs: number,
+  sleep: (ms: number) => Promise<void>,
+): Promise<string[]> {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const have = new Set(
+      (await api.drifts()).map((d) => `${d.type} ${nodeName.get(d.sourceServiceId)}>${nodeName.get(d.targetServiceId)}`),
+    )
+    const absent = expected.filter((e) => !have.has(e))
+    if (absent.length === 0 || Date.now() >= deadline) return absent
     await sleep(3000)
   }
 }

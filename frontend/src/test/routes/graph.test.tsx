@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useSyncExternalStore } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -7,7 +7,7 @@ import { ApiError, apiFetch } from '#/lib/api'
 import { Route } from '#/routes/_authenticated/graph'
 
 import type { PageResult, RegistryTeam } from '#/lib/registry-types'
-import type { BlastRadius, Cycles, Graph, Spofs } from '#/lib/topology-types'
+import type { BlastRadius, Cycles, DriftsPage, Graph, Spofs } from '#/lib/topology-types'
 
 // Minimal reactive stand-in for TanStack Router's search-param state: real enough that
 // navigate({ search }) calls re-render the component with the updated filters/selection.
@@ -75,6 +75,7 @@ const EMPTY_BLAST_RADIUS: BlastRadius = {
 }
 
 const EMPTY_CYCLES: Cycles = { cycles: [], truncated: false }
+const EMPTY_DRIFTS: DriftsPage = { items: [], total: 0, limit: 200, offset: 0 }
 const EMPTY_SPOFS: Spofs = { threshold: 5, rationale: 'rationale', items: [] }
 
 function mockGraphCalls(
@@ -83,6 +84,7 @@ function mockGraphCalls(
   cycles: Cycles = EMPTY_CYCLES,
   spofs: Spofs = EMPTY_SPOFS,
   services: { id: string; name: string }[] = [],
+  drifts: DriftsPage = EMPTY_DRIFTS,
 ) {
   vi.mocked(apiFetch).mockImplementation((path: string) => {
     if (path.includes('/v1/registry/services')) return Promise.resolve({ items: services, total: services.length, limit: 1000, offset: 0 })
@@ -90,6 +92,7 @@ function mockGraphCalls(
     if (path.includes('/v1/topology/blast-radius/')) return Promise.resolve(blastRadius)
     if (path.includes('/v1/topology/cycles')) return Promise.resolve(cycles)
     if (path.includes('/v1/topology/spofs')) return Promise.resolve(spofs)
+    if (path.includes('/v1/topology/drifts')) return Promise.resolve(drifts)
     const query = path.split('?')[1] ?? ''
     return Promise.resolve(byQuery(query))
   })
@@ -131,6 +134,54 @@ describe('GraphPage', () => {
     expect(await screen.findByRole('group', { name: /service dependency graph/i })).toBeInTheDocument()
     expect(screen.getByText('Select a service to see what breaks if it goes down.')).toBeInTheDocument()
     expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('type=DECLARED'))
+  })
+
+  it('All edge mode reads every edge type, without a type filter', async () => {
+    mockGraphCalls(() => makeGraph())
+    mockSearch = { type: 'ALL' }
+    renderPage()
+    await screen.findByRole('group', { name: /service dependency graph/i })
+    const graphCall = vi.mocked(apiFetch).mock.calls.find(([path]) => String(path).startsWith('/v1/topology/graph'))
+    expect(graphCall?.[0]).not.toContain('type=')
+  })
+
+  it('Drift edge mode keeps only drifted edges and colors them by drift type', async () => {
+    const graph = makeGraph({
+      edges: [
+        { source: 's1', target: 's2', dependencyType: 'DECLARED', protocol: 'HTTP', metadata: null },
+        { source: 's2', target: 's1', dependencyType: 'OBSERVED', protocol: 'HTTP', metadata: null },
+      ],
+    })
+    mockGraphCalls(
+      () => graph,
+      EMPTY_BLAST_RADIUS,
+      EMPTY_CYCLES,
+      EMPTY_SPOFS,
+      [],
+      {
+        items: [
+          { id: 'd1', type: 'UNDECLARED', sourceServiceId: 's2', targetServiceId: 's1', detectedAt: '2026-10-20T12:00:00Z', resolvedAt: null, resolution: null },
+        ],
+        total: 1,
+        limit: 200,
+        offset: 0,
+      },
+    )
+    mockSearch = { type: 'DRIFT' }
+    renderPage()
+    const svg = await screen.findByRole('group', { name: /service dependency graph/i })
+
+    await waitFor(() => expect(svg.querySelectorAll('.graph-link-visible')).toHaveLength(1))
+    await waitFor(() =>
+      expect(svg.querySelector('.graph-link-visible')?.getAttribute('stroke')).toBe('var(--warning)'),
+    )
+  })
+
+  it('Drift edge mode says so when nothing drifts', async () => {
+    mockGraphCalls(() => makeGraph({ edges: [] }))
+    mockSearch = { type: 'DRIFT' }
+    renderPage()
+    expect(await screen.findAllByText(/declared and observed dependencies agree/i)).not.toHaveLength(0)
   })
 
   it('arriving with a ?service= deep link preselects that node in the side panel', async () => {

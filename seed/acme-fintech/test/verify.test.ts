@@ -16,3 +16,26 @@ describe('verify', () => {
     expect(checks.filter((c) => !c.ok)).toEqual([])
   })
 })
+
+describe('verify with drift', () => {
+  const sleep = async () => {}
+  const opts = { sleep, pollMs: 0, discoveryTimeoutMs: 50, syncTimeoutMs: 50, observedTimeoutMs: 0, driftTimeoutMs: 0 }
+
+  it('reports drift records that never appear', async () => {
+    const api = new FakeApi(seed)
+    const checks = await verify(api, seed, { ...opts, skipObserved: true, withDrift: { enable: async () => {}, disable: async () => {} } })
+    expect(checks.find((c) => c.name === '4 drift records raised')?.ok).toBe(false)
+  })
+
+  it('passes when 3 undeclared and 1 missing drift records exist', async () => {
+    const api = new FakeApi(seed)
+    api.driftRecords = [
+      ['UNDECLARED', 'reporting-service', 'payments-service'],
+      ['UNDECLARED', 'webhook-relay', 'fraud-service'],
+      ['UNDECLARED', 'legacy-batch', 'notification-service'],
+      ['MISSING', 'loyalty-service', 'fx-service'],
+    ].map(([type, from, to]) => ({ type: type as 'UNDECLARED' | 'MISSING', sourceServiceId: `svc-${from}`, targetServiceId: `svc-${to}` }))
+    const checks = await verify(api, seed, { ...opts, skipObserved: true, withDrift: { enable: async () => {}, disable: async () => {} } })
+    expect(checks.find((c) => c.name === '4 drift records raised')?.ok).toBe(true)
+  })
+})

@@ -17,7 +17,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useReducedMotion } from '#/hooks/useReducedMotion'
 import { normalizeHealth } from '#/lib/registry-types'
 
-import type { Graph, GraphEdge, GraphNode } from '#/lib/topology-types'
+import type { DriftType, Graph, GraphEdge, GraphNode } from '#/lib/topology-types'
 import type { ServiceHealth } from '#/lib/registry-types'
 
 export interface SimNode extends SimulationNodeDatum, GraphNode {}
@@ -139,6 +139,11 @@ export function isSpof(serviceId: string, spofServiceIds: Set<string> | null): b
   return spofServiceIds?.has(serviceId) ?? false
 }
 
+const DRIFT_STROKE: Record<DriftType, string> = {
+  UNDECLARED: 'var(--warning)',
+  MISSING: 'var(--info)',
+}
+
 export function DependencyGraph({
   graph,
   selectedServiceId,
@@ -147,6 +152,8 @@ export function DependencyGraph({
   blastRadiusPartial,
   cycleMemberIds,
   spofServiceIds,
+  driftEdges,
+  highlightedDriftKey,
 }: {
   graph: Graph
   selectedServiceId: string | null
@@ -156,6 +163,10 @@ export function DependencyGraph({
   blastRadiusPartial?: boolean
   cycleMemberIds?: Set<string> | null
   spofServiceIds?: Set<string> | null
+  // `source>target` → drift type. Undeclared edges are drawn solid amber, missing ones dashed blue,
+  // so the two kinds differ by line style as well as color.
+  driftEdges?: Map<string, DriftType> | null
+  highlightedDriftKey?: string | null
 }) {
   const svgRef = useRef<SVGSVGElement>(null)
   const onSelectNodeRef = useRef(onSelectNode)
@@ -278,6 +289,7 @@ export function DependencyGraph({
 
     linkSelection
       .append('line')
+      .attr('class', 'graph-link-visible')
       .attr('stroke', 'var(--border)')
       .attr('stroke-width', 1.5)
       .attr('pointer-events', 'none')
@@ -545,6 +557,22 @@ export function DependencyGraph({
       .selectAll<SVGLineElement, SimLink>('.graph-links line')
       .style('opacity', (link) => linkOpacity(endpointId(link.source), endpointId(link.target), selectedServiceId, dimMap))
   }, [selectedServiceId, blastRadiusHighlight, blastRadiusPartial, cycleMemberIds, spofServiceIds, graph])
+
+  useEffect(() => {
+    const svgEl = svgRef.current
+    if (!svgEl) return
+    select(svgEl)
+      .selectAll<SVGLineElement, SimLink>('.graph-link-visible')
+      .each(function (link) {
+        const key = `${endpointId(link.source)}>${endpointId(link.target)}`
+        const drift = driftEdges?.get(key)
+        const emphasised = key === highlightedDriftKey
+        select(this)
+          .attr('stroke', drift ? DRIFT_STROKE[drift] : 'var(--border)')
+          .attr('stroke-dasharray', drift === 'MISSING' ? '6 4' : null)
+          .attr('stroke-width', emphasised ? 4 : drift ? 2.5 : 1.5)
+      })
+  }, [driftEdges, highlightedDriftKey, graph])
 
   return (
     <svg

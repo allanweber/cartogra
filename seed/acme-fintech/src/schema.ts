@@ -53,6 +53,11 @@ export function dormantCalls(seed: SeedData): SeedCall[] {
   return seed.calls.filter((c) => !c.declared)
 }
 
+/** Declared calls the fake services never make: Cartogra reports them as missing drift. */
+export function silentDeclaredCalls(seed: SeedData): SeedCall[] {
+  return seed.calls.filter((c) => c.declared && !c.enabled)
+}
+
 export function dependentsOf(seed: SeedData, target: string): string[] {
   return [...new Set(declaredCalls(seed).filter((c) => c.to === target).map((c) => c.from))]
 }
@@ -134,7 +139,6 @@ export function validateSeed(seed: SeedData): void {
     const key = `${c.from}>${c.to}`
     if (keys.has(key)) errors.push(`call ${key}: duplicate`)
     keys.add(key)
-    if (c.declared && !c.enabled) errors.push(`call ${key}: declared calls must be enabled`)
   }
   if (errors.length > 0) throw new Error(`Invalid seed data:\n- ${errors.join('\n- ')}`)
 }

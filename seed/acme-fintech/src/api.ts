@@ -45,6 +45,12 @@ export interface Risk {
   affectedServices: string[]
 }
 
+export interface Drift {
+  type: 'UNDECLARED' | 'MISSING'
+  sourceServiceId: string
+  targetServiceId: string
+}
+
 export class ApiError extends Error {
   readonly status: number
   readonly code: string
@@ -71,6 +77,7 @@ export interface CartograApi {
   cycles(): Promise<string[][]>
   spofs(): Promise<string[]>
   risks(): Promise<Risk[]>
+  drifts(): Promise<Drift[]>
 }
 
 interface Page<T> {
@@ -156,6 +163,10 @@ export class HttpCartograApi implements CartograApi {
   async risks(): Promise<Risk[]> {
     const data = await this.request<Page<Risk>>('GET', '/api/v1/topology/risks?limit=100')
     return data.items
+  }
+
+  async drifts(): Promise<Drift[]> {
+    return this.listAll<Drift>('/api/v1/topology/drifts')
   }
 
   private async listAll<T>(path: string): Promise<T[]> {

@@ -20,6 +20,8 @@ servers:
     description: Local development (via Gateway)
 
 tags:
+  - name: drift
+    description: Differences between declared and observed dependencies, and how to resolve them
   - name: dependencies
     description: Declare, edit, remove, and read service dependency edges
   - name: graph
@@ -368,6 +370,96 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+
+  # ── Drift ─────────────────────────────────────────────────────────────────
+
+  /drifts:
+    get:
+      summary: Active drift between declared and observed dependencies
+      description: |
+        Unresolved drift records, newest first. `UNDECLARED` is observed in traces but never declared;
+        `MISSING` is declared but not observed within `topology.drift.missing-after`.
+      operationId: listDrifts
+      tags: [drift]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriftsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /drifts/{id}/resolve:
+    post:
+      summary: Resolve a drift record
+      description: |
+        `ACCEPT_OBSERVED` (undeclared only) declares the observed edge; `REMOVE_DECLARED` (missing only)
+        deletes the declared edge; `DISMISS` closes either kind and it is never raised again.
+        Requires ADMIN or membership of a team owning either service.
+      operationId: resolveDrift
+      tags: [drift]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  $ref: "#/components/schemas/DriftAction"
+      responses:
+        "200":
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriftResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          description: "`INVALID_DRIFT_ACTION`: the action does not apply to this drift type"
 
   # ── Health ────────────────────────────────────────────────────────────────
 
@@ -820,6 +912,76 @@ components:
                 truncated:
                   type: boolean
                   description: True when any risk source (cycles, SPOFs, orphans, drift) hit its cap of 200.
+
+    # ── Drift ─────────────────────────────────────────────────────────────────
+
+    DriftType:
+      type: string
+      enum: [UNDECLARED, MISSING]
+
+    DriftAction:
+      type: string
+      enum: [ACCEPT_OBSERVED, REMOVE_DECLARED, DISMISS]
+
+    DriftResolution:
+      type: string
+      enum: [ACCEPTED, REMOVED, DISMISSED, AUTO]
+
+    Drift:
+      type: object
+      required: [id, type, sourceServiceId, targetServiceId, detectedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          $ref: "#/components/schemas/DriftType"
+        sourceServiceId:
+          type: string
+          format: uuid
+        targetServiceId:
+          type: string
+          format: uuid
+        detectedAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: string
+          format: date-time
+          nullable: true
+        resolution:
+          allOf:
+            - $ref: "#/components/schemas/DriftResolution"
+          nullable: true
+
+    DriftResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/Drift"
+
+    DriftsResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [items, total, limit, offset]
+              properties:
+                items:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/Drift"
+                total:
+                  type: integer
+                  format: int64
+                limit:
+                  type: integer
+                offset:
+                  type: integer
 
   responses:
     BadRequest:

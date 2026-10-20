@@ -139,6 +139,8 @@ Append-only audit log — one row per version.
 | `drift_type` | TEXT | `undeclared` \| `missing` |
 | `detected_at` | TIMESTAMPTZ | |
 | `resolved_at` | TIMESTAMPTZ | |
+| `resolved_by` | UUID | Null when closed automatically |
+| `resolution` | TEXT | `accepted` \| `removed` \| `dismissed` \| `auto`; set iff `resolved_at` is set. `dismissed` suppresses re-detection |
 
 ---
 
