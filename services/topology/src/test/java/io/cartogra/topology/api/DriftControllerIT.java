@@ -1,5 +1,7 @@
 package io.cartogra.topology.api;
 
+import com.github.tomakehurst.wiremock.WireMockServer;
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import io.cartogra.test.KafkaTestSupport;
 import io.cartogra.test.PostgresTestSupport;
 import io.cartogra.topology.domain.Dependency;
@@ -14,6 +16,8 @@ import io.cartogra.topology.repository.DependencyDriftRepository;
 import io.cartogra.topology.repository.DependencyRepository;
 import io.cartogra.topology.repository.GraphNodeRepository;
 import io.cartogra.topology.repository.GraphNodeUpsert;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -31,6 +35,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.post;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
@@ -41,6 +49,22 @@ class DriftControllerIT {
 
     private static final HttpClient HTTP = HttpClient.newHttpClient();
 
+    private static final WireMockServer WIRE_MOCK =
+            new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort());
+
+    @BeforeAll
+    static void startWireMock() {
+        WIRE_MOCK.start();
+        WIRE_MOCK.stubFor(post(urlPathEqualTo("/internal/services/access"))
+                .willReturn(aResponse().withStatus(200).withHeader("Content-Type", "application/json")
+                        .withBody("{\"data\":{},\"traceId\":\"a3f1c8d2000000000000000000000000\"}")));
+    }
+
+    @AfterAll
+    static void stopWireMock() {
+        WIRE_MOCK.stop();
+    }
+
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url",
@@ -49,6 +73,7 @@ class DriftControllerIT {
         registry.add("spring.datasource.password", PostgresTestSupport.POSTGRES::getPassword);
         registry.add("spring.kafka.bootstrap-servers", KafkaTestSupport.KAFKA::getBootstrapServers);
         registry.add("spring.kafka.consumer.group-id", () -> "drift-controller-it-" + UUID.randomUUID());
+        registry.add("topology.registry.base-url", () -> "http://localhost:" + WIRE_MOCK.port());
     }
 
     @LocalServerPort
