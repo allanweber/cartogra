@@ -124,9 +124,10 @@ export function RootErrorBoundary({
   error,
   reset,
 }: {
-  error: Error
+  error: unknown
   reset: () => void
 }) {
+  const message = error instanceof Error ? error.message : ''
   const traceId = error instanceof ApiError ? error.traceId : null
 
   return (
@@ -144,7 +145,7 @@ export function RootErrorBoundary({
       }
     >
       <Alert variant="destructive">
-        <AlertTitle>{error.message || 'Unknown rendering error'}</AlertTitle>
+        <AlertTitle>{message || 'Unknown rendering error'}</AlertTitle>
         <AlertDescription>
           {traceId ? `Trace ID: ${traceId}` : 'No trace ID was attached to this error.'}
         </AlertDescription>
