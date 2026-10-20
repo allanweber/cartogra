@@ -7,7 +7,7 @@
 --   duration in docs/architecture/topology-performance.md with the hardware
 --   named."
 --
--- Same recipe as seed/graph-perf-seed.sql (Phase 1, 20 services / 30 edges),
+-- Same recipe as the Phase 1 seed (20 services / 30 edges, removed in 3.2; see git history),
 -- scaled up:
 --   - 130 services, full permutation at offset 1 (coprime with 130) -> 130
 --     backbone edges (one complete cycle, no self-edges, no duplicates).
@@ -114,7 +114,7 @@ ON CONFLICT (tenant_id, source_service_id, target_service_id, dependency_type, p
     WHERE deleted_at IS NULL
     DO NOTHING;
 
--- SPOF hub cases, same recipe as seed/graph-perf-seed.sql -------------------
+-- SPOF hub cases, same recipe as the Phase 1 seed -------------------
 -- Adds 3 synthetic "hub" services with fan-in at/above SpofService's
 -- DEFAULT_THRESHOLD, drawing dependents from idx 0-17 of the 130-service
 -- pool, for 18 more edges (182 + 18 = 200 total). Not load-bearing for the

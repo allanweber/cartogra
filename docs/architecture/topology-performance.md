@@ -34,7 +34,7 @@ directed edges:
 
 - 182 backbone edges: a full permutation at offset 1 over the 130 services (130 edges, one complete
   cycle) plus a partial permutation at offset 7 over the first 52 services (52 edges).
-- 18 fan-in edges onto the 3 SPOF hub services (7 + 5 + 6), carried over from `seed/graph-perf-seed.sql`'s
+- 18 fan-in edges onto the 3 SPOF hub services (7 + 5 + 6), carried over from the Phase 1 seed (`seed/graph-perf-seed.sql`, removed in 3.2; see git history)'s
   Phase 1 shape so this fixture isn't a bare cycle — not load-bearing for these measurements (SPOF
   detection itself is covered by issues #116/#117).
 
