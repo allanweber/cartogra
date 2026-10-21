@@ -3,6 +3,7 @@ package io.cartogra.ingestion.infrastructure.scm.azuredevops;
 import io.cartogra.ingestion.domain.CommitInfo;
 import io.cartogra.ingestion.domain.OwnershipMap;
 import io.cartogra.ingestion.domain.ScmConnectionConfig;
+import io.cartogra.ingestion.infrastructure.scm.CodeownersHandles;
 import io.cartogra.ingestion.infrastructure.scm.ScmProvider;
 import io.cartogra.ingestion.domain.ScmRepository;
 import org.jspecify.annotations.Nullable;
@@ -19,9 +20,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.MatchResult;
+import java.util.regex.Pattern;
 
 @Component
 public class AzureDevOpsProvider implements ScmProvider {
+
+    private static final Pattern OWNER_TOKEN = Pattern.compile("\\[[^\\]]*\\]\\S*|\\S+");
 
     /** One REST client per connection, reused across the calls a single sync makes per repo — avoids paying a fresh TLS handshake on every call. Re-created when the config changes (e.g. a rotated PAT). */
     private final Map<UUID, CachedClient> clients = new ConcurrentHashMap<>();
@@ -134,14 +139,15 @@ public class AzureDevOpsProvider implements ScmProvider {
         content.ifPresent(text -> text.lines()
                 .filter(line -> !line.isBlank() && !line.startsWith("#"))
                 .forEach(line -> {
-                    String[] tokenParts = line.trim().split("\\s+");
-                    String path = tokenParts[0];
-                    List<String> owners = tokenParts.length > 1
-                            ? List.of(java.util.Arrays.copyOfRange(tokenParts, 1, tokenParts.length))
-                            : List.of();
+                    List<String> tokens = OWNER_TOKEN.matcher(line.trim()).results()
+                            .map(MatchResult::group)
+                            .toList();
+                    String path = tokens.getFirst();
+                    List<String> owners = tokens.subList(1, tokens.size());
                     pathOwners.put(path, owners);
                     owners.stream()
-                            .filter(o -> o.startsWith("[") || o.contains("\\"))
+                            .filter(o -> o.startsWith("@") || o.startsWith("[") || o.contains("\\"))
+                            .flatMap(o -> CodeownersHandles.teamName(o).stream())
                             .forEach(team -> {
                                 if (!ownerTeams.contains(team)) ownerTeams.add(team);
                             });

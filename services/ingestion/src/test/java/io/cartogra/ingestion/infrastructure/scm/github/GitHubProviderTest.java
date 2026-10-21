@@ -80,7 +80,7 @@ class GitHubProviderTest {
     @Test
     void resolveOwnership_parsesCodeOwners() {
         String encoded = java.util.Base64.getEncoder()
-                .encodeToString("* @acme/platform\n/src @acme/backend\n".getBytes());
+                .encodeToString("* @acme/platform @alice alice@acme.com\n/src @acme/backend\n".getBytes());
         wireMock.stubFor(get(urlPathEqualTo("/repos/acme/payments/contents/CODEOWNERS"))
                 .willReturn(okJson("{\"content\": \"" + encoded + "\"}")));
 
@@ -90,6 +90,7 @@ class GitHubProviderTest {
 
         assertThat(map.pathOwners()).containsKey("*");
         assertThat(map.pathOwners()).containsKey("/src");
-        assertThat(map.ownerTeams()).contains("@acme/platform", "@acme/backend");
+        assertThat(map.pathOwners().get("*")).containsExactly("@acme/platform", "@alice", "alice@acme.com");
+        assertThat(map.ownerTeams()).containsExactlyInAnyOrder("platform", "backend");
     }
 }

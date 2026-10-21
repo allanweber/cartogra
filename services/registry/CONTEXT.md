@@ -145,7 +145,7 @@ SCM Connection created/synced there. See `docs/architecture/kafka-topics.md`.
 | Topic | Consumer class | Method invoked |
 |---|---|---|
 | `cartogra.ingestion.service.discovered` | `RegistryServiceDiscoveryConsumer` | `ServiceService.upsertDiscovered` |
-| `cartogra.ingestion.ownership.resolved` | `OwnershipResolvedConsumer` | `ServiceService.resolveOwnership` (single-match rule) |
+| `cartogra.ingestion.ownership.resolved` | `OwnershipResolvedConsumer` | `ServiceService.resolveOwnership` (service by external id, else repo-URL suffix; handles matched to teams by slug; assign when exactly one distinct team matches; never overrides an existing owner) |
 
 ---
 

@@ -3,6 +3,7 @@ package io.cartogra.ingestion.infrastructure.scm.github;
 import io.cartogra.ingestion.domain.CommitInfo;
 import io.cartogra.ingestion.domain.OwnershipMap;
 import io.cartogra.ingestion.domain.ScmConnectionConfig;
+import io.cartogra.ingestion.infrastructure.scm.CodeownersHandles;
 import io.cartogra.ingestion.infrastructure.scm.ScmProvider;
 import io.cartogra.ingestion.domain.ScmRepository;
 import org.jspecify.annotations.Nullable;
@@ -142,6 +143,7 @@ public class GitHubProvider implements ScmProvider {
             pathOwners.put(path, owners);
             owners.stream()
                     .filter(o -> o.startsWith("@") && o.contains("/"))
+                    .flatMap(o -> CodeownersHandles.teamName(o).stream())
                     .forEach(team -> {
                         if (!ownerTeams.contains(team)) ownerTeams.add(team);
                     });

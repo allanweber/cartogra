@@ -102,8 +102,8 @@ consuming the already-existing `cartogra.ingestion.ownership.resolved` topic "wi
 Neither was built: by the time 2.4/2.5 (SPOFs, Risks) shipped, `graph_nodes.team_id` was already live via the
 general `cartogra.registry.service.{registered,updated}` lifecycle sync (`GraphNodeEventConsumer`) — Registry's
 `assignOwner` already publishes `service.updated` on every ownership change, manual or CODEOWNERS-driven.
-ADR-0028 supersedes ADR-0027 on this basis; `#122` ("[3.4] Orphan risk from ownership events") describes a
-mechanism whose premise no longer holds.
+ADR-0028 supersedes ADR-0027 on this basis; `#122` (roadmap 3.4) was rescoped to the CODEOWNERS → team mapping
+that makes `ownership.resolved` actually assign owners in Registry.
 
 **Anti-corruption layer notes:**
 - Gateway strips any client-supplied `X-Tenant-Id` / `X-User-Id` before forwarding — protecting all downstream contexts from tenant spoofing.

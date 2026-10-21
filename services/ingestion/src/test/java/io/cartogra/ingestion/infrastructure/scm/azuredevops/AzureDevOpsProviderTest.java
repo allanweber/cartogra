@@ -1,6 +1,7 @@
 package io.cartogra.ingestion.infrastructure.scm.azuredevops;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import io.cartogra.ingestion.domain.OwnershipMap;
 import io.cartogra.ingestion.domain.ScmConnectionConfig;
 import io.cartogra.ingestion.domain.ScmRepository;
 import org.junit.jupiter.api.Test;
@@ -65,6 +66,25 @@ class AzureDevOpsProviderTest {
 
         assertThat(content).isPresent();
         assertThat(content.get()).contains("[Platform Team]");
+    }
+
+    @Test
+    void resolveOwnership_reducesHandlesToTeamNames() {
+        wireMock.stubFor(get(urlPathEqualTo("/contoso/Platform/_apis/git/repositories/payments-api/items"))
+                .willReturn(ok("""
+                        # owners
+                        * @payments alice@contoso.com
+                        /ledger [Platform]\\Ledger
+                        /risk [Risk Team] Contoso\\Growth
+                        """)));
+
+        var provider = new AzureDevOpsProvider();
+        var repo = new ScmRepository("r1", "payments-api", "Platform/payments-api", "main", false, null, null);
+        OwnershipMap map = provider.resolveOwnership(config(), repo);
+
+        assertThat(map.pathOwners().get("*")).containsExactly("@payments", "alice@contoso.com");
+        assertThat(map.pathOwners().get("/risk")).containsExactly("[Risk Team]", "Contoso\\Growth");
+        assertThat(map.ownerTeams()).containsExactly("payments", "Ledger", "Risk Team", "Growth");
     }
 
     @Test

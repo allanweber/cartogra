@@ -4,7 +4,7 @@ import path from 'node:path'
 import { request } from '@playwright/test'
 import { Client } from 'pg'
 
-const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:3006'
+const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:3016'
 const dbUrl = process.env.E2E_DB_URL ?? 'postgresql://cartogra:cartogra@localhost:5436/cartogra'
 const storageStatePath = path.join(import.meta.dirname, '.auth', 'storage-state.json')
 export const runInfoPath = path.join(import.meta.dirname, '.auth', 'run.json')

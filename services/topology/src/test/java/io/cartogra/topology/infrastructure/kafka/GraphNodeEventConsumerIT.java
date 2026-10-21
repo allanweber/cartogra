@@ -8,6 +8,8 @@ import io.cartogra.topology.domain.DependencyProtocol;
 import io.cartogra.topology.domain.DependencyType;
 import io.cartogra.topology.domain.GraphNode;
 import io.cartogra.topology.domain.GraphNodeService;
+import io.cartogra.topology.domain.RiskService;
+import io.cartogra.topology.domain.RiskType;
 import io.cartogra.topology.domain.event.ServiceLifecyclePayload;
 import io.cartogra.topology.repository.DependencyRepository;
 import io.cartogra.topology.repository.GraphNodeRepository;
@@ -33,6 +35,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -71,6 +74,9 @@ class GraphNodeEventConsumerIT {
 
     @Autowired
     DependencyRepository dependencyRepository;
+
+    @Autowired
+    RiskService riskService;
 
     @Autowired
     KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
@@ -150,6 +156,39 @@ class GraphNodeEventConsumerIT {
                     assertThat(found.get().tier()).isEqualTo("CRITICAL");
                     assertThat(found.get().healthStatus()).isEqualTo("DEGRADED");
                 });
+    }
+
+    @Test
+    void updatedEventClearingTeamTurnsNodeIntoOrphanRisk() {
+        UUID tenantId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+        UUID team = UUID.randomUUID();
+        var owned = new ServiceLifecyclePayload(serviceId, tenantId, "payments", team, "STANDARD", "HEALTHY", null);
+        send("cartogra.registry.service.registered", EventEnvelope.of("service.registered", serviceId, tenantId, 1, owned));
+
+        Awaitility.await().atMost(Duration.ofSeconds(15)).pollInterval(Duration.ofMillis(300))
+                .until(() -> graphNodeRepository.findByServiceId(tenantId, serviceId)
+                        .map(n -> team.equals(n.teamId())).orElse(false));
+        assertThat(orphanRiskServices(tenantId)).doesNotContain(serviceId);
+
+        var unowned = new ServiceLifecyclePayload(serviceId, tenantId, "payments", null, "STANDARD", "HEALTHY", null);
+        send("cartogra.registry.service.updated", EventEnvelope.of("service.updated", serviceId, tenantId, 1, unowned));
+
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(15))
+                .pollInterval(Duration.ofMillis(300))
+                .untilAsserted(() -> {
+                    assertThat(graphNodeRepository.findByServiceId(tenantId, serviceId))
+                            .get().extracting(GraphNode::teamId).isNull();
+                    assertThat(orphanRiskServices(tenantId)).containsExactly(serviceId);
+                });
+    }
+
+    private List<UUID> orphanRiskServices(UUID tenantId) {
+        return riskService.list(tenantId, 100, 0).items().stream()
+                .filter(r -> r.type() == RiskType.ORPHAN)
+                .flatMap(r -> r.affectedServices().stream())
+                .toList();
     }
 
     @Test

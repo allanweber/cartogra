@@ -81,15 +81,18 @@ public class JdbcTeamRepository implements TeamRepository {
     }
 
     @Override
-    public Optional<Team> findByTenantAndName(UUID tenantId, String name) {
+    public Optional<Team> findByTenantAndSlug(UUID tenantId, String slug) {
         String sql = """
                 SELECT * FROM teams
-                WHERE tenant_id = :tenantId AND lower(name) = lower(:name) AND deleted_at IS NULL
+                WHERE tenant_id = :tenantId
+                  AND regexp_replace(lower(name), '[^a-z0-9]+', '-', 'g') = :slug
+                  AND deleted_at IS NULL
+                ORDER BY created_at
                 LIMIT 1
                 """;
         var params = new MapSqlParameterSource()
                 .addValue("tenantId", tenantId)
-                .addValue("name", name);
+                .addValue("slug", slug);
         return jdbc.query(sql, params, TEAM_MAPPER).stream().findFirst();
     }
 

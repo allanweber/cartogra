@@ -168,6 +168,33 @@ The repos are named exactly like the K8s Services, so the registry merges both i
 and last commit appear on the K8s-discovered rows). Your project's other repos will also show up as separate services; the
 business plan allows 100.
 
+### CODEOWNERS team mapping check (manual, roadmap 3.4)
+
+`pnpm acme load` assigns owners through the API, and Registry never overrides an existing owner from CODEOWNERS — so a
+normal run never exercises the CODEOWNERS path. To prove it, clear the owners (through the API, so `service.updated`
+keeps Topology in sync) and let an SCM sync restore them. On a brand-new tenant, use `pnpm acme load --skip-owners`
+instead of clearing.
+
+```bash
+for id in $(curl -s "http://localhost:8080/api/v1/registry/services?limit=100" -H "Authorization: Bearer $TOKEN" \
+            | jq -r '.data.items[] | select(.teamId != null) | .id'); do
+  curl -s -o /dev/null -X PATCH "http://localhost:8080/api/v1/registry/services/$id/owner" \
+    -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"teamId":null}'
+done
+curl -s -X POST http://localhost:8080/api/v1/ingestion/scm-connections/<id>/sync -H "Authorization: Bearer $TOKEN" | jq .
+curl -s "http://localhost:8080/api/v1/registry/services?limit=100" -H "Authorization: Bearer $TOKEN" \
+  | jq --slurpfile seed seed-data.json \
+    '[.data.items[] | select(.name as $n | $seed[0].services | map(.name) | index($n))]
+     | {owned: map(select(.teamId != null)) | length, orphans: map(select(.teamId == null) | .name)}'
+pnpm acme verify   # no "owner set:" lines = CODEOWNERS picked the seed's team for every service
+```
+
+Expect `owned: 17` and the 3 seed orphans, which also stay listed under `type: "orphan"` in `GET /api/v1/topology/risks`.
+If a service stays unowned, grep the registry log for `ownership.resolved:` — it says whether no service matched the repo,
+no team matched the handle, or several teams matched. `service.discovered` and `ownership.resolved` travel on separate
+topics, so a first sync can occasionally see ownership before the service exists; a second sync fixes it. The same
+mapping is asserted without an SCM org by `AcmeCodeownersMappingIT` (registry).
+
 ## 5. Load teams, owners, tiers, declared edges
 
 ```bash

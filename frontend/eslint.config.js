@@ -24,6 +24,8 @@ export default [
       '.output/**',
       '.tanstack/**',
       '.vinxi/**',
+      'playwright-report/**',
+      'test-results/**',
     ],
   },
 ]

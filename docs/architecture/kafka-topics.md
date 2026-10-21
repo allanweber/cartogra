@@ -82,7 +82,7 @@ table, as authoritative on exact timing, and re-check the wording there before r
 | Topic | Direction | Roadmap story | Status |
 | ----- | --------- | -------------- | ------ |
 | `cartogra.observability.spans` | OTel Collector → Topology (`OtelSpanWorker`) | 3.1 | **Implemented in 3.1** (consumer side; the collector is the producer). Payload is raw OTLP/JSON from the collector's `kafka` exporter — a documented exception to the envelope rule (ADR-0029). Tenant comes from resource attribute `cartogra.tenant.id`; unattributable records go to `cartogra.observability.spans.dlq`. Ingestion is not on this path |
-| `cartogra.registry.service.ownership-changed` | Registry → Topology, orphan-risk flagging only | ADR-0027 | **Conflicts with roadmap 3.4**, which instead describes Topology consuming the already-real `cartogra.ingestion.ownership.resolved`. See the reconciliation note in `CONTEXT-MAP.md`. Do not implement either side until that's resolved |
+| `cartogra.registry.service.ownership-changed` | Registry → Topology, orphan-risk flagging only | ADR-0027 | **Not built — superseded by ADR-0028.** Topology reads `graph_nodes.team_id`, already synced by `service.{registered,updated}`; roadmap 3.4 was rescoped to the CODEOWNERS team mapping and adds no topic |
 | `cartogra.platform.audit.recorded` | Topology → Registry | 4.1 | Registry writes audit events directly; Topology publishes this for Registry's consumer |
 | `cartogra.ingestion.spec.discovered` | Ingestion → Contract | 5.8 | Named `spec.discovered`, not `spec.updated` as an earlier version of this document had it |
 | `cartogra.platform.dead-letter` | platform-wide DLQ replay | 7.5 | Distinct from the per-service `.dlq` topics above |
