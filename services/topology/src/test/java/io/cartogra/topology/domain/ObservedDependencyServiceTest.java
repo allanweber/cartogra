@@ -8,6 +8,7 @@ import io.cartogra.topology.repository.DependencyRepository;
 import io.cartogra.topology.repository.GraphNodeRepository;
 import io.cartogra.topology.repository.PendingSpanLink;
 import io.cartogra.topology.repository.PendingSpanLinkRepository;
+import io.cartogra.topology.repository.SpanRef;
 import io.cartogra.topology.repository.UnresolvedSpanServiceRepository;
 import io.cartogra.topology.repository.UpsertOutcome;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -24,6 +25,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -303,6 +305,42 @@ class ObservedDependencyServiceTest {
 
         verify(pendingSpanLinkRepository, never()).findClientPartner(any(), any(), any());
         verify(pendingSpanLinkRepository, never()).insert(any());
+    }
+
+    @Test
+    void directlyResolvedClientDiscardsItsStoredServerHalf() {
+        knownNodes();
+        when(dependencyRepository.upsertObserved(any(), any(), any(), any(), any())).thenReturn(UpsertOutcome.INSERTED);
+        when(pendingSpanLinkRepository.deleteServerPartners(any(), any())).thenReturn(1);
+
+        service.ingest(TENANT, List.of(client("checkout", "c1", "payments", null)));
+
+        verify(pendingSpanLinkRepository).deleteServerPartners(TENANT, Set.of(new SpanRef("trace", "c1")));
+        assertThat(counter("cartogra.spans.pending_discarded")).isEqualTo(1);
+    }
+
+    @Test
+    void serverBeforeDirectlyResolvedClientInSameBatchIsNotParked() {
+        knownNodes();
+        when(dependencyRepository.upsertObserved(any(), any(), any(), any(), any())).thenReturn(UpsertOutcome.INSERTED);
+        when(pendingSpanLinkRepository.findClientPartner(any(), any(), any())).thenReturn(Optional.empty());
+
+        service.ingest(TENANT, List.of(
+                server("payments", "s1", "c1"),
+                client("checkout", "c1", "payments", null)));
+
+        verify(pendingSpanLinkRepository, never()).insert(any());
+        verify(dependencyRepository).upsertObserved(eq(TENANT), eq(CHECKOUT), eq(PAYMENTS), any(), any());
+    }
+
+    @Test
+    void batchWithoutDirectlyResolvedClientsDiscardsNothing() {
+        knownNodes();
+        when(pendingSpanLinkRepository.findClientPartner(any(), any(), any())).thenReturn(Optional.empty());
+
+        service.ingest(TENANT, List.of(server("payments", "s1", "c1")));
+
+        verify(pendingSpanLinkRepository, never()).deleteServerPartners(any(), any());
     }
 
     @Test

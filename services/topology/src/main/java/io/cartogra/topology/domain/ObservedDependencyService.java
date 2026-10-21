@@ -8,6 +8,7 @@ import io.cartogra.topology.repository.DependencyRepository;
 import io.cartogra.topology.repository.GraphNodeRepository;
 import io.cartogra.topology.repository.PendingSpanLink;
 import io.cartogra.topology.repository.PendingSpanLinkRepository;
+import io.cartogra.topology.repository.SpanRef;
 import io.cartogra.topology.repository.UnresolvedSpanServiceRepository;
 import io.cartogra.topology.repository.UpsertOutcome;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -84,7 +85,7 @@ public class ObservedDependencyService {
         Set<String> recordedUnknown = new HashSet<>();
         List<SpanObservation> pendingClients = new ArrayList<>();
         List<SpanObservation> pendingServers = new ArrayList<>();
-        Set<String> resolvedClientSpans = new HashSet<>();
+        Set<SpanRef> resolvedClientSpans = new HashSet<>();
         FallbackLock lock = new FallbackLock(tenantId);
 
         for (SpanObservation span : observations) {
@@ -107,6 +108,7 @@ public class ObservedDependencyService {
             }
         }
 
+        discardServersOfResolvedClients(tenantId, pendingServers, resolvedClientSpans);
         flushPending(tenantId, pendingClients, pendingServers, now);
         upsertEdges(tenantId, edges, now);
     }
@@ -114,11 +116,11 @@ public class ObservedDependencyService {
     private void handleClient(UUID tenantId, SpanObservation client, UUID sourceId, NameResolver names,
                               Set<EdgeKey> edges, List<SpanObservation> pendingClients,
                               List<SpanObservation> pendingServers, Instant now, Set<String> recordedUnknown,
-                              Set<String> resolvedClientSpans, FallbackLock lock) {
+                              Set<SpanRef> resolvedClientSpans, FallbackLock lock) {
         String targetName = client.peerName() != null ? client.peerName() : client.peerHost();
         UUID targetId = targetName != null ? names.resolve(targetName) : null;
         if (targetId != null) {
-            resolvedClientSpans.add(spanKey(client.traceId(), client.spanId()));
+            resolvedClientSpans.add(new SpanRef(client.traceId(), client.spanId()));
             addEdge(edges, sourceId, targetId, client.protocol());
             return;
         }
@@ -147,10 +149,10 @@ public class ObservedDependencyService {
 
     private void handleServer(UUID tenantId, SpanObservation server, UUID targetId, NameResolver names,
                               Set<EdgeKey> edges, List<SpanObservation> pendingClients,
-                              List<SpanObservation> pendingServers, Set<String> resolvedClientSpans,
+                              List<SpanObservation> pendingServers, Set<SpanRef> resolvedClientSpans,
                               FallbackLock lock) {
         if (server.parentSpanId() == null
-                || resolvedClientSpans.contains(spanKey(server.traceId(), server.parentSpanId()))) {
+                || resolvedClientSpans.contains(new SpanRef(server.traceId(), server.parentSpanId()))) {
             return;
         }
         Optional<SpanObservation> inBatch = pendingClients.stream()
@@ -173,10 +175,6 @@ public class ObservedDependencyService {
             return;
         }
         pendingServers.add(server);
-    }
-
-    private static String spanKey(String traceId, String spanId) {
-        return traceId + '/' + spanId;
     }
 
     private void matchedFallback(Set<EdgeKey> edges, @Nullable UUID sourceId, @Nullable UUID targetId,
@@ -202,6 +200,23 @@ public class ObservedDependencyService {
     private void recordUnknown(UUID tenantId, String name, Instant now, Set<String> recordedUnknown) {
         if (recordedUnknown.add(name.toLowerCase(Locale.ROOT))) {
             unresolvedSpanServiceRepository.record(tenantId, name, now, spanLinkProperties.maxUnresolvedPerTenant());
+        }
+    }
+
+    /**
+     * A SERVER half parked before its CLIENT resolved directly can never be matched; drop it now
+     * instead of letting it sit until TTL. Runs without the fallback lock: a concurrently inserted
+     * row that slips past is only reaped later, never wrongly joined.
+     */
+    private void discardServersOfResolvedClients(UUID tenantId, List<SpanObservation> pendingServers,
+                                                 Set<SpanRef> resolvedClientSpans) {
+        if (resolvedClientSpans.isEmpty()) {
+            return;
+        }
+        pendingServers.removeIf(s -> resolvedClientSpans.contains(new SpanRef(s.traceId(), s.parentSpanId())));
+        int deleted = pendingSpanLinkRepository.deleteServerPartners(tenantId, resolvedClientSpans);
+        if (deleted > 0) {
+            meterRegistry.counter("cartogra.spans.pending_discarded").increment(deleted);
         }
     }
 

@@ -3,6 +3,7 @@ package io.cartogra.topology.infrastructure.jdbc;
 import io.cartogra.topology.domain.SpanKind;
 import io.cartogra.topology.repository.PendingSpanLink;
 import io.cartogra.topology.repository.PendingSpanLinkRepository;
+import io.cartogra.topology.repository.SpanRef;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -10,12 +11,16 @@ import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
 @Repository
 public class JdbcPendingSpanLinkRepository implements PendingSpanLinkRepository {
+
+    private static final int DELETE_CHUNK_SIZE = 1000;
 
     private static final RowMapper<PendingSpanLink> MAPPER = (rs, _) -> new PendingSpanLink(
             UUID.fromString(rs.getString("id")),
@@ -92,6 +97,26 @@ public class JdbcPendingSpanLinkRepository implements PendingSpanLinkRepository 
     @Override
     public void delete(UUID id) {
         jdbc.update("DELETE FROM pending_span_links WHERE id = :id", new MapSqlParameterSource("id", id));
+    }
+
+    @Override
+    public int deleteServerPartners(UUID tenantId, Collection<SpanRef> clientSpans) {
+        String sql = """
+                DELETE FROM pending_span_links
+                WHERE tenant_id = :tenantId AND kind = 'server'
+                  AND (trace_id, parent_span_id) IN (:spans)
+                """;
+        List<Object[]> spans = clientSpans.stream()
+                .map(ref -> new Object[] {ref.traceId(), ref.spanId()})
+                .toList();
+        int deleted = 0;
+        for (int from = 0; from < spans.size(); from += DELETE_CHUNK_SIZE) {
+            var params = new MapSqlParameterSource()
+                    .addValue("tenantId", tenantId)
+                    .addValue("spans", spans.subList(from, Math.min(from + DELETE_CHUNK_SIZE, spans.size())));
+            deleted += jdbc.update(sql, params);
+        }
+        return deleted;
     }
 
     @Override

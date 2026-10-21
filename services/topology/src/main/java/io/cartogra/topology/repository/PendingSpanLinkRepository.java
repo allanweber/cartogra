@@ -1,6 +1,7 @@
 package io.cartogra.topology.repository;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -19,6 +20,9 @@ public interface PendingSpanLinkRepository {
     void insert(PendingSpanLink link);
 
     void delete(UUID id);
+
+    /** Deletes pending SERVER spans whose {@code parent_span_id} is one of the given CLIENT spans. */
+    int deleteServerPartners(UUID tenantId, Collection<SpanRef> clientSpans);
 
     int deleteExpired(Instant now);
 }

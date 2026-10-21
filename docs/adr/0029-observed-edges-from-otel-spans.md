@@ -42,7 +42,7 @@ ADR-0016 proposed an OTel Collector `kafka` exporter feeding `cartogra.observabi
 
 ### Neutral
 
-- A SERVER span whose CLIENT resolved via `peer.service` in an earlier batch still sits in `pending_span_links` until TTL.
+- A parked SERVER span is deleted as soon as its CLIENT resolves directly (`peer.service` / `server.address`), in any later batch. Only a SERVER span arriving *after* its directly-resolved CLIENT's batch (or racing it on another instance) still sits in `pending_span_links` until TTL; SERVER spans usually export first, so this is the rare order.
 - The collector's Kafka pipeline drops spans from the `topology` service (`filter/no-self`) so the worker's own consumer/JDBC/DLQ spans cannot feed it; revisit with 7.9.
 
 ## Alternatives Considered
