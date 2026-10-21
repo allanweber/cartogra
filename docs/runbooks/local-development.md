@@ -270,14 +270,16 @@ instrumented service ──OTLP──▶ otel-collector ──▶ Kafka cartogra
 
 | Setting | Where | Default | Meaning |
 |---------|-------|---------|---------|
-| `CARTOGRA_TENANT_ID` | collector container env (`docker-compose.dev.yml`) | `unset` | Tenant UUID stamped on spans that don't already carry `cartogra.tenant.id`. `unset` is deliberately invalid: Topology sends such batches to the DLQ as `TENANT_MALFORMED`. Read only at container start. |
+| `CARTOGRA_TENANT_ID` | collector container env (`docker-compose.dev.yml`) | `unset` | Tenant UUID stamped on spans that don't already carry `cartogra.tenant.id`. `unset` is a placeholder: the collector's `filter/no-self` drops `unset` spans before Kafka, so they never reach Topology or the DLQ. Read only at container start. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | each service | `http://localhost:4318` | Where services send OTLP/HTTP. Already points at the dev collector. |
 | `KAFKA_BOOTSTRAP_SERVERS` | Topology | `localhost:9092` | Same Kafka the collector exports to (`kafka:29092` inside the compose network). |
 | `topology.span-links.ttl` | Topology `application.yml` | `PT5M` | How long an unmatched CLIENT/SERVER half waits for its partner. |
 | `topology.span-links.reap-interval` | same | `PT1M` | How often expired halves are deleted. |
 | `topology.span-links.max-unresolved-per-tenant` | same | `1000` | Cap on distinct unknown peer names recorded per tenant. |
+| `topology.span-topics.retention` | same (`TOPOLOGY_SPAN_TOPICS_RETENTION`) | `PT1H` | Kafka retention of `cartogra.observability.spans`. Topology reads records within seconds. |
+| `topology.span-topics.dlq-retention` | same (`TOPOLOGY_SPAN_TOPICS_DLQ_RETENTION`) | `P3D` | Kafka retention of `cartogra.observability.spans.dlq`. |
 
-The Kafka topic `cartogra.observability.spans` (and `.dlq`) is auto-created by the dev broker on first use.
+Topology creates `cartogra.observability.spans` and `.dlq` at startup with the retentions above, and fixes the retention in place if the broker auto-created them first (`spring.kafka.admin.modify-topic-configs`). The collector also drops spans from Cartogra's own `topology`, `gateway`, `registry` and `ingestion` services.
 
 ### Procedure
 
@@ -315,7 +317,8 @@ The Kafka topic `cartogra.observability.spans` (and `.dlq`) is auto-created by t
 |----------|-----|----------|
 | Unknown target | `__TARGET__` = a name not in the catalog | no edge; row in `topology.unresolved_span_services` (`seen_count` grows) |
 | IP target + SERVER half | send `client-ip-target.json` (`__SOURCE__`, `__TENANT__`, `__TRACE__`, `__CLIENT_SPAN__`), then `server-child.json` (`__TARGET__` = the server's `service.name`, `__SERVER_SPAN__` 16 hex, **same** `__TENANT__`/`__TRACE__`/`__CLIENT_SPAN__` values) | edge created; `topology.pending_span_links` empty again |
-| Missing/invalid tenant | send `no-tenant.json` with the collector started without `CARTOGRA_TENANT_ID` | record on `cartogra.observability.spans.dlq`, Topology logs `Span batch quarantined: TENANT_MALFORMED` |
+| Missing tenant | send `no-tenant.json` with the collector started without `CARTOGRA_TENANT_ID` | dropped by the collector (stamped `unset`): nothing on `cartogra.observability.spans` or `.dlq` |
+| Invalid/unknown tenant | send `client-peer-service.json` with `__TENANT__` = `not-a-uuid` or a random UUID | record on `cartogra.observability.spans.dlq`, Topology logs `Span batch quarantined: TENANT_MALFORMED` / `TENANT_UNKNOWN` |
 | Real traffic | set `OTEL_EXPORTER_OTLP_ENDPOINT` on your own instrumented services | edges for each CLIENT span whose peer is in the catalog |
 
 ### Inspecting each hop
@@ -335,8 +338,8 @@ Counters: `cartogra_spans_edges_total{result}` (created/updated/unchanged), `car
 
 | Symptom | Cause / fix |
 |---------|-------------|
-| `TENANT_MALFORMED` in the Topology log | Record has `cartogra.tenant.id=unset` or a non-UUID. The collector was started without `CARTOGRA_TENANT_ID` (recreate it, step 4). Old records stay on the DLQ. |
-| Registry/Ingestion scheduler spans (`healthProbeScheduler.probe`, …) on the DLQ | Same cause. They are INTERNAL spans and never produce edges, but they are quarantined until the tenant is set. |
+| `TENANT_MALFORMED` in the Topology log | Record has a non-UUID `cartogra.tenant.id` (`unset` is dropped by the collector and never gets here). Old records stay on the DLQ until its 3-day retention. |
+| Spans from your own services never arrive | The collector was started without `CARTOGRA_TENANT_ID`, so they are stamped `unset` and dropped (recreate it, step 4). |
 | `TENANT_MISSING` | Span has no `cartogra.tenant.id` and the collector didn't add one (spans sent straight to Kafka, or a custom collector config). |
 | Collector exits on start | `docker logs cartogra-otel-collector`. An empty `CARTOGRA_TENANT_ID` fails validation (compose defaults it to `unset`); Kafka must be healthy. |
 | `200` from curl but no edge | Check Kafka UI for the message. Then `unresolved_span_services` (name not in catalog), then `cartogra_spans_skipped_total` (kind/protocol/self). Source and target must differ and both be live catalog services. |

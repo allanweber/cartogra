@@ -1,6 +1,7 @@
 package io.cartogra.topology.infrastructure.kafka;
 
 import io.cartogra.topology.domain.ObservedDependencyService;
+import io.cartogra.topology.domain.SpanObservation;
 import io.cartogra.topology.domain.exception.UnattributedSpanBatchException;
 import io.cartogra.topology.infrastructure.otel.OtlpSpanMapper;
 import io.cartogra.topology.infrastructure.otel.OtlpSpanMapper.TenantSpans;
@@ -16,7 +17,10 @@ import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -24,7 +28,8 @@ import java.util.UUID;
  * The topic carries raw OTLP, not an {@code EventEnvelope} (ADR-0029). Tenant attribution
  * is validated per resource: attributable resources are ingested, and if any resource was not
  * the record then ends on {@code <topic>.dlq} via a non-retryable exception, so quarantined
- * spans stay visible without discarding the valid ones batched with them.
+ * spans stay visible without discarding the valid ones batched with them. A tenant's resources are
+ * ingested as one batch so the CLIENT and SERVER halves of a call join in memory whatever their order.
  */
 @Component
 public class OtelSpanWorker {
@@ -56,16 +61,18 @@ public class OtelSpanWorker {
             List<TenantSpans> groups = spanMapper.map(request);
 
             UnattributedSpanBatchException firstQuarantined = null;
+            Map<UUID, List<SpanObservation>> byTenant = new LinkedHashMap<>();
             for (TenantSpans group : groups) {
                 try {
                     UUID tenantId = observedDependencyService.requireAttributedTenant(group.tenantRaw());
-                    observedDependencyService.ingest(tenantId, group.observations());
+                    byTenant.computeIfAbsent(tenantId, _ -> new ArrayList<>()).addAll(group.observations());
                 } catch (UnattributedSpanBatchException e) {
                     if (firstQuarantined == null) {
                         firstQuarantined = e;
                     }
                 }
             }
+            byTenant.forEach(observedDependencyService::ingest);
             if (firstQuarantined != null) {
                 throw firstQuarantined;
             }

@@ -10,7 +10,10 @@ import io.cartogra.topology.repository.GraphNodeUpsert;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Header;
@@ -28,6 +31,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
+import org.springframework.kafka.core.KafkaAdmin;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.test.utils.ContainerTestUtils;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -65,6 +69,7 @@ class OtelSpanWorkerIT {
     @Autowired DependencyRepository dependencyRepository;
     @Autowired NamedParameterJdbcTemplate jdbc;
     @Autowired MeterRegistry meterRegistry;
+    @Autowired KafkaAdmin kafkaAdmin;
 
     private KafkaTemplate<String, String> template;
     private UUID tenant;
@@ -174,6 +179,27 @@ class OtelSpanWorkerIT {
     }
 
     @Test
+    void resolvedClientBeforeItsServerInOneRecordParksNothing() throws Exception {
+        send("resolved-call-one-record.json", vars(newId(16), newId(8), "checkout", "payments"));
+
+        awaitEdge(checkout, payments);
+        assertThat(count("pending_span_links")).isZero();
+    }
+
+    @Test
+    void parkedServerIsDiscardedWhenItsClientLaterResolvesDirectly() throws Exception {
+        String trace = newId(16);
+        String clientSpan = newId(8);
+        send("server-child.json", vars(trace, clientSpan, "checkout", "payments"));
+        Awaitility.await().atMost(Duration.ofSeconds(20)).until(() -> count("pending_span_links") == 1);
+
+        send("client-peer-service.json", vars(trace, clientSpan, "checkout", "payments"));
+
+        Awaitility.await().atMost(Duration.ofSeconds(20)).until(() -> count("pending_span_links") == 0);
+        assertThat(edgeExists(checkout, payments)).isTrue();
+    }
+
+    @Test
     void unknownPeerServiceIsCountedAndHostIsNot() throws Exception {
         send("client-peer-service.json", vars(newId(16), newId(8), "checkout", "ghost"));
         send("client-peer-service.json", vars(newId(16), newId(8), "checkout", "ghost"));
@@ -199,6 +225,23 @@ class OtelSpanWorkerIT {
         assertThat(edgeExists(checkout, payments)).isFalse();
         assertThat(edgeExists(checkout, checkout)).isFalse();
         assertThat(count("dependencies")).isEqualTo(1);
+    }
+
+    @Test
+    void spanTopicsCarryShortRetention() throws Exception {
+        try (var admin = AdminClient.create(kafkaAdmin.getConfigurationProperties())) {
+            assertThat(config(admin, "cartogra.observability.spans", TopicConfig.RETENTION_MS_CONFIG))
+                    .isEqualTo("3600000");
+            assertThat(config(admin, "cartogra.observability.spans", TopicConfig.SEGMENT_MS_CONFIG))
+                    .isEqualTo("3600000");
+            assertThat(config(admin, "cartogra.observability.spans.dlq", TopicConfig.RETENTION_MS_CONFIG))
+                    .isEqualTo("259200000");
+        }
+    }
+
+    private static String config(AdminClient admin, String topic, String key) throws Exception {
+        var resource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+        return admin.describeConfigs(List.of(resource)).all().get().get(resource).get(key).value();
     }
 
     @Test
