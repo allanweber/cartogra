@@ -383,6 +383,39 @@ class AuthControllerIT extends AbstractGatewayIT {
     }
 
     @Test
+    void loginWithExistingRefreshCookieRevokesReplacedSession() throws Exception {
+        UUID tenantId = insertTenant();
+        String email = "relogin-" + UUID.randomUUID() + "@test.com";
+        insertVerifiedUser(tenantId, email, "Pass1!");
+        String loginJson = """
+            {"email":"%s","password":"Pass1!","tenantId":"%s"}
+            """.formatted(email, tenantId);
+
+        String firstBody = mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(loginJson))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+        String firstRefresh = JsonPath.read(firstBody, "$.data.refreshToken");
+
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(loginJson)
+                .cookie(new Cookie("jwt_refresh", firstRefresh)))
+            .andExpect(status().isOk());
+
+        Integer activeSessions = jdbcTemplate.queryForObject("""
+            SELECT count(*) FROM refresh_tokens r JOIN users u ON u.id = r.user_id
+            WHERE u.email = :email AND r.revoked_at IS NULL
+            """, new MapSqlParameterSource("email", email), Integer.class);
+        assertThat(activeSessions).isEqualTo(1);
+
+        mockMvc.perform(post("/api/auth/refresh")
+                .cookie(new Cookie("jwt_refresh", firstRefresh)))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void updateUserInfo_unauthenticated_returns401() throws Exception {
         mockMvc.perform(put("/api/auth/userinfo")
                 .contentType(MediaType.APPLICATION_JSON)

@@ -22,6 +22,8 @@ import io.cartogra.gateway.repository.TenantRepository;
 import io.cartogra.gateway.repository.UserRepository;
 import io.cartogra.gateway.infrastructure.jwt.JwtClaims;
 import io.cartogra.gateway.infrastructure.jwt.JwtTokenProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -29,6 +31,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
@@ -43,6 +46,8 @@ import java.util.concurrent.Executors;
 @Service
 public class AuthService {
 
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
+    static final Duration REFRESH_REPLAY_GRACE = Duration.ofSeconds(30);
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final long OTP_TTL_SECONDS = 900;
     static final long INVITE_TOKEN_TTL_SECONDS = 7 * 24 * 3600;
@@ -168,19 +173,37 @@ public class AuthService {
 
     public TokenResponse refreshToken(String rawRefreshToken) {
         String hash = sha256(rawRefreshToken);
-        RefreshToken token = refreshTokenRepository.findActiveByHash(hash)
-            .orElseThrow(() -> new UnauthorizedException("Invalid or expired refresh token"));
+        RefreshToken session = refreshTokenRepository.findActiveByHash(hash)
+            .orElseThrow(() -> rejectStaleRefreshToken(hash));
 
-        refreshTokenRepository.revoke(token.id());
-
-        User user = userRepository.findById(token.userId())
+        User user = userRepository.findById(session.userId())
             .orElseThrow(() -> new UnauthorizedException("User not found"));
 
         if (user.disabledAt() != null) {
+            refreshTokenRepository.revoke(session.id());
             throw new UnauthorizedException("This account has been disabled. Contact your administrator.");
         }
 
-        return issueTokens(user);
+        String rawNext = jwtTokenProvider.issueRefreshToken();
+        refreshTokenRepository.rotate(hash, sha256(rawNext),
+                Instant.now().plusSeconds(jwtConfig.refreshTokenExpirySeconds()))
+            .orElseThrow(() -> rejectStaleRefreshToken(hash));
+
+        return new TokenResponse(issueAccessToken(user), rawNext, jwtConfig.accessTokenExpirySeconds());
+    }
+
+    /** A just-rotated token replayed outside {@link #REFRESH_REPLAY_GRACE} is treated as stolen and
+     *  revokes its session; inside the grace window it is a concurrent-refresh race and is only rejected. */
+    private UnauthorizedException rejectStaleRefreshToken(String hash) {
+        Instant graceCutoff = Instant.now().minus(REFRESH_REPLAY_GRACE);
+        refreshTokenRepository.findActiveByPreviousHash(hash)
+            .filter(session -> session.lastUsedAt() == null || session.lastUsedAt().isBefore(graceCutoff))
+            .ifPresent(session -> {
+                log.warn("Refresh token replay detected, revoking session [sessionId={}, userId={}]",
+                    session.id(), session.userId());
+                refreshTokenRepository.revoke(session.id());
+            });
+        return new UnauthorizedException("Invalid or expired refresh token");
     }
 
     public void logout(String rawRefreshToken) {
@@ -396,17 +419,20 @@ public class AuthService {
     }
 
     private TokenResponse issueTokens(User user) {
+        String accessToken = issueAccessToken(user);
+        String rawRefresh = jwtTokenProvider.issueRefreshToken();
+
+        refreshTokenRepository.save(RefreshToken.issue(user.tenantId(), user.id(), sha256(rawRefresh),
+            Instant.now().plusSeconds(jwtConfig.refreshTokenExpirySeconds())));
+
+        return new TokenResponse(accessToken, rawRefresh, jwtConfig.accessTokenExpirySeconds());
+    }
+
+    private String issueAccessToken(User user) {
         JwtClaims claims = new JwtClaims(user.id(), user.tenantId(), user.email(),
             user.name(), user.authProvider(), user.roles(),
             Instant.now().plusSeconds(jwtConfig.accessTokenExpirySeconds()));
-        String accessToken = jwtTokenProvider.issueAccessToken(claims);
-        String rawRefresh = jwtTokenProvider.issueRefreshToken();
-
-        RefreshToken token = new RefreshToken(null, user.tenantId(), user.id(), sha256(rawRefresh),
-            null, Instant.now().plusSeconds(jwtConfig.refreshTokenExpirySeconds()), null, null, null);
-        refreshTokenRepository.save(token);
-
-        return new TokenResponse(accessToken, rawRefresh, jwtConfig.accessTokenExpirySeconds());
+        return jwtTokenProvider.issueAccessToken(claims);
     }
 
     private static String generateOtp() {

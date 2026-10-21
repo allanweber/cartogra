@@ -88,9 +88,13 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<TokenResponse>> login(
             @Valid @RequestBody LoginRequest request,
+            @CookieValue(name = COOKIE_REFRESH, required = false) String replacedRefreshToken,
             HttpServletResponse response) {
         String traceId = traceContext.currentTraceId();
         TokenResponse result = auth.login(request.email(), request.password());
+        if (replacedRefreshToken != null) {
+            auth.logout(replacedRefreshToken);
+        }
         setAuthCookies(response, result);
         return ResponseEntity.ok()
             .header("X-Trace-Id", traceId)
