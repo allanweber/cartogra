@@ -26,6 +26,8 @@ spring:
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
     listener:
       ack-mode: manual_immediate
+    admin:
+      modify-topic-configs: true
   mvc:
     throw-exception-if-no-handler-found: true
   web:
@@ -47,6 +49,9 @@ topology:
   drift:
     sweep-interval: ${TOPOLOGY_DRIFT_SWEEP_INTERVAL:PT5M}
     missing-after: ${TOPOLOGY_DRIFT_MISSING_AFTER:P7D}
+  span-topics:
+    retention: ${TOPOLOGY_SPAN_TOPICS_RETENTION:PT1H}
+    dlq-retention: ${TOPOLOGY_SPAN_TOPICS_DLQ_RETENTION:P3D}
   processed-events:
     retention: ${TOPOLOGY_PROCESSED_EVENTS_RETENTION:P30D}
     reaper-interval: ${TOPOLOGY_PROCESSED_EVENTS_REAPER_INTERVAL:PT1H}

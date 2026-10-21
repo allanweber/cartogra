@@ -19,19 +19,24 @@ processors:
     attributes:
       - { action: upsert, key: service.namespace, value: cartogra }
   # Dev-only tenant stamp for the observed-edges feed (ADR-0029). `insert` keeps a tenant already
-  # on the span; compose defaults CARTOGRA_TENANT_ID to "unset" (empty fails collector validation), which Topology quarantines as malformed.
+  # on the span; compose defaults CARTOGRA_TENANT_ID to "unset" (empty fails collector validation), which filter/no-self drops.
   resource/tenant:
     attributes:
       - { action: insert, key: cartogra.tenant.id, value: "${env:CARTOGRA_TENANT_ID}" }
 
-  # Topology's own spans (its Kafka consumer, JDBC and DLQ publishes) must not feed the span worker,
-  # or consuming a record would generate the next one. Revisit with 7.9 when Cartogra's own
-  # CLIENT spans are meant to become edges.
+  # Cartogra's own spans must not feed the span worker: they carry no tenant, and Topology's own
+  # (Kafka consumer, JDBC, DLQ publishes) would make consuming a record generate the next one.
+  # Spans still on the "unset" tenant would only be quarantined, so they are dropped here too.
+  # Revisit with 7.9 when Cartogra's own CLIENT spans are meant to become edges.
   filter/no-self:
     error_mode: ignore
     traces:
       span:
         - 'resource.attributes["service.name"] == "topology"'
+        - 'resource.attributes["service.name"] == "gateway"'
+        - 'resource.attributes["service.name"] == "registry"'
+        - 'resource.attributes["service.name"] == "ingestion"'
+        - 'resource.attributes["cartogra.tenant.id"] == "unset"'
 
 exporters:
   otlp/tempo:

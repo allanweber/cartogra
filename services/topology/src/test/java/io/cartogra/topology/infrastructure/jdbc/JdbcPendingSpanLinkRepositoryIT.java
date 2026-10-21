@@ -4,12 +4,14 @@ import io.cartogra.topology.AbstractTopologyIT;
 import io.cartogra.topology.domain.SpanKind;
 import io.cartogra.topology.repository.PendingSpanLink;
 import io.cartogra.topology.repository.PendingSpanLinkRepository;
+import io.cartogra.topology.repository.SpanRef;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -59,6 +61,26 @@ class JdbcPendingSpanLinkRepositoryIT extends AbstractTopologyIT {
         repository.delete(found.id());
 
         assertThat(repository.findClientPartner(TENANT, trace, "c1")).isEmpty();
+    }
+
+    @Test
+    void deleteServerPartnersRemovesOnlyMatchingServerRowsOfTheTenant() {
+        UUID otherTenant = UUID.randomUUID();
+        String trace = UUID.randomUUID().toString();
+        Instant expiresAt = Instant.now().plusSeconds(60);
+        repository.insert(link(TENANT, trace, "s1", "c1", SpanKind.SERVER, expiresAt));
+        repository.insert(link(TENANT, trace, "s2", "c2", SpanKind.SERVER, expiresAt));
+        repository.insert(link(TENANT, trace, "c1", null, SpanKind.CLIENT, expiresAt));
+        repository.insert(link(otherTenant, trace, "s1", "c1", SpanKind.SERVER, expiresAt));
+
+        int deleted = repository.deleteServerPartners(TENANT,
+                List.of(new SpanRef(trace, "c1"), new SpanRef("other-trace", "c2")));
+
+        assertThat(deleted).isEqualTo(1);
+        assertThat(repository.findServerPartner(TENANT, trace, "c1")).isEmpty();
+        assertThat(repository.findServerPartner(TENANT, trace, "c2")).isPresent();
+        assertThat(repository.findClientPartner(TENANT, trace, "c1")).isPresent();
+        assertThat(repository.findServerPartner(otherTenant, trace, "c1")).isPresent();
     }
 
     @Test
