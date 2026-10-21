@@ -15,6 +15,13 @@ describe('loadSeed', () => {
     expect(api.services.filter((s) => s.teamId === null)).toHaveLength(3)
   })
 
+  it('assigns no owners with skipOwners, leaving ownership to CODEOWNERS', async () => {
+    const api = new FakeApi(seed)
+    const summary = await loadSeed(api, seed, { ...fast, skipOwners: true })
+    expect(summary).toMatchObject({ teamsCreated: 5, tiersUpdated: 20, ownersAssigned: 0 })
+    expect(api.services.filter((s) => s.teamId === null)).toHaveLength(20)
+  })
+
   it('leaves identical state when run twice', async () => {
     const api = new FakeApi(seed)
     await loadSeed(api, seed, fast)

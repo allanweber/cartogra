@@ -28,10 +28,13 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * All operations on the Service aggregate: CRUD, ownership assignment, orphan detection,
@@ -432,13 +435,15 @@ public class ServiceService {
     }
 
     /**
-     * Auto-assigns a team to a service from a resolved CODEOWNERS mapping. Idempotent: skips when the
-     * service already has an owner, ownership is ambiguous, or the team is unknown.
+     * Auto-assigns a team to a service from a resolved CODEOWNERS mapping. The service is found by SCM external id
+     * (the repo's full path), falling back to a repository-URL suffix match. Each owner handle is matched to a
+     * team by slug; handles matching no team (users, unknown teams) are ignored. Idempotent: skips when the
+     * service already has an owner or when zero or several distinct teams match.
      */
     @Transactional
     public void resolveOwnership(OwnershipResolvedPayload payload) {
-        Optional<Service> serviceOpt = serviceRepository.findByRepositoryPath(
-                payload.tenantId(), payload.repositoryFullName());
+        Optional<Service> serviceOpt = serviceRepository.findByExternalId(payload.tenantId(), payload.repositoryFullName())
+                .or(() -> serviceRepository.findByRepositoryPath(payload.tenantId(), payload.repositoryFullName()));
         if (serviceOpt.isEmpty()) {
             log.warn("ownership.resolved: no service found for repository={} tenant={}",
                     payload.repositoryFullName(), payload.tenantId());
@@ -456,23 +461,25 @@ public class ServiceService {
                     payload.repositoryFullName(), payload.tenantId());
             return;
         }
-        if (payload.ownerTeams().size() > 1) {
-            log.warn("ownership.resolved: ambiguous ownerTeams={} for repository={} tenant={}, skipping auto-assign",
-                    payload.ownerTeams(), payload.repositoryFullName(), payload.tenantId());
+        Set<UUID> matchedTeamIds = payload.ownerTeams().stream()
+                .map(handle -> teamRepository.findByTenantAndSlug(payload.tenantId(), Team.slug(handle)))
+                .flatMap(Optional::stream)
+                .map(Team::id)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (matchedTeamIds.isEmpty()) {
+            log.warn("ownership.resolved: ownerTeams={} match no team in registry for tenant={}, repository={}",
+                    payload.ownerTeams(), payload.tenantId(), payload.repositoryFullName());
+            return;
+        }
+        if (matchedTeamIds.size() > 1) {
+            log.warn("ownership.resolved: ambiguous ownerTeams={} match teams={} for repository={} tenant={}, skipping auto-assign",
+                    payload.ownerTeams(), matchedTeamIds, payload.repositoryFullName(), payload.tenantId());
             return;
         }
 
-        String teamName = payload.ownerTeams().get(0);
-        Optional<Team> teamOpt = teamRepository.findByTenantAndName(payload.tenantId(), teamName);
-        if (teamOpt.isEmpty()) {
-            log.warn("ownership.resolved: team='{}' not found in registry for tenant={}, repository={}",
-                    teamName, payload.tenantId(), payload.repositoryFullName());
-            return;
-        }
-
-        assignOwner(payload.tenantId(), service.id(), teamOpt.get().id(), SystemActors.SYSTEM);
-        log.info("ownership.resolved: assigned team={} to service={} via CODEOWNERS",
-                teamOpt.get().id(), service.id());
+        UUID teamId = matchedTeamIds.iterator().next();
+        assignOwner(payload.tenantId(), service.id(), teamId, SystemActors.SYSTEM);
+        log.info("ownership.resolved: assigned team={} to service={} via CODEOWNERS", teamId, service.id());
     }
 
     private ServiceSnapshot snapshot(Service service, @Nullable UUID changedBy) {

@@ -90,7 +90,7 @@ class CodeownersFlowIT {
         // Create team
         HttpResponse<String> teamResp = HTTP.send(
                 post("/api/v1/registry/teams", """
-                        {"name":"platform-team"}""", tenantId),
+                        {"name":"Platform Team"}""", tenantId),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(teamResp.statusCode()).isEqualTo(201);
         String teamId = objectMapper.readTree(teamResp.body()).get("data").get("id").stringValue();
@@ -110,10 +110,10 @@ class CodeownersFlowIT {
         JsonNode initialTeamId = svcData.get("teamId");
         assertThat(initialTeamId == null || initialTeamId.isNull()).isTrue();
 
-        // Publish synthetic ownership.resolved event
+        // Publish the ownership.resolved event GitHubProvider emits for "* @acme/platform-team @alice"
         var payload = new OwnershipResolvedPayload(
                 tenantId, UUID.randomUUID(), "acme/platform-api",
-                List.of("platform-team"), Map.of());
+                List.of("platform-team"), Map.of("*", List.of("@acme/platform-team", "@alice")));
         var envelope = EventEnvelope.of("ownership.resolved", UUID.fromString(serviceId), tenantId, 1, payload);
         String json = objectMapper.writeValueAsString(envelope);
 

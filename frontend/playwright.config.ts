@@ -1,6 +1,9 @@
 import { defineConfig, devices } from '@playwright/test'
 
-const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:3006'
+// Dedicated port, never the developer's :3006 dev server: reusing that one leaks its session/tenant into the suite.
+// The gateway's default CORS origins include it.
+const E2E_PORT = 3016
+const baseURL = process.env.E2E_BASE_URL ?? `http://localhost:${E2E_PORT}`
 
 export default defineConfig({
   testDir: './e2e',
@@ -23,7 +26,7 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: 'pnpm run dev',
+    command: `pnpm exec vite dev --port ${E2E_PORT} --strictPort`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

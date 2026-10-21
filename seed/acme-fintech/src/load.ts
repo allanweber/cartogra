@@ -7,6 +7,8 @@ export interface LoadOptions {
   discoveryTimeoutMs?: number
   syncTimeoutMs?: number
   pollMs?: number
+  /** Leave owners unassigned so CODEOWNERS (SCM sync) is the only ownership source. */
+  skipOwners?: boolean
 }
 
 export interface LoadSummary {
@@ -58,7 +60,7 @@ export async function loadSeed(api: CartograApi, seed: SeedData, options: LoadOp
       summary.tiersUpdated++
       log(`tier set: ${seeded.name} -> ${seeded.tier}`)
     }
-    if (seeded.team !== null) {
+    if (seeded.team !== null && !options.skipOwners) {
       const teamId = teamIds.get(seeded.team.toLowerCase())!
       if (current.teamId !== teamId) {
         await api.assignOwner(current.id, teamId)
@@ -68,7 +70,7 @@ export async function loadSeed(api: CartograApi, seed: SeedData, options: LoadOp
     }
   }
 
-  const nodeIds = await waitForNodes(api, seed, teamIds, syncTimeoutMs, pollMs, sleep)
+  const nodeIds = await waitForNodes(api, seed, options.skipOwners ? new Map() : teamIds, syncTimeoutMs, pollMs, sleep)
   const existing = new Set((await api.graph('DECLARED')).edges.map((e) => `${e.source}>${e.target}`))
 
   for (const call of declaredCalls(seed)) {
@@ -117,8 +119,8 @@ async function waitForNodes(
     const nodes = new Map((await api.graph()).nodes.map((n) => [n.name.toLowerCase(), n]))
     const stale = seed.services.filter((s) => {
       const node = nodes.get(s.name.toLowerCase())
-      const expectedTeam = s.team === null ? null : teamIds.get(s.team.toLowerCase())
-      return !node || node.tier !== s.tier || (expectedTeam !== null && node.teamId !== expectedTeam)
+      const expectedTeam = s.team === null ? undefined : teamIds.get(s.team.toLowerCase())
+      return !node || node.tier !== s.tier || (expectedTeam !== undefined && node.teamId !== expectedTeam)
     })
     if (stale.length === 0) return new Map(seed.services.map((s) => [s.name, nodes.get(s.name.toLowerCase())!.serviceId]))
     if (Date.now() >= deadline) {

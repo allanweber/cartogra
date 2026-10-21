@@ -52,7 +52,7 @@ async function main(): Promise<number> {
     case 'verify': {
       const api = await authenticated()
       if (command === 'load') {
-        await loadSeed(api, seed, { log: console.log })
+        await loadSeed(api, seed, { log: console.log, skipOwners: [arg, ...flags].includes('--skip-owners') })
         return 0
       }
       const withDrift = flags.includes('--with-drift') || arg === '--with-drift'
@@ -72,7 +72,7 @@ async function main(): Promise<number> {
     }
 
     default:
-      console.error('usage: acme <validate|manifests|repos|load|verify [--with-drift] [--no-spans]|drift on|off>')
+      console.error('usage: acme <validate|manifests|repos|load [--skip-owners]|verify [--with-drift] [--no-spans]|drift on|off>')
       return 2
   }
 }

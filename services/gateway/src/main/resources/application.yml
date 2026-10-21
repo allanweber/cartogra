@@ -123,7 +123,7 @@ app:
   frontend:
     base-url: ${FRONTEND_BASE_URL:http://localhost:3006}
   cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3006}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3006,http://localhost:3016}
   jwt:
     secret: ${JWT_SECRET}
     access-token-expiry-seconds: ${JWT_ACCESS_EXPIRY_SECONDS:900}

@@ -97,7 +97,7 @@ No HTTP endpoints for domain operations. The `GlobalExceptionHandler` exists onl
 | Topic | Trigger | Key payload fields |
 |---|---|---|
 | `cartogra.ingestion.service.discovered` | Per non-archived repo (SCM) or K8s Service ADD/MODIFY | `externalId`, `tenantId`, `connectionId`, `name`, `repositoryUrl`, `techStack`, `healthStatus`, `source` |
-| `cartogra.ingestion.ownership.resolved` | Per repo after CODEOWNERS resolution | `externalId`, `tenantId`, `connectionId`, `ownerTeams[]`, `pathOwners{}` |
+| `cartogra.ingestion.ownership.resolved` | Per repo after CODEOWNERS resolution | `externalId`, `tenantId`, `connectionId`, `ownerTeams[]` (bare team names — provider handle syntax stripped by `CodeownersHandles`), `pathOwners{}` (raw handles) |
 | `cartogra.ingestion.sync.completed` | After each Sync Job completes | `connectionId`, `tenantId`, `status`, `repositoriesSynced`, `errorMessage` |
 
 Future topics (Phase 2/3):
