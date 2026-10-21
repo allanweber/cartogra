@@ -94,10 +94,8 @@ public class OAuthService {
         String newAccessToken = jwtTokenProvider.issueAccessToken(claims);
         String rawRefresh = jwtTokenProvider.issueRefreshToken();
 
-        RefreshToken refreshToken = new RefreshToken(null, user.tenantId(), user.id(),
-            AuthService.sha256(rawRefresh), null,
-            Instant.now().plusSeconds(jwtConfig.refreshTokenExpirySeconds()), null, null, null);
-        refreshTokenRepository.save(refreshToken);
+        refreshTokenRepository.save(RefreshToken.issue(user.tenantId(), user.id(),
+            AuthService.sha256(rawRefresh), Instant.now().plusSeconds(jwtConfig.refreshTokenExpirySeconds())));
 
         return new TokenResponse(newAccessToken, rawRefresh, jwtConfig.accessTokenExpirySeconds());
     }

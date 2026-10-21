@@ -127,7 +127,7 @@ app:
   jwt:
     secret: ${JWT_SECRET}
     access-token-expiry-seconds: ${JWT_ACCESS_EXPIRY_SECONDS:900}
-    refresh-token-expiry-seconds: ${JWT_REFRESH_EXPIRY_SECONDS:2592000}
+    refresh-token-expiry-seconds: ${JWT_REFRESH_EXPIRY_SECONDS:604800}
     cookie-secure: true
   resend:
     api-key: ${RESEND_API_KEY}

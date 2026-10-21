@@ -1,6 +1,7 @@
 package io.cartogra.gateway.api;
 
 import io.cartogra.gateway.api.dto.TokenResponse;
+import io.cartogra.gateway.domain.AuthService;
 import io.cartogra.gateway.domain.OAuthService;
 import io.cartogra.gateway.config.FrontendProperties;
 import io.cartogra.gateway.config.JwtConfig;
@@ -24,12 +25,15 @@ public class OAuthController {
     private static final String COOKIE_REFRESH = "jwt_refresh";
 
     private final OAuthService oauth;
+    private final AuthService auth;
     private final FrontendProperties frontend;
     private final TraceContext traceContext;
     private final boolean cookieSecure;
 
-    public OAuthController(OAuthService oauth, FrontendProperties frontend, TraceContext traceContext, JwtConfig jwtConfig) {
+    public OAuthController(OAuthService oauth, AuthService auth, FrontendProperties frontend,
+                           TraceContext traceContext, JwtConfig jwtConfig) {
         this.oauth = oauth;
+        this.auth = auth;
         this.frontend = frontend;
         this.traceContext = traceContext;
         this.cookieSecure = jwtConfig.cookieSecure();
@@ -50,10 +54,14 @@ public class OAuthController {
     public ResponseEntity<Void> callback(
             @PathVariable String provider,
             @RequestParam String code,
-            @RequestParam String state) {
+            @RequestParam String state,
+            @CookieValue(name = COOKIE_REFRESH, required = false) String replacedRefreshToken) {
         String traceId = traceContext.currentTraceId();
         try {
             TokenResponse result = oauth.handleCallback(provider, code, state);
+            if (replacedRefreshToken != null) {
+                auth.logout(replacedRefreshToken);
+            }
             HttpHeaders headers = new HttpHeaders();
             headers.add(HttpHeaders.LOCATION, frontend.baseUrl() + "/dashboard");
             headers.add("X-Trace-Id", traceId);

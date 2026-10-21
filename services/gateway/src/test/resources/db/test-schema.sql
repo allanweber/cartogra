@@ -1,5 +1,5 @@
 -- Test schema for gateway integration tests.
--- Mirrors the registry Flyway migrations (V001, V002, V003, V008, V009, V010, V011, V012, V013, V014).
+-- Mirrors the registry Flyway migrations (V001, V002, V003, V008, V009, V010, V011, V012, V013, V014, V015, V016).
 -- Used instead of Flyway since the gateway has no migrations of its own.
 
 CREATE TABLE IF NOT EXISTS billing_plans (
@@ -86,8 +86,10 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
     tenant_id   UUID         NOT NULL,
     user_id     UUID         NOT NULL REFERENCES users(id),
     token_hash  VARCHAR(64)  NOT NULL UNIQUE,
+    previous_hash VARCHAR(64),
     issued_at   TIMESTAMPTZ  NOT NULL DEFAULT now(),
     expires_at  TIMESTAMPTZ  NOT NULL,
+    last_used_at TIMESTAMPTZ,
     revoked_at  TIMESTAMPTZ,
     created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
     deleted_at  TIMESTAMPTZ

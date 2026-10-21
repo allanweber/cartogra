@@ -38,6 +38,39 @@ public class JdbcRefreshTokenRepository implements RefreshTokenRepository {
     }
 
     @Override
+    public Optional<RefreshToken> findActiveByPreviousHash(String tokenHash) {
+        String sql = """
+            SELECT * FROM refresh_tokens
+            WHERE previous_hash = :hash
+              AND revoked_at IS NULL
+              AND deleted_at IS NULL
+            """;
+        var params = new MapSqlParameterSource("hash", tokenHash);
+        return jdbc.query(sql, params, JdbcRefreshTokenRepository::mapRow).stream().findFirst();
+    }
+
+    @Override
+    public Optional<RefreshToken> rotate(String currentHash, String newHash, Instant expiresAt) {
+        String sql = """
+            UPDATE refresh_tokens
+            SET previous_hash = token_hash,
+                token_hash    = :newHash,
+                expires_at    = :expiresAt,
+                last_used_at  = now()
+            WHERE token_hash = :currentHash
+              AND revoked_at IS NULL
+              AND deleted_at IS NULL
+              AND expires_at > now()
+            RETURNING *
+            """;
+        var params = new MapSqlParameterSource()
+            .addValue("currentHash", currentHash)
+            .addValue("newHash", newHash)
+            .addValue("expiresAt", Timestamp.from(expiresAt));
+        return jdbc.query(sql, params, JdbcRefreshTokenRepository::mapRow).stream().findFirst();
+    }
+
+    @Override
     public RefreshToken save(RefreshToken token) {
         UUID id = UUID.randomUUID();
         String sql = """
@@ -54,8 +87,8 @@ public class JdbcRefreshTokenRepository implements RefreshTokenRepository {
             .addValue("expiresAt", Timestamp.from(token.expiresAt()))
             .addValue("createdAt", Timestamp.from(now));
         jdbc.update(sql, params);
-        return new RefreshToken(id, token.tenantId(), token.userId(), token.tokenHash(),
-            now, token.expiresAt(), null, now, null);
+        return new RefreshToken(id, token.tenantId(), token.userId(), token.tokenHash(), null,
+            now, token.expiresAt(), null, null, now, null);
     }
 
     @Override
@@ -90,8 +123,10 @@ public class JdbcRefreshTokenRepository implements RefreshTokenRepository {
             UUID.fromString(rs.getString("tenant_id")),
             UUID.fromString(rs.getString("user_id")),
             rs.getString("token_hash"),
+            rs.getString("previous_hash"),
             toInstant(rs.getTimestamp("issued_at")),
             toInstant(rs.getTimestamp("expires_at")),
+            toInstant(rs.getTimestamp("last_used_at")),
             toInstant(rs.getTimestamp("revoked_at")),
             toInstant(rs.getTimestamp("created_at")),
             toInstant(rs.getTimestamp("deleted_at"))
