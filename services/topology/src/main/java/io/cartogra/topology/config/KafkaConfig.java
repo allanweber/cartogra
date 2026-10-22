@@ -13,31 +13,13 @@ import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.listener.CommonErrorHandler;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
-import org.springframework.kafka.support.serializer.JacksonJsonSerializer;
 import org.springframework.util.backoff.FixedBackOff;
 import tools.jackson.core.JacksonException;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.json.JsonMapper;
 
 import java.util.Map;
 
 @Configuration
 public class KafkaConfig {
-
-    @Bean
-    public ProducerFactory<String, Object> producerFactory(
-            @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers,
-            ObjectMapper objectMapper) {
-        var props = Map.<String, Object>of(
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        return new DefaultKafkaProducerFactory<>(
-                props, new StringSerializer(), new JacksonJsonSerializer<>((JsonMapper) objectMapper));
-    }
-
-    @Bean
-    public KafkaTemplate<String, Object> kafkaTemplate(ProducerFactory<String, Object> producerFactory) {
-        return new KafkaTemplate<>(producerFactory);
-    }
 
     /**
      * Dedicated string-valued producer for dead-letter publishing — see registry's
