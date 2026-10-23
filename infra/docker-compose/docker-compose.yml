@@ -3,6 +3,11 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: cartogra-postgres
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
     environment:
       POSTGRES_DB: cartogra
       POSTGRES_USER: cartogra
@@ -23,6 +28,11 @@ services:
   valkey:
     image: valkey/valkey:8-alpine
     container_name: cartogra-valkey
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.25"
     ports:
       - "6380:6379"
     volumes:
@@ -39,6 +49,11 @@ services:
   kafka:
     image: apache/kafka:4.0.0
     container_name: cartogra-kafka
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -55,6 +70,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx256m"
     ports:
       - "9092:9092"
     volumes:
@@ -74,6 +90,11 @@ services:
       dockerfile: infra/docker/gateway/Dockerfile
     image: cartogra/gateway:local
     container_name: cartogra-gateway
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
     ports:
       - "8080:8080"
     environment:
@@ -117,6 +138,11 @@ services:
       dockerfile: infra/docker/registry/Dockerfile
     image: cartogra/registry:local
     container_name: cartogra-registry
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
     ports:
       - "8081:8081"
     environment:
@@ -146,6 +172,11 @@ services:
       dockerfile: infra/docker/topology/Dockerfile
     image: cartogra/topology:local
     container_name: cartogra-topology
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
     ports:
       - "8082:8082"
     environment:
@@ -175,6 +206,11 @@ services:
       dockerfile: infra/docker/ingestion/Dockerfile
     image: cartogra/ingestion:local
     container_name: cartogra-ingestion
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
     ports:
       - "8085:8085"
     environment:
