@@ -4,3 +4,4 @@ resources:
   - gateway
   - registry
   - ingestion
+  - topology
