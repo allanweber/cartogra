@@ -146,3 +146,17 @@ export interface Drift {
 }
 
 export type DriftsPage = PageResult<Drift>
+
+export type UnresolvedResolution = 'DISMISSED' | 'REGISTERED'
+
+export interface UnresolvedSpanService {
+  id: string
+  name: string
+  firstSeenAt: string
+  lastSeenAt: string
+  seenCount: number
+  resolvedAt: string | null
+  resolution: UnresolvedResolution | null
+}
+
+export type UnresolvedSpanServicesPage = PageResult<UnresolvedSpanService>

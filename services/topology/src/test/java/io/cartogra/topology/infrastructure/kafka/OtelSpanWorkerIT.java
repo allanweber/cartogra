@@ -215,6 +215,22 @@ class OtelSpanWorkerIT {
     }
 
     @Test
+    void dismissedPeerServiceIsNotRecordedAgain() throws Exception {
+        jdbc.update("""
+                INSERT INTO unresolved_span_services
+                    (tenant_id, name, first_seen_at, last_seen_at, deleted_at, resolution)
+                VALUES (:t, 'ghost', now(), now(), now(), 'dismissed')
+                """, new MapSqlParameterSource("t", tenant));
+
+        send("client-peer-service.json", vars(newId(16), newId(8), "checkout", "ghost"));
+
+        Awaitility.await().atMost(Duration.ofSeconds(20)).until(() -> count("pending_span_links") == 1);
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM unresolved_span_services WHERE tenant_id = :t AND deleted_at IS NULL",
+                new MapSqlParameterSource("t", tenant), Long.class)).isZero();
+    }
+
+    @Test
     void messagingSpanAndSelfCallCreateNoEdge() throws Exception {
         send("messaging-span.json", vars(newId(16), newId(8), "checkout", "payments"));
         send("client-peer-service.json", vars(newId(16), newId(8), "checkout", "checkout"));

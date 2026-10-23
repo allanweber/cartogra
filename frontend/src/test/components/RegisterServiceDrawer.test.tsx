@@ -70,7 +70,14 @@ const CREATED_SERVICE: RegistryService = {
   runbookUrl: null,
 }
 
-function renderDrawer(props: { open?: boolean; onOpenChange?: (v: boolean) => void } = {}) {
+function renderDrawer(
+  props: {
+    open?: boolean
+    onOpenChange?: (v: boolean) => void
+    defaultName?: string
+    onRegistered?: (service: RegistryService) => void
+  } = {},
+) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   const onOpenChange = props.onOpenChange ?? vi.fn()
   return {
@@ -78,7 +85,12 @@ function renderDrawer(props: { open?: boolean; onOpenChange?: (v: boolean) => vo
     client,
     ...render(
       <QueryClientProvider client={client}>
-        <RegisterServiceDrawer open={props.open ?? true} onOpenChange={onOpenChange} />
+        <RegisterServiceDrawer
+          open={props.open ?? true}
+          onOpenChange={onOpenChange}
+          defaultName={props.defaultName}
+          onRegistered={props.onRegistered}
+        />
       </QueryClientProvider>,
     ),
   }
@@ -165,6 +177,22 @@ describe('RegisterServiceDrawer', () => {
     fireEvent.click(screen.getByRole('button', { name: /register service/i }))
 
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+  })
+
+  it('pre-fills the name from defaultName and reports the created service', async () => {
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path.includes('/v1/registry/teams')) return Promise.resolve(EMPTY_TEAMS)
+      return Promise.resolve(CREATED_SERVICE)
+    })
+    const onRegistered = vi.fn()
+    renderDrawer({ defaultName: 'stripe-gateway', onRegistered })
+
+    expect(await screen.findByDisplayValue('stripe-gateway')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /register service/i }))
+
+    await waitFor(() => expect(onRegistered).toHaveBeenCalledWith(CREATED_SERVICE))
+    const postCall = vi.mocked(apiFetch).mock.calls.find(([_, init]) => init?.method === 'POST')
+    expect(JSON.parse((postCall![1] as RequestInit).body as string).name).toBe('stripe-gateway')
   })
 
   it('error clears when drawer is closed and reopened', async () => {

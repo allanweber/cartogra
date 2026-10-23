@@ -1,7 +1,7 @@
 package io.cartogra.topology.api;
 
 import io.cartogra.common.api.ApiResponse;
-import io.cartogra.topology.api.dto.DriftPageResponse;
+import io.cartogra.common.api.PageResult;
 import io.cartogra.topology.api.dto.DriftResponse;
 import io.cartogra.topology.api.dto.ResolveDriftRequest;
 import io.cartogra.topology.domain.DriftService;
@@ -30,11 +30,11 @@ public class DriftController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<DriftPageResponse>> list(
+    public ResponseEntity<ApiResponse<PageResult<DriftResponse>>> list(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") int offset) {
-        return TracedResponse.ok(DriftPageResponse.from(driftService.list(tenantId, limit, offset)));
+        return TracedResponse.ok(driftService.list(tenantId, limit, offset).map(DriftResponse::from));
     }
 
     @PostMapping("/{id}/resolve")

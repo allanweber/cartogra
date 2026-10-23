@@ -18,6 +18,8 @@ import type { PageResult, RegistryService, RegistryTeam } from '#/lib/registry-t
 interface RegisterServiceDrawerProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  defaultName?: string
+  onRegistered?: (service: RegistryService) => void
 }
 
 interface CreateServicePayload {
@@ -53,7 +55,7 @@ function Field({ children }: { children: React.ReactNode }) {
   return <div className="space-y-1.5">{children}</div>
 }
 
-export function RegisterServiceDrawer({ open, onOpenChange }: RegisterServiceDrawerProps) {
+export function RegisterServiceDrawer({ open, onOpenChange, defaultName, onRegistered }: RegisterServiceDrawerProps) {
   const queryClient = useQueryClient()
   const isAdmin = useAuthStore((s) => s.user?.roles.includes('ADMIN') ?? false)
 
@@ -78,10 +80,11 @@ export function RegisterServiceDrawer({ open, onOpenChange }: RegisterServiceDra
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       }),
-    onSuccess: () => {
+    onSuccess: (service) => {
       queryClient.invalidateQueries({ queryKey: ['services'] })
       queryClient.invalidateQueries({ queryKey: ['tech-stacks'] })
       toast.success('Service registered')
+      onRegistered?.(service)
       onOpenChange(false)
     },
     onError: (err) => {
@@ -117,6 +120,12 @@ export function RegisterServiceDrawer({ open, onOpenChange }: RegisterServiceDra
     mutation.reset()
     form.reset()
   }, [open])
+
+  useEffect(() => {
+    if (open && defaultName) {
+      form.setFieldValue('name', defaultName)
+    }
+  }, [open, defaultName])
 
   useEffect(() => {
     if (open && myTeamId) {

@@ -1,5 +1,6 @@
 package io.cartogra.topology.domain;
 
+import io.cartogra.common.api.PageResult;
 import io.cartogra.topology.domain.exception.DriftAlreadyResolvedException;
 import io.cartogra.topology.domain.exception.DriftNotFoundException;
 import io.cartogra.topology.domain.exception.InvalidDriftActionException;
@@ -37,10 +38,10 @@ public class DriftService {
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
-    public DriftPage list(UUID tenantId, int limit, int offset) {
+    public PageResult<DependencyDrift> list(UUID tenantId, int limit, int offset) {
         int boundedLimit = Math.clamp(limit, 1, MAX_LIMIT);
         int boundedOffset = Math.max(offset, 0);
-        return new DriftPage(driftRepository.findActive(tenantId, boundedLimit, boundedOffset),
+        return PageResult.of(driftRepository.findActive(tenantId, boundedLimit, boundedOffset),
                 driftRepository.countActive(tenantId), boundedLimit, boundedOffset);
     }
 

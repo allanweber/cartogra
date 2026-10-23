@@ -11,6 +11,8 @@ import io.cartogra.topology.domain.exception.InvalidDriftActionException;
 import io.cartogra.topology.domain.exception.DuplicateDependencyException;
 import io.cartogra.topology.domain.exception.SelfDependencyException;
 import io.cartogra.topology.domain.exception.UnknownServiceNodeException;
+import io.cartogra.topology.domain.exception.UnresolvedSpanServiceAlreadyResolvedException;
+import io.cartogra.topology.domain.exception.UnresolvedSpanServiceNotFoundException;
 import io.opentelemetry.api.trace.Span;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,6 +54,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DriftAlreadyResolvedException.class)
     public ResponseEntity<ApiErrorResponse> handleDriftAlreadyResolved(DriftAlreadyResolvedException ex) {
         return respond(HttpStatus.CONFLICT, ErrorCodes.DRIFT_ALREADY_RESOLVED, ex.getMessage());
+    }
+
+    @ExceptionHandler(UnresolvedSpanServiceNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleUnresolvedSpanServiceNotFound(
+            UnresolvedSpanServiceNotFoundException ex) {
+        return respond(HttpStatus.NOT_FOUND, ErrorCodes.NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(UnresolvedSpanServiceAlreadyResolvedException.class)
+    public ResponseEntity<ApiErrorResponse> handleUnresolvedSpanServiceAlreadyResolved(
+            UnresolvedSpanServiceAlreadyResolvedException ex) {
+        return respond(HttpStatus.CONFLICT, ErrorCodes.UNRESOLVED_SPAN_SERVICE_ALREADY_RESOLVED, ex.getMessage());
     }
 
     @ExceptionHandler(InvalidDriftActionException.class)

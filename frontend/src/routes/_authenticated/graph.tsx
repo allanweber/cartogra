@@ -10,10 +10,12 @@ import { DependencyGraph } from '#/components/DependencyGraph'
 import { DriftTab, driftKey } from '#/components/DriftTab'
 import { InspectorPanel } from '#/components/InspectorPanel'
 import { SpofBadge } from '#/components/SpofBadge'
+import { UnresolvedSpanServices } from '#/components/UnresolvedSpanServices'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#/components/ui/select'
+import { Separator } from '#/components/ui/separator'
 import { Skeleton } from '#/components/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
 import { useDrifts } from '#/hooks/useDrifts'
@@ -373,8 +375,10 @@ function GraphPage() {
                       : 'Select a service to see what breaks if it goes down.'}
                   </p>
                 </CardHeader>
-                <CardContent className="pb-4">
+                <CardContent className="space-y-4 pb-4">
                   <DriftTab nodesById={badgeNodesById} selectedDriftId={selectedDriftId} onSelectDrift={selectDrift} />
+                  <Separator />
+                  <UnresolvedSpanServices />
                 </CardContent>
               </Card>
             )}

@@ -1,5 +1,6 @@
 package io.cartogra.topology.domain;
 
+import io.cartogra.common.api.PageResult;
 import io.cartogra.topology.domain.exception.DriftAlreadyResolvedException;
 import io.cartogra.topology.domain.exception.DriftNotFoundException;
 import io.cartogra.topology.domain.exception.InvalidDriftActionException;
@@ -164,7 +165,7 @@ class DriftServiceTest {
         when(driftRepository.findActive(TENANT, 200, 0)).thenReturn(List.of());
         when(driftRepository.countActive(TENANT)).thenReturn(0L);
 
-        DriftPage page = service.list(TENANT, 9999, -5);
+        PageResult<DependencyDrift> page = service.list(TENANT, 9999, -5);
 
         assertThat(page.limit()).isEqualTo(200);
         assertThat(page.offset()).isZero();
