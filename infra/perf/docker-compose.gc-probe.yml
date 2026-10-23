@@ -1,0 +1,19 @@
+# Test-only overlay: exposes the heapdump actuator endpoint so check-jvm-health.sh can force a full GC
+# (a live heap dump collects first) and read a real old-gen live-data value. NEVER use in production.
+services:
+  gateway:
+    environment:
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info,heapdump
+      MANAGEMENT_ENDPOINT_HEAPDUMP_ACCESS: unrestricted
+  registry:
+    environment:
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info,heapdump
+      MANAGEMENT_ENDPOINT_HEAPDUMP_ACCESS: unrestricted
+  topology:
+    environment:
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info,heapdump
+      MANAGEMENT_ENDPOINT_HEAPDUMP_ACCESS: unrestricted
+  ingestion:
+    environment:
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info,heapdump
+      MANAGEMENT_ENDPOINT_HEAPDUMP_ACCESS: unrestricted
