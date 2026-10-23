@@ -132,6 +132,15 @@ subprojects {
     // Local `bootRun` always targets dev — nothing here reaches the production jar/image.
     tasks.withType<BootRun>().configureEach {
         args("--spring.profiles.active=dev")
+        // Keep local dev JVMs small so all four services can run side by side.
+        jvmArgs(
+            "-Xmx256m",
+            "-XX:MaxMetaspaceSize=192m",
+            "-XX:ReservedCodeCacheSize=64m",
+            "-Xss512k",
+            "-XX:+UseSerialGC",
+            "-XX:ActiveProcessorCount=2",
+        )
         // suspend=n: bootRun always starts normally; a debugger can attach on this port
         // at any time (or never) without needing a special "--debug-jvm" invocation.
         debugPorts[project.name]?.let { port ->
