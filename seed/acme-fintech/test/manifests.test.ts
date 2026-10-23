@@ -36,6 +36,7 @@ describe('renderManifests', () => {
     expect(count(`value: "${options.tenantId}"`)).toBe(20)
     expect(yaml).toContain('ACME_OTLP_ENDPOINT')
     expect(yaml).toContain(String.raw`{\"to\":\"payments-service\",\"enabled\":false}`)
+    expect(yaml).toContain(String.raw`{\"to\":\"stripe-gateway\",\"enabled\":true}`)
   })
 
   it('rejects a bad tenant id, missing endpoint and latest tags', () => {

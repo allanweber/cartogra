@@ -488,6 +488,13 @@
       "to": "notification-service",
       "declared": false,
       "enabled": false
+    },
+    {
+      "from": "payments-service",
+      "to": "stripe-gateway",
+      "declared": false,
+      "enabled": true,
+      "external": true
     }
   ]
 }

@@ -8,7 +8,9 @@ import io.cartogra.topology.infrastructure.registry.RegistryServiceSnapshot;
 import io.cartogra.topology.infrastructure.scheduled.DependencyGraphViewRefreshScheduler;
 import io.cartogra.topology.repository.DependencyRepository;
 import io.cartogra.topology.repository.GraphNodeRepository;
+import io.cartogra.topology.repository.GraphNodeUpsert;
 import io.cartogra.topology.repository.ProcessedEventRepository;
+import io.cartogra.topology.repository.UnresolvedSpanServiceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -31,17 +33,20 @@ public class GraphNodeService {
     private final RegistryGraphNodeClient registryClient;
     private final DependencyRepository dependencyRepository;
     private final DependencyGraphViewRefreshScheduler graphViewRefreshScheduler;
+    private final UnresolvedSpanServiceRepository unresolvedSpanServiceRepository;
 
     public GraphNodeService(GraphNodeRepository graphNodeRepository,
                              ProcessedEventRepository processedEventRepository,
                              RegistryGraphNodeClient registryClient,
                              DependencyRepository dependencyRepository,
-                             DependencyGraphViewRefreshScheduler graphViewRefreshScheduler) {
+                             DependencyGraphViewRefreshScheduler graphViewRefreshScheduler,
+                             UnresolvedSpanServiceRepository unresolvedSpanServiceRepository) {
         this.graphNodeRepository = graphNodeRepository;
         this.processedEventRepository = processedEventRepository;
         this.registryClient = registryClient;
         this.dependencyRepository = dependencyRepository;
         this.graphViewRefreshScheduler = graphViewRefreshScheduler;
+        this.unresolvedSpanServiceRepository = unresolvedSpanServiceRepository;
     }
 
     /**
@@ -62,7 +67,7 @@ public class GraphNodeService {
         if (EVENT_TYPE_DELETED.equals(envelope.eventType())) {
             handleDeleted(payload, envelope.timestamp());
         } else {
-            graphNodeRepository.upsert(payload.toGraphNodeUpsert());
+            upsertNode(payload.toGraphNodeUpsert());
         }
     }
 
@@ -97,7 +102,7 @@ public class GraphNodeService {
                 throw new BackfillFailedException(upserted, offset, e);
             }
             for (RegistryServiceSnapshot snapshot : page) {
-                graphNodeRepository.upsert(snapshot.toGraphNodeUpsert());
+                upsertNode(snapshot.toGraphNodeUpsert());
                 upserted++;
             }
             offset += BACKFILL_PAGE_SIZE;
@@ -105,5 +110,10 @@ public class GraphNodeService {
 
         log.info("Backfill upserted {} graph nodes from registry", upserted);
         return upserted;
+    }
+
+    private void upsertNode(GraphNodeUpsert upsert) {
+        graphNodeRepository.upsert(upsert);
+        unresolvedSpanServiceRepository.markRegistered(upsert.tenantId(), upsert.name(), Instant.now());
     }
 }

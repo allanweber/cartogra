@@ -39,3 +39,20 @@ describe('verify with drift', () => {
     expect(checks.find((c) => c.name === '4 drift records raised')?.ok).toBe(true)
   })
 })
+
+describe('verify unresolved span services', () => {
+  const opts = { sleep: async () => {}, pollMs: 0, discoveryTimeoutMs: 50, syncTimeoutMs: 50, observedTimeoutMs: 0 }
+  const check = '1 external peers listed as unresolved'
+
+  it('fails while the external peer is not listed', async () => {
+    const checks = await verify(new FakeApi(seed), seed, opts)
+    expect(checks.find((c) => c.name === check)).toMatchObject({ ok: false, detail: 'stripe-gateway' })
+  })
+
+  it('passes once the external peer is listed', async () => {
+    const api = new FakeApi(seed)
+    api.unresolved = [{ name: 'stripe-gateway', seenCount: 4 }]
+    const checks = await verify(api, seed, opts)
+    expect(checks.find((c) => c.name === check)?.ok).toBe(true)
+  })
+})

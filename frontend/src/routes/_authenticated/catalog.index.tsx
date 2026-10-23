@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, LayoutGrid, List, Plus, RotateCw, Search, SlidersHorizontal } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { z } from 'zod'
@@ -131,7 +131,8 @@ function CatalogPage() {
 
   const healthDbValue = HEALTH_OPTIONS.find((f) => f.value === healthFilter)?.dbValue
 
-  const { data: pageResult, isLoading, error, dataUpdatedAt, refetch } = useQuery({
+  const { data: pageResult, isLoading, isPlaceholderData, error, dataUpdatedAt, refetch } = useQuery({
+    placeholderData: keepPreviousData,
     queryKey: ['services', teamFilter, healthFilter, sourceFilter, [...techFilter].sort(), dQuery, page],
     queryFn: () => {
       const params = new URLSearchParams()
@@ -365,40 +366,42 @@ function CatalogPage() {
         </div>
 
         {/* Content */}
-        {isLoading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-44 w-full rounded-xl" />
-            ))}
-          </div>
-        ) : error ? (
-          <Alert variant="destructive">
-            <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
-              <span>
-                {error.message}
-                {error instanceof ApiError && ` (trace: ${error.traceId})`}
-              </span>
-              <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1.5">
-                <RotateCw className="size-3.5" aria-hidden="true" />
-                Retry
-              </Button>
-            </AlertDescription>
-          </Alert>
-        ) : services.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16 text-center">
-            <Search className="mb-3 size-8 text-muted-foreground/50" aria-hidden="true" />
-            <p className="text-sm font-medium">No services match your filters</p>
-            <p className="mt-1 text-xs text-muted-foreground">Try adjusting the search or filters</p>
-          </div>
-        ) : view === 'grid' ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {services.map((svc) => (
-              <ServiceCard key={svc.id} service={svc} teamName={teamMap.get(svc.teamId ?? '') ?? null} />
-            ))}
-          </div>
-        ) : (
-          <ServiceListTable services={services} teamMap={teamMap} />
-        )}
+        <div aria-busy={isPlaceholderData} className={cn('transition-opacity', isPlaceholderData && 'opacity-60')}>
+          {isLoading ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="h-44 w-full rounded-xl" />
+              ))}
+            </div>
+          ) : error ? (
+            <Alert variant="destructive">
+              <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+                <span>
+                  {error.message}
+                  {error instanceof ApiError && ` (trace: ${error.traceId})`}
+                </span>
+                <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1.5">
+                  <RotateCw className="size-3.5" aria-hidden="true" />
+                  Retry
+                </Button>
+              </AlertDescription>
+            </Alert>
+          ) : services.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16 text-center">
+              <Search className="mb-3 size-8 text-muted-foreground/50" aria-hidden="true" />
+              <p className="text-sm font-medium">No services match your filters</p>
+              <p className="mt-1 text-xs text-muted-foreground">Try adjusting the search or filters</p>
+            </div>
+          ) : view === 'grid' ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {services.map((svc) => (
+                <ServiceCard key={svc.id} service={svc} teamName={teamMap.get(svc.teamId ?? '') ?? null} />
+              ))}
+            </div>
+          ) : (
+            <ServiceListTable services={services} teamMap={teamMap} />
+          )}
+        </div>
 
         {/* Pagination */}
         {totalPages > 1 && (

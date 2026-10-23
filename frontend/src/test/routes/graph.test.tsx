@@ -7,7 +7,7 @@ import { ApiError, apiFetch } from '#/lib/api'
 import { Route } from '#/routes/_authenticated/graph'
 
 import type { PageResult, RegistryTeam } from '#/lib/registry-types'
-import type { BlastRadius, Cycles, DriftsPage, Graph, Spofs } from '#/lib/topology-types'
+import type { BlastRadius, Cycles, DriftsPage, Graph, Spofs, UnresolvedSpanServicesPage } from '#/lib/topology-types'
 
 // Minimal reactive stand-in for TanStack Router's search-param state: real enough that
 // navigate({ search }) calls re-render the component with the updated filters/selection.
@@ -76,6 +76,7 @@ const EMPTY_BLAST_RADIUS: BlastRadius = {
 
 const EMPTY_CYCLES: Cycles = { cycles: [], truncated: false }
 const EMPTY_DRIFTS: DriftsPage = { items: [], total: 0, limit: 200, offset: 0 }
+const EMPTY_UNRESOLVED: UnresolvedSpanServicesPage = { items: [], total: 0, limit: 20, offset: 0 }
 const EMPTY_SPOFS: Spofs = { threshold: 5, rationale: 'rationale', items: [] }
 
 function mockGraphCalls(
@@ -85,6 +86,7 @@ function mockGraphCalls(
   spofs: Spofs = EMPTY_SPOFS,
   services: { id: string; name: string }[] = [],
   drifts: DriftsPage = EMPTY_DRIFTS,
+  unresolved: UnresolvedSpanServicesPage = EMPTY_UNRESOLVED,
 ) {
   vi.mocked(apiFetch).mockImplementation((path: string) => {
     if (path.includes('/v1/registry/services')) return Promise.resolve({ items: services, total: services.length, limit: 1000, offset: 0 })
@@ -93,6 +95,7 @@ function mockGraphCalls(
     if (path.includes('/v1/topology/cycles')) return Promise.resolve(cycles)
     if (path.includes('/v1/topology/spofs')) return Promise.resolve(spofs)
     if (path.includes('/v1/topology/drifts')) return Promise.resolve(drifts)
+    if (path.includes('/v1/topology/unresolved-span-services')) return Promise.resolve(unresolved)
     const query = path.split('?')[1] ?? ''
     return Promise.resolve(byQuery(query))
   })
@@ -175,6 +178,28 @@ describe('GraphPage', () => {
     await waitFor(() =>
       expect(svg.querySelector('.graph-link-visible')?.getAttribute('stroke')).toBe('var(--warning)'),
     )
+  })
+
+  it('lists unresolved span services under drift in the side card', async () => {
+    mockGraphCalls(() => makeGraph({}), undefined, undefined, undefined, [], EMPTY_DRIFTS, {
+      items: [
+        {
+          id: 'u1',
+          name: 'stripe-gateway',
+          firstSeenAt: '2026-10-20T12:00:00Z',
+          lastSeenAt: new Date().toISOString(),
+          seenCount: 9,
+          resolvedAt: null,
+          resolution: null,
+        },
+      ],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    })
+    renderPage()
+    expect(await screen.findByRole('heading', { name: 'Unresolved services (1)' })).toBeInTheDocument()
+    expect(screen.getByText('stripe-gateway')).toBeInTheDocument()
   })
 
   it('Drift edge mode says so when nothing drifts', async () => {

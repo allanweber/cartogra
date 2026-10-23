@@ -44,6 +44,23 @@ async function fetchVerificationToken(email: string): Promise<string> {
   }
 }
 
+// The free plan caps a tenant at 10 services and every spec shares this tenant, so the suite
+// outgrows it. There is no API to change plan; same SQL as the Acme seed README.
+async function upgradeToBusinessPlan(orgName: string) {
+  const client = new Client({ connectionString: dbUrl })
+  await client.connect()
+  try {
+    const result = await client.query(
+      `UPDATE registry.tenants SET plan_id = (SELECT id FROM registry.billing_plans WHERE slug = 'business')
+       WHERE name = $1`,
+      [orgName],
+    )
+    if (result.rowCount !== 1) throw new Error(`Could not upgrade ${orgName} to the business plan`)
+  } finally {
+    await client.end()
+  }
+}
+
 export default async function globalSetup() {
   assertLocalTargets()
   await mkdir(path.dirname(storageStatePath), { recursive: true })
@@ -68,6 +85,8 @@ export default async function globalSetup() {
     if (!verify.ok()) {
       throw new Error(`Verification failed: ${verify.status()} ${await verify.text()}`)
     }
+
+    await upgradeToBusinessPlan(orgName)
 
     const login = await api.post('/api/auth/login', { data: { email, password } })
     if (!login.ok()) {

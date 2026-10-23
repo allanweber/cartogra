@@ -18,3 +18,10 @@ metadata:
   name: ingestion
 spec:
   replicas: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: topology
+spec:
+  replicas: 3

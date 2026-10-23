@@ -36,3 +36,16 @@ spec:
   selector:
     matchLabels:
       app: ingestion
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: topology
+  labels:
+    app: topology
+    team: platform
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: topology

@@ -1,0 +1,6 @@
+# Overlay for the perf workflow: one tenant drives all load, so the per-tenant gateway rate limit
+# would turn the test into a 429 benchmark. Use with -f docker-compose.yml -f ../perf/docker-compose.perf.yml.
+services:
+  gateway:
+    environment:
+      RATE_LIMIT_ENABLED: "false"

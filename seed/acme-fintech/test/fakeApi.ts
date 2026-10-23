@@ -1,4 +1,4 @@
-import { ApiError, type CartograApi, type CatalogService, type Drift, type Graph, type Risk, type Team } from '../src/api.ts'
+import { ApiError, type CartograApi, type CatalogService, type Drift, type Graph, type Risk, type Team, type UnresolvedSpanService } from '../src/api.ts'
 import { declaredCycles, type SeedData } from '../src/schema.ts'
 
 export class FakeApi implements CartograApi {
@@ -7,6 +7,7 @@ export class FakeApi implements CartograApi {
   readonly edges = new Set<string>()
   readonly calls: string[] = []
   driftRecords: Drift[] = []
+  unresolved: UnresolvedSpanService[] = []
   nodeLagReads = 0
   private seq = 0
   private readonly seed: SeedData
@@ -90,5 +91,8 @@ export class FakeApi implements CartograApi {
   async risks(): Promise<Risk[]> {
     const orphans = this.services.filter((s) => s.teamId === null).map((s) => s.id)
     return [{ type: 'orphan', affectedServices: orphans }]
+  }
+  async unresolvedSpanServices() {
+    return [...this.unresolved]
   }
 }

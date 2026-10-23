@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: topology-config
+data:
+  DB_URL: "jdbc:postgresql://postgres:5432/cartogra?currentSchema=topology"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  REGISTRY_URI: "http://registry:8081"

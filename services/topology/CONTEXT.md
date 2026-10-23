@@ -20,6 +20,7 @@ Topology maintains the live dependency graph of all Services within a tenant. It
 | **Blast radius** | The set of Services reachable from a given Service within a bounded hop count, in both directions: `upstream` (what it depends on, forward traversal) and `downstream` (what would be affected if it degraded or went down, backward traversal) — computed via a recursive CTE over `dependency_graph_edges`. Note: this `upstream`/`downstream` pairing is the opposite of the one used by the 1-hop `/dependencies/{serviceId}` endpoint |
 | **Cycle** | A set of Services in a circular dependency chain; indicates an architectural anti-pattern |
 | **Drift** | A mismatch between declared and observed dependencies (`undeclared` = observed but not declared; `missing` = declared but not observed) |
+| **Unresolved span service** | A `peer.service` name seen on CLIENT spans that matches no catalog Service (e.g. an external SaaS API). Listed by `seen_count` until a Service with that name is registered (`resolution='registered'`) or a user dismisses it (`resolution='dismissed'`, never re-recorded) |
 | **SPOF** | Single Point of Failure — a Service with no redundancy that sits on the critical path of many other Services |
 | **Graph snapshot** | The full dependency graph state at a point in time; published to Kafka after every update |
 | **Orphan** | A Service with no team owner (`team_id IS NULL`); `team_id` is mirrored from Registry via the existing `service.{registered,updated}` lifecycle sync (ADR-0028, superseding ADR-0027's plan for a dedicated topic), used for orphan risk and SPOF severity |
@@ -56,6 +57,7 @@ Cross-context references stored as IDs only — Topology never hydrates a `Servi
 |---|---|
 | `dependencies` | Directional edges; `dependency_type`: declared/observed; `protocol`: http/grpc/kafka/db |
 | `dependency_drifts` | Drift records: `drift_type`: undeclared/missing; `detected_at`/`resolved_at`/`resolved_by`; `resolution`: accepted/removed/dismissed/auto (auto = condition cleared on its own) |
+| `unresolved_span_services` | Unknown `peer.service` names from spans, capped per tenant (`topology.span-links.max-unresolved-per-tenant`); `seen_count`/`last_seen_at`; soft-deleted with `resolution`: dismissed/registered and `resolved_by` |
 | `graph_nodes` | Local projection of Registry services (`GraphNodeEventConsumer` — [1.1]); one row per (tenant_id, service_id), soft-deleted on `service.deleted` |
 | `processed_events` | Consumer-side idempotency ledger, keyed `(tenant_id, event_id)` — a replayed envelope is a no-op |
 
@@ -63,7 +65,7 @@ Cross-context references stored as IDs only — Topology never hydrates a `Servi
 
 ## Inbound Ports (API)
 
-Implemented: backfill, dependency CRUD, graph read (`[1.1]`–`[1.3]`), blast radius (`[2.1]`), cycles (`[2.3]`), SPOFs (`[2.4]`), risks (`[2.5]`). Drift detection and resolution (`[3.3]`).
+Implemented: backfill, dependency CRUD, graph read (`[1.1]`–`[1.3]`), blast radius (`[2.1]`), cycles (`[2.3]`), SPOFs (`[2.4]`), risks (`[2.5]`). Drift detection and resolution (`[3.3]`). Unresolved span services (`[3.6]`).
 
 | Method | Path | Description |
 |---|---|---|
@@ -78,6 +80,8 @@ Implemented: backfill, dependency CRUD, graph read (`[1.1]`–`[1.3]`), blast ra
 | GET | `/api/v1/topology/drifts` | Active drift records, paginated (`limit` ≤ 200, `offset`) — [3.3] |
 | POST | `/api/v1/topology/drifts/{id}/resolve` | `{action: ACCEPT_OBSERVED \| REMOVE_DECLARED \| DISMISS}`; accept only for `undeclared`, remove only for `missing` (422 `INVALID_DRIFT_ACTION`); already resolved 409 `DRIFT_ALREADY_RESOLVED`; ADMIN or team member on either side; dismissed drift is never re-raised — [3.3] |
 | GET | `/api/v1/topology/spofs` | Fan-in ≥ tenant-configurable threshold (default 5); severity escalates to CRITICAL for CRITICAL-tier or orphan services; threshold + rationale ship in the payload — [2.4] |
+| GET | `/api/v1/topology/unresolved-span-services` | Live unresolved span services, sorted by `seen_count` desc, paginated (`limit` ≤ 200, `offset`) — [3.6] |
+| POST | `/api/v1/topology/unresolved-span-services/{id}/dismiss` | Soft delete, sticky (never re-recorded from spans); any tenant user, recorded in `resolved_by`; already resolved 409 `UNRESOLVED_SPAN_SERVICE_ALREADY_RESOLVED` — [3.6] |
 | GET | `/api/v1/topology/risks` | Paginated SPOF + cycle + drift + orphan findings, severity-sorted — [2.5] |
 
 ---

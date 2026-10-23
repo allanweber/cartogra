@@ -1,7 +1,7 @@
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
-  allCycles, declaredCalls, declaredCycles, dependentsOf, dormantCalls, findElementaryCycles,
+  allCycles, declaredCalls, declaredCycles, dependentsOf, dormantCalls, externalCalls, findElementaryCycles,
   loadSeedFile, silentDeclaredCalls, unownedServices, validateSeed, type SeedData,
 } from '../src/schema.ts'
 
@@ -44,6 +44,12 @@ describe('seed-data.json', () => {
   it('only references real services', () => {
     expect(() => validateSeed(seed)).not.toThrow()
   })
+
+  it('has one external call that stays out of edges, drift and cycles', () => {
+    expect(externalCalls(seed).map((c) => `${c.from}>${c.to}`)).toEqual(['payments-service>stripe-gateway'])
+    expect(dormantCalls(seed).some((c) => c.external)).toBe(false)
+    expect(declaredCalls(seed).some((c) => c.external)).toBe(false)
+  })
 })
 
 describe('validateSeed', () => {
@@ -57,6 +63,14 @@ describe('validateSeed', () => {
     expect(() => validateSeed({ ...base, calls: [{ from: 'a', to: 'zzz', declared: true, enabled: true }] })).toThrow(/unknown target/)
     expect(() => validateSeed({ ...base, calls: [base.calls[0], base.calls[0]] })).toThrow(/duplicate/)
     expect(() => validateSeed({ ...base, calls: [{ from: 'a', to: 'a', declared: true, enabled: true }] })).toThrow(/self call/)
+  })
+
+  it('accepts an unknown target only on an undeclared, enabled external call', () => {
+    const external = { from: 'a', to: 'stripe-gateway', declared: false, enabled: true, external: true }
+    expect(() => validateSeed({ ...base, calls: [...base.calls, external] })).not.toThrow()
+    expect(() => validateSeed({ ...base, calls: [{ ...external, declared: true }] })).toThrow(/undeclared and enabled/)
+    expect(() => validateSeed({ ...base, calls: [{ ...external, enabled: false }] })).toThrow(/undeclared and enabled/)
+    expect(() => validateSeed({ ...base, calls: [{ ...external, to: 'B' }] })).toThrow(/is a catalog service/)
   })
 
   it('rejects duplicate service names case-insensitively', () => {

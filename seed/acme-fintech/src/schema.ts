@@ -24,6 +24,8 @@ export interface SeedCall {
   to: string
   declared: boolean
   enabled: boolean
+  /** Target is outside the catalog (e.g. a SaaS API): Cartogra lists it as an unresolved span service. */
+  external?: boolean
 }
 
 export interface SeedData {
@@ -45,17 +47,26 @@ export function loadSeedFile(path: string): SeedData {
   return seed
 }
 
+/** Calls between catalog services; external calls never become edges. */
+export function catalogCalls(seed: SeedData): SeedCall[] {
+  return seed.calls.filter((c) => !c.external)
+}
+
+export function externalCalls(seed: SeedData): SeedCall[] {
+  return seed.calls.filter((c) => c.external === true)
+}
+
 export function declaredCalls(seed: SeedData): SeedCall[] {
-  return seed.calls.filter((c) => c.declared)
+  return catalogCalls(seed).filter((c) => c.declared)
 }
 
 export function dormantCalls(seed: SeedData): SeedCall[] {
-  return seed.calls.filter((c) => !c.declared)
+  return catalogCalls(seed).filter((c) => !c.declared)
 }
 
 /** Declared calls the fake services never make: Cartogra reports them as missing drift. */
 export function silentDeclaredCalls(seed: SeedData): SeedCall[] {
-  return seed.calls.filter((c) => c.declared && !c.enabled)
+  return catalogCalls(seed).filter((c) => c.declared && !c.enabled)
 }
 
 export function dependentsOf(seed: SeedData, target: string): string[] {
@@ -110,7 +121,7 @@ export function declaredCycles(seed: SeedData): string[][] {
 }
 
 export function allCycles(seed: SeedData): string[][] {
-  return findElementaryCycles(seed.calls.map((c) => [c.from, c.to]))
+  return findElementaryCycles(catalogCalls(seed).map((c) => [c.from, c.to]))
 }
 
 export function validateSeed(seed: SeedData): void {
@@ -134,7 +145,13 @@ export function validateSeed(seed: SeedData): void {
   const keys = new Set<string>()
   for (const c of seed.calls) {
     if (!names.includes(c.from)) errors.push(`call ${c.from}->${c.to}: unknown source`)
-    if (!names.includes(c.to)) errors.push(`call ${c.from}->${c.to}: unknown target`)
+    if (c.external) {
+      if (lower.includes(c.to.toLowerCase())) errors.push(`call ${c.from}->${c.to}: external target is a catalog service`)
+      if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(c.to)) errors.push(`call ${c.from}->${c.to}: external target must be a DNS label`)
+      if (c.declared || !c.enabled) errors.push(`call ${c.from}->${c.to}: external calls must be undeclared and enabled`)
+    } else if (!names.includes(c.to)) {
+      errors.push(`call ${c.from}->${c.to}: unknown target`)
+    }
     if (c.from === c.to) errors.push(`call ${c.from}: self call`)
     const key = `${c.from}>${c.to}`
     if (keys.has(key)) errors.push(`call ${key}: duplicate`)

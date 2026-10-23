@@ -17,7 +17,9 @@ This is the only seed in the repo. It replaces `graph-perf-seed.sql`, `create-te
 containing exactly 2 cycles, 1 god service (`ledger-service`, 12 dependents), and 3 dormant undeclared
 calls (`reporting-service -> payments-service`, `webhook-relay -> fraud-service`, `legacy-batch -> notification-service`)
 that produce undeclared drift when switched on. One declared call (`loyalty-service -> fx-service`) is never made, so it
-becomes missing drift once `topology.drift.missing-after` has passed.
+becomes missing drift once `topology.drift.missing-after` has passed. One external call (`payments-service -> stripe-gateway`,
+`"external": true`) targets a name outside the catalog: it never becomes an edge and shows up in the graph's
+"Unresolved services" list instead.
 
 ## Prerequisites
 
@@ -208,7 +210,7 @@ exits non-zero and lists the missing ones.
 ## 6. Verify, then demo
 
 ```bash
-pnpm acme verify                 # load twice + identical-state diff, /cycles = 2, SPOF, 3 orphans, observed edges
+pnpm acme verify                 # load twice + identical-state diff, /cycles = 2, SPOF, 3 orphans, observed edges, stripe-gateway unresolved
 pnpm acme verify --with-drift    # also switches the 3 undeclared calls on and waits for the observed edges and 4 drift records
 pnpm acme drift on               # demo: watch 3 edges nobody declared appear on /graph (Drift edge mode)
 pnpm acme drift off

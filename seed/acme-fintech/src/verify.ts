@@ -1,6 +1,6 @@
 import type { CartograApi } from './api.ts'
 import { loadSeed, type LoadOptions } from './load.ts'
-import { allCycles, declaredCalls, declaredCycles, dormantCalls, silentDeclaredCalls, unownedServices, type SeedData } from './schema.ts'
+import { allCycles, declaredCalls, declaredCycles, dormantCalls, externalCalls, silentDeclaredCalls, unownedServices, type SeedData } from './schema.ts'
 
 export interface Snapshot {
   teams: string[]
@@ -72,6 +72,10 @@ export async function verify(api: CartograApi, seed: SeedData, options: VerifyOp
     const expected = declaredCalls(seed).map((c) => `${c.from}>${c.to}`).filter((key) => !silent.has(key))
     const missing = await pollMissing(expected, observedPairs, options.observedTimeoutMs ?? 90_000, sleep)
     add('declared calls observed from spans', missing.length === 0, missing.join(', '))
+
+    const peers = externalCalls(seed).map((c) => c.to.toLowerCase())
+    const unlisted = await pollMissing(peers, unresolvedNames(api), options.observedTimeoutMs ?? 90_000, sleep)
+    add(`${peers.length} external peers listed as unresolved`, unlisted.length === 0, unlisted.join(', '))
   }
 
   if (options.withDrift) {
@@ -93,6 +97,10 @@ export async function verify(api: CartograApi, seed: SeedData, options: VerifyOp
     }
   }
   return checks
+}
+
+function unresolvedNames(api: CartograApi): () => Promise<Set<string>> {
+  return async () => new Set((await api.unresolvedSpanServices()).map((u) => u.name.toLowerCase()))
 }
 
 export function godService(seed: SeedData): string {

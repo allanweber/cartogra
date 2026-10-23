@@ -1,0 +1,100 @@
+name: Perf
+
+# Load test against the production compose stack (same images and resource limits as docker-compose.yml).
+# Gating: k6 thresholds (errors, p95) and JVM memory health (no OOM-kill/restart, live data under the ceiling).
+# CPU/memory samples are reported as a trend only — shared runners are too noisy to gate on them.
+on:
+  # TEMPORARY: lets the workflow run before it exists on main. Remove before merging.
+  push:
+    branches: [feat/3.6-unresolved-span-services]
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: k6 run duration
+        default: 3m
+      rate:
+        description: k6 requests per second
+        default: '40'
+      span_count:
+        description: OTLP spans published to the span topic during the run
+        default: '20000'
+
+concurrency:
+  group: perf-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  load:
+    name: Perf — k6 load + JVM memory health
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COMPOSE: docker compose -f docker-compose.yml -f ../perf/docker-compose.perf.yml -f ../perf/docker-compose.gc-probe.yml
+      DURATION: ${{ inputs.duration || '3m' }}
+      RATE: ${{ inputs.rate || '40' }}
+      SPAN_COUNT: ${{ inputs.span_count || '20000' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - name: Start backend stack
+        working-directory: infra/docker-compose
+        run: $COMPOSE up -d --build --wait
+
+      - name: Log in a perf tenant
+        run: infra/perf/login.sh >> "$GITHUB_ENV"
+
+      - name: Sample container CPU/memory in the background
+        run: |
+          nohup bash -c 'while true; do docker stats --no-stream --format "{{.Name}} {{.CPUPerc}} {{.MemUsage}}" >> "$RUNNER_TEMP/stats.log"; sleep 5; done' >/dev/null 2>&1 &
+
+      - name: Run k6 load with a concurrent span burst
+        run: |
+          mkdir -p "$RUNNER_TEMP/k6" && chmod 777 "$RUNNER_TEMP/k6"
+          docker run --rm --network host \
+            -v "$PWD/infra/perf/k6:/scripts:ro" -v "$RUNNER_TEMP/k6:/out" \
+            -e COOKIE -e DURATION -e RATE \
+            grafana/k6:1.0.0 run --summary-export=/out/k6-summary.json /scripts/api-load.js &
+          k6_pid=$!
+          sleep 20
+          infra/perf/publish-spans.sh
+          wait "$k6_pid"
+
+      - name: Check JVM memory health
+        if: ${{ !cancelled() }}
+        run: |
+          infra/perf/check-jvm-health.sh
+
+      - name: Report peak CPU/memory (trend only)
+        if: ${{ !cancelled() }}
+        run: |
+          {
+            echo "### Peak container usage during the run (not gating)"
+            echo
+            echo "| Container | Peak CPU % | Peak memory (MiB) | Limit |"
+            echo "|---|---|---|---|"
+            awk 'function mib(v,  n) { n = v + 0; if (v ~ /GiB/) return n * 1024; if (v ~ /KiB/) return n / 1024; if (v ~ /MiB/) return n; return n / 1048576 }
+                 { cpu = $2 + 0; mem = mib($3); if (cpu > c[$1]) c[$1] = cpu; if (mem > m[$1]) m[$1] = mem; l[$1] = $5 }
+                 END { for (k in c) printf "| %s | %.1f | %.0f | %s |\n", k, c[k], m[k], l[k] }' "$RUNNER_TEMP/stats.log" | sort
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload k6 summary and stats
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: perf-results
+          path: |
+            ${{ runner.temp }}/k6/k6-summary.json
+            ${{ runner.temp }}/stats.log
+          retention-days: 30
+
+      - name: Dump backend logs on failure
+        if: failure()
+        working-directory: infra/docker-compose
+        run: $COMPOSE logs
+
+      - name: Tear down backend stack
+        if: always()
+        working-directory: infra/docker-compose
+        run: $COMPOSE down -v

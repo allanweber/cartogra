@@ -45,6 +45,11 @@ export interface Risk {
   affectedServices: string[]
 }
 
+export interface UnresolvedSpanService {
+  name: string
+  seenCount: number
+}
+
 export interface Drift {
   type: 'UNDECLARED' | 'MISSING'
   sourceServiceId: string
@@ -78,6 +83,7 @@ export interface CartograApi {
   spofs(): Promise<string[]>
   risks(): Promise<Risk[]>
   drifts(): Promise<Drift[]>
+  unresolvedSpanServices(): Promise<UnresolvedSpanService[]>
 }
 
 interface Page<T> {
@@ -167,6 +173,10 @@ export class HttpCartograApi implements CartograApi {
 
   async drifts(): Promise<Drift[]> {
     return this.listAll<Drift>('/api/v1/topology/drifts')
+  }
+
+  async unresolvedSpanServices(): Promise<UnresolvedSpanService[]> {
+    return this.listAll<UnresolvedSpanService>('/api/v1/topology/unresolved-span-services')
   }
 
   private async listAll<T>(path: string): Promise<T[]> {
