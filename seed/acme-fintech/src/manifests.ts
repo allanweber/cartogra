@@ -1,4 +1,4 @@
-import { enabledCallsFrom, type SeedData, type SeedService } from './schema.ts'
+import { callKind, consumedDestinations, enabledCallsFrom, type SeedData, type SeedService } from './schema.ts'
 
 export interface ManifestOptions {
   tenantId: string
@@ -39,10 +39,14 @@ function labels(s: SeedService, options: ManifestOptions, indent: number): strin
 }
 
 function deployment(seed: SeedData, s: SeedService, options: ManifestOptions): string {
-  const calls = enabledCallsFrom(seed, s.name).map((c) => ({ to: c.to, enabled: true }))
-  for (const dormant of seed.calls.filter((c) => c.from === s.name && !c.enabled)) {
+  const enabled = enabledCallsFrom(seed, s.name)
+  const calls = enabled.filter((c) => callKind(c) === 'http').map((c) => ({ to: c.to, enabled: true }))
+  for (const dormant of seed.calls.filter((c) => c.from === s.name && !c.enabled && callKind(c) === 'http')) {
     calls.push({ to: dormant.to, enabled: false })
   }
+  const produces = [...new Set(enabled.filter((c) => callKind(c) === 'messaging').map((c) => c.destination!))]
+  const consumes = consumedDestinations(seed, s.name)
+  const databases = enabled.filter((c) => callKind(c) === 'db').map((c) => c.to)
   const probe = (name: string, extra: string) => `          ${name}:
             httpGet:
               path: /health
@@ -92,6 +96,12 @@ ${labels(s, options, 8)}
               value: ${JSON.stringify(options.otlpEndpoint)}
             - name: ACME_CALLS
               value: ${JSON.stringify(JSON.stringify(calls))}
+            - name: ACME_PRODUCES
+              value: ${JSON.stringify(JSON.stringify(produces))}
+            - name: ACME_CONSUMES
+              value: ${JSON.stringify(JSON.stringify(consumes))}
+            - name: ACME_DB_CALLS
+              value: ${JSON.stringify(JSON.stringify(databases))}
           resources:
             requests:
               cpu: 25m

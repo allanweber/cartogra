@@ -1,5 +1,5 @@
 import { ApiError, type CartograApi, type CatalogService } from './api.ts'
-import { declaredCalls, type SeedData } from './schema.ts'
+import { callProtocol, declaredCalls, edgeKey, type Protocol, type SeedData } from './schema.ts'
 
 export interface LoadOptions {
   log?: (message: string) => void
@@ -71,16 +71,17 @@ export async function loadSeed(api: CartograApi, seed: SeedData, options: LoadOp
   }
 
   const nodeIds = await waitForNodes(api, seed, options.skipOwners ? new Map() : teamIds, syncTimeoutMs, pollMs, sleep)
-  const existing = new Set((await api.graph('DECLARED')).edges.map((e) => `${e.source}>${e.target}`))
+  const existing = new Set((await api.graph('DECLARED')).edges.map((e) => edgeKey(e.source, e.target, e.protocol)))
 
   for (const call of declaredCalls(seed)) {
     const source = nodeIds.get(call.from)!
     const target = nodeIds.get(call.to)!
-    if (existing.has(`${source}>${target}`)) {
+    const protocol = callProtocol(call)
+    if (existing.has(edgeKey(source, target, protocol))) {
       summary.edgesExisting++
       continue
     }
-    if (await declareWithRetry(api, source, target, pollMs, sleep)) summary.edgesCreated++
+    if (await declareWithRetry(api, source, target, protocol, pollMs, sleep)) summary.edgesCreated++
     else summary.edgesExisting++
   }
   log(`edges: ${summary.edgesCreated} created, ${summary.edgesExisting} already declared`)
@@ -134,12 +135,13 @@ async function declareWithRetry(
   api: CartograApi,
   source: string,
   target: string,
+  protocol: Protocol,
   pollMs: number,
   sleep: (ms: number) => Promise<void>,
 ): Promise<boolean> {
   for (let attempt = 1; ; attempt++) {
     try {
-      await api.declareDependency(source, target)
+      await api.declareDependency(source, target, protocol)
       return true
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) return false

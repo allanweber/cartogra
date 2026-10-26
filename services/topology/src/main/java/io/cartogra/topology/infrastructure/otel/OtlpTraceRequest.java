@@ -22,12 +22,15 @@ public record OtlpTraceRequest(@Nullable List<ResourceSpans> resourceSpans) {
 
     public record KeyValue(String key, @Nullable AnyValue value) {}
 
-    public record AnyValue(@Nullable String stringValue, @Nullable Object intValue) {
+    public record AnyValue(@Nullable String stringValue, @Nullable Object intValue, @Nullable Boolean boolValue) {
 
         @Nullable
         public String asString() {
             if (stringValue != null) {
                 return stringValue;
+            }
+            if (boolValue != null) {
+                return boolValue.toString();
             }
             return intValue != null ? intValue.toString() : null;
         }

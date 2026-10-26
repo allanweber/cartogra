@@ -228,6 +228,17 @@
         "stack": "python",
         "port": 8120
       }
+    },
+    {
+      "name": "ledger-db",
+      "team": "Ledger",
+      "tier": "CRITICAL",
+      "description": "Ledger PostgreSQL database",
+      "repo": {
+        "provider": "azure",
+        "stack": "java",
+        "port": 8121
+      }
     }
   ],
   "calls": [
@@ -495,6 +506,29 @@
       "declared": false,
       "enabled": true,
       "external": true
+    },
+    {
+      "from": "payments-service",
+      "to": "notification-service",
+      "kind": "messaging",
+      "destination": "payments.completed",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "payments-service",
+      "to": "loyalty-service",
+      "kind": "messaging",
+      "destination": "payments.completed",
+      "declared": true,
+      "enabled": true
+    },
+    {
+      "from": "ledger-service",
+      "to": "ledger-db",
+      "kind": "db",
+      "declared": true,
+      "enabled": true
     }
   ]
 }

@@ -57,8 +57,13 @@ public class OtlpSpanMapper {
         String peerHost = attribute(span.attributes(), "server.address")
                 .map(OtlpSpanMapper::stripPort).filter(s -> !s.isBlank()).orElse(null);
         String parent = isBlank(span.parentSpanId()) ? null : span.parentSpanId();
+        String dbName = attribute(span.attributes(), "db.namespace")
+                .or(() -> attribute(span.attributes(), "db.name")).filter(s -> !s.isBlank()).orElse(null);
+        String destination = attribute(span.attributes(), "messaging.destination.name")
+                .filter(s -> !s.isBlank()).orElse(null);
         return Optional.of(new SpanObservation(serviceName, kind.get(), span.traceId(), span.spanId(),
-                parent, peerName, peerHost, protocol(span.attributes())));
+                parent, peerName, peerHost, protocol(kind.get(), span.attributes(), destination), dbName,
+                destination));
     }
 
     private static Optional<SpanKind> parseKind(@Nullable Object kind) {
@@ -68,11 +73,20 @@ public class OtlpSpanMapper {
         return switch (kind.toString()) {
             case "2", "SPAN_KIND_SERVER" -> Optional.of(SpanKind.SERVER);
             case "3", "SPAN_KIND_CLIENT" -> Optional.of(SpanKind.CLIENT);
+            case "4", "SPAN_KIND_PRODUCER" -> Optional.of(SpanKind.PRODUCER);
+            case "5", "SPAN_KIND_CONSUMER" -> Optional.of(SpanKind.CONSUMER);
             default -> Optional.empty();
         };
     }
 
-    private static @Nullable DependencyProtocol protocol(@Nullable List<KeyValue> attrs) {
+    private static @Nullable DependencyProtocol protocol(SpanKind kind, @Nullable List<KeyValue> attrs,
+                                                         @Nullable String destination) {
+        if (kind == SpanKind.PRODUCER || kind == SpanKind.CONSUMER) {
+            return isKafkaDestination(attrs, destination) ? DependencyProtocol.KAFKA : null;
+        }
+        if (kind == SpanKind.CLIENT && attribute(attrs, "db.system").filter(s -> !s.isBlank()).isPresent()) {
+            return DependencyProtocol.DB;
+        }
         if (attribute(attrs, "rpc.system").filter("grpc"::equalsIgnoreCase).isPresent()) {
             return DependencyProtocol.GRPC;
         }
@@ -80,6 +94,12 @@ public class OtlpSpanMapper {
             return DependencyProtocol.HTTP;
         }
         return null;
+    }
+
+    private static boolean isKafkaDestination(@Nullable List<KeyValue> attrs, @Nullable String destination) {
+        return destination != null
+                && attribute(attrs, "messaging.system").filter("kafka"::equalsIgnoreCase).isPresent()
+                && attribute(attrs, "messaging.destination.temporary").filter("true"::equalsIgnoreCase).isEmpty();
     }
 
     static String stripPort(String address) {

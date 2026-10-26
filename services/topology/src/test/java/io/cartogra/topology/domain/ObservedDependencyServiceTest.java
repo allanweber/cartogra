@@ -6,6 +6,7 @@ import io.cartogra.topology.domain.exception.UnattributedSpanBatchException.Quar
 import io.cartogra.topology.infrastructure.scheduled.DependencyGraphViewRefreshScheduler;
 import io.cartogra.topology.repository.DependencyRepository;
 import io.cartogra.topology.repository.GraphNodeRepository;
+import io.cartogra.topology.repository.MessagingEndpoint;
 import io.cartogra.topology.repository.PendingSpanLink;
 import io.cartogra.topology.repository.PendingSpanLinkRepository;
 import io.cartogra.topology.repository.SpanRef;
@@ -46,6 +47,8 @@ class ObservedDependencyServiceTest {
     private static final UUID TENANT = UUID.randomUUID();
     private static final UUID CHECKOUT = UUID.randomUUID();
     private static final UUID PAYMENTS = UUID.randomUUID();
+    private static final UUID LEDGER_DB = UUID.randomUUID();
+    private static final UUID NOTIFICATIONS = UUID.randomUUID();
 
     @Mock GraphNodeRepository graphNodeRepository;
     @Mock DependencyRepository dependencyRepository;
@@ -60,13 +63,14 @@ class ObservedDependencyServiceTest {
     void setUp() {
         service = new ObservedDependencyService(graphNodeRepository, dependencyRepository,
                 pendingSpanLinkRepository, unresolvedSpanServiceRepository, refreshScheduler,
-                new SpanLinkProperties(Duration.ofMinutes(5), Duration.ofMinutes(1), 1000), meters);
+                new SpanLinkProperties(Duration.ofMinutes(5), Duration.ofMinutes(1), 1000, Duration.ofHours(24)), meters);
     }
 
     private void knownNodes() {
         when(graphNodeRepository.findLiveByLowerNames(eq(TENANT), anyCollection())).thenAnswer(inv -> {
             Collection<String> asked = inv.getArgument(1);
-            Map<String, UUID> all = Map.of("checkout", CHECKOUT, "payments", PAYMENTS);
+            Map<String, UUID> all = Map.of("checkout", CHECKOUT, "payments", PAYMENTS,
+                    "ledger-db", LEDGER_DB, "notifications", NOTIFICATIONS);
             return all.entrySet().stream().filter(e -> asked.contains(e.getKey()))
                     .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
         });
@@ -74,12 +78,22 @@ class ObservedDependencyServiceTest {
 
     private static SpanObservation client(String service, String spanId, String peerName, String peerHost) {
         return new SpanObservation(service, SpanKind.CLIENT, "trace", spanId, null, peerName, peerHost,
-                DependencyProtocol.HTTP);
+                DependencyProtocol.HTTP, null, null);
     }
 
     private static SpanObservation server(String service, String spanId, String parent) {
         return new SpanObservation(service, SpanKind.SERVER, "trace", spanId, parent, null, null,
-                DependencyProtocol.HTTP);
+                DependencyProtocol.HTTP, null, null);
+    }
+
+    private static SpanObservation db(String service, String peerName, String dbName, String peerHost) {
+        return new SpanObservation(service, SpanKind.CLIENT, "trace", "d1", null, peerName, peerHost,
+                DependencyProtocol.DB, dbName, null);
+    }
+
+    private static SpanObservation messaging(String service, SpanKind kind, String destination) {
+        return new SpanObservation(service, kind, "trace", "m1", null, null, null,
+                DependencyProtocol.KAFKA, null, destination);
     }
 
     private double counter(String name, String... tags) {
@@ -169,7 +183,7 @@ class ObservedDependencyServiceTest {
     @Test
     void spanWithoutProtocolIsSkipped() {
         knownNodes();
-        var span = new SpanObservation("checkout", SpanKind.CLIENT, "t", "c1", null, "payments", null, null);
+        var span = new SpanObservation("checkout", SpanKind.CLIENT, "t", "c1", null, "payments", null, null, null, null);
 
         service.ingest(TENANT, List.of(span));
 
@@ -356,5 +370,115 @@ class ObservedDependencyServiceTest {
 
         verify(dependencyRepository).upsertObserved(eq(TENANT), eq(CHECKOUT), eq(PAYMENTS), any(), any());
         verify(unresolvedSpanServiceRepository, never()).record(any(), anyString(), any(), anyInt());
+    }
+
+    @Test
+    void dbSpanResolvedByDbNamespaceCreatesDbEdge() {
+        knownNodes();
+        when(dependencyRepository.upsertObserved(any(), any(), any(), any(), any())).thenReturn(UpsertOutcome.INSERTED);
+
+        service.ingest(TENANT, List.of(db("payments", null, "ledger-db", "10.0.0.9")));
+
+        verify(dependencyRepository).upsertObserved(eq(TENANT), eq(PAYMENTS), eq(LEDGER_DB),
+                eq(DependencyProtocol.DB), any());
+    }
+
+    @Test
+    void dbSpanPrefersPeerServiceOverDbNamespaceAndHost() {
+        knownNodes();
+        when(dependencyRepository.upsertObserved(any(), any(), any(), any(), any())).thenReturn(UpsertOutcome.INSERTED);
+
+        service.ingest(TENANT, List.of(db("payments", "notifications", "ledger-db", "checkout")));
+
+        verify(dependencyRepository).upsertObserved(eq(TENANT), eq(PAYMENTS), eq(NOTIFICATIONS),
+                eq(DependencyProtocol.DB), any());
+        verify(dependencyRepository, times(1)).upsertObserved(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void dbSpanFallsBackToHostWhenNamesDoNotResolve() {
+        knownNodes();
+        when(dependencyRepository.upsertObserved(any(), any(), any(), any(), any())).thenReturn(UpsertOutcome.INSERTED);
+
+        service.ingest(TENANT, List.of(db("payments", "pg-main", "app", "ledger-db")));
+
+        verify(dependencyRepository).upsertObserved(eq(TENANT), eq(PAYMENTS), eq(LEDGER_DB),
+                eq(DependencyProtocol.DB), any());
+    }
+
+    @Test
+    void unmatchedDbIsDroppedWithoutParkingOrRecording() {
+        knownNodes();
+
+        service.ingest(TENANT, List.of(db("payments", "pg-main", "app", "10.0.0.9")));
+
+        verify(dependencyRepository, never()).upsertObserved(any(), any(), any(), any(), any());
+        verify(pendingSpanLinkRepository, never()).insert(any());
+        verify(pendingSpanLinkRepository, never()).lockTenant(any());
+        verify(unresolvedSpanServiceRepository, never()).record(any(), anyString(), any(), anyInt());
+        assertThat(counter("cartogra.spans.skipped", "reason", "unresolved_db")).isEqualTo(1);
+    }
+
+    @Test
+    void producerJoinsStoredConsumersOnDestination() {
+        knownNodes();
+        when(dependencyRepository.upsertObserved(any(), any(), any(), any(), any())).thenReturn(UpsertOutcome.INSERTED);
+        when(pendingSpanLinkRepository.findMessagingEndpoints(TENANT, Set.of("orders"))).thenReturn(List.of(
+                new MessagingEndpoint("orders", SpanKind.PRODUCER, "payments"),
+                new MessagingEndpoint("orders", SpanKind.CONSUMER, "notifications"),
+                new MessagingEndpoint("orders", SpanKind.CONSUMER, "checkout")));
+
+        service.ingest(TENANT, List.of(
+                messaging("payments", SpanKind.PRODUCER, "orders"),
+                messaging("Payments", SpanKind.PRODUCER, "orders")));
+
+        verify(pendingSpanLinkRepository).upsertMessagingEndpoints(eq(TENANT),
+                eq(Set.of(new MessagingEndpoint("orders", SpanKind.PRODUCER, "payments"))), any());
+        verify(dependencyRepository).upsertObserved(eq(TENANT), eq(PAYMENTS), eq(NOTIFICATIONS),
+                eq(DependencyProtocol.KAFKA), any());
+        verify(dependencyRepository).upsertObserved(eq(TENANT), eq(PAYMENTS), eq(CHECKOUT),
+                eq(DependencyProtocol.KAFKA), any());
+        verify(pendingSpanLinkRepository, never()).delete(any());
+    }
+
+    @Test
+    void messagingRowsGetTheMessagingTtl() {
+        knownNodes();
+        when(pendingSpanLinkRepository.findMessagingEndpoints(any(), any())).thenReturn(List.of());
+
+        service.ingest(TENANT, List.of(messaging("notifications", SpanKind.CONSUMER, "orders")));
+
+        var captor = ArgumentCaptor.forClass(Instant.class);
+        verify(pendingSpanLinkRepository).upsertMessagingEndpoints(eq(TENANT), any(), captor.capture());
+        assertThat(captor.getValue()).isAfter(Instant.now().plus(Duration.ofHours(23)));
+        verify(dependencyRepository, never()).upsertObserved(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void storedPairsOnOtherDestinationsOrWithoutABatchSideAreNotJoined() {
+        knownNodes();
+        when(dependencyRepository.upsertObserved(any(), any(), any(), any(), any())).thenReturn(UpsertOutcome.INSERTED);
+        when(pendingSpanLinkRepository.findMessagingEndpoints(TENANT, Set.of("orders"))).thenReturn(List.of(
+                new MessagingEndpoint("orders", SpanKind.PRODUCER, "checkout"),
+                new MessagingEndpoint("orders", SpanKind.CONSUMER, "ledger-db")));
+
+        service.ingest(TENANT, List.of(messaging("notifications", SpanKind.CONSUMER, "orders")));
+
+        verify(dependencyRepository).upsertObserved(eq(TENANT), eq(CHECKOUT), eq(NOTIFICATIONS),
+                eq(DependencyProtocol.KAFKA), any());
+        verify(dependencyRepository, times(1)).upsertObserved(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void serviceProducingAndConsumingItsOwnTopicCreatesNoEdge() {
+        knownNodes();
+        when(pendingSpanLinkRepository.findMessagingEndpoints(any(), any())).thenReturn(List.of());
+
+        service.ingest(TENANT, List.of(
+                messaging("payments", SpanKind.PRODUCER, "orders"),
+                messaging("payments", SpanKind.CONSUMER, "orders")));
+
+        verify(dependencyRepository, never()).upsertObserved(any(), any(), any(), any(), any());
+        assertThat(counter("cartogra.spans.skipped", "reason", "self")).isEqualTo(1);
     }
 }

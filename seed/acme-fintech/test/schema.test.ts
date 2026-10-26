@@ -1,15 +1,15 @@
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
-  allCycles, declaredCalls, declaredCycles, dependentsOf, dormantCalls, externalCalls, findElementaryCycles,
+  allCycles, callKey, callKind, declaredCalls, declaredCycles, dependentsOf, dormantCalls, externalCalls, findElementaryCycles,
   loadSeedFile, silentDeclaredCalls, unownedServices, validateSeed, type SeedData,
 } from '../src/schema.ts'
 
 const seed = loadSeedFile(resolve(import.meta.dirname, '../seed-data.json'))
 
 describe('seed-data.json', () => {
-  it('has 20 services and 5 teams', () => {
-    expect(seed.services).toHaveLength(20)
+  it('has 21 services and 5 teams', () => {
+    expect(seed.services).toHaveLength(21)
     expect(seed.teams).toHaveLength(5)
   })
 
@@ -37,8 +37,17 @@ describe('seed-data.json', () => {
     expect(silentDeclaredCalls(seed).map((c) => `${c.from}>${c.to}`)).toEqual(['loyalty-service>fx-service'])
   })
 
-  it('declares 40 calls', () => {
-    expect(declaredCalls(seed)).toHaveLength(40)
+  it('declares 43 calls', () => {
+    expect(declaredCalls(seed)).toHaveLength(43)
+  })
+
+  it('has one topic with two consumers and one db call, all declared and enabled', () => {
+    const async = declaredCalls(seed).filter((c) => callKind(c) !== 'http' && c.enabled).map(callKey)
+    expect(async).toEqual([
+      'payments-service>notification-service KAFKA',
+      'payments-service>loyalty-service KAFKA',
+      'ledger-service>ledger-db DB',
+    ])
   })
 
   it('only references real services', () => {
@@ -71,6 +80,17 @@ describe('validateSeed', () => {
     expect(() => validateSeed({ ...base, calls: [{ ...external, declared: true }] })).toThrow(/undeclared and enabled/)
     expect(() => validateSeed({ ...base, calls: [{ ...external, enabled: false }] })).toThrow(/undeclared and enabled/)
     expect(() => validateSeed({ ...base, calls: [{ ...external, to: 'B' }] })).toThrow(/is a catalog service/)
+  })
+
+  it('validates call kinds and destinations', () => {
+    const messaging = { from: 'a', to: 'b', declared: true, enabled: true, kind: 'messaging' as const, destination: 'orders.paid' }
+    expect(() => validateSeed({ ...base, calls: [...base.calls, messaging] })).not.toThrow()
+    expect(() => validateSeed({ ...base, calls: [{ ...messaging, destination: undefined }] })).toThrow(/valid destination/)
+    expect(() => validateSeed({ ...base, calls: [{ ...messaging, destination: 'bad topic' }] })).toThrow(/valid destination/)
+    expect(() => validateSeed({ ...base, calls: [{ ...base.calls[0], destination: 'x' }] })).toThrow(/only messaging/)
+    expect(() => validateSeed({ ...base, calls: [{ ...base.calls[0], kind: 'smtp' as never }] })).toThrow(/invalid kind/)
+    expect(() => validateSeed({ ...base, calls: [{ from: 'a', to: 'ext', declared: false, enabled: true, external: true, kind: 'db' as const }] })).toThrow(/external calls must be http/)
+    expect(() => validateSeed({ ...base, calls: [messaging, messaging] })).toThrow(/duplicate/)
   })
 
   it('rejects duplicate service names case-insensitively', () => {

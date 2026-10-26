@@ -1,25 +1,32 @@
 # Acme Fintech seed
 
-A simulated fintech SaaS (20 microservices, 5 teams) that **Cartogra monitors**. It is a standalone
+A simulated fintech SaaS (21 services, 5 teams) that **Cartogra monitors**. It is a standalone
 project: no imports from Cartogra code, own `package.json`. It runs in the **kind** cluster.
 
 | What | Where it comes from |
 |---|---|
-| 20 services in the catalog | Cartogra **discovery**: K8s (health, namespace) and SCM repos (repo, tech stack, ownership). Registry merges both by service name. The loader never calls `POST /services` |
+| 21 services in the catalog | Cartogra **discovery**: K8s (health, namespace) and SCM repos (repo, tech stack, ownership). Registry merges both by service name. The loader never calls `POST /services` |
 | 5 teams, owners, tiers, declared dependencies | `pnpm acme load` through the gateway API |
 | Observed edges, the drift | Real OTel spans emitted by the fake services through the collector |
-| 20 source repos (all Azure DevOps; Java, Node, Python) | `pnpm acme repos`, generated from `seed-data.json` |
+| 21 source repos (all Azure DevOps; Java, Node, Python) | `pnpm acme repos`, generated from `seed-data.json` |
 
 This is the only seed in the repo. It replaces `graph-perf-seed.sql`, `create-test-repos.sh`,
 `k8s-discovery-manifests.yaml` / `k8s-discovery-teardown.sh` and `k8s-discovery-test.md` (see git history).
 
-`seed-data.json` is the single source of truth: 5 teams, 20 services (3 orphans), 40 declared calls
+`seed-data.json` is the single source of truth: 5 teams, 21 services (3 orphans), 43 declared calls
 containing exactly 2 cycles, 1 god service (`ledger-service`, 12 dependents), and 3 dormant undeclared
 calls (`reporting-service -> payments-service`, `webhook-relay -> fraud-service`, `legacy-batch -> notification-service`)
 that produce undeclared drift when switched on. One declared call (`loyalty-service -> fx-service`) is never made, so it
 becomes missing drift once `topology.drift.missing-after` has passed. One external call (`payments-service -> stripe-gateway`,
 `"external": true`) targets a name outside the catalog: it never becomes an edge and shows up in the graph's
 "Unresolved services" list instead.
+
+Calls default to `http`. Two other kinds have no broker or database behind them; the fake services only emit the spans:
+`"kind": "messaging"` with a `destination` (`payments-service` publishes `payments.completed`, consumed by
+`notification-service` and `loyalty-service`; producer and consumers emit PRODUCER/CONSUMER spans on their own timers,
+in separate traces, so Cartogra joins them on the topic name) and `"kind": "db"` (`ledger-service` emits CLIENT spans with
+`db.system=postgresql`, `db.namespace=ledger-db`; `ledger-db` is a catalog service that makes no calls). Both are declared
+with protocol `KAFKA`/`DB`, so they add `kafka`/`db` edges without extra drift or cycles.
 
 ## Prerequisites
 
@@ -104,7 +111,7 @@ Services up) and sets `ACME_TENANT_ID` on every pod (so spans carry `cartogra.te
 docker build -t acme-fintech-service:1.0.0 .
 kind load docker-image acme-fintech-service:1.0.0 --name cartogra
 kubectl apply -f k8s/acme-fintech.yaml
-kubectl -n acme-fintech get pods -w        # 20 pods Running 1/1
+kubectl -n acme-fintech get pods -w        # 21 pods Running 1/1
 ```
 
 ## 4. Register the cluster in ingestion
@@ -119,13 +126,13 @@ curl -s -X POST http://localhost:8080/api/v1/ingestion/k8s/clusters -H "Content-
 ```
 
 The worker bootstraps by scanning every tenant-labelled namespace, then keeps live watches on Services,
-Endpoints and Namespaces. Within seconds the 20 services appear in the catalog.
+Endpoints and Namespaces. Within seconds the 21 services appear in the catalog.
 
 ## 4b. Source repos (SCM discovery, optional)
 
-Creates one Azure DevOps repo per service (20 total) with the files the providers read: tech-stack markers
+Creates one Azure DevOps repo per service (21 total) with the files the providers read: tech-stack markers
 (`build.gradle.kts`, `package.json`, `requirements.txt`, `Dockerfile`), `openapi.yaml`, a README, and `CODEOWNERS` for the
-17 owned services (the 3 orphans have none).
+18 owned services (the 3 orphans have none).
 
 Prerequisites (one time):
 
@@ -166,7 +173,7 @@ curl -s -X POST http://localhost:8080/api/v1/ingestion/scm-connections \
 curl -s -X POST http://localhost:8080/api/v1/ingestion/scm-connections/<id>/sync -H "Authorization: Bearer $TOKEN" | jq .
 ```
 
-The repos are named exactly like the K8s Services, so the registry merges both into the same 20 services (repo URL, tech stack
+The repos are named exactly like the K8s Services, so the registry merges both into the same 21 services (repo URL, tech stack
 and last commit appear on the K8s-discovered rows). Your project's other repos will also show up as separate services; the
 business plan allows 100.
 
@@ -191,7 +198,7 @@ curl -s "http://localhost:8080/api/v1/registry/services?limit=100" -H "Authoriza
 pnpm acme verify   # no "owner set:" lines = CODEOWNERS picked the seed's team for every service
 ```
 
-Expect `owned: 17` and the 3 seed orphans, which also stay listed under `type: "orphan"` in `GET /api/v1/topology/risks`.
+Expect `owned: 18` and the 3 seed orphans, which also stay listed under `type: "orphan"` in `GET /api/v1/topology/risks`.
 If a service stays unowned, grep the registry log for `ownership.resolved:` — it says whether no service matched the repo,
 no team matched the handle, or several teams matched. `service.discovered` and `ownership.resolved` travel on separate
 topics, so a first sync can occasionally see ownership before the service exists; a second sync fixes it. The same
@@ -201,7 +208,7 @@ mapping is asserted without an SCM org by `AcmeCodeownersMappingIT` (registry).
 
 ```bash
 export ACME_EMAIL=... ACME_PASSWORD=...
-pnpm acme load            # waits (<= 2 min) for discovery to produce all 20 services, then adds the rest
+pnpm acme load            # waits (<= 2 min) for discovery to produce all 21 services, then adds the rest
 ```
 
 Run it as often as you like: it is additive and idempotent. If discovery hasn't produced every service, it
@@ -210,7 +217,7 @@ exits non-zero and lists the missing ones.
 ## 6. Verify, then demo
 
 ```bash
-pnpm acme verify                 # load twice + identical-state diff, /cycles = 2, SPOF, 3 orphans, observed edges, stripe-gateway unresolved
+pnpm acme verify                 # load twice + identical-state diff, /cycles = 2, SPOF, 3 orphans, observed edges (incl. 2 kafka + 1 db), stripe-gateway unresolved
 pnpm acme verify --with-drift    # also switches the 3 undeclared calls on and waits for the observed edges and 4 drift records
 pnpm acme drift on               # demo: watch 3 edges nobody declared appear on /graph (Drift edge mode)
 pnpm acme drift off
@@ -225,7 +232,7 @@ sweep: start Topology with `TOPOLOGY_DRIFT_SWEEP_INTERVAL=PT15S TOPOLOGY_DRIFT_M
 What `k8s-discovery-test.md` used to cover, now against the Acme namespace. Watch Kafka UI
 (`http://localhost:8086`, topic `cartogra.ingestion.service.discovered`).
 
-**Bootstrap**: after registering the cluster, one message per Service (20), with `source: kubernetes`,
+**Bootstrap**: after registering the cluster, one message per Service (21), with `source: kubernetes`,
 `externalId: acme-fintech/<name>`.
 
 | Endpoint state | `healthStatus` |
@@ -275,7 +282,7 @@ Clean up the scratch namespaces: `kubectl delete namespace no-tenant late-adopte
 |---|---|
 | `pnpm acme validate` | Prints seed counts (no network) |
 | `pnpm acme manifests` | Writes the k8s yml (needs `ACME_TENANT_ID`, `ACME_OTLP_ENDPOINT`) |
-| `pnpm acme repos` | Generates and pushes the 20 source repos (idempotent) |
+| `pnpm acme repos` | Generates and pushes the 21 source repos (idempotent) |
 | `pnpm acme load` | Teams, owners, tiers, declared edges via the gateway |
 | `pnpm acme verify [--with-drift] [--no-spans]` | End-to-end checks against the live stack |
 | `pnpm acme drift on\|off` | `kubectl port-forward` to each caller and toggles the dormant calls |

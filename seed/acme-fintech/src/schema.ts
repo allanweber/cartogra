@@ -19,6 +19,9 @@ export interface SeedService {
   repo: SeedRepo
 }
 
+export type CallKind = 'http' | 'messaging' | 'db'
+export type Protocol = 'HTTP' | 'KAFKA' | 'DB'
+
 export interface SeedCall {
   from: string
   to: string
@@ -26,6 +29,10 @@ export interface SeedCall {
   enabled: boolean
   /** Target is outside the catalog (e.g. a SaaS API): Cartogra lists it as an unresolved span service. */
   external?: boolean
+  /** Defaults to http. messaging: `from` produces to `destination` and `to` consumes it; db: `to` is the database. */
+  kind?: CallKind
+  /** Kafka topic, required for messaging calls only. */
+  destination?: string
 }
 
 export interface SeedData {
@@ -36,6 +43,10 @@ export interface SeedData {
   calls: SeedCall[]
 }
 
+const KINDS: readonly CallKind[] = ['http', 'messaging', 'db']
+const PROTOCOLS: Record<CallKind, Protocol> = { http: 'HTTP', messaging: 'KAFKA', db: 'DB' }
+const TOPIC = /^[A-Za-z0-9._-]+$/
+
 const TIERS: readonly Tier[] = ['CRITICAL', 'STANDARD', 'EXPERIMENTAL']
 const PROVIDERS: readonly RepoProvider[] = ['github', 'azure']
 const STACKS: readonly RepoStack[] = ['java', 'node', 'python']
@@ -45,6 +56,23 @@ export function loadSeedFile(path: string): SeedData {
   const seed = JSON.parse(readFileSync(path, 'utf8')) as SeedData
   validateSeed(seed)
   return seed
+}
+
+export function callKind(call: SeedCall): CallKind {
+  return call.kind ?? 'http'
+}
+
+export function callProtocol(call: SeedCall): Protocol {
+  return PROTOCOLS[callKind(call)]
+}
+
+/** Identity of an edge as Topology stores it: source, target and protocol. */
+export function edgeKey(from: string, to: string, protocol: string): string {
+  return `${from}>${to} ${protocol.toUpperCase()}`
+}
+
+export function callKey(call: SeedCall): string {
+  return edgeKey(call.from, call.to, callProtocol(call))
 }
 
 /** Calls between catalog services; external calls never become edges. */
@@ -75,6 +103,11 @@ export function dependentsOf(seed: SeedData, target: string): string[] {
 
 export function enabledCallsFrom(seed: SeedData, service: string): SeedCall[] {
   return seed.calls.filter((c) => c.from === service && c.enabled)
+}
+
+/** Topics a service consumes: the destinations of enabled messaging calls that target it. */
+export function consumedDestinations(seed: SeedData, service: string): string[] {
+  return [...new Set(seed.calls.filter((c) => c.to === service && c.enabled && callKind(c) === 'messaging').map((c) => c.destination!))]
 }
 
 export function unownedServices(seed: SeedData): string[] {
@@ -145,6 +178,13 @@ export function validateSeed(seed: SeedData): void {
   const keys = new Set<string>()
   for (const c of seed.calls) {
     if (!names.includes(c.from)) errors.push(`call ${c.from}->${c.to}: unknown source`)
+    if (c.kind !== undefined && !KINDS.includes(c.kind)) errors.push(`call ${c.from}->${c.to}: invalid kind ${c.kind}`)
+    if (callKind(c) === 'messaging') {
+      if (!c.destination || !TOPIC.test(c.destination)) errors.push(`call ${c.from}->${c.to}: messaging needs a valid destination`)
+    } else if (c.destination !== undefined) {
+      errors.push(`call ${c.from}->${c.to}: only messaging calls take a destination`)
+    }
+    if (c.external && callKind(c) !== 'http') errors.push(`call ${c.from}->${c.to}: external calls must be http`)
     if (c.external) {
       if (lower.includes(c.to.toLowerCase())) errors.push(`call ${c.from}->${c.to}: external target is a catalog service`)
       if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(c.to)) errors.push(`call ${c.from}->${c.to}: external target must be a DNS label`)
@@ -153,7 +193,7 @@ export function validateSeed(seed: SeedData): void {
       errors.push(`call ${c.from}->${c.to}: unknown target`)
     }
     if (c.from === c.to) errors.push(`call ${c.from}: self call`)
-    const key = `${c.from}>${c.to}`
+    const key = `${c.from}>${c.to} ${callKind(c)}`
     if (keys.has(key)) errors.push(`call ${key}: duplicate`)
     keys.add(key)
   }

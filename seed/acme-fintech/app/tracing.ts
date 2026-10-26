@@ -14,6 +14,10 @@ export interface TracingConfig {
 export interface Tracing {
   clientCall: (target: string, serverAddress: string, run: (headers: Record<string, string>) => Promise<void>) => Promise<void>
   serverSpan: (headers: Record<string, string | string[] | undefined>, run: () => void) => void
+  /** Spans only: no broker or database exists, Cartogra joins the halves on the destination name. */
+  producerSpan: (destination: string) => void
+  consumerSpan: (destination: string) => void
+  dbSpan: (database: string) => void
   shutdown: () => Promise<void>
 }
 
@@ -60,6 +64,25 @@ export function startTracing(config: TracingConfig): Tracing {
       } finally {
         span.end()
       }
+    },
+    producerSpan(destination) {
+      tracer.startSpan(`send ${destination}`, {
+        kind: SpanKind.PRODUCER,
+        attributes: { 'messaging.system': 'kafka', 'messaging.destination.name': destination, 'messaging.operation.type': 'send' },
+      }).end()
+    },
+    consumerSpan(destination) {
+      tracer.startSpan(`process ${destination}`, {
+        kind: SpanKind.CONSUMER,
+        attributes: { 'messaging.system': 'kafka', 'messaging.destination.name': destination, 'messaging.operation.type': 'process' },
+        root: true,
+      }).end()
+    },
+    dbSpan(database) {
+      tracer.startSpan('SELECT entries', {
+        kind: SpanKind.CLIENT,
+        attributes: { 'db.system': 'postgresql', 'db.namespace': database, 'db.operation.name': 'SELECT' },
+      }).end()
     },
     shutdown: () => provider.shutdown(),
   }

@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { loadSeedFile } from '../src/schema.ts'
+import { callProtocol, declaredCalls, loadSeedFile } from '../src/schema.ts'
 import { godService, verify } from '../src/verify.ts'
 import { FakeApi } from './fakeApi.ts'
 
@@ -54,5 +54,37 @@ describe('verify unresolved span services', () => {
     api.unresolved = [{ name: 'stripe-gateway', seenCount: 4 }]
     const checks = await verify(api, seed, opts)
     expect(checks.find((c) => c.name === check)?.ok).toBe(true)
+  })
+})
+
+describe('verify kafka and db edges', () => {
+  const opts = { sleep: async () => {}, pollMs: 0, discoveryTimeoutMs: 50, syncTimeoutMs: 50, observedTimeoutMs: 0 }
+
+  it('fails while the kafka and db edges are not observed', async () => {
+    const checks = await verify(new FakeApi(seed), seed, opts)
+    expect(checks.find((c) => c.name === '2 kafka edges observed')?.ok).toBe(false)
+    expect(checks.find((c) => c.name === '1 db edges observed')).toMatchObject({ ok: false, detail: 'ledger-service>ledger-db DB' })
+  })
+
+  it('passes once every declared call is observed with its protocol', async () => {
+    const api = new FakeApi(seed)
+    for (const c of declaredCalls(seed).filter((call) => call.enabled)) {
+      api.observed.add(`svc-${c.from}>svc-${c.to} ${callProtocol(c)}`)
+    }
+    const checks = await verify(api, seed, opts)
+    for (const name of ['declared calls observed from spans', '2 kafka edges observed', '1 db edges observed']) {
+      expect(checks.find((c) => c.name === name)?.ok).toBe(true)
+    }
+  })
+
+  it('does not accept an http edge in place of the kafka one', async () => {
+    const api = new FakeApi(seed)
+    api.observed.add('svc-payments-service>svc-notification-service HTTP')
+    api.observed.add('svc-payments-service>svc-loyalty-service KAFKA')
+    const checks = await verify(api, seed, opts)
+    expect(checks.find((c) => c.name === '2 kafka edges observed')).toMatchObject({
+      ok: false,
+      detail: 'payments-service>notification-service KAFKA',
+    })
   })
 })

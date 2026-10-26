@@ -99,17 +99,77 @@ class OtlpSpanMapperTest {
     @Test
     void noProtocolAttributesGivesNullProtocol() {
         var obs = map(span("3", """
-                {"key":"db.system","value":{"stringValue":"postgresql"}}"""), SERVICE)
+                {"key":"peer.service","value":{"stringValue":"payments"}}"""), SERVICE)
                 .getFirst().observations().getFirst();
 
         assertThat(obs.protocol()).isNull();
     }
 
     @Test
-    void internalProducerAndConsumerKindsAreDropped() {
+    void internalKindIsDropped() {
         assertThat(map(span("1", ""), SERVICE).getFirst().observations()).isEmpty();
-        assertThat(map(span("4", ""), SERVICE).getFirst().observations()).isEmpty();
-        assertThat(map(span("5", ""), SERVICE).getFirst().observations()).isEmpty();
+    }
+
+    @Test
+    void dbSystemOnClientGivesDbProtocolOverHttp() {
+        var obs = map(span("3", """
+                {"key":"db.system","value":{"stringValue":"postgresql"}},
+                {"key":"db.namespace","value":{"stringValue":"ledger-db"}},
+                {"key":"http.request.method","value":{"stringValue":"GET"}}"""), SERVICE)
+                .getFirst().observations().getFirst();
+
+        assertThat(obs.protocol()).isEqualTo(DependencyProtocol.DB);
+        assertThat(obs.dbName()).isEqualTo("ledger-db");
+    }
+
+    @Test
+    void legacyDbNameIsUsedWhenNamespaceIsAbsent() {
+        var obs = map(span("3", """
+                {"key":"db.system","value":{"stringValue":"postgresql"}},
+                {"key":"db.name","value":{"stringValue":"ledger"}}"""), SERVICE)
+                .getFirst().observations().getFirst();
+
+        assertThat(obs.dbName()).isEqualTo("ledger");
+    }
+
+    @Test
+    void kafkaProducerAndConsumerKindsCarryDestination() {
+        String attrs = """
+                {"key":"messaging.system","value":{"stringValue":"kafka"}},
+                {"key":"messaging.destination.name","value":{"stringValue":"payments.completed"}}""";
+        var producer = map(span("4", attrs), SERVICE).getFirst().observations().getFirst();
+        var consumer = map(span("\"SPAN_KIND_CONSUMER\"", attrs), SERVICE).getFirst().observations().getFirst();
+
+        assertThat(producer.kind()).isEqualTo(SpanKind.PRODUCER);
+        assertThat(consumer.kind()).isEqualTo(SpanKind.CONSUMER);
+        assertThat(producer.protocol()).isEqualTo(DependencyProtocol.KAFKA);
+        assertThat(producer.destination()).isEqualTo("payments.completed");
+    }
+
+    @Test
+    void nonKafkaTemporaryOrMissingDestinationGivesNullProtocol() {
+        var rabbit = map(span("4", """
+                {"key":"messaging.system","value":{"stringValue":"rabbitmq"}},
+                {"key":"messaging.destination.name","value":{"stringValue":"orders"}}"""), SERVICE);
+        var temporary = map(span("5", """
+                {"key":"messaging.system","value":{"stringValue":"kafka"}},
+                {"key":"messaging.destination.name","value":{"stringValue":"reply-1"}},
+                {"key":"messaging.destination.temporary","value":{"boolValue":true}}"""), SERVICE);
+        var noDestination = map(span("4", """
+                {"key":"messaging.system","value":{"stringValue":"kafka"}}"""), SERVICE);
+
+        assertThat(rabbit.getFirst().observations().getFirst().protocol()).isNull();
+        assertThat(temporary.getFirst().observations().getFirst().protocol()).isNull();
+        assertThat(noDestination.getFirst().observations().getFirst().protocol()).isNull();
+    }
+
+    @Test
+    void dbSystemOnProducerIsNotDb() {
+        var obs = map(span("4", """
+                {"key":"db.system","value":{"stringValue":"postgresql"}}"""), SERVICE)
+                .getFirst().observations().getFirst();
+
+        assertThat(obs.protocol()).isNull();
     }
 
     @Test

@@ -1,10 +1,12 @@
 import { ApiError, type CartograApi, type CatalogService, type Drift, type Graph, type Risk, type Team, type UnresolvedSpanService } from '../src/api.ts'
-import { declaredCycles, type SeedData } from '../src/schema.ts'
+import { declaredCycles, type Protocol, type SeedData } from '../src/schema.ts'
 
 export class FakeApi implements CartograApi {
   readonly teams: Team[] = []
   readonly services: CatalogService[]
   readonly edges = new Set<string>()
+  /** `source>target PROTOCOL` keys by service id, returned by graph('OBSERVED'). */
+  readonly observed = new Set<string>()
   readonly calls: string[] = []
   driftRecords: Drift[] = []
   unresolved: UnresolvedSpanService[] = []
@@ -61,21 +63,20 @@ export class FakeApi implements CartograApi {
   }
   async graph(type?: 'DECLARED' | 'OBSERVED'): Promise<Graph> {
     const nodes = this.services.map((s) => ({ serviceId: s.id, name: s.name, teamId: s.teamId, tier: s.tier }))
-    const edges =
-      type === 'OBSERVED'
-        ? []
-        : [...this.edges].map((e) => {
-            const [source, target] = e.split('>')
-            return { source, target, dependencyType: 'declared', protocol: 'http' }
-          })
+    const toEdge = (dependencyType: string) => (e: string) => {
+      const [pair, protocol] = e.split(' ')
+      const [source, target] = pair.split('>')
+      return { source, target, dependencyType, protocol }
+    }
+    const edges = type === 'OBSERVED' ? [...this.observed].map(toEdge('observed')) : [...this.edges].map(toEdge('declared'))
     return { nodes, edges, truncated: false }
   }
-  async declareDependency(source: string, target: string) {
-    this.calls.push(`declare:${source}>${target}`)
+  async declareDependency(source: string, target: string, protocol: Protocol) {
+    this.calls.push(`declare:${source}>${target} ${protocol}`)
     if (!this.services.some((s) => s.id === source) || !this.services.some((s) => s.id === target)) {
       throw new ApiError(404, 'NOT_FOUND', 'unknown node', 't')
     }
-    const key = `${source}>${target}`
+    const key = `${source}>${target} ${protocol}`
     if (this.edges.has(key)) throw new ApiError(409, 'CONFLICT', 'duplicate', 't')
     this.edges.add(key)
   }

@@ -6,6 +6,7 @@ import io.cartogra.topology.domain.exception.UnattributedSpanBatchException.Quar
 import io.cartogra.topology.infrastructure.scheduled.DependencyGraphViewRefreshScheduler;
 import io.cartogra.topology.repository.DependencyRepository;
 import io.cartogra.topology.repository.GraphNodeRepository;
+import io.cartogra.topology.repository.MessagingEndpoint;
 import io.cartogra.topology.repository.PendingSpanLink;
 import io.cartogra.topology.repository.PendingSpanLinkRepository;
 import io.cartogra.topology.repository.SpanRef;
@@ -18,15 +19,18 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 @Service
 public class ObservedDependencyService {
@@ -86,6 +90,7 @@ public class ObservedDependencyService {
         List<SpanObservation> pendingClients = new ArrayList<>();
         List<SpanObservation> pendingServers = new ArrayList<>();
         Set<SpanRef> resolvedClientSpans = new HashSet<>();
+        Set<MessagingEndpoint> messagingEndpoints = new LinkedHashSet<>();
         FallbackLock lock = new FallbackLock(tenantId);
 
         for (SpanObservation span : observations) {
@@ -99,17 +104,24 @@ public class ObservedDependencyService {
                 count("cartogra.spans.skipped", "reason", "unresolved_source");
                 continue;
             }
-            if (span.kind() == SpanKind.CLIENT) {
-                handleClient(tenantId, span, ownId, names, edges, pendingClients, pendingServers, now,
-                        recordedUnknown, resolvedClientSpans, lock);
-            } else {
-                handleServer(tenantId, span, ownId, names, edges, pendingClients, pendingServers,
+            switch (span.kind()) {
+                case CLIENT -> {
+                    if (span.protocol() == DependencyProtocol.DB) {
+                        handleDb(span, ownId, names, edges);
+                    } else {
+                        handleClient(tenantId, span, ownId, names, edges, pendingClients, pendingServers, now,
+                                recordedUnknown, resolvedClientSpans, lock);
+                    }
+                }
+                case SERVER -> handleServer(tenantId, span, ownId, names, edges, pendingClients, pendingServers,
                         resolvedClientSpans, lock);
+                case PRODUCER, CONSUMER -> collectMessagingEndpoint(span, messagingEndpoints);
             }
         }
 
         discardServersOfResolvedClients(tenantId, pendingServers, resolvedClientSpans);
         flushPending(tenantId, pendingClients, pendingServers, now);
+        joinMessaging(tenantId, messagingEndpoints, names, edges, now);
         upsertEdges(tenantId, edges, now);
     }
 
@@ -175,6 +187,71 @@ public class ObservedDependencyService {
             return;
         }
         pendingServers.add(server);
+    }
+
+    /** A DB never emits a SERVER span, so an unmatched DB is dropped instead of parked or recorded. */
+    private void handleDb(SpanObservation client, UUID sourceId, NameResolver names, Set<EdgeKey> edges) {
+        UUID targetId = Stream.of(client.peerName(), client.dbName(), client.peerHost())
+                .filter(Objects::nonNull)
+                .map(names::resolve)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+        if (targetId == null) {
+            count("cartogra.spans.skipped", "reason", "unresolved_db");
+            return;
+        }
+        addEdge(edges, sourceId, targetId, DependencyProtocol.DB);
+    }
+
+    private void collectMessagingEndpoint(SpanObservation span, Set<MessagingEndpoint> endpoints) {
+        if (span.destination() == null) {
+            count("cartogra.spans.skipped", "reason", "unsupported_protocol");
+            return;
+        }
+        endpoints.add(new MessagingEndpoint(span.destination(), span.kind(),
+                span.serviceName().toLowerCase(Locale.ROOT)));
+    }
+
+    /**
+     * Joins producers and consumers on the destination name: every producer gets a kafka edge to every
+     * consumer of the same destination, as long as one side was seen in this batch. Runs without a lock;
+     * two instances racing on opposite sides can miss each other once, and the next span on either side
+     * makes the edge because messaging rows live for {@code messagingTtl}.
+     */
+    private void joinMessaging(UUID tenantId, Set<MessagingEndpoint> batch, NameResolver names,
+                               Set<EdgeKey> edges, Instant now) {
+        if (batch.isEmpty()) {
+            return;
+        }
+        pendingSpanLinkRepository.upsertMessagingEndpoints(tenantId, batch,
+                now.plus(spanLinkProperties.messagingTtl()));
+        Set<String> destinations = new HashSet<>();
+        batch.forEach(endpoint -> destinations.add(endpoint.destination()));
+        Set<MessagingEndpoint> known = new LinkedHashSet<>(
+                pendingSpanLinkRepository.findMessagingEndpoints(tenantId, destinations));
+        known.addAll(batch);
+        names.preload(known.stream().map(MessagingEndpoint::serviceName).toList());
+
+        for (MessagingEndpoint producer : known) {
+            if (producer.kind() != SpanKind.PRODUCER) {
+                continue;
+            }
+            for (MessagingEndpoint consumer : known) {
+                if (consumer.kind() == SpanKind.CONSUMER
+                        && consumer.destination().equals(producer.destination())
+                        && (batch.contains(producer) || batch.contains(consumer))) {
+                    UUID sourceId = names.resolve(producer.serviceName());
+                    UUID targetId = names.resolve(consumer.serviceName());
+                    if (sourceId == null || targetId == null) {
+                        count("cartogra.spans.skipped", "reason", "unresolved_target");
+                        continue;
+                    }
+                    count("cartogra.spans.messaging_matched");
+                    addEdge(edges, sourceId, targetId, DependencyProtocol.KAFKA);
+                }
+            }
+        }
     }
 
     private void matchedFallback(Set<EdgeKey> edges, @Nullable UUID sourceId, @Nullable UUID targetId,
@@ -298,9 +375,19 @@ public class ObservedDependencyService {
                 if (span.peerHost() != null) {
                     initial.add(lower(span.peerHost()));
                 }
+                if (span.dbName() != null) {
+                    initial.add(lower(span.dbName()));
+                }
             }
             this.resolved = new HashMap<>(graphNodeRepository.findLiveByLowerNames(tenantId, initial));
             this.lookedUp.addAll(initial);
+        }
+
+        void preload(Collection<String> names) {
+            List<String> missing = names.stream().map(NameResolver::lower).filter(lookedUp::add).toList();
+            if (!missing.isEmpty()) {
+                resolved.putAll(graphNodeRepository.findLiveByLowerNames(tenantId, missing));
+            }
         }
 
         @Nullable
