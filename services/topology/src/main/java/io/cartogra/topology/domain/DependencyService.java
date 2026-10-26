@@ -56,7 +56,7 @@ public class DependencyService {
     }
 
     public Dependency create(UUID tenantId, @Nullable UUID userId, DeclareDependencyRequest request) {
-        requireEitherSideAccess(tenantId, userId, request.sourceServiceId(), request.targetServiceId());
+        requirePairAccess(tenantId, userId, request.sourceServiceId(), request.targetServiceId());
         return transactionTemplate.execute(status -> {
             NodePair nodes = validateNodes(tenantId, request.sourceServiceId(), request.targetServiceId());
             requireNotSelfEdge(request.sourceServiceId(), request.targetServiceId());
@@ -100,10 +100,45 @@ public class DependencyService {
 
     public void delete(UUID tenantId, @Nullable UUID userId, UUID id) {
         Dependency existing = loadDeclared(tenantId, id);
-        requireEitherSideAccess(tenantId, userId, existing.sourceServiceId(), existing.targetServiceId());
+        requirePairAccess(tenantId, userId, existing.sourceServiceId(), existing.targetServiceId());
 
         transactionTemplate.executeWithoutResult(status -> {
             dependencyRepository.softDelete(tenantId, id);
+            graphViewRefreshScheduler.markDirty();
+        });
+    }
+
+    /**
+     * Declares every live observed protocol of the pair that is not declared yet; returns false when nothing is
+     * observed for the pair any more. Joins the caller's transaction; the caller has already authorized the pair.
+     */
+    public boolean declareObservedPair(UUID tenantId, UUID sourceServiceId, UUID targetServiceId) {
+        return Boolean.TRUE.equals(transactionTemplate.execute(status -> {
+            validateNodes(tenantId, sourceServiceId, targetServiceId);
+            requireNotSelfEdge(sourceServiceId, targetServiceId);
+            List<DependencyProtocol> observed = dependencyRepository.findLiveProtocols(tenantId,
+                    sourceServiceId, targetServiceId, DependencyType.OBSERVED);
+            if (observed.isEmpty()) {
+                return false;
+            }
+            Instant now = Instant.now();
+            for (DependencyProtocol protocol : observed) {
+                boolean declared = dependencyRepository.findByEdgeIdentity(tenantId, sourceServiceId,
+                        targetServiceId, DependencyType.DECLARED, protocol).isPresent();
+                if (!declared) {
+                    dependencyRepository.save(new Dependency(UUID.randomUUID(), tenantId, sourceServiceId,
+                            targetServiceId, DependencyType.DECLARED, protocol, null, now, now, null));
+                }
+            }
+            graphViewRefreshScheduler.markDirty();
+            return true;
+        }));
+    }
+
+    /** Soft-deletes every declared protocol of the pair. Joins the caller's transaction; the caller has authorized it. */
+    public void removeDeclaredPair(UUID tenantId, UUID sourceServiceId, UUID targetServiceId) {
+        transactionTemplate.executeWithoutResult(status -> {
+            dependencyRepository.softDeleteDeclaredPair(tenantId, sourceServiceId, targetServiceId);
             graphViewRefreshScheduler.markDirty();
         });
     }
@@ -191,7 +226,8 @@ public class DependencyService {
                 });
     }
 
-    void requireEitherSideAccess(UUID tenantId, @Nullable UUID userId, UUID sourceServiceId, UUID targetServiceId) {
+    /** ADMIN, or a member of the team owning either side; checked before any state-revealing validation. */
+    public void requirePairAccess(UUID tenantId, @Nullable UUID userId, UUID sourceServiceId, UUID targetServiceId) {
         if (isAdmin()) {
             return;
         }

@@ -107,7 +107,14 @@ describe('InspectorPanel', () => {
         blastRadius={blastRadius({
           downstream: {
             entries: [
-              { serviceId: 's2', name: 'checkout-api', teamId: 't1', tier: null, healthStatus: 'HEALTHY', distance: 1 },
+              {
+                serviceId: 's2', name: 'checkout-api', teamId: 't1', tier: null, healthStatus: 'HEALTHY', distance: 1,
+                via: [
+                  { dependencyType: 'DECLARED', protocol: 'HTTP' },
+                  { dependencyType: 'OBSERVED', protocol: 'HTTP' },
+                  { dependencyType: 'OBSERVED', protocol: 'KAFKA' },
+                ],
+              },
             ],
             depthTruncated: false,
             nodesBeyondDepth: 0,
@@ -116,7 +123,7 @@ describe('InspectorPanel', () => {
           },
           upstream: {
             entries: [
-              { serviceId: 's3', name: 'auth-service', teamId: null, tier: null, healthStatus: 'HEALTHY', distance: 2 },
+              { serviceId: 's3', name: 'auth-service', teamId: null, tier: null, healthStatus: 'HEALTHY', distance: 2, via: [] },
             ],
             depthTruncated: false,
             nodesBeyondDepth: 0,
@@ -139,6 +146,8 @@ describe('InspectorPanel', () => {
     expect(screen.getByText('2 hops away')).toBeInTheDocument()
     expect(screen.getByText('Payments Team')).toBeInTheDocument()
     expect(screen.getByText('Unassigned')).toBeInTheDocument()
+    expect(screen.getByLabelText('Connection: HTTP declared and observed')).toHaveTextContent(/^HTTP$/)
+    expect(screen.getByLabelText('Connection: KAFKA observed')).toHaveTextContent('KAFKA · observed')
   })
 
   it('shows a depth-truncation notice distinct from a node-cap-truncation notice', () => {

@@ -2,7 +2,6 @@ package io.cartogra.topology.repository;
 
 import io.cartogra.topology.domain.DependencyDrift;
 import io.cartogra.topology.domain.DriftResolution;
-import io.cartogra.topology.domain.DriftType;
 
 import org.jspecify.annotations.Nullable;
 
@@ -19,10 +18,6 @@ public interface DependencyDriftRepository {
     List<DependencyDrift> findActive(UUID tenantId, int limit, int offset);
 
     long countActive(UUID tenantId);
-
-    /** The still-unresolved drift record for a given edge + drift type, if one exists. */
-    Optional<DependencyDrift> findActiveByEdge(UUID tenantId, UUID sourceServiceId, UUID targetServiceId,
-            DriftType type);
 
     DependencyDrift save(DependencyDrift drift);
 

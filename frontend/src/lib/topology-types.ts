@@ -71,6 +71,12 @@ export interface BlastRadiusEntry {
   tier: ServiceTierValue | null
   healthStatus: ServiceHealthStatus
   distance: number
+  via: BlastRadiusConnection[]
+}
+
+export interface BlastRadiusConnection {
+  dependencyType: DependencyType
+  protocol: DependencyProtocol
 }
 
 export interface BlastRadiusDirectionResult {

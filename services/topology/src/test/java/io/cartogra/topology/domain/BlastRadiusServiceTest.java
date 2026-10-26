@@ -189,4 +189,31 @@ class BlastRadiusServiceTest {
         assertThat(result.downstream().nodeCapTruncated()).isFalse();
         assertThat(result.downstream().nodesBeyondCap()).isZero();
     }
+
+    @Test
+    void connectionsComeOnlyFromThePreviousHopInTraversalDirection() {
+        stubLiveNode();
+        UUID b = UUID.randomUUID();
+        UUID c = UUID.randomUUID();
+        when(dependencyGraphViewRepository.findBlastRadius(eq(tenantId), eq(serviceId), eq(BlastRadiusDirection.DOWNSTREAM), anyInt()))
+                .thenReturn(List.of(new BlastRadiusRow(b, 1), new BlastRadiusRow(c, 2)));
+        when(graphNodeRepository.findByServiceIds(eq(tenantId), any(), anyInt())).thenReturn(List.of(node(b, "b"), node(c, "c")));
+        when(dependencyGraphViewRepository.findByServiceIds(eq(tenantId), any(), eq(null))).thenReturn(List.of(
+                edge(b, serviceId, DependencyType.OBSERVED, DependencyProtocol.KAFKA),
+                edge(b, serviceId, DependencyType.DECLARED, DependencyProtocol.HTTP),
+                edge(c, b, DependencyType.DECLARED, DependencyProtocol.GRPC),
+                edge(c, serviceId, DependencyType.DECLARED, DependencyProtocol.DB),
+                edge(serviceId, b, DependencyType.DECLARED, DependencyProtocol.HTTP)));
+
+        BlastRadius result = service.compute(tenantId, serviceId, BlastRadiusDirection.DOWNSTREAM, null);
+
+        assertThat(result.downstream().entries()).extracting(BlastRadiusEntry::via).containsExactly(
+                List.of(new BlastRadiusConnection(DependencyType.DECLARED, DependencyProtocol.HTTP),
+                        new BlastRadiusConnection(DependencyType.OBSERVED, DependencyProtocol.KAFKA)),
+                List.of(new BlastRadiusConnection(DependencyType.DECLARED, DependencyProtocol.GRPC)));
+    }
+
+    private GraphEdge edge(UUID source, UUID target, DependencyType type, DependencyProtocol protocol) {
+        return new GraphEdge(tenantId, source, target, type, protocol, null);
+    }
 }

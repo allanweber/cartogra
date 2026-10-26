@@ -1,5 +1,6 @@
 package io.cartogra.topology.repository;
 
+import io.cartogra.topology.domain.DependencyProtocol;
 import io.cartogra.topology.domain.SpanKind;
 import org.jspecify.annotations.Nullable;
 
@@ -14,6 +15,6 @@ public record PendingSpanLink(
         @Nullable String parentSpanId,
         SpanKind kind,
         String serviceName,
-        @Nullable String protocol,
+        @Nullable DependencyProtocol protocol,
         Instant expiresAt
 ) {}

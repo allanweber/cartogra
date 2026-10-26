@@ -6,10 +6,14 @@ import io.cartogra.topology.repository.DependencyGraphViewRepository;
 import io.cartogra.topology.repository.GraphNodeRepository;
 import org.jspecify.annotations.Nullable;
 
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -36,6 +40,9 @@ public class BlastRadiusService {
     public static final int DEFAULT_DEPTH = 3;
     public static final int MAX_DEPTH = 6;
     public static final int MAX_NODES_PER_DIRECTION = 200;
+
+    private static final Comparator<BlastRadiusConnection> CONNECTION_ORDER =
+            Comparator.comparing(BlastRadiusConnection::protocol).thenComparing(BlastRadiusConnection::type);
 
     private final GraphNodeRepository graphNodeRepository;
     private final DependencyGraphViewRepository graphViewRepository;
@@ -70,9 +77,11 @@ public class BlastRadiusService {
         Map<UUID, GraphNode> nodesById = graphNodeRepository.findByServiceIds(tenantId, ids, ids.size()).stream()
                 .collect(Collectors.toMap(GraphNode::serviceId, Function.identity()));
 
+        Map<UUID, List<BlastRadiusConnection>> via = connectionsFromPreviousHop(tenantId, serviceId, direction, withinDepth);
         List<BlastRadiusEntry> live = withinDepth.stream()
                 .filter(row -> nodesById.get(row.serviceId()) != null)
-                .map(row -> new BlastRadiusEntry(nodesById.get(row.serviceId()), row.depth()))
+                .map(row -> new BlastRadiusEntry(nodesById.get(row.serviceId()), row.depth(),
+                        via.getOrDefault(row.serviceId(), List.of())))
                 .toList();
 
         boolean nodeCapTruncated = live.size() > MAX_NODES_PER_DIRECTION;
@@ -80,6 +89,29 @@ public class BlastRadiusService {
         List<BlastRadiusEntry> entries = nodeCapTruncated ? live.subList(0, MAX_NODES_PER_DIRECTION) : live;
 
         return new BlastRadiusDirectionResult(entries, nodesBeyondDepth > 0, nodesBeyondDepth, nodeCapTruncated, nodesBeyondCap);
+    }
+
+    private Map<UUID, List<BlastRadiusConnection>> connectionsFromPreviousHop(UUID tenantId, UUID serviceId,
+            BlastRadiusDirection direction, List<BlastRadiusRow> rows) {
+        if (rows.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Integer> depthById = new HashMap<>();
+        depthById.put(serviceId, 0);
+        rows.forEach(row -> depthById.put(row.serviceId(), row.depth()));
+
+        Map<UUID, Set<BlastRadiusConnection>> via = new HashMap<>();
+        for (GraphEdge edge : graphViewRepository.findByServiceIds(tenantId, new HashSet<>(depthById.keySet()), null)) {
+            UUID from = direction == BlastRadiusDirection.UPSTREAM ? edge.sourceServiceId() : edge.targetServiceId();
+            UUID to = direction == BlastRadiusDirection.UPSTREAM ? edge.targetServiceId() : edge.sourceServiceId();
+            Integer fromDepth = depthById.get(from);
+            Integer toDepth = depthById.get(to);
+            if (fromDepth != null && toDepth != null && toDepth == fromDepth + 1) {
+                via.computeIfAbsent(to, _ -> new TreeSet<>(CONNECTION_ORDER))
+                        .add(new BlastRadiusConnection(edge.type(), edge.protocol()));
+            }
+        }
+        return via.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> List.copyOf(e.getValue())));
     }
 
     private int clampDepth(@Nullable Integer requested) {

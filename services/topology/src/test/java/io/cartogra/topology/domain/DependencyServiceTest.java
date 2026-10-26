@@ -13,6 +13,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
@@ -24,6 +25,7 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -427,5 +429,53 @@ class DependencyServiceTest {
                 .isInstanceOf(AccessDeniedException.class);
         verify(dependencyRepository, never()).softDelete(any(), any());
         verify(graphViewRefreshScheduler, never()).markDirty();
+    }
+
+    @Test
+    void declareObservedPairDeclaresEveryObservedProtocolNotYetDeclared() {
+        stubLiveNodes();
+        when(dependencyRepository.findLiveProtocols(tenantId, sourceId, targetId, DependencyType.OBSERVED))
+                .thenReturn(List.of(DependencyProtocol.HTTP, DependencyProtocol.GRPC));
+        when(dependencyRepository.findByEdgeIdentity(tenantId, sourceId, targetId, DependencyType.DECLARED,
+                DependencyProtocol.HTTP)).thenReturn(Optional.empty());
+        when(dependencyRepository.findByEdgeIdentity(tenantId, sourceId, targetId, DependencyType.DECLARED,
+                DependencyProtocol.GRPC)).thenReturn(Optional.of(org.mockito.Mockito.mock(Dependency.class)));
+
+        assertThat(service.declareObservedPair(tenantId, sourceId, targetId)).isTrue();
+
+        ArgumentCaptor<Dependency> saved = ArgumentCaptor.forClass(Dependency.class);
+        verify(dependencyRepository).save(saved.capture());
+        assertThat(saved.getValue().type()).isEqualTo(DependencyType.DECLARED);
+        assertThat(saved.getValue().protocol()).isEqualTo(DependencyProtocol.HTTP);
+        verify(graphViewRefreshScheduler).markDirty();
+    }
+
+    @Test
+    void declareObservedPairReturnsFalseWhenNothingIsObserved() {
+        stubLiveNodes();
+        when(dependencyRepository.findLiveProtocols(tenantId, sourceId, targetId, DependencyType.OBSERVED))
+                .thenReturn(List.of());
+
+        assertThat(service.declareObservedPair(tenantId, sourceId, targetId)).isFalse();
+
+        verify(dependencyRepository, never()).save(any());
+        verify(graphViewRefreshScheduler, never()).markDirty();
+    }
+
+    @Test
+    void declareObservedPairRejectsADeletedNode() {
+        when(graphNodeRepository.findByServiceId(tenantId, sourceId)).thenReturn(Optional.of(deletedNode(sourceId)));
+
+        assertThatThrownBy(() -> service.declareObservedPair(tenantId, sourceId, targetId))
+                .isInstanceOf(UnknownServiceNodeException.class);
+        verify(dependencyRepository, never()).save(any());
+    }
+
+    @Test
+    void removeDeclaredPairSoftDeletesThePair() {
+        service.removeDeclaredPair(tenantId, sourceId, targetId);
+
+        verify(dependencyRepository).softDeleteDeclaredPair(tenantId, sourceId, targetId);
+        verify(graphViewRefreshScheduler).markDirty();
     }
 }

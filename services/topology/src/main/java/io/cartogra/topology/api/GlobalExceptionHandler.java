@@ -6,6 +6,7 @@ import io.cartogra.common.api.ErrorCodes;
 import io.cartogra.topology.domain.exception.BackfillFailedException;
 import io.cartogra.topology.domain.exception.DependencyNotFoundException;
 import io.cartogra.topology.domain.exception.DriftAlreadyResolvedException;
+import io.cartogra.topology.domain.exception.DriftNoLongerObservedException;
 import io.cartogra.topology.domain.exception.DriftNotFoundException;
 import io.cartogra.topology.domain.exception.InvalidDriftActionException;
 import io.cartogra.topology.domain.exception.DuplicateDependencyException;
@@ -54,6 +55,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DriftAlreadyResolvedException.class)
     public ResponseEntity<ApiErrorResponse> handleDriftAlreadyResolved(DriftAlreadyResolvedException ex) {
         return respond(HttpStatus.CONFLICT, ErrorCodes.DRIFT_ALREADY_RESOLVED, ex.getMessage());
+    }
+
+    @ExceptionHandler(DriftNoLongerObservedException.class)
+    public ResponseEntity<ApiErrorResponse> handleDriftNoLongerObserved(DriftNoLongerObservedException ex) {
+        return respond(HttpStatus.CONFLICT, ErrorCodes.DRIFT_NO_LONGER_OBSERVED, ex.getMessage());
     }
 
     @ExceptionHandler(UnresolvedSpanServiceNotFoundException.class)

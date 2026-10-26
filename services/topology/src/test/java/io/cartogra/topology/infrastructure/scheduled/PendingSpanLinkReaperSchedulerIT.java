@@ -1,6 +1,7 @@
 package io.cartogra.topology.infrastructure.scheduled;
 
 import io.cartogra.topology.AbstractTopologyIT;
+import io.cartogra.topology.domain.DependencyProtocol;
 import io.cartogra.topology.domain.SpanKind;
 import io.cartogra.topology.repository.MessagingEndpoint;
 import io.cartogra.topology.repository.PendingSpanLink;
@@ -31,32 +32,33 @@ class PendingSpanLinkReaperSchedulerIT extends AbstractTopologyIT {
     @Test
     void reapRemovesExpiredButKeepsLiveRows() {
         UUID tenant = UUID.randomUUID();
-        repository.insert(new PendingSpanLink(UUID.randomUUID(), tenant, "t", "expired", null, SpanKind.CLIENT,
-                "svc", "http", Instant.now().minusSeconds(5)));
-        repository.insert(new PendingSpanLink(UUID.randomUUID(), tenant, "t", "live", null, SpanKind.CLIENT,
-                "svc", "http", Instant.now().plusSeconds(300)));
+        repository.park(tenant, List.of(
+                new PendingSpanLink(UUID.randomUUID(), tenant, "t", "expired", null, SpanKind.CLIENT,
+                        "svc", DependencyProtocol.HTTP, Instant.now().minusSeconds(5)),
+                new PendingSpanLink(UUID.randomUUID(), tenant, "t", "live", null, SpanKind.CLIENT,
+                        "svc", DependencyProtocol.HTTP, Instant.now().plusSeconds(300))));
 
         reaper.reap();
 
-        assertThat(repository.findClientPartner(tenant, "t", "live")).isPresent();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM pending_span_links WHERE tenant_id = :t",
                 new MapSqlParameterSource("t", tenant), Long.class)).isEqualTo(1L);
+        assertThat(repository.takeClientPartner(tenant, "t", "live")).isPresent();
     }
 
     @Test
     void reapRemovesIdleMessagingEndpointsButKeepsLiveOnes() {
         UUID tenant = UUID.randomUUID();
-        repository.upsertMessagingEndpoints(tenant,
+        repository.joinMessagingEndpoints(tenant,
                 List.of(new MessagingEndpoint("orders.paid", SpanKind.PRODUCER, "checkout")),
                 Instant.now().minusSeconds(5));
-        repository.upsertMessagingEndpoints(tenant,
+        repository.joinMessagingEndpoints(tenant,
                 List.of(new MessagingEndpoint("orders.paid", SpanKind.CONSUMER, "payments")),
                 Instant.now().plus(Duration.ofHours(24)));
 
         reaper.reap();
 
-        assertThat(repository.findMessagingEndpoints(tenant, List.of("orders.paid")))
-                .containsExactly(new MessagingEndpoint("orders.paid", SpanKind.CONSUMER, "payments"));
+        assertThat(jdbc.queryForObject("SELECT service_name FROM pending_span_links WHERE tenant_id = :t",
+                new MapSqlParameterSource("t", tenant), String.class)).isEqualTo("payments");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM pending_span_links WHERE tenant_id = :t",
                 new MapSqlParameterSource("t", tenant), Long.class)).isEqualTo(1L);
     }

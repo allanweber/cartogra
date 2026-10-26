@@ -1,10 +1,11 @@
 package io.cartogra.topology.infrastructure.kafka;
 
+import io.cartogra.topology.config.SpanLinkConfig;
 import io.cartogra.topology.domain.ObservedDependencyService;
 import io.cartogra.topology.domain.SpanObservation;
 import io.cartogra.topology.domain.exception.UnattributedSpanBatchException;
-import io.cartogra.topology.infrastructure.otel.OtlpSpanMapper;
-import io.cartogra.topology.infrastructure.otel.OtlpSpanMapper.TenantSpans;
+import io.cartogra.topology.infrastructure.otel.OtlpSpanParser;
+import io.cartogra.topology.infrastructure.otel.OtlpSpanParser.TenantSpans;
 import io.cartogra.topology.infrastructure.otel.OtlpTraceRequest;
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
 import io.opentelemetry.context.Context;
@@ -37,19 +38,19 @@ public class OtelSpanWorker {
     private static final Logger log = LoggerFactory.getLogger(OtelSpanWorker.class);
 
     private final ObservedDependencyService observedDependencyService;
-    private final OtlpSpanMapper spanMapper;
+    private final OtlpSpanParser spanParser;
     private final ObjectMapper objectMapper;
 
-    public OtelSpanWorker(ObservedDependencyService observedDependencyService, OtlpSpanMapper spanMapper,
+    public OtelSpanWorker(ObservedDependencyService observedDependencyService, OtlpSpanParser spanParser,
                           ObjectMapper objectMapper) {
         this.observedDependencyService = observedDependencyService;
-        this.spanMapper = spanMapper;
+        this.spanParser = spanParser;
         this.objectMapper = objectMapper;
     }
 
     @KafkaListener(
             id = "otelSpanWorker",
-            topics = "cartogra.observability.spans",
+            topics = SpanLinkConfig.SPANS_TOPIC,
             groupId = "${spring.kafka.consumer.group-id}"
     )
     public void consume(ConsumerRecord<String, String> record, Acknowledgment ack) {
@@ -58,7 +59,7 @@ public class OtelSpanWorker {
 
         try (Scope _ = ctx.makeCurrent()) {
             OtlpTraceRequest request = objectMapper.readValue(record.value(), OtlpTraceRequest.class);
-            List<TenantSpans> groups = spanMapper.map(request);
+            List<TenantSpans> groups = spanParser.map(request);
 
             UnattributedSpanBatchException firstQuarantined = null;
             Map<UUID, List<SpanObservation>> byTenant = new LinkedHashMap<>();

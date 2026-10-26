@@ -506,7 +506,7 @@ class ServiceServiceTest {
         var payload = new OwnershipResolvedPayload(tenantId, null, "org/repo", List.of("platform"), Map.of());
 
         when(serviceRepository.findByRepositoryPath(tenantId, "org/repo")).thenReturn(Optional.of(orphan));
-        when(teamRepository.findByTenantAndSlug(tenantId, "platform")).thenReturn(Optional.of(team));
+        when(teamRepository.findByTenantAndSlug(tenantId, "platform")).thenReturn(List.of(team));
         when(teamRepository.findById(tenantId, teamId)).thenReturn(Optional.of(team));
         when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.of(orphan));
         when(serviceRepository.save(any())).thenReturn(withTeam);
@@ -539,7 +539,7 @@ class ServiceServiceTest {
         var payload = new OwnershipResolvedPayload(tenantId, null, "Acme/payments", List.of("payments"), Map.of());
 
         when(serviceRepository.findByExternalId(tenantId, "Acme/payments")).thenReturn(Optional.of(orphan));
-        when(teamRepository.findByTenantAndSlug(tenantId, "payments")).thenReturn(Optional.of(team));
+        when(teamRepository.findByTenantAndSlug(tenantId, "payments")).thenReturn(List.of(team));
         when(teamRepository.findById(tenantId, teamId)).thenReturn(Optional.of(team));
         when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.of(orphan));
         when(serviceRepository.save(any())).thenReturn(serviceWithTeam(tenantId, serviceId, "payments", teamId));
@@ -582,9 +582,25 @@ class ServiceServiceTest {
         var payload = new OwnershipResolvedPayload(tenantId, null, "org/repo", List.of("team-a", "team-b"), Map.of());
         when(serviceRepository.findByRepositoryPath(tenantId, "org/repo")).thenReturn(Optional.of(orphan));
         when(teamRepository.findByTenantAndSlug(tenantId, "team-a"))
-                .thenReturn(Optional.of(team(tenantId, UUID.randomUUID(), "Team A")));
+                .thenReturn(List.of(team(tenantId, UUID.randomUUID(), "Team A")));
         when(teamRepository.findByTenantAndSlug(tenantId, "team-b"))
-                .thenReturn(Optional.of(team(tenantId, UUID.randomUUID(), "Team B")));
+                .thenReturn(List.of(team(tenantId, UUID.randomUUID(), "Team B")));
+
+        serviceService.resolveOwnership(payload);
+
+        verifyNoInteractions(eventProducer);
+        verify(serviceRepository, never()).save(any());
+    }
+
+    @Test
+    void resolveOwnershipSkipsWhenOneHandleSlugMatchesSeveralTeams() {
+        UUID tenantId = UUID.randomUUID();
+        Service orphan = service(tenantId, "payments");
+        var payload = new OwnershipResolvedPayload(tenantId, null, "org/repo", List.of("payments-team"), Map.of());
+        when(serviceRepository.findByRepositoryPath(tenantId, "org/repo")).thenReturn(Optional.of(orphan));
+        when(teamRepository.findByTenantAndSlug(tenantId, "payments-team")).thenReturn(List.of(
+                team(tenantId, UUID.randomUUID(), "Payments Team"),
+                team(tenantId, UUID.randomUUID(), "payments-team")));
 
         serviceService.resolveOwnership(payload);
 
@@ -602,8 +618,8 @@ class ServiceServiceTest {
         var payload = new OwnershipResolvedPayload(tenantId, null, "org/repo", List.of("alice", "Platform Team"), Map.of());
 
         when(serviceRepository.findByRepositoryPath(tenantId, "org/repo")).thenReturn(Optional.of(orphan));
-        when(teamRepository.findByTenantAndSlug(tenantId, "alice")).thenReturn(Optional.empty());
-        when(teamRepository.findByTenantAndSlug(tenantId, "platform-team")).thenReturn(Optional.of(team));
+        when(teamRepository.findByTenantAndSlug(tenantId, "alice")).thenReturn(List.of());
+        when(teamRepository.findByTenantAndSlug(tenantId, "platform-team")).thenReturn(List.of(team));
         when(teamRepository.findById(tenantId, teamId)).thenReturn(Optional.of(team));
         when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.of(orphan));
         when(serviceRepository.save(any())).thenReturn(serviceWithTeam(tenantId, serviceId, "payments", teamId));
@@ -624,7 +640,7 @@ class ServiceServiceTest {
         var payload = new OwnershipResolvedPayload(tenantId, null, "org/repo", List.of("payments", "Payments"), Map.of());
 
         when(serviceRepository.findByRepositoryPath(tenantId, "org/repo")).thenReturn(Optional.of(orphan));
-        when(teamRepository.findByTenantAndSlug(tenantId, "payments")).thenReturn(Optional.of(team));
+        when(teamRepository.findByTenantAndSlug(tenantId, "payments")).thenReturn(List.of(team));
         when(teamRepository.findById(tenantId, teamId)).thenReturn(Optional.of(team));
         when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.of(orphan));
         when(serviceRepository.save(any())).thenReturn(serviceWithTeam(tenantId, serviceId, "payments", teamId));
@@ -640,7 +656,7 @@ class ServiceServiceTest {
         Service orphan = service(tenantId, "payments");
         var payload = new OwnershipResolvedPayload(tenantId, null, "org/repo", List.of("unknown-team"), Map.of());
         when(serviceRepository.findByRepositoryPath(tenantId, "org/repo")).thenReturn(Optional.of(orphan));
-        when(teamRepository.findByTenantAndSlug(tenantId, "unknown-team")).thenReturn(Optional.empty());
+        when(teamRepository.findByTenantAndSlug(tenantId, "unknown-team")).thenReturn(List.of());
 
         serviceService.resolveOwnership(payload);
 

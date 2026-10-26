@@ -115,7 +115,7 @@ class AcmeCodeownersMappingIT {
         insertTenant(otherTenant);
         insertTeam(otherTenant, "Ledger");
 
-        assertThat(teamRepository.findByTenantAndSlug(tenantId, "platform-team")).get()
+        assertThat(teamRepository.findByTenantAndSlug(tenantId, "platform-team")).singleElement()
                 .extracting(t -> t.id()).isEqualTo(platform);
         assertThat(teamRepository.findByTenantAndSlug(tenantId, "retired")).isEmpty();
         assertThat(teamRepository.findByTenantAndSlug(tenantId, "ledger")).isEmpty();

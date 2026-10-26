@@ -46,6 +46,17 @@ function countByTeam(entries: BlastRadiusEntry[], teamMap: Map<string, string>):
   return [...counts.entries()].sort(([, a], [, b]) => b - a)
 }
 
+// One badge per protocol; a protocol seen only in traffic is marked observed, since nobody declared it.
+function connectionBadges(via: BlastRadiusEntry['via']): { protocol: string; label: string; observedOnly: boolean }[] {
+  const byProtocol = new Map<string, Set<string>>()
+  via.forEach((c) => byProtocol.set(c.protocol, (byProtocol.get(c.protocol) ?? new Set()).add(c.dependencyType)))
+  return [...byProtocol.entries()].map(([protocol, types]) => ({
+    protocol,
+    label: `${protocol} ${[...types].map((t) => t.toLowerCase()).sort().join(' and ')}`,
+    observedOnly: !types.has('DECLARED'),
+  }))
+}
+
 function BlastRadiusEntryRow({ entry, teamMap }: { entry: BlastRadiusEntry; teamMap: Map<string, string> }) {
   const teamName = teamMap.get(entry.teamId ?? '') ?? 'Unassigned'
   return (
@@ -67,7 +78,23 @@ function BlastRadiusEntryRow({ entry, teamMap }: { entry: BlastRadiusEntry; team
           {entry.name}
         </Link>
       </div>
-      <span className="shrink-0 text-xs text-muted-foreground">{teamName}</span>
+      <div className="flex shrink-0 items-center gap-2">
+        {connectionBadges(entry.via).map((badge) => (
+          <span
+            key={badge.protocol}
+            title={badge.label}
+            aria-label={`Connection: ${badge.label}`}
+            className={cn(
+              'rounded-md border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground',
+              badge.observedOnly && 'border-dashed',
+            )}
+          >
+            {badge.protocol}
+            {badge.observedOnly && <span className="normal-case"> · observed</span>}
+          </span>
+        ))}
+        <span className="text-xs text-muted-foreground">{teamName}</span>
+      </div>
     </li>
   )
 }
@@ -323,7 +350,12 @@ export function InspectorPanel({
             />
           </TabsContent>
           <TabsContent value="drift" className="min-h-0 overflow-y-auto pt-3">
-            <DriftTab nodesById={nodesById} selectedDriftId={selectedDriftId} onSelectDrift={onSelectDrift} />
+            <DriftTab
+              nodesById={nodesById}
+              serviceId={node.serviceId}
+              selectedDriftId={selectedDriftId}
+              onSelectDrift={onSelectDrift}
+            />
           </TabsContent>
         </Tabs>
       </CardContent>

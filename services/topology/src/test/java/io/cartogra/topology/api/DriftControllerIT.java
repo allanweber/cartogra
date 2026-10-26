@@ -7,7 +7,8 @@ import io.cartogra.test.PostgresTestSupport;
 import io.cartogra.topology.domain.Dependency;
 import io.cartogra.topology.domain.DependencyProtocol;
 import io.cartogra.topology.domain.DependencyType;
-import io.cartogra.topology.domain.DriftDetectionService;
+import io.cartogra.topology.domain.DependencyDrift;
+import io.cartogra.topology.domain.DriftService;
 import io.cartogra.topology.domain.DriftType;
 import io.cartogra.topology.domain.ObservedDependencyService;
 import io.cartogra.topology.domain.SpanKind;
@@ -33,6 +34,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
@@ -83,7 +85,7 @@ class DriftControllerIT {
     @Autowired private GraphNodeRepository graphNodeRepository;
     @Autowired private DependencyRepository dependencyRepository;
     @Autowired private DependencyDriftRepository driftRepository;
-    @Autowired private DriftDetectionService detectionService;
+    @Autowired private DriftService driftService;
     @Autowired private ObservedDependencyService observedDependencyService;
 
     private UUID node(UUID tenantId, String name) {
@@ -115,8 +117,8 @@ class DriftControllerIT {
 
     private UUID seedUndeclared(UUID tenant, UUID source, UUID target) {
         edge(tenant, source, target, DependencyType.OBSERVED, Instant.now());
-        detectionService.sweep(tenant, Instant.now());
-        return driftRepository.findActiveByEdge(tenant, source, target, DriftType.UNDECLARED).orElseThrow().id();
+        driftService.sweep(tenant, Instant.now());
+        return activeDrift(tenant, source, target, DriftType.UNDECLARED).orElseThrow().id();
     }
 
     @Test
@@ -147,9 +149,9 @@ class DriftControllerIT {
 
         observedDependencyService.ingest(tenant, List.of(new SpanObservation("reporting-service", SpanKind.CLIENT,
                 "trace-1", "span-1", null, "payments-service", null, DependencyProtocol.HTTP, null, null)));
-        detectionService.sweep(tenant, Instant.now());
+        driftService.sweep(tenant, Instant.now());
 
-        UUID driftId = driftRepository.findActiveByEdge(tenant, reporting, payments, DriftType.UNDECLARED)
+        UUID driftId = activeDrift(tenant, reporting, payments, DriftType.UNDECLARED)
                 .orElseThrow().id();
         assertThat(send("POST", "/" + driftId + "/resolve", tenant, "ADMIN",
                 "{\"action\":\"ACCEPT_OBSERVED\"}").statusCode()).isEqualTo(200);
@@ -182,7 +184,7 @@ class DriftControllerIT {
         assertThat(data.get("resolution").stringValue()).isEqualTo("ACCEPTED");
         assertThat(dependencyRepository.findByEdgeIdentity(tenant, a, b, DependencyType.DECLARED,
                 DependencyProtocol.HTTP)).isPresent();
-        detectionService.sweep(tenant, Instant.now());
+        driftService.sweep(tenant, Instant.now());
         assertThat(driftRepository.findAllActive(tenant)).isEmpty();
     }
 
@@ -196,8 +198,8 @@ class DriftControllerIT {
         edge(tenant, a, b, DependencyType.DECLARED, old);
         edge(tenant, a, c, DependencyType.DECLARED, old);
         edge(tenant, a, c, DependencyType.OBSERVED, Instant.now());
-        detectionService.sweep(tenant, Instant.now());
-        UUID driftId = driftRepository.findActiveByEdge(tenant, a, b, DriftType.MISSING).orElseThrow().id();
+        driftService.sweep(tenant, Instant.now());
+        UUID driftId = activeDrift(tenant, a, b, DriftType.MISSING).orElseThrow().id();
 
         HttpResponse<String> resp = send("POST", "/" + driftId + "/resolve", tenant, "ADMIN",
                 "{\"action\":\"REMOVE_DECLARED\"}");
@@ -214,7 +216,7 @@ class DriftControllerIT {
 
         HttpResponse<String> resp = send("POST", "/" + driftId + "/resolve", tenant, "ADMIN",
                 "{\"action\":\"DISMISS\"}");
-        detectionService.sweep(tenant, Instant.now());
+        driftService.sweep(tenant, Instant.now());
 
         assertThat(resp.statusCode()).isEqualTo(200);
         assertThat(driftRepository.findAllActive(tenant)).isEmpty();
@@ -279,5 +281,12 @@ class DriftControllerIT {
         assertThat(send("POST", "/" + driftId + "/resolve", tenant, "ADMIN", "{\"action\":\"NOPE\"}")
                 .statusCode()).isEqualTo(400);
         assertThat(send("POST", "/" + driftId + "/resolve", tenant, "ADMIN", "{}").statusCode()).isEqualTo(400);
+    }
+
+    private Optional<DependencyDrift> activeDrift(UUID tenant, UUID source, UUID target, DriftType type) {
+        return driftRepository.findAllActive(tenant).stream()
+                .filter(d -> d.sourceServiceId().equals(source) && d.targetServiceId().equals(target)
+                        && d.type() == type)
+                .findFirst();
     }
 }

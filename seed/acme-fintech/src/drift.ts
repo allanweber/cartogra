@@ -14,6 +14,8 @@ export async function setDrift(seed: SeedData, enable: boolean): Promise<SeedCal
   return calls
 }
 
+const PORT_FORWARD_TIMEOUT_MS = 30_000
+
 async function toggleCall(seed: SeedData, call: SeedCall, enable: boolean): Promise<void> {
   const port = await freePort()
   const forward = spawn(
@@ -23,10 +25,11 @@ async function toggleCall(seed: SeedData, call: SeedCall, enable: boolean): Prom
   )
   try {
     await new Promise<void>((resolve, reject) => {
-      forward.once('error', reject)
-      forward.once('exit', (code) => reject(new Error(`kubectl port-forward exited early (${code})`)))
+      const timer = setTimeout(() => reject(new Error(`kubectl port-forward to ${call.from} not ready after ${PORT_FORWARD_TIMEOUT_MS} ms`)), PORT_FORWARD_TIMEOUT_MS)
+      forward.once('error', (err) => { clearTimeout(timer); reject(err) })
+      forward.once('exit', (code) => { clearTimeout(timer); reject(new Error(`kubectl port-forward exited early (${code})`)) })
       forward.stdout.on('data', (chunk: Buffer) => {
-        if (chunk.toString().includes('Forwarding from')) resolve()
+        if (chunk.toString().includes('Forwarding from')) { clearTimeout(timer); resolve() }
       })
     })
     const action = enable ? 'enable' : 'disable'

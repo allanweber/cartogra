@@ -10,7 +10,6 @@ import io.cartogra.topology.repository.MessagingEndpoint;
 import io.cartogra.topology.repository.PendingSpanLink;
 import io.cartogra.topology.repository.PendingSpanLinkRepository;
 import io.cartogra.topology.repository.SpanRef;
-import io.cartogra.topology.repository.UnresolvedSpanServiceRepository;
 import io.cartogra.topology.repository.UpsertOutcome;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.jspecify.annotations.Nullable;
@@ -20,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -37,10 +37,14 @@ public class ObservedDependencyService {
 
     private record EdgeKey(UUID source, UUID target, DependencyProtocol protocol) {}
 
+    private static final Comparator<EdgeKey> EDGE_LOCK_ORDER = Comparator.comparing(EdgeKey::source)
+            .thenComparing(EdgeKey::target)
+            .thenComparing(EdgeKey::protocol);
+
     private final GraphNodeRepository graphNodeRepository;
     private final DependencyRepository dependencyRepository;
     private final PendingSpanLinkRepository pendingSpanLinkRepository;
-    private final UnresolvedSpanServiceRepository unresolvedSpanServiceRepository;
+    private final UnresolvedSpanServiceService unresolvedSpanServiceService;
     private final DependencyGraphViewRefreshScheduler graphViewRefreshScheduler;
     private final SpanLinkProperties spanLinkProperties;
     private final MeterRegistry meterRegistry;
@@ -48,14 +52,14 @@ public class ObservedDependencyService {
     public ObservedDependencyService(GraphNodeRepository graphNodeRepository,
                                      DependencyRepository dependencyRepository,
                                      PendingSpanLinkRepository pendingSpanLinkRepository,
-                                     UnresolvedSpanServiceRepository unresolvedSpanServiceRepository,
+                                     UnresolvedSpanServiceService unresolvedSpanServiceService,
                                      DependencyGraphViewRefreshScheduler graphViewRefreshScheduler,
                                      SpanLinkProperties spanLinkProperties,
                                      MeterRegistry meterRegistry) {
         this.graphNodeRepository = graphNodeRepository;
         this.dependencyRepository = dependencyRepository;
         this.pendingSpanLinkRepository = pendingSpanLinkRepository;
-        this.unresolvedSpanServiceRepository = unresolvedSpanServiceRepository;
+        this.unresolvedSpanServiceService = unresolvedSpanServiceService;
         this.graphViewRefreshScheduler = graphViewRefreshScheduler;
         this.spanLinkProperties = spanLinkProperties;
         this.meterRegistry = meterRegistry;
@@ -86,12 +90,11 @@ public class ObservedDependencyService {
         Instant now = Instant.now();
         NameResolver names = new NameResolver(tenantId, observations);
         Set<EdgeKey> edges = new LinkedHashSet<>();
-        Set<String> recordedUnknown = new HashSet<>();
+        List<String> unknownNames = new ArrayList<>();
         List<SpanObservation> pendingClients = new ArrayList<>();
         List<SpanObservation> pendingServers = new ArrayList<>();
         Set<SpanRef> resolvedClientSpans = new HashSet<>();
         Set<MessagingEndpoint> messagingEndpoints = new LinkedHashSet<>();
-        FallbackLock lock = new FallbackLock(tenantId);
 
         for (SpanObservation span : observations) {
             if (span.protocol() == null) {
@@ -100,7 +103,7 @@ public class ObservedDependencyService {
             }
             UUID ownId = names.resolve(span.serviceName());
             if (ownId == null) {
-                recordUnknown(tenantId, span.serviceName(), now, recordedUnknown);
+                unknownNames.add(span.serviceName());
                 count("cartogra.spans.skipped", "reason", "unresolved_source");
                 continue;
             }
@@ -109,12 +112,12 @@ public class ObservedDependencyService {
                     if (span.protocol() == DependencyProtocol.DB) {
                         handleDb(span, ownId, names, edges);
                     } else {
-                        handleClient(tenantId, span, ownId, names, edges, pendingClients, pendingServers, now,
-                                recordedUnknown, resolvedClientSpans, lock);
+                        handleClient(tenantId, span, ownId, names, edges, pendingClients, pendingServers,
+                                unknownNames, resolvedClientSpans);
                     }
                 }
                 case SERVER -> handleServer(tenantId, span, ownId, names, edges, pendingClients, pendingServers,
-                        resolvedClientSpans, lock);
+                        resolvedClientSpans);
                 case PRODUCER, CONSUMER -> collectMessagingEndpoint(span, messagingEndpoints);
             }
         }
@@ -123,12 +126,13 @@ public class ObservedDependencyService {
         flushPending(tenantId, pendingClients, pendingServers, now);
         joinMessaging(tenantId, messagingEndpoints, names, edges, now);
         upsertEdges(tenantId, edges, now);
+        unresolvedSpanServiceService.record(tenantId, unknownNames, now);
     }
 
     private void handleClient(UUID tenantId, SpanObservation client, UUID sourceId, NameResolver names,
                               Set<EdgeKey> edges, List<SpanObservation> pendingClients,
-                              List<SpanObservation> pendingServers, Instant now, Set<String> recordedUnknown,
-                              Set<SpanRef> resolvedClientSpans, FallbackLock lock) {
+                              List<SpanObservation> pendingServers, List<String> unknownNames,
+                              Set<SpanRef> resolvedClientSpans) {
         String targetName = client.peerName() != null ? client.peerName() : client.peerHost();
         UUID targetId = targetName != null ? names.resolve(targetName) : null;
         if (targetId != null) {
@@ -145,24 +149,21 @@ public class ObservedDependencyService {
             matchedFallback(edges, sourceId, names.resolve(inBatch.get().serviceName()), client.protocol());
             return;
         }
-        lock.acquire();
         Optional<PendingSpanLink> stored =
-                pendingSpanLinkRepository.findServerPartner(tenantId, client.traceId(), client.spanId());
+                pendingSpanLinkRepository.takeServerPartner(tenantId, client.traceId(), client.spanId());
         if (stored.isPresent()) {
-            pendingSpanLinkRepository.delete(stored.get().id());
             matchedFallback(edges, sourceId, names.resolve(stored.get().serviceName()), client.protocol());
             return;
         }
         if (client.peerName() != null) {
-            recordUnknown(tenantId, client.peerName(), now, recordedUnknown);
+            unknownNames.add(client.peerName());
         }
         pendingClients.add(client);
     }
 
     private void handleServer(UUID tenantId, SpanObservation server, UUID targetId, NameResolver names,
                               Set<EdgeKey> edges, List<SpanObservation> pendingClients,
-                              List<SpanObservation> pendingServers, Set<SpanRef> resolvedClientSpans,
-                              FallbackLock lock) {
+                              List<SpanObservation> pendingServers, Set<SpanRef> resolvedClientSpans) {
         if (server.parentSpanId() == null
                 || resolvedClientSpans.contains(new SpanRef(server.traceId(), server.parentSpanId()))) {
             return;
@@ -175,14 +176,11 @@ public class ObservedDependencyService {
             matchedFallback(edges, names.resolve(inBatch.get().serviceName()), targetId, inBatch.get().protocol());
             return;
         }
-        lock.acquire();
         Optional<PendingSpanLink> stored =
-                pendingSpanLinkRepository.findClientPartner(tenantId, server.traceId(), server.parentSpanId());
+                pendingSpanLinkRepository.takeClientPartner(tenantId, server.traceId(), server.parentSpanId());
         if (stored.isPresent()) {
             PendingSpanLink link = stored.get();
-            pendingSpanLinkRepository.delete(link.id());
-            DependencyProtocol protocol = link.protocol() != null
-                    ? DependencyProtocol.fromDbValue(link.protocol()) : server.protocol();
+            DependencyProtocol protocol = link.protocol() != null ? link.protocol() : server.protocol();
             matchedFallback(edges, names.resolve(link.serviceName()), targetId, protocol);
             return;
         }
@@ -209,28 +207,21 @@ public class ObservedDependencyService {
             count("cartogra.spans.skipped", "reason", "unsupported_protocol");
             return;
         }
-        endpoints.add(new MessagingEndpoint(span.destination(), span.kind(),
-                span.serviceName().toLowerCase(Locale.ROOT)));
+        endpoints.add(new MessagingEndpoint(span.destination(), span.kind(), span.serviceName()));
     }
 
     /**
      * Joins producers and consumers on the destination name: every producer gets a kafka edge to every
-     * consumer of the same destination, as long as one side was seen in this batch. Runs without a lock;
-     * two instances racing on opposite sides can miss each other once, and the next span on either side
-     * makes the edge because messaging rows live for {@code messagingTtl}.
+     * consumer of the same destination, as long as one side was seen in this batch. A side missed in a race
+     * is joined by the next span on either side, because messaging rows live for {@code messagingTtl}.
      */
     private void joinMessaging(UUID tenantId, Set<MessagingEndpoint> batch, NameResolver names,
                                Set<EdgeKey> edges, Instant now) {
         if (batch.isEmpty()) {
             return;
         }
-        pendingSpanLinkRepository.upsertMessagingEndpoints(tenantId, batch,
+        Set<MessagingEndpoint> known = pendingSpanLinkRepository.joinMessagingEndpoints(tenantId, batch,
                 now.plus(spanLinkProperties.messagingTtl()));
-        Set<String> destinations = new HashSet<>();
-        batch.forEach(endpoint -> destinations.add(endpoint.destination()));
-        Set<MessagingEndpoint> known = new LinkedHashSet<>(
-                pendingSpanLinkRepository.findMessagingEndpoints(tenantId, destinations));
-        known.addAll(batch);
         names.preload(known.stream().map(MessagingEndpoint::serviceName).toList());
 
         for (MessagingEndpoint producer : known) {
@@ -274,17 +265,7 @@ public class ObservedDependencyService {
         }
     }
 
-    private void recordUnknown(UUID tenantId, String name, Instant now, Set<String> recordedUnknown) {
-        if (recordedUnknown.add(name.toLowerCase(Locale.ROOT))) {
-            unresolvedSpanServiceRepository.record(tenantId, name, now, spanLinkProperties.maxUnresolvedPerTenant());
-        }
-    }
-
-    /**
-     * A SERVER half parked before its CLIENT resolved directly can never be matched; drop it now
-     * instead of letting it sit until TTL. Runs without the fallback lock: a concurrently inserted
-     * row that slips past is only reaped later, never wrongly joined.
-     */
+    /** A SERVER half parked before its CLIENT resolved directly can never be matched; drop it now, not at TTL. */
     private void discardServersOfResolvedClients(UUID tenantId, List<SpanObservation> pendingServers,
                                                  Set<SpanRef> resolvedClientSpans) {
         if (resolvedClientSpans.isEmpty()) {
@@ -300,23 +281,20 @@ public class ObservedDependencyService {
     private void flushPending(UUID tenantId, List<SpanObservation> clients, List<SpanObservation> servers,
                               Instant now) {
         Instant expiresAt = now.plus(spanLinkProperties.ttl());
-        for (SpanObservation client : clients) {
-            pendingSpanLinkRepository.insert(pendingLink(tenantId, client, expiresAt));
-        }
-        for (SpanObservation server : servers) {
-            pendingSpanLinkRepository.insert(pendingLink(tenantId, server, expiresAt));
-        }
+        pendingSpanLinkRepository.park(tenantId, Stream.concat(clients.stream(), servers.stream())
+                .map(span -> pendingLink(tenantId, span, expiresAt))
+                .toList());
     }
 
     private PendingSpanLink pendingLink(UUID tenantId, SpanObservation span, Instant expiresAt) {
         return new PendingSpanLink(UUID.randomUUID(), tenantId, span.traceId(), span.spanId(), span.parentSpanId(),
-                span.kind(), span.serviceName(),
-                span.protocol() != null ? span.protocol().toDbValue() : null, expiresAt);
+                span.kind(), span.serviceName(), span.protocol(), expiresAt);
     }
 
     private void upsertEdges(UUID tenantId, Set<EdgeKey> edges, Instant now) {
         boolean touched = false;
-        for (EdgeKey edge : edges) {
+        List<EdgeKey> ordered = edges.stream().sorted(EDGE_LOCK_ORDER).toList();
+        for (EdgeKey edge : ordered) {
             UpsertOutcome outcome = dependencyRepository.upsertObserved(
                     tenantId, edge.source(), edge.target(), edge.protocol(), now);
             if (outcome != UpsertOutcome.UNCHANGED) {
@@ -336,27 +314,6 @@ public class ObservedDependencyService {
 
     private void count(String name, String... tags) {
         meterRegistry.counter(name, tags).increment();
-    }
-
-    /**
-     * Serializes the find-partner/insert-pending join per tenant for the rest of the transaction.
-     * One lock per tenant (not per trace) keeps lock-table usage constant and rules out deadlocks;
-     * without it two instances handling the halves of one call can each miss the other's insert.
-     */
-    private final class FallbackLock {
-        private final UUID tenantId;
-        private boolean held;
-
-        FallbackLock(UUID tenantId) {
-            this.tenantId = tenantId;
-        }
-
-        void acquire() {
-            if (!held) {
-                pendingSpanLinkRepository.lockTenant(tenantId);
-                held = true;
-            }
-        }
     }
 
     private final class NameResolver {

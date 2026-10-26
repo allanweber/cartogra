@@ -22,5 +22,6 @@ public final class ErrorCodes {
     public static final String SELF_DEPENDENCY                = "SELF_DEPENDENCY";
     public static final String INVALID_DRIFT_ACTION           = "INVALID_DRIFT_ACTION";
     public static final String DRIFT_ALREADY_RESOLVED         = "DRIFT_ALREADY_RESOLVED";
+    public static final String DRIFT_NO_LONGER_OBSERVED       = "DRIFT_NO_LONGER_OBSERVED";
     public static final String UNRESOLVED_SPAN_SERVICE_ALREADY_RESOLVED = "UNRESOLVED_SPAN_SERVICE_ALREADY_RESOLVED";
 }

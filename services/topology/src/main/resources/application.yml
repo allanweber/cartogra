@@ -49,6 +49,11 @@ topology:
   drift:
     sweep-interval: ${TOPOLOGY_DRIFT_SWEEP_INTERVAL:PT5M}
     missing-after: ${TOPOLOGY_DRIFT_MISSING_AFTER:P7D}
+  span-links:
+    ttl: ${TOPOLOGY_SPAN_LINKS_TTL:PT5M}
+    reap-interval: ${TOPOLOGY_SPAN_LINKS_REAP_INTERVAL:PT1M}
+    max-unresolved-per-tenant: ${TOPOLOGY_SPAN_LINKS_MAX_UNRESOLVED_PER_TENANT:1000}
+    messaging-ttl: ${TOPOLOGY_SPAN_LINKS_MESSAGING_TTL:PT24H}
   span-topics:
     retention: ${TOPOLOGY_SPAN_TOPICS_RETENTION:PT1H}
     dlq-retention: ${TOPOLOGY_SPAN_TOPICS_DLQ_RETENTION:P3D}

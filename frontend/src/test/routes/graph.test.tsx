@@ -225,7 +225,7 @@ describe('GraphPage', () => {
       serviceId: 's1',
       upstream: { entries: [], depthTruncated: false, nodesBeyondDepth: 0, nodeCapTruncated: false, nodesBeyondCap: 0 },
       downstream: {
-        entries: [{ serviceId: 's2', name: 'auth-service', teamId: null, tier: null, healthStatus: 'HEALTHY', distance: 1 }],
+        entries: [{ serviceId: 's2', name: 'auth-service', teamId: null, tier: null, healthStatus: 'HEALTHY', distance: 1, via: [] }],
         depthTruncated: false,
         nodesBeyondDepth: 0,
         nodeCapTruncated: false,
@@ -254,7 +254,7 @@ describe('GraphPage', () => {
       serviceId: 's1',
       upstream: { entries: [], depthTruncated: false, nodesBeyondDepth: 0, nodeCapTruncated: false, nodesBeyondCap: 0 },
       downstream: {
-        entries: [{ serviceId: 's2', name: 'auth-service', teamId: null, tier: null, healthStatus: 'HEALTHY', distance: 1 }],
+        entries: [{ serviceId: 's2', name: 'auth-service', teamId: null, tier: null, healthStatus: 'HEALTHY', distance: 1, via: [] }],
         depthTruncated: true,
         nodesBeyondDepth: 4,
         nodeCapTruncated: false,
@@ -274,7 +274,7 @@ describe('GraphPage', () => {
 
   it('a slow blast-radius response for a previous selection never overwrites the current one', async () => {
     const entry = (serviceId: string, name: string) => ({
-      serviceId, name, teamId: null, tier: null, healthStatus: 'HEALTHY' as const, distance: 1,
+      serviceId, name, teamId: null, tier: null, healthStatus: 'HEALTHY' as const, distance: 1, via: [],
     })
     const result = (serviceId: string, name: string): BlastRadius => ({
       ...EMPTY_BLAST_RADIUS,
@@ -436,6 +436,35 @@ describe('GraphPage', () => {
 
     expect(await screen.findByRole('group', { name: /service dependency graph/i })).toBeInTheDocument()
     expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('teamId=team-1'))
+  })
+
+  it('filters services by name, keeping their direct neighbours and the edges between them', async () => {
+    mockGraphCalls(() =>
+      makeGraph({
+        nodes: [
+          { serviceId: 's1', name: 'api-gateway', teamId: null, tier: 'CRITICAL', healthStatus: 'HEALTHY' },
+          { serviceId: 's2', name: 'auth-service', teamId: null, tier: 'STANDARD', healthStatus: 'HEALTHY' },
+          { serviceId: 's3', name: 'ledger', teamId: null, tier: 'STANDARD', healthStatus: 'HEALTHY' },
+        ],
+      }),
+    )
+    renderPage()
+    const svg = await screen.findByRole('group', { name: /service dependency graph/i })
+    const names = () => Array.from(svg.querySelectorAll('.graph-node')).map((el) => el.getAttribute('aria-label')?.split(',')[0])
+    expect(names()).toHaveLength(3)
+
+    fireEvent.change(screen.getByRole('searchbox', { name: /filter services by name/i }), { target: { value: 'AUTH' } })
+
+    await waitFor(() => expect(names().sort()).toEqual(['api-gateway', 'auth-service']))
+    expect(mockSearch.q).toBe('AUTH')
+  })
+
+  it('says so when no service matches the name filter', async () => {
+    mockSearch = { q: 'nope' }
+    mockGraphCalls(() => makeGraph())
+    renderPage()
+    expect(await screen.findByText('No services match “nope”.')).toBeInTheDocument()
+    expect(screen.queryByText('No services to graph yet.')).not.toBeInTheDocument()
   })
 
   it('shows a dismissible banner when the graph is truncated', async () => {

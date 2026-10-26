@@ -22,7 +22,7 @@ public interface TeamRepository {
 
     boolean existsByName(UUID tenantId, String name, UUID excludeId);
 
-    Optional<Team> findByTenantAndSlug(UUID tenantId, String slug);
+    List<Team> findByTenantAndSlug(UUID tenantId, String slug);
 
     boolean isMember(UUID tenantId, UUID teamId, UUID userId);
 

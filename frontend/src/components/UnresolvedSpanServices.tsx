@@ -16,7 +16,8 @@ const MAX_LIMIT = 200
 
 function lastSeen(dateStr: string): string {
   const secs = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
-  if (secs < 3600) return `${Math.max(1, Math.floor(secs / 60))}m ago`
+  if (secs < 60) return 'just now'
+  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`
   if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`
   return `${Math.floor(secs / 86400)}d ago`
 }
@@ -88,14 +89,24 @@ export function UnresolvedSpanServices() {
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span className="font-medium break-all">{item.name}</span>
                 <span className="text-xs text-muted-foreground">
-                  {item.seenCount}× · {lastSeen(item.lastSeenAt)}
+                  {item.seenCount} {item.seenCount === 1 ? 'call' : 'calls'} · last seen {lastSeen(item.lastSeenAt)}
                 </span>
               </div>
               <div className="mt-2 flex gap-2">
-                <Button size="sm" variant="outline" onClick={() => setRegistering(item)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  aria-label={`Create service ${item.name}`}
+                  onClick={() => setRegistering(item)}
+                >
                   Create service
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => setPendingDismiss(item)}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  aria-label={`Dismiss ${item.name}`}
+                  onClick={() => setPendingDismiss(item)}
+                >
                   Dismiss
                 </Button>
               </div>
@@ -113,6 +124,12 @@ export function UnresolvedSpanServices() {
         >
           Show more ({items.length} of {total})
         </Button>
+      )}
+
+      {items.length < total && limit >= MAX_LIMIT && (
+        <p className="text-xs text-muted-foreground">
+          Showing the first {items.length} of {total}, sorted by call count.
+        </p>
       )}
 
       <ConfirmDialog
