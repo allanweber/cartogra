@@ -102,7 +102,7 @@ class AcmeCodeownersMappingIT {
                 owned++;
             }
         }
-        assertThat(owned).isEqualTo(17);
+        assertThat(owned).isEqualTo(18);
         assertThat(orphans).isEqualTo(3);
     }
 

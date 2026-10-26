@@ -1,6 +1,9 @@
 import type { CartograApi } from './api.ts'
 import { loadSeed, type LoadOptions } from './load.ts'
-import { allCycles, declaredCalls, declaredCycles, dormantCalls, externalCalls, silentDeclaredCalls, unownedServices, type SeedData } from './schema.ts'
+import {
+  allCycles, callKey, callKind, declaredCalls, declaredCycles, dormantCalls, edgeKey, externalCalls, silentDeclaredCalls,
+  unownedServices, type SeedData,
+} from './schema.ts'
 
 export interface Snapshot {
   teams: string[]
@@ -32,7 +35,7 @@ export async function snapshot(api: CartograApi, seed: SeedData): Promise<Snapsh
       .filter((s) => seeded.has(s.name.toLowerCase()))
       .map((s) => `${s.name}|${s.tier}|${s.teamId ? teamName.get(s.teamId) : '-'}`)
       .sort(),
-    declaredEdges: graph.edges.map((e) => `${nodeName.get(e.source)}>${nodeName.get(e.target)}`).sort(),
+    declaredEdges: graph.edges.map((e) => edgeKey(nodeName.get(e.source)!, nodeName.get(e.target)!, e.protocol)).sort(),
   }
 }
 
@@ -64,14 +67,22 @@ export async function verify(api: CartograApi, seed: SeedData, options: VerifyOp
   const orphanRisks = new Set((await api.risks()).filter((r) => r.type === 'orphan').flatMap((r) => r.affectedServices))
   add(`${orphanIds.size} orphans in risks`, [...orphanIds].every((id) => id !== undefined && orphanRisks.has(id)))
 
-  const observedPairs = async () =>
-    new Set((await api.graph('OBSERVED')).edges.map((e) => `${nodeName.get(e.source)}>${nodeName.get(e.target)}`))
+  const edgeKeys = async (type: 'DECLARED' | 'OBSERVED') =>
+    new Set((await api.graph(type)).edges.map((e) => edgeKey(nodeName.get(e.source)!, nodeName.get(e.target)!, e.protocol)))
+  const observedEdges = () => edgeKeys('OBSERVED')
 
   if (!options.skipObserved) {
-    const silent = new Set(silentDeclaredCalls(seed).map((c) => `${c.from}>${c.to}`))
-    const expected = declaredCalls(seed).map((c) => `${c.from}>${c.to}`).filter((key) => !silent.has(key))
-    const missing = await pollMissing(expected, observedPairs, options.observedTimeoutMs ?? 90_000, sleep)
+    const silent = new Set(silentDeclaredCalls(seed).map(callKey))
+    const expected = declaredCalls(seed).map(callKey).filter((key) => !silent.has(key))
+    const missing = await pollMissing(expected, observedEdges, options.observedTimeoutMs ?? 90_000, sleep)
     add('declared calls observed from spans', missing.length === 0, missing.join(', '))
+
+    const observedNow = await observedEdges()
+    for (const kind of ['messaging', 'db'] as const) {
+      const keys = declaredCalls(seed).filter((c) => callKind(c) === kind && c.enabled).map(callKey)
+      const absent = keys.filter((key) => !observedNow.has(key))
+      add(`${keys.length} ${kind === 'messaging' ? 'kafka' : 'db'} edges observed`, keys.length > 0 && absent.length === 0, absent.join(', '))
+    }
 
     const peers = externalCalls(seed).map((c) => c.to.toLowerCase())
     const unlisted = await pollMissing(peers, unresolvedNames(api), options.observedTimeoutMs ?? 90_000, sleep)
@@ -80,13 +91,14 @@ export async function verify(api: CartograApi, seed: SeedData, options: VerifyOp
 
   if (options.withDrift) {
     const dormant = dormantCalls(seed).map((c) => `${c.from}>${c.to}`)
+    const dormantEdges = dormantCalls(seed).map(callKey)
     const silent = silentDeclaredCalls(seed).map((c) => `${c.from}>${c.to}`)
     await options.withDrift.enable()
     try {
-      const missing = await pollMissing(dormant, observedPairs, options.observedTimeoutMs ?? 90_000, sleep)
-      const declared = new Set((await api.graph('DECLARED')).edges.map((e) => `${nodeName.get(e.source)}>${nodeName.get(e.target)}`))
+      const missing = await pollMissing(dormantEdges, observedEdges, options.observedTimeoutMs ?? 90_000, sleep)
+      const declared = await edgeKeys('DECLARED')
       add(`${dormant.length} undeclared edges observed`, missing.length === 0, missing.join(', '))
-      add('undeclared edges stay undeclared', dormant.every((key) => !declared.has(key)))
+      add('undeclared edges stay undeclared', dormantEdges.every((key) => !declared.has(key)))
       add('cycle count unchanged with drift on', (await api.cycles()).length === allCycles(seed).length)
 
       const wanted = [...dormant.map((key) => `UNDECLARED ${key}`), ...silent.map((key) => `MISSING ${key}`)]

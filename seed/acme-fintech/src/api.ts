@@ -1,3 +1,5 @@
+import type { Protocol } from './schema.ts'
+
 export interface Team {
   id: string
   name: string
@@ -78,7 +80,7 @@ export interface CartograApi {
   updateService(service: CatalogService, tier: string): Promise<void>
   assignOwner(serviceId: string, teamId: string): Promise<void>
   graph(type?: 'DECLARED' | 'OBSERVED'): Promise<Graph>
-  declareDependency(sourceServiceId: string, targetServiceId: string): Promise<void>
+  declareDependency(sourceServiceId: string, targetServiceId: string, protocol: Protocol): Promise<void>
   cycles(): Promise<string[][]>
   spofs(): Promise<string[]>
   risks(): Promise<Risk[]>
@@ -148,11 +150,11 @@ export class HttpCartograApi implements CartograApi {
     return this.request<Graph>('GET', `/api/v1/topology/graph${query}`)
   }
 
-  async declareDependency(sourceServiceId: string, targetServiceId: string): Promise<void> {
+  async declareDependency(sourceServiceId: string, targetServiceId: string, protocol: Protocol): Promise<void> {
     await this.request('POST', '/api/v1/topology/dependencies', {
       sourceServiceId,
       targetServiceId,
-      protocol: 'HTTP',
+      protocol,
     })
   }
 

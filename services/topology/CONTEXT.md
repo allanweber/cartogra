@@ -31,7 +31,7 @@ Topology maintains the live dependency graph of all Services within a tenant. It
 ## Core Responsibilities
 
 1. **Dependency CRUD** — create, read, soft-delete declared dependencies
-2. **Observed edge ingestion** — `OtelSpanWorker` consumes raw OTLP/JSON from `cartogra.observability.spans` and upserts observed edges (ADR-0029)
+2. **Observed edge ingestion** — `OtelSpanWorker` consumes raw OTLP/JSON from `cartogra.observability.spans` and upserts observed edges (ADR-0029): `http`/`grpc` from CLIENT↔SERVER spans, `kafka` from PRODUCER/CONSUMER spans joined on the topic name, `db` from CLIENT spans with `db.system` whose DB matches a catalog service
 3. **Blast radius computation** — recursive CTE traversal downstream from a given node
 4. **Cycle detection** — recursive CTE looking for back-edges
 5. **Drift detection** — compare declared vs. observed sets per service; persist drift records

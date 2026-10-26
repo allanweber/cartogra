@@ -146,7 +146,7 @@ class DriftControllerIT {
         graphNodeRepository.upsert(new GraphNodeUpsert(tenant, payments, "payments-service", null, null, "HEALTHY"));
 
         observedDependencyService.ingest(tenant, List.of(new SpanObservation("reporting-service", SpanKind.CLIENT,
-                "trace-1", "span-1", null, "payments-service", null, DependencyProtocol.HTTP)));
+                "trace-1", "span-1", null, "payments-service", null, DependencyProtocol.HTTP, null, null)));
         detectionService.sweep(tenant, Instant.now());
 
         UUID driftId = driftRepository.findActiveByEdge(tenant, reporting, payments, DriftType.UNDECLARED)

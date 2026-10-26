@@ -13,5 +13,6 @@ import java.time.Duration;
 public record SpanLinkProperties(
         @NotNull @DefaultValue("PT5M") Duration ttl,
         @NotNull @DefaultValue("PT1M") Duration reapInterval,
-        @Positive @DefaultValue("1000") int maxUnresolvedPerTenant) {
+        @Positive @DefaultValue("1000") int maxUnresolvedPerTenant,
+        @NotNull @DefaultValue("PT24H") Duration messagingTtl) {
 }

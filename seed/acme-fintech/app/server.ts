@@ -6,6 +6,10 @@ const serviceName = requireEnv('SERVICE_NAME')
 const namespace = process.env.ACME_NAMESPACE ?? 'acme-fintech'
 const port = Number(process.env.PORT ?? 8080)
 const calls = JSON.parse(process.env.ACME_CALLS ?? '[]') as CallConfig[]
+const produces = JSON.parse(process.env.ACME_PRODUCES ?? '[]') as string[]
+const consumes = JSON.parse(process.env.ACME_CONSUMES ?? '[]') as string[]
+const databases = JSON.parse(process.env.ACME_DB_CALLS ?? '[]') as string[]
+const intervalMs = Number(process.env.ACME_CALL_INTERVAL_MS ?? 5000)
 
 const tracing = startTracing({
   serviceName,
@@ -16,7 +20,7 @@ const tracing = startTracing({
 
 const scheduler = new CallScheduler({
   calls,
-  intervalMs: Number(process.env.ACME_CALL_INTERVAL_MS ?? 5000),
+  intervalMs,
   invoke: (target) => {
     const address = `${target}.${namespace}.svc.cluster.local`
     return tracing.clientCall(target, address, async (headers) => {
@@ -43,12 +47,22 @@ const server = createServer((req, res) => {
   }
 })
 
+const asyncTimer = setInterval(() => {
+  for (const destination of produces) tracing.producerSpan(destination)
+  for (const destination of consumes) tracing.consumerSpan(destination)
+  for (const database of databases) tracing.dbSpan(database)
+}, intervalMs)
+
 server.listen(port, () => {
-  console.log(`${serviceName} listening on ${port}, ${calls.length} downstream call(s) configured`)
+  console.log(
+    `${serviceName} listening on ${port}, ${calls.length} downstream call(s), ` +
+      `${produces.length} produced / ${consumes.length} consumed topic(s), ${databases.length} database(s) configured`,
+  )
   scheduler.start()
 })
 
 process.on('SIGTERM', () => {
+  clearInterval(asyncTimer)
   scheduler.stop()
   server.close()
   void tracing.shutdown().finally(() => process.exit(0))

@@ -1,12 +1,14 @@
 package io.cartogra.topology.infrastructure.jdbc;
 
 import io.cartogra.topology.domain.SpanKind;
+import io.cartogra.topology.repository.MessagingEndpoint;
 import io.cartogra.topology.repository.PendingSpanLink;
 import io.cartogra.topology.repository.PendingSpanLinkRepository;
 import io.cartogra.topology.repository.SpanRef;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
@@ -117,6 +119,48 @@ public class JdbcPendingSpanLinkRepository implements PendingSpanLinkRepository 
             deleted += jdbc.update(sql, params);
         }
         return deleted;
+    }
+
+    @Override
+    public void upsertMessagingEndpoints(UUID tenantId, Collection<MessagingEndpoint> endpoints, Instant expiresAt) {
+        if (endpoints.isEmpty()) {
+            return;
+        }
+        String sql = """
+                INSERT INTO pending_span_links (tenant_id, kind, destination, service_name, protocol, expires_at)
+                VALUES (:tenantId, :kind, :destination, :serviceName, 'kafka', :expiresAt)
+                ON CONFLICT (tenant_id, destination, kind, lower(service_name)) WHERE destination IS NOT NULL
+                DO UPDATE SET expires_at = EXCLUDED.expires_at
+                    WHERE pending_span_links.expires_at < EXCLUDED.expires_at - interval '1 minute'
+                """;
+        SqlParameterSource[] batch = endpoints.stream()
+                .map(endpoint -> new MapSqlParameterSource()
+                        .addValue("tenantId", tenantId)
+                        .addValue("kind", endpoint.kind().name().toLowerCase(Locale.ROOT))
+                        .addValue("destination", endpoint.destination())
+                        .addValue("serviceName", endpoint.serviceName())
+                        .addValue("expiresAt", Timestamp.from(expiresAt)))
+                .toArray(SqlParameterSource[]::new);
+        jdbc.batchUpdate(sql, batch);
+    }
+
+    @Override
+    public List<MessagingEndpoint> findMessagingEndpoints(UUID tenantId, Collection<String> destinations) {
+        if (destinations.isEmpty()) {
+            return List.of();
+        }
+        String sql = """
+                SELECT destination, kind, service_name FROM pending_span_links
+                WHERE tenant_id = :tenantId AND destination IN (:destinations)
+                  AND kind IN ('producer', 'consumer') AND expires_at > now()
+                """;
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("destinations", destinations);
+        return jdbc.query(sql, params, (rs, _) -> new MessagingEndpoint(
+                rs.getString("destination"),
+                SpanKind.valueOf(rs.getString("kind").toUpperCase(Locale.ROOT)),
+                rs.getString("service_name")));
     }
 
     @Override

@@ -11,15 +11,15 @@ describe('loadSeed', () => {
   it('creates teams, sets tiers/owners and declares all edges', async () => {
     const api = new FakeApi(seed)
     const summary = await loadSeed(api, seed, fast)
-    expect(summary).toMatchObject({ teamsCreated: 5, tiersUpdated: 20, ownersAssigned: 17, edgesCreated: declaredCalls(seed).length })
+    expect(summary).toMatchObject({ teamsCreated: 5, tiersUpdated: 21, ownersAssigned: 18, edgesCreated: declaredCalls(seed).length })
     expect(api.services.filter((s) => s.teamId === null)).toHaveLength(3)
   })
 
   it('assigns no owners with skipOwners, leaving ownership to CODEOWNERS', async () => {
     const api = new FakeApi(seed)
     const summary = await loadSeed(api, seed, { ...fast, skipOwners: true })
-    expect(summary).toMatchObject({ teamsCreated: 5, tiersUpdated: 20, ownersAssigned: 0 })
-    expect(api.services.filter((s) => s.teamId === null)).toHaveLength(20)
+    expect(summary).toMatchObject({ teamsCreated: 5, tiersUpdated: 21, ownersAssigned: 0 })
+    expect(api.services.filter((s) => s.teamId === null)).toHaveLength(21)
   })
 
   it('leaves identical state when run twice', async () => {
@@ -37,13 +37,21 @@ describe('loadSeed', () => {
     expect(error).toBeInstanceOf(MissingServicesError)
     expect((error as MissingServicesError).missing).toEqual([seed.services[0].name, seed.services[1].name])
     expect(api.calls).toHaveLength(0)
-    expect(api.services).toHaveLength(18)
+    expect(api.services).toHaveLength(19)
   })
 
   it('never calls anything that creates a service', async () => {
     const api = new FakeApi(seed)
     await loadSeed(api, seed, fast)
     expect(Object.getOwnPropertyNames(Object.getPrototypeOf(api)).some((m) => /createService/i.test(m))).toBe(false)
+  })
+
+  it('declares each call with its protocol, including a kafka edge beside an http one on the same pair', async () => {
+    const api = new FakeApi(seed)
+    await loadSeed(api, seed, fast)
+    expect(api.edges).toContain('svc-payments-service>svc-notification-service HTTP')
+    expect(api.edges).toContain('svc-payments-service>svc-notification-service KAFKA')
+    expect(api.edges).toContain('svc-ledger-service>svc-ledger-db DB')
   })
 
   it('skips edges that already exist on the server (409)', async () => {

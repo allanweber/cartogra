@@ -2,6 +2,7 @@ package io.cartogra.topology.repository;
 
 import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -23,6 +24,15 @@ public interface PendingSpanLinkRepository {
 
     /** Deletes pending SERVER spans whose {@code parent_span_id} is one of the given CLIENT spans. */
     int deleteServerPartners(UUID tenantId, Collection<SpanRef> clientSpans);
+
+    /**
+     * Inserts one row per endpoint, or pushes an existing row's {@code expires_at} forward when it
+     * would move by more than a minute. Messaging rows are never deleted on match, only reaped.
+     */
+    void upsertMessagingEndpoints(UUID tenantId, Collection<MessagingEndpoint> endpoints, Instant expiresAt);
+
+    /** Live producer and consumer rows for the given destinations. */
+    List<MessagingEndpoint> findMessagingEndpoints(UUID tenantId, Collection<String> destinations);
 
     int deleteExpired(Instant now);
 }

@@ -118,9 +118,19 @@ class OtelSpanWorkerIT {
                 "__SERVER_SPAN__", newId(8), "__SOURCE__", source, "__TARGET__", target);
     }
 
+    private Map<String, String> messagingVars(String source, int kind, String destination, String system) {
+        return Map.of("__TENANT__", tenant.toString(), "__TRACE__", newId(16), "__CLIENT_SPAN__", newId(8),
+                "__SOURCE__", source, "__KIND__", Integer.toString(kind), "__DESTINATION__", destination,
+                "__SYSTEM__", system);
+    }
+
     private boolean edgeExists(UUID source, UUID target) {
+        return edgeExists(source, target, DependencyProtocol.HTTP);
+    }
+
+    private boolean edgeExists(UUID source, UUID target, DependencyProtocol protocol) {
         return dependencyRepository.findByEdgeIdentity(tenant, source, target,
-                DependencyType.OBSERVED, DependencyProtocol.HTTP).isPresent();
+                DependencyType.OBSERVED, protocol).isPresent();
     }
 
     private long count(String table) {
@@ -241,6 +251,66 @@ class OtelSpanWorkerIT {
         assertThat(edgeExists(checkout, payments)).isFalse();
         assertThat(edgeExists(checkout, checkout)).isFalse();
         assertThat(count("dependencies")).isEqualTo(1);
+    }
+
+    @Test
+    void producerAndConsumersInSeparateRecordsJoinOnDestinationInEitherOrder() throws Exception {
+        UUID notifications = addNode("notifications");
+        send("messaging-endpoint.json", messagingVars("payments", 5, "orders.paid", "kafka"));
+        Awaitility.await().atMost(Duration.ofSeconds(20)).until(() -> count("pending_span_links") == 1);
+
+        send("messaging-endpoint.json", messagingVars("checkout", 4, "orders.paid", "kafka"));
+        Awaitility.await().atMost(Duration.ofSeconds(20)).pollInterval(Duration.ofMillis(300))
+                .until(() -> edgeExists(checkout, payments, DependencyProtocol.KAFKA));
+
+        send("messaging-endpoint.json", messagingVars("notifications", 5, "orders.paid", "kafka"));
+        Awaitility.await().atMost(Duration.ofSeconds(20)).pollInterval(Duration.ofMillis(300))
+                .until(() -> edgeExists(checkout, notifications, DependencyProtocol.KAFKA));
+
+        assertThat(edgeExists(payments, notifications, DependencyProtocol.KAFKA)).isFalse();
+        assertThat(count("pending_span_links")).isEqualTo(3);
+    }
+
+    @Test
+    void repeatedSpansKeepOneMessagingRowPerEndpointWithDayLongExpiry() throws Exception {
+        send("messaging-endpoint.json", messagingVars("checkout", 4, "orders.paid", "kafka"));
+        send("messaging-endpoint.json", messagingVars("Checkout", 4, "orders.paid", "kafka"));
+        send("messaging-endpoint.json", messagingVars("checkout", 4, "orders.refunded", "kafka"));
+        Awaitility.await().atMost(Duration.ofSeconds(20)).until(() -> count("pending_span_links") == 2);
+        Thread.sleep(2000);
+
+        assertThat(count("pending_span_links")).isEqualTo(2);
+        Long dayLong = jdbc.queryForObject("""
+                SELECT count(*) FROM pending_span_links
+                WHERE tenant_id = :t AND expires_at > now() + interval '23 hours'
+                """, new MapSqlParameterSource("t", tenant), Long.class);
+        assertThat(dayLong).isEqualTo(2L);
+    }
+
+    @Test
+    void nonKafkaMessagingIsSkipped() throws Exception {
+        send("messaging-endpoint.json", messagingVars("checkout", 4, "orders.paid", "rabbitmq"));
+        send("messaging-endpoint.json", messagingVars("payments", 5, "orders.paid", "rabbitmq"));
+        send("client-peer-service.json", vars(newId(16), newId(8), "payments", "checkout"));
+
+        awaitEdge(payments, checkout);
+
+        assertThat(count("pending_span_links")).isZero();
+        assertThat(count("dependencies")).isEqualTo(1);
+    }
+
+    @Test
+    void dbSpanMatchingACatalogServiceCreatesDbEdgeAndUnmatchedDbLeavesNoTrace() throws Exception {
+        UUID ledgerDb = addNode("ledger-db");
+        send("db-client.json", vars(newId(16), newId(8), "payments", "app"));
+        send("db-client.json", vars(newId(16), newId(8), "payments", "ledger-db"));
+
+        Awaitility.await().atMost(Duration.ofSeconds(20)).pollInterval(Duration.ofMillis(300))
+                .until(() -> edgeExists(payments, ledgerDb, DependencyProtocol.DB));
+
+        assertThat(count("dependencies")).isEqualTo(1);
+        assertThat(count("pending_span_links")).isZero();
+        assertThat(count("unresolved_span_services")).isZero();
     }
 
     @Test

@@ -262,7 +262,10 @@ instrumented service ──OTLP──▶ otel-collector ──▶ Kafka cartogra
 ```
 
 - The collector has two trace pipelines: `traces` (→ Tempo, unchanged) and `traces/spans` (→ Kafka). The second stamps the resource attribute `cartogra.tenant.id` and drops Topology's own spans (`service.name == "topology"`), otherwise consuming a record would create the next one.
-- Only **CLIENT** spans with `http.request.method` / `http.method` (→ `http`) or `rpc.system=grpc` (→ `grpc`) become edges. Everything else (INTERNAL, messaging, DB) is skipped.
+- **CLIENT** spans with `http.request.method` / `http.method` (→ `http`) or `rpc.system=grpc` (→ `grpc`) become edges.
+- **PRODUCER/CONSUMER** spans with `messaging.system=kafka` and `messaging.destination.name` (→ `kafka`) are joined on the topic name: each producer of a topic gets an edge to each consumer of it. No shared trace is needed. Each (topic, producer/consumer, service) is one row in `topology.pending_span_links`, kept for `topology.span-links.messaging-ttl` after the last span.
+- **CLIENT** spans with `db.system` (→ `db`) become an edge only when `peer.service`, `db.namespace` (or `db.name`) or the `server.address` host matches a catalog service; otherwise they are dropped, not listed as unresolved.
+- Everything else (INTERNAL, other messaging systems) is skipped.
 - Source = the span's `service.name`. Target = `peer.service`, else the host of `server.address` (port stripped). Both are matched against catalog service names, case-insensitively.
 - If the target is an IP or unknown host, Topology waits for the matching SERVER span (same trace, `parentSpanId` = the client's `spanId`) and takes the target from that span's `service.name`. Unmatched halves are kept in `topology.pending_span_links` for 5 minutes.
 
@@ -274,7 +277,8 @@ instrumented service ──OTLP──▶ otel-collector ──▶ Kafka cartogra
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | each service | `http://localhost:4318` | Where services send OTLP/HTTP. Already points at the dev collector. |
 | `KAFKA_BOOTSTRAP_SERVERS` | Topology | `localhost:9092` | Same Kafka the collector exports to (`kafka:29092` inside the compose network). |
 | `topology.span-links.ttl` | Topology `application.yml` | `PT5M` | How long an unmatched CLIENT/SERVER half waits for its partner. |
-| `topology.span-links.reap-interval` | same | `PT1M` | How often expired halves are deleted. |
+| `topology.span-links.messaging-ttl` | same | `PT24H` | How long a topic's producer/consumer row lives without a new span. A producer and consumer only join if both were seen within this window. |
+| `topology.span-links.reap-interval` | same | `PT1M` | How often expired rows are deleted. |
 | `topology.span-links.max-unresolved-per-tenant` | same | `1000` | Cap on distinct unknown peer names recorded per tenant. |
 | `topology.span-topics.retention` | same (`TOPOLOGY_SPAN_TOPICS_RETENTION`) | `PT1H` | Kafka retention of `cartogra.observability.spans`. Topology reads records within seconds. |
 | `topology.span-topics.dlq-retention` | same (`TOPOLOGY_SPAN_TOPICS_DLQ_RETENTION`) | `P3D` | Kafka retention of `cartogra.observability.spans.dlq`. |
@@ -317,6 +321,8 @@ Topology creates `cartogra.observability.spans` and `.dlq` at startup with the r
 |----------|-----|----------|
 | Unknown target | `__TARGET__` = a name not in the catalog | no edge; row in `topology.unresolved_span_services` (`seen_count` grows) |
 | IP target + SERVER half | send `client-ip-target.json` (`__SOURCE__`, `__TENANT__`, `__TRACE__`, `__CLIENT_SPAN__`), then `server-child.json` (`__TARGET__` = the server's `service.name`, `__SERVER_SPAN__` 16 hex, **same** `__TENANT__`/`__TRACE__`/`__CLIENT_SPAN__` values) | edge created; `topology.pending_span_links` empty again |
+| Kafka edge | send `messaging-endpoint.json` twice with the same `__DESTINATION__` (e.g. `orders.paid`) and `__SYSTEM__=kafka`: once `__KIND__=4` (producer, `__SOURCE__=checkout`), once `__KIND__=5` (consumer, `__SOURCE__=payments`); any order, separate traces | `checkout → payments` edge with protocol `kafka`; 2 rows stay in `topology.pending_span_links` |
+| DB edge | register a service named after the DB (e.g. `ledger-db`), send `db-client.json` with `__TARGET__=ledger-db` (the `db.namespace`) | `__SOURCE__ → ledger-db` edge with protocol `db`; an unmatched `__TARGET__` creates nothing |
 | Missing tenant | send `no-tenant.json` with the collector started without `CARTOGRA_TENANT_ID` | dropped by the collector (stamped `unset`): nothing on `cartogra.observability.spans` or `.dlq` |
 | Invalid/unknown tenant | send `client-peer-service.json` with `__TENANT__` = `not-a-uuid` or a random UUID | record on `cartogra.observability.spans.dlq`, Topology logs `Span batch quarantined: TENANT_MALFORMED` / `TENANT_UNKNOWN` |
 | Real traffic | set `OTEL_EXPORTER_OTLP_ENDPOINT` on your own instrumented services | edges for each CLIENT span whose peer is in the catalog |
@@ -332,7 +338,7 @@ There is no collector UI. Use:
 | Span was rejected | Kafka UI → `cartogra.observability.spans.dlq`; header `kafka_dlt-exception-message` holds the reason |
 | Topology outcome | counters (below) via Prometheus `http://localhost:9090`; tables `dependencies`, `unresolved_span_services`, `pending_span_links` |
 
-Counters: `cartogra_spans_edges_total{result}` (created/updated/unchanged), `cartogra_spans_skipped_total{reason}` (unsupported_protocol, unresolved_source, unresolved_target, self), `cartogra_spans_fallback_matched_total`, `cartogra_spans_quarantined_total{reason}`.
+Counters: `cartogra_spans_edges_total{result}` (created/updated/unchanged), `cartogra_spans_skipped_total{reason}` (unsupported_protocol, unresolved_source, unresolved_target, unresolved_db, self), `cartogra_spans_fallback_matched_total`, `cartogra_spans_messaging_matched_total`, `cartogra_spans_quarantined_total{reason}`.
 
 ### Troubleshooting
 
