@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { Network, X } from 'lucide-react'
+import { Network, Search, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
 
 import { AppLayout } from '#/components/AppLayout'
 import { CycleBadge } from '#/components/CycleBadge'
 import { DependencyGraph } from '#/components/DependencyGraph'
+import { DriftLegend } from '#/components/DriftLegend'
 import { DriftTab, driftKey } from '#/components/DriftTab'
 import { InspectorPanel } from '#/components/InspectorPanel'
 import { SpofBadge } from '#/components/SpofBadge'
@@ -14,10 +15,12 @@ import { UnresolvedSpanServices } from '#/components/UnresolvedSpanServices'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
+import { Input } from '#/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#/components/ui/select'
 import { Separator } from '#/components/ui/separator'
 import { Skeleton } from '#/components/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
+import { useDebounce } from '#/hooks/useDebounce'
 import { useDrifts } from '#/hooks/useDrifts'
 import { useServiceNames } from '#/hooks/useRisks'
 import { ApiError, apiFetch } from '#/lib/api'
@@ -42,6 +45,7 @@ const graphSearchSchema = z.object({
   service: z.string().optional(),
   type: z.enum(['ALL', 'DECLARED', 'OBSERVED', 'DRIFT']).optional(),
   team: z.string().optional(),
+  q: z.string().optional(),
 })
 
 export const Route = createFileRoute('/_authenticated/graph')({
@@ -58,6 +62,23 @@ function typeQuery(mode: EdgeMode): string | null {
   return mode === 'DECLARED' || mode === 'OBSERVED' ? mode : null
 }
 
+// Keeps matches plus their direct neighbours, so a matched service still shows what it talks to.
+// The selected service always counts as a match so typing never drops the open inspector.
+function filterByName(graph: Graph, query: string, selectedId: string | null): Graph {
+  const needle = query.trim().toLowerCase()
+  if (!needle) return graph
+  const matches = new Set(
+    graph.nodes.filter((n) => n.serviceId === selectedId || n.name.toLowerCase().includes(needle)).map((n) => n.serviceId),
+  )
+  const edges = graph.edges.filter((e) => matches.has(e.source) || matches.has(e.target))
+  const kept = new Set(matches)
+  edges.forEach((e) => {
+    kept.add(e.source)
+    kept.add(e.target)
+  })
+  return { ...graph, nodes: graph.nodes.filter((n) => kept.has(n.serviceId)), edges }
+}
+
 function GraphPage() {
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
@@ -66,6 +87,14 @@ function GraphPage() {
   const selectedServiceId = search.service ?? null
   const type = search.type ?? 'DECLARED'
   const teamId = search.team ?? null
+  const [nameQuery, setNameQuery] = useState(search.q ?? '')
+  const debouncedNameQuery = useDebounce(nameQuery, 250)
+  const nameFilter = debouncedNameQuery.trim()
+
+  useEffect(() => {
+    if ((search.q ?? '') === nameFilter) return
+    navigate({ search: (prev) => ({ ...prev, q: nameFilter || undefined }), replace: true })
+  }, [nameFilter, search.q, navigate])
 
   function setSelectedServiceId(id: string | null) {
     navigate({ search: (prev) => ({ ...prev, service: id ?? undefined }), replace: true })
@@ -113,12 +142,20 @@ function GraphPage() {
   function selectDrift(drift: Drift | null) {
     setSelectedDriftId(drift?.id ?? null)
     setSelectedDriftKey(drift ? driftKey(drift) : null)
+    if (!drift || type === 'DRIFT') return
+    const edgeShown = graph?.edges.some((e) => e.source === drift.sourceServiceId && e.target === drift.targetServiceId)
+    if (!edgeShown) setType('DRIFT')
   }
 
   const graph = useMemo<Graph | undefined>(() => {
-    if (!fetchedGraph || type !== 'DRIFT') return fetchedGraph
-    return { ...fetchedGraph, edges: fetchedGraph.edges.filter((e) => driftEdges.has(`${e.source}>${e.target}`)) }
-  }, [fetchedGraph, type, driftEdges])
+    if (!fetchedGraph) return fetchedGraph
+    const byMode =
+      type === 'DRIFT'
+        ? { ...fetchedGraph, edges: fetchedGraph.edges.filter((e) => driftEdges.has(`${e.source}>${e.target}`)) }
+        : fetchedGraph
+    return filterByName(byMode, nameFilter, selectedServiceId)
+  }, [fetchedGraph, type, driftEdges, nameFilter, selectedServiceId])
+  const noNameMatch = !!fetchedGraph && fetchedGraph.nodes.length > 0 && !!graph && graph.nodes.length === 0
 
   const nodesById = useMemo(() => {
     const map = new Map<string, GraphNode>()
@@ -217,6 +254,21 @@ function GraphPage() {
       description="A dependency map for blast radius, single points of failure, and drift visibility."
     >
       <div className="mb-4 flex shrink-0 flex-wrap items-center gap-3">
+        <div className="relative w-56">
+          <Search
+            className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <Input
+            type="search"
+            placeholder="Filter services by name..."
+            value={nameQuery}
+            onChange={(e) => setNameQuery(e.target.value)}
+            className="h-8 pl-8 text-sm"
+            aria-label="Filter services by name"
+          />
+        </div>
+
         <ToggleGroup
           type="single"
           value={type}
@@ -249,6 +301,8 @@ function GraphPage() {
             ))}
           </SelectContent>
         </Select>
+
+        {driftEdges.size > 0 && <DriftLegend />}
 
         <CycleBadge cycles={cycles} nodesById={badgeNodesById} truncated={cyclesData?.truncated} />
         <SpofBadge
@@ -301,7 +355,13 @@ function GraphPage() {
         </Alert>
       )}
 
-      {!isLoading && graph && graph.nodes.length === 0 && (
+      {noNameMatch && (
+        <Alert className="mb-4 shrink-0">
+          <AlertDescription>No services match “{nameFilter}”.</AlertDescription>
+        </Alert>
+      )}
+
+      {!isLoading && fetchedGraph && fetchedGraph.nodes.length === 0 && (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-24 text-center">
           <Network className="mb-3 size-8 text-muted-foreground/50" />
           <p className="text-sm font-medium">No services to graph yet.</p>
@@ -315,7 +375,7 @@ function GraphPage() {
       )}
 
       {blastRadiusPartial && (
-        <Alert>
+        <Alert className="mb-4 shrink-0">
           <AlertDescription>
             Partial blast radius — the result was truncated, so services not highlighted may still be affected.
           </AlertDescription>
@@ -368,15 +428,20 @@ function GraphPage() {
             ) : (
               <Card className="h-full overflow-y-auto">
                 <CardHeader className="pb-2 pt-5">
-                  <CardTitle className="text-sm font-semibold">Drift</CardTitle>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-sm text-muted-foreground">
                     {selectionMissing
                       ? 'That service isn’t in this view — try All teams or Declared.'
                       : 'Select a service to see what breaks if it goes down.'}
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-4 pb-4">
-                  <DriftTab nodesById={badgeNodesById} selectedDriftId={selectedDriftId} onSelectDrift={selectDrift} />
+                  <Separator />
+                  <section aria-labelledby="drift-heading" className="space-y-2">
+                    <CardTitle id="drift-heading" className="text-sm font-semibold">
+                      Drift{driftsData ? ` (${driftsData.total})` : ''}
+                    </CardTitle>
+                    <DriftTab nodesById={badgeNodesById} selectedDriftId={selectedDriftId} onSelectDrift={selectDrift} />
+                  </section>
                   <Separator />
                   <UnresolvedSpanServices />
                 </CardContent>

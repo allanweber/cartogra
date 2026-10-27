@@ -10,7 +10,6 @@ import io.cartogra.topology.repository.DependencyRepository;
 import io.cartogra.topology.repository.GraphNodeRepository;
 import io.cartogra.topology.repository.GraphNodeUpsert;
 import io.cartogra.topology.repository.ProcessedEventRepository;
-import io.cartogra.topology.repository.UnresolvedSpanServiceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -33,20 +32,20 @@ public class GraphNodeService {
     private final RegistryGraphNodeClient registryClient;
     private final DependencyRepository dependencyRepository;
     private final DependencyGraphViewRefreshScheduler graphViewRefreshScheduler;
-    private final UnresolvedSpanServiceRepository unresolvedSpanServiceRepository;
+    private final UnresolvedSpanServiceService unresolvedSpanServiceService;
 
     public GraphNodeService(GraphNodeRepository graphNodeRepository,
                              ProcessedEventRepository processedEventRepository,
                              RegistryGraphNodeClient registryClient,
                              DependencyRepository dependencyRepository,
                              DependencyGraphViewRefreshScheduler graphViewRefreshScheduler,
-                             UnresolvedSpanServiceRepository unresolvedSpanServiceRepository) {
+                             UnresolvedSpanServiceService unresolvedSpanServiceService) {
         this.graphNodeRepository = graphNodeRepository;
         this.processedEventRepository = processedEventRepository;
         this.registryClient = registryClient;
         this.dependencyRepository = dependencyRepository;
         this.graphViewRefreshScheduler = graphViewRefreshScheduler;
-        this.unresolvedSpanServiceRepository = unresolvedSpanServiceRepository;
+        this.unresolvedSpanServiceService = unresolvedSpanServiceService;
     }
 
     /**
@@ -114,6 +113,6 @@ public class GraphNodeService {
 
     private void upsertNode(GraphNodeUpsert upsert) {
         graphNodeRepository.upsert(upsert);
-        unresolvedSpanServiceRepository.markRegistered(upsert.tenantId(), upsert.name(), Instant.now());
+        unresolvedSpanServiceService.markRegistered(upsert.tenantId(), upsert.name());
     }
 }

@@ -10,7 +10,6 @@ import io.cartogra.topology.repository.MessagingEndpoint;
 import io.cartogra.topology.repository.PendingSpanLink;
 import io.cartogra.topology.repository.PendingSpanLinkRepository;
 import io.cartogra.topology.repository.SpanRef;
-import io.cartogra.topology.repository.UnresolvedSpanServiceRepository;
 import io.cartogra.topology.repository.UpsertOutcome;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,8 +32,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -53,7 +50,7 @@ class ObservedDependencyServiceTest {
     @Mock GraphNodeRepository graphNodeRepository;
     @Mock DependencyRepository dependencyRepository;
     @Mock PendingSpanLinkRepository pendingSpanLinkRepository;
-    @Mock UnresolvedSpanServiceRepository unresolvedSpanServiceRepository;
+    @Mock UnresolvedSpanServiceService unresolvedSpanServiceService;
     @Mock DependencyGraphViewRefreshScheduler refreshScheduler;
 
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
@@ -62,8 +59,22 @@ class ObservedDependencyServiceTest {
     @BeforeEach
     void setUp() {
         service = new ObservedDependencyService(graphNodeRepository, dependencyRepository,
-                pendingSpanLinkRepository, unresolvedSpanServiceRepository, refreshScheduler,
+                pendingSpanLinkRepository, unresolvedSpanServiceService, refreshScheduler,
                 new SpanLinkProperties(Duration.ofMinutes(5), Duration.ofMinutes(1), 1000, Duration.ofHours(24)), meters);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> recordedUnknown() {
+        ArgumentCaptor<Collection<String>> captor = ArgumentCaptor.forClass(Collection.class);
+        verify(unresolvedSpanServiceService).record(eq(TENANT), captor.capture(), any());
+        return List.copyOf(captor.getValue());
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<PendingSpanLink> parked() {
+        ArgumentCaptor<Collection<PendingSpanLink>> captor = ArgumentCaptor.forClass(Collection.class);
+        verify(pendingSpanLinkRepository).park(eq(TENANT), captor.capture());
+        return List.copyOf(captor.getValue());
     }
 
     private void knownNodes() {
@@ -133,19 +144,19 @@ class ObservedDependencyServiceTest {
         service.ingest(TENANT, List.of(client("checkout", "c1", null, "payments")));
 
         verify(dependencyRepository).upsertObserved(eq(TENANT), eq(CHECKOUT), eq(PAYMENTS), any(), any());
-        verify(unresolvedSpanServiceRepository, never()).record(any(), anyString(), any(), anyInt());
+        assertThat(recordedUnknown()).isEmpty();
     }
 
     @Test
-    void unresolvedPeerServiceIsRecordedOnceAndParkedForFallback() {
+    void unresolvedPeerServiceIsRecordedAndParkedForFallback() {
         knownNodes();
 
         service.ingest(TENANT, List.of(
                 client("checkout", "c1", "ghost", null),
                 client("checkout", "c2", "ghost", null)));
 
-        verify(unresolvedSpanServiceRepository).record(eq(TENANT), eq("ghost"), any(), eq(1000));
-        verify(pendingSpanLinkRepository, times(2)).insert(any());
+        assertThat(recordedUnknown()).containsExactly("ghost", "ghost");
+        assertThat(parked()).hasSize(2);
         verify(refreshScheduler, never()).markDirty();
     }
 
@@ -155,8 +166,8 @@ class ObservedDependencyServiceTest {
 
         service.ingest(TENANT, List.of(client("checkout", "c1", null, "10.1.2.3")));
 
-        verify(unresolvedSpanServiceRepository, never()).record(any(), anyString(), any(), anyInt());
-        verify(pendingSpanLinkRepository).insert(any());
+        assertThat(recordedUnknown()).isEmpty();
+        assertThat(parked()).hasSize(1);
     }
 
     @Test
@@ -165,7 +176,7 @@ class ObservedDependencyServiceTest {
 
         service.ingest(TENANT, List.of(client("stranger", "c1", "payments", null)));
 
-        verify(unresolvedSpanServiceRepository).record(eq(TENANT), eq("stranger"), any(), eq(1000));
+        assertThat(recordedUnknown()).containsExactly("stranger");
         verify(dependencyRepository, never()).upsertObserved(any(), any(), any(), any(), any());
         assertThat(counter("cartogra.spans.skipped", "reason", "unresolved_source")).isEqualTo(1);
     }
@@ -195,14 +206,14 @@ class ObservedDependencyServiceTest {
     void clientAndServerInSameBatchJoinWithoutTouchingTheTable() {
         knownNodes();
         when(dependencyRepository.upsertObserved(any(), any(), any(), any(), any())).thenReturn(UpsertOutcome.INSERTED);
-        when(pendingSpanLinkRepository.findServerPartner(any(), any(), any())).thenReturn(Optional.empty());
+        when(pendingSpanLinkRepository.takeServerPartner(any(), any(), any())).thenReturn(Optional.empty());
 
         service.ingest(TENANT, List.of(
                 client("checkout", "c1", null, "10.1.2.3"),
                 server("payments", "s1", "c1")));
 
         verify(dependencyRepository).upsertObserved(eq(TENANT), eq(CHECKOUT), eq(PAYMENTS), any(), any());
-        verify(pendingSpanLinkRepository, never()).insert(any());
+        assertThat(parked()).isEmpty();
         assertThat(counter("cartogra.spans.fallback_matched")).isEqualTo(1);
     }
 
@@ -210,14 +221,14 @@ class ObservedDependencyServiceTest {
     void serverAfterStoredClientJoinsAndDeletesPendingRow() {
         knownNodes();
         UUID rowId = UUID.randomUUID();
-        when(pendingSpanLinkRepository.findClientPartner(TENANT, "trace", "c1")).thenReturn(Optional.of(
-                new PendingSpanLink(rowId, TENANT, "trace", "c1", null, SpanKind.CLIENT, "checkout", "http",
+        when(pendingSpanLinkRepository.takeClientPartner(TENANT, "trace", "c1")).thenReturn(Optional.of(
+                new PendingSpanLink(rowId, TENANT, "trace", "c1", null, SpanKind.CLIENT, "checkout", DependencyProtocol.HTTP,
                         Instant.now().plusSeconds(60))));
         when(dependencyRepository.upsertObserved(any(), any(), any(), any(), any())).thenReturn(UpsertOutcome.INSERTED);
 
         service.ingest(TENANT, List.of(server("payments", "s1", "c1")));
 
-        verify(pendingSpanLinkRepository).delete(rowId);
+        verify(pendingSpanLinkRepository).takeClientPartner(TENANT, "trace", "c1");
         verify(dependencyRepository).upsertObserved(eq(TENANT), eq(CHECKOUT), eq(PAYMENTS),
                 eq(DependencyProtocol.HTTP), any());
     }
@@ -226,14 +237,14 @@ class ObservedDependencyServiceTest {
     void clientAfterStoredServerJoinsAndDeletesPendingRow() {
         knownNodes();
         UUID rowId = UUID.randomUUID();
-        when(pendingSpanLinkRepository.findServerPartner(TENANT, "trace", "c1")).thenReturn(Optional.of(
-                new PendingSpanLink(rowId, TENANT, "trace", "s1", "c1", SpanKind.SERVER, "payments", "http",
+        when(pendingSpanLinkRepository.takeServerPartner(TENANT, "trace", "c1")).thenReturn(Optional.of(
+                new PendingSpanLink(rowId, TENANT, "trace", "s1", "c1", SpanKind.SERVER, "payments", DependencyProtocol.HTTP,
                         Instant.now().plusSeconds(60))));
         when(dependencyRepository.upsertObserved(any(), any(), any(), any(), any())).thenReturn(UpsertOutcome.INSERTED);
 
         service.ingest(TENANT, List.of(client("checkout", "c1", null, "10.1.2.3")));
 
-        verify(pendingSpanLinkRepository).delete(rowId);
+        verify(pendingSpanLinkRepository).takeServerPartner(TENANT, "trace", "c1");
         verify(dependencyRepository).upsertObserved(eq(TENANT), eq(CHECKOUT), eq(PAYMENTS), any(), any());
     }
 
@@ -243,21 +254,20 @@ class ObservedDependencyServiceTest {
 
         service.ingest(TENANT, List.of(server("payments", "s1", null)));
 
-        verify(pendingSpanLinkRepository, never()).insert(any());
+        assertThat(parked()).isEmpty();
         verify(dependencyRepository, never()).upsertObserved(any(), any(), any(), any(), any());
     }
 
     @Test
     void unmatchedServerIsParkedWithTtl() {
         knownNodes();
-        when(pendingSpanLinkRepository.findClientPartner(any(), any(), any())).thenReturn(Optional.empty());
+        when(pendingSpanLinkRepository.takeClientPartner(any(), any(), any())).thenReturn(Optional.empty());
 
         service.ingest(TENANT, List.of(server("payments", "s1", "c1")));
 
-        var captor = ArgumentCaptor.forClass(PendingSpanLink.class);
-        verify(pendingSpanLinkRepository).insert(captor.capture());
-        assertThat(captor.getValue().kind()).isEqualTo(SpanKind.SERVER);
-        assertThat(captor.getValue().expiresAt()).isAfter(Instant.now().plus(Duration.ofMinutes(4)));
+        List<PendingSpanLink> parked = parked();
+        assertThat(parked).singleElement().extracting(PendingSpanLink::kind).isEqualTo(SpanKind.SERVER);
+        assertThat(parked.getFirst().expiresAt()).isAfter(Instant.now().plus(Duration.ofMinutes(4)));
     }
 
     @Test
@@ -285,27 +295,15 @@ class ObservedDependencyServiceTest {
     }
 
     @Test
-    void fallbackLockIsTakenOncePerBatchAndOnlyWhenNeeded() {
-        knownNodes();
-        when(pendingSpanLinkRepository.findServerPartner(any(), any(), any())).thenReturn(Optional.empty());
-        when(pendingSpanLinkRepository.findClientPartner(any(), any(), any())).thenReturn(Optional.empty());
-
-        service.ingest(TENANT, List.of(
-                client("checkout", "c1", null, "10.1.2.3"),
-                client("checkout", "c2", null, "10.1.2.4"),
-                server("payments", "s1", "c9")));
-
-        verify(pendingSpanLinkRepository, times(1)).lockTenant(TENANT);
-    }
-
-    @Test
-    void directlyResolvedBatchNeverLocksOrLooksUpPartners() {
+    void directlyResolvedBatchNeverLooksUpOrParksPartners() {
         knownNodes();
         when(dependencyRepository.upsertObserved(any(), any(), any(), any(), any())).thenReturn(UpsertOutcome.INSERTED);
 
         service.ingest(TENANT, List.of(client("checkout", "c1", "payments", null)));
 
-        verify(pendingSpanLinkRepository, never()).lockTenant(any());
+        verify(pendingSpanLinkRepository, never()).takeServerPartner(any(), any(), any());
+        verify(pendingSpanLinkRepository, never()).takeClientPartner(any(), any(), any());
+        assertThat(parked()).isEmpty();
     }
 
     @Test
@@ -317,8 +315,8 @@ class ObservedDependencyServiceTest {
                 client("checkout", "c1", "payments", null),
                 server("payments", "s1", "c1")));
 
-        verify(pendingSpanLinkRepository, never()).findClientPartner(any(), any(), any());
-        verify(pendingSpanLinkRepository, never()).insert(any());
+        verify(pendingSpanLinkRepository, never()).takeClientPartner(any(), any(), any());
+        assertThat(parked()).isEmpty();
     }
 
     @Test
@@ -337,20 +335,20 @@ class ObservedDependencyServiceTest {
     void serverBeforeDirectlyResolvedClientInSameBatchIsNotParked() {
         knownNodes();
         when(dependencyRepository.upsertObserved(any(), any(), any(), any(), any())).thenReturn(UpsertOutcome.INSERTED);
-        when(pendingSpanLinkRepository.findClientPartner(any(), any(), any())).thenReturn(Optional.empty());
+        when(pendingSpanLinkRepository.takeClientPartner(any(), any(), any())).thenReturn(Optional.empty());
 
         service.ingest(TENANT, List.of(
                 server("payments", "s1", "c1"),
                 client("checkout", "c1", "payments", null)));
 
-        verify(pendingSpanLinkRepository, never()).insert(any());
+        assertThat(parked()).isEmpty();
         verify(dependencyRepository).upsertObserved(eq(TENANT), eq(CHECKOUT), eq(PAYMENTS), any(), any());
     }
 
     @Test
     void batchWithoutDirectlyResolvedClientsDiscardsNothing() {
         knownNodes();
-        when(pendingSpanLinkRepository.findClientPartner(any(), any(), any())).thenReturn(Optional.empty());
+        when(pendingSpanLinkRepository.takeClientPartner(any(), any(), any())).thenReturn(Optional.empty());
 
         service.ingest(TENANT, List.of(server("payments", "s1", "c1")));
 
@@ -362,14 +360,14 @@ class ObservedDependencyServiceTest {
         knownNodes();
         when(dependencyRepository.upsertObserved(any(), any(), any(), any(), any())).thenReturn(UpsertOutcome.INSERTED);
         UUID rowId = UUID.randomUUID();
-        when(pendingSpanLinkRepository.findServerPartner(TENANT, "trace", "c1")).thenReturn(Optional.of(
-                new PendingSpanLink(rowId, TENANT, "trace", "s1", "c1", SpanKind.SERVER, "payments", "http",
+        when(pendingSpanLinkRepository.takeServerPartner(TENANT, "trace", "c1")).thenReturn(Optional.of(
+                new PendingSpanLink(rowId, TENANT, "trace", "s1", "c1", SpanKind.SERVER, "payments", DependencyProtocol.HTTP,
                         Instant.now().plusSeconds(60))));
 
         service.ingest(TENANT, List.of(client("checkout", "c1", "ghost-alias", null)));
 
         verify(dependencyRepository).upsertObserved(eq(TENANT), eq(CHECKOUT), eq(PAYMENTS), any(), any());
-        verify(unresolvedSpanServiceRepository, never()).record(any(), anyString(), any(), anyInt());
+        assertThat(recordedUnknown()).isEmpty();
     }
 
     @Test
@@ -413,9 +411,8 @@ class ObservedDependencyServiceTest {
         service.ingest(TENANT, List.of(db("payments", "pg-main", "app", "10.0.0.9")));
 
         verify(dependencyRepository, never()).upsertObserved(any(), any(), any(), any(), any());
-        verify(pendingSpanLinkRepository, never()).insert(any());
-        verify(pendingSpanLinkRepository, never()).lockTenant(any());
-        verify(unresolvedSpanServiceRepository, never()).record(any(), anyString(), any(), anyInt());
+        assertThat(parked()).isEmpty();
+        assertThat(recordedUnknown()).isEmpty();
         assertThat(counter("cartogra.spans.skipped", "reason", "unresolved_db")).isEqualTo(1);
     }
 
@@ -423,7 +420,7 @@ class ObservedDependencyServiceTest {
     void producerJoinsStoredConsumersOnDestination() {
         knownNodes();
         when(dependencyRepository.upsertObserved(any(), any(), any(), any(), any())).thenReturn(UpsertOutcome.INSERTED);
-        when(pendingSpanLinkRepository.findMessagingEndpoints(TENANT, Set.of("orders"))).thenReturn(List.of(
+        when(pendingSpanLinkRepository.joinMessagingEndpoints(eq(TENANT), any(), any())).thenReturn(Set.of(
                 new MessagingEndpoint("orders", SpanKind.PRODUCER, "payments"),
                 new MessagingEndpoint("orders", SpanKind.CONSUMER, "notifications"),
                 new MessagingEndpoint("orders", SpanKind.CONSUMER, "checkout")));
@@ -432,24 +429,22 @@ class ObservedDependencyServiceTest {
                 messaging("payments", SpanKind.PRODUCER, "orders"),
                 messaging("Payments", SpanKind.PRODUCER, "orders")));
 
-        verify(pendingSpanLinkRepository).upsertMessagingEndpoints(eq(TENANT),
+        verify(pendingSpanLinkRepository).joinMessagingEndpoints(eq(TENANT),
                 eq(Set.of(new MessagingEndpoint("orders", SpanKind.PRODUCER, "payments"))), any());
         verify(dependencyRepository).upsertObserved(eq(TENANT), eq(PAYMENTS), eq(NOTIFICATIONS),
                 eq(DependencyProtocol.KAFKA), any());
         verify(dependencyRepository).upsertObserved(eq(TENANT), eq(PAYMENTS), eq(CHECKOUT),
                 eq(DependencyProtocol.KAFKA), any());
-        verify(pendingSpanLinkRepository, never()).delete(any());
     }
 
     @Test
     void messagingRowsGetTheMessagingTtl() {
         knownNodes();
-        when(pendingSpanLinkRepository.findMessagingEndpoints(any(), any())).thenReturn(List.of());
 
         service.ingest(TENANT, List.of(messaging("notifications", SpanKind.CONSUMER, "orders")));
 
         var captor = ArgumentCaptor.forClass(Instant.class);
-        verify(pendingSpanLinkRepository).upsertMessagingEndpoints(eq(TENANT), any(), captor.capture());
+        verify(pendingSpanLinkRepository).joinMessagingEndpoints(eq(TENANT), any(), captor.capture());
         assertThat(captor.getValue()).isAfter(Instant.now().plus(Duration.ofHours(23)));
         verify(dependencyRepository, never()).upsertObserved(any(), any(), any(), any(), any());
     }
@@ -458,9 +453,10 @@ class ObservedDependencyServiceTest {
     void storedPairsOnOtherDestinationsOrWithoutABatchSideAreNotJoined() {
         knownNodes();
         when(dependencyRepository.upsertObserved(any(), any(), any(), any(), any())).thenReturn(UpsertOutcome.INSERTED);
-        when(pendingSpanLinkRepository.findMessagingEndpoints(TENANT, Set.of("orders"))).thenReturn(List.of(
+        when(pendingSpanLinkRepository.joinMessagingEndpoints(eq(TENANT), any(), any())).thenReturn(Set.of(
                 new MessagingEndpoint("orders", SpanKind.PRODUCER, "checkout"),
-                new MessagingEndpoint("orders", SpanKind.CONSUMER, "ledger-db")));
+                new MessagingEndpoint("orders", SpanKind.CONSUMER, "ledger-db"),
+                new MessagingEndpoint("orders", SpanKind.CONSUMER, "notifications")));
 
         service.ingest(TENANT, List.of(messaging("notifications", SpanKind.CONSUMER, "orders")));
 
@@ -472,7 +468,8 @@ class ObservedDependencyServiceTest {
     @Test
     void serviceProducingAndConsumingItsOwnTopicCreatesNoEdge() {
         knownNodes();
-        when(pendingSpanLinkRepository.findMessagingEndpoints(any(), any())).thenReturn(List.of());
+        when(pendingSpanLinkRepository.joinMessagingEndpoints(eq(TENANT), any(), any())).thenAnswer(
+                inv -> Set.copyOf(inv.<Collection<MessagingEndpoint>>getArgument(1)));
 
         service.ingest(TENANT, List.of(
                 messaging("payments", SpanKind.PRODUCER, "orders"),

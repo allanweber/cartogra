@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Component
-public class OtlpSpanMapper {
+public class OtlpSpanParser {
 
     public static final String TENANT_ATTRIBUTE = "cartogra.tenant.id";
 
@@ -55,7 +55,7 @@ public class OtlpSpanMapper {
         }
         String peerName = attribute(span.attributes(), "peer.service").filter(s -> !s.isBlank()).orElse(null);
         String peerHost = attribute(span.attributes(), "server.address")
-                .map(OtlpSpanMapper::stripPort).filter(s -> !s.isBlank()).orElse(null);
+                .map(OtlpSpanParser::stripPort).filter(s -> !s.isBlank()).orElse(null);
         String parent = isBlank(span.parentSpanId()) ? null : span.parentSpanId();
         String dbName = attribute(span.attributes(), "db.namespace")
                 .or(() -> attribute(span.attributes(), "db.name")).filter(s -> !s.isBlank()).orElse(null);

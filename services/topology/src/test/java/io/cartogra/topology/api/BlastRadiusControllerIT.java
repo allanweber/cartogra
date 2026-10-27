@@ -112,6 +112,31 @@ class BlastRadiusControllerIT {
     }
 
     @Test
+    void eachEntryCarriesTheConnectionsThatReachItFromThePreviousHop() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        UUID a = seedNode(tenantId, "svc-a");
+        UUID b = seedNode(tenantId, "svc-b");
+        UUID db = seedNode(tenantId, "svc-db");
+        Instant now = Instant.now();
+        seedEdge(tenantId, a, b);
+        dependencyRepository.save(new Dependency(UUID.randomUUID(), tenantId, a, b,
+                DependencyType.OBSERVED, DependencyProtocol.KAFKA, null, now, now, null));
+        dependencyRepository.save(new Dependency(UUID.randomUUID(), tenantId, b, db,
+                DependencyType.OBSERVED, DependencyProtocol.DB, null, now, now, null));
+        graphViewRepository.refresh();
+
+        JsonNode entries = objectMapper.readTree(getBlastRadius(tenantId, a, "").body())
+                .get("data").get("upstream").get("entries");
+
+        assertThat(entries).hasSize(2);
+        assertThat(entries.get(0).get("via").toString())
+                .isEqualTo("[{\"dependencyType\":\"DECLARED\",\"protocol\":\"HTTP\"},"
+                        + "{\"dependencyType\":\"OBSERVED\",\"protocol\":\"KAFKA\"}]");
+        assertThat(entries.get(1).get("via").toString())
+                .isEqualTo("[{\"dependencyType\":\"OBSERVED\",\"protocol\":\"DB\"}]");
+    }
+
+    @Test
     void unknownServiceReturns404() throws Exception {
         HttpResponse<String> resp = getBlastRadius(UUID.randomUUID(), UUID.randomUUID(), "");
 

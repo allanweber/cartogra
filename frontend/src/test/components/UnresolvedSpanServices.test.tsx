@@ -76,7 +76,7 @@ describe('UnresolvedSpanServices', () => {
 
     const list = await screen.findByRole('list', { name: 'Unresolved services' })
     expect(within(list).getByText('stripe-gateway')).toBeInTheDocument()
-    expect(within(list).getByText('412× · 2m ago')).toBeInTheDocument()
+    expect(within(list).getByText('412 calls · last seen 2m ago')).toBeInTheDocument()
     expect(within(list).getByText('legacy-ldap')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Unresolved services (2)' })).toBeInTheDocument()
     expect(apiFetch).toHaveBeenCalledWith('/v1/topology/unresolved-span-services?limit=20&offset=0')
@@ -102,10 +102,10 @@ describe('UnresolvedSpanServices', () => {
     vi.mocked(apiMutate).mockResolvedValue(item({ resolution: 'DISMISSED' }))
     renderList()
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Dismiss' }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Dismiss/ }))
     const dialog = await screen.findByRole('dialog')
     mockList([])
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Dismiss' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Dismiss/ }))
 
     await waitFor(() =>
       expect(apiMutate).toHaveBeenCalledWith('/v1/topology/unresolved-span-services/u1/dismiss', {}),
@@ -117,7 +117,7 @@ describe('UnresolvedSpanServices', () => {
     mockList([item({})])
     renderList()
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Create service' }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Create service/ }))
     expect(screen.getByText('prefill:stripe-gateway')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Fake register' }))
 

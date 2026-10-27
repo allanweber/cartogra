@@ -362,9 +362,60 @@ jobs:
         working-directory: infra/docker-compose
         run: docker compose -f docker-compose.yml down -v
 
+  acme-seed:
+    name: Acme seed — Typecheck & Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: seed/acme-fintech
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect seed changes
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            CHANGED=$(git diff "origin/${{ github.base_ref }}" --name-only)
+          elif [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            CHANGED=$(git diff --name-only $(git hash-object -t tree /dev/null))
+          else
+            CHANGED=$(git diff "${{ github.event.before }}" "${{ github.sha }}" --name-only)
+          fi
+          if echo "$CHANGED" | grep -q 'seed/acme-fintech/'; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        if: steps.changes.outputs.changed == 'true'
+        with:
+          version: 12
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: steps.changes.outputs.changed == 'true'
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+          cache-dependency-path: seed/acme-fintech/pnpm-lock.yaml
+
+      - name: Install dependencies
+        if: steps.changes.outputs.changed == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        if: steps.changes.outputs.changed == 'true'
+        run: pnpm typecheck
+
+      - name: Test
+        if: steps.changes.outputs.changed == 'true'
+        run: pnpm test
+
   container-build:
     name: Container — Build checks
-    needs: [backend, frontend]
+    needs: [backend, frontend, acme-seed]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
@@ -404,6 +455,7 @@ jobs:
           check topology  'services/topology|infra/docker/topology'
           check ingestion 'services/ingestion|infra/docker/ingestion'
           check frontend  'frontend|infra/docker/frontend'
+          check acme      'seed/acme-fintech'
 
       - name: Build registry image
         if: steps.changes.outputs.registry == 'true'
@@ -475,6 +527,21 @@ jobs:
         with:
           scan-type: 'image'
           image-ref: 'cartogra/frontend:ci'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+          format: 'table'
+
+      - name: Build Acme seed image
+        if: steps.changes.outputs.acme == 'true'
+        run: docker build -t cartogra/acme-fintech-service:ci seed/acme-fintech
+
+      - name: Scan Acme seed image — fail on CRITICAL or HIGH (unfixed suppressed)
+        if: steps.changes.outputs.acme == 'true'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: 'image'
+          image-ref: 'cartogra/acme-fintech-service:ci'
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
           ignore-unfixed: true

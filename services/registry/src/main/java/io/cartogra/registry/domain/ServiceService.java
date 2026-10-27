@@ -463,7 +463,7 @@ public class ServiceService {
         }
         Set<UUID> matchedTeamIds = payload.ownerTeams().stream()
                 .map(handle -> teamRepository.findByTenantAndSlug(payload.tenantId(), Team.slug(handle)))
-                .flatMap(Optional::stream)
+                .flatMap(List::stream)
                 .map(Team::id)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         if (matchedTeamIds.isEmpty()) {

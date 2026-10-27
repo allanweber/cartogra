@@ -1,15 +1,18 @@
 package io.cartogra.topology.domain;
 
 import io.cartogra.common.api.PageResult;
+import io.cartogra.topology.config.SpanLinkProperties;
 import io.cartogra.topology.domain.exception.UnresolvedSpanServiceAlreadyResolvedException;
 import io.cartogra.topology.domain.exception.UnresolvedSpanServiceNotFoundException;
 import io.cartogra.topology.repository.UnresolvedSpanServiceRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -19,7 +22,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -35,7 +40,28 @@ class UnresolvedSpanServiceServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new UnresolvedSpanServiceService(repository);
+        service = new UnresolvedSpanServiceService(repository,
+                new SpanLinkProperties(Duration.ofMinutes(5), Duration.ofMinutes(1), 50, Duration.ofHours(24)));
+    }
+
+    @Test
+    void recordDedupesCaseInsensitivelyInSortedOrderWithTheTenantCap() {
+        Instant seenAt = Instant.now();
+
+        service.record(tenant, List.of("zeta", "Alpha", "ALPHA", "mid"), seenAt);
+
+        InOrder order = inOrder(repository);
+        order.verify(repository).record(tenant, "Alpha", seenAt, 50);
+        order.verify(repository).record(tenant, "mid", seenAt, 50);
+        order.verify(repository).record(tenant, "zeta", seenAt, 50);
+        verify(repository, times(3)).record(eq(tenant), any(), eq(seenAt), eq(50));
+    }
+
+    @Test
+    void markRegisteredClearsTheName() {
+        service.markRegistered(tenant, "stripe-gateway");
+
+        verify(repository).markRegistered(eq(tenant), eq("stripe-gateway"), any());
     }
 
     private UnresolvedSpanService row(Instant deletedAt, UnresolvedResolution resolution) {

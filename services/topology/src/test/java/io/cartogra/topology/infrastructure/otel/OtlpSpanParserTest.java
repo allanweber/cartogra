@@ -3,7 +3,7 @@ package io.cartogra.topology.infrastructure.otel;
 import io.cartogra.topology.domain.DependencyProtocol;
 import io.cartogra.topology.domain.SpanKind;
 import io.cartogra.topology.domain.SpanObservation;
-import io.cartogra.topology.infrastructure.otel.OtlpSpanMapper.TenantSpans;
+import io.cartogra.topology.infrastructure.otel.OtlpSpanParser.TenantSpans;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -11,9 +11,9 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class OtlpSpanMapperTest {
+class OtlpSpanParserTest {
 
-    private final OtlpSpanMapper mapper = new OtlpSpanMapper();
+    private final OtlpSpanParser mapper = new OtlpSpanParser();
     private final JsonMapper json = JsonMapper.builder().build();
 
     private List<TenantSpans> map(String spanJson, String resourceAttrs) {

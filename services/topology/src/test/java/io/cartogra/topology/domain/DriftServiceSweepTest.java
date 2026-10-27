@@ -11,6 +11,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -26,7 +29,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class DriftDetectionServiceTest {
+class DriftServiceSweepTest {
 
     private static final UUID TENANT = UUID.randomUUID();
     private static final UUID A = UUID.randomUUID();
@@ -36,13 +39,40 @@ class DriftDetectionServiceTest {
 
     @Mock DependencyRepository dependencyRepository;
     @Mock DependencyDriftRepository driftRepository;
+    @Mock DependencyService dependencyService;
+    @Mock PlatformTransactionManager transactionManager;
 
-    private DriftDetectionService service;
+    private DriftService service;
 
     @BeforeEach
     void setUp() {
-        service = new DriftDetectionService(dependencyRepository, driftRepository,
-                new DriftProperties(Duration.ofMinutes(5), WINDOW), new SimpleMeterRegistry());
+        org.mockito.Mockito.lenient().when(transactionManager.getTransaction(any()))
+                .thenReturn(new SimpleTransactionStatus());
+        service = new DriftService(driftRepository, dependencyRepository, dependencyService,
+                new DriftProperties(Duration.ofMinutes(5), WINDOW), new SimpleMeterRegistry(), transactionManager);
+    }
+
+    @Test
+    void observedPairSilentSinceTheCutoffIsNotRaisedAsUndeclared() {
+        declared();
+        observed(pair(A, B, NOW.minus(Duration.ofDays(30)), NOW.minus(WINDOW).minusSeconds(1)));
+
+        service.sweep(TENANT, NOW);
+
+        verify(driftRepository, never()).insertIfAbsent(any());
+    }
+
+    @Test
+    void sweepRunsInARepeatableReadTransaction() {
+        declared();
+        observed();
+
+        service.sweep(TENANT, NOW);
+
+        ArgumentCaptor<TransactionDefinition> definition = ArgumentCaptor.forClass(TransactionDefinition.class);
+        verify(transactionManager).getTransaction(definition.capture());
+        assertThat(definition.getValue().getIsolationLevel()).isEqualTo(TransactionDefinition.ISOLATION_REPEATABLE_READ);
+        verify(transactionManager).commit(any());
     }
 
     private void declared(EdgePairStat... pairs) {

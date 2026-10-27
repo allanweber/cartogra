@@ -4,6 +4,7 @@ import io.cartogra.topology.domain.BlastRadiusEntry;
 import io.cartogra.topology.domain.GraphNode;
 import org.jspecify.annotations.Nullable;
 
+import java.util.List;
 import java.util.UUID;
 
 public record BlastRadiusEntryResponse(
@@ -12,11 +13,13 @@ public record BlastRadiusEntryResponse(
         @Nullable UUID teamId,
         @Nullable String tier,
         String healthStatus,
-        int distance
+        int distance,
+        List<BlastRadiusConnectionResponse> via
 ) {
     public static BlastRadiusEntryResponse from(BlastRadiusEntry entry) {
         GraphNode node = entry.node();
         return new BlastRadiusEntryResponse(node.serviceId(), node.name(), node.teamId(), node.tier(),
-                node.healthStatus(), entry.distance());
+                node.healthStatus(), entry.distance(),
+                entry.via().stream().map(BlastRadiusConnectionResponse::from).toList());
     }
 }

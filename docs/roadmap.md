@@ -111,14 +111,14 @@ No user-facing value. It exists because the next phases are unverifiable without
 - [x] **1.1 — Graph nodes projected from the registry.** *As the platform, I keep a local node list so graph queries never call the registry synchronously.*
   Topology consumes `cartogra.registry.service.{registered,updated,deleted}` into a `graph_nodes` table (`tenant_id`, `service_id`, `name`, `team_id`, `tier`, `health_status`, `deleted_at`), idempotent via a `(tenant_id, event_id)` dedupe table. Admin `POST /v1/internal/backfill` walks the registry once for tenants that predate the consumer.
   *Acceptance:* replaying an envelope is a no-op; `service.deleted` soft-deletes the node; ITs prove all three.
-  *Acme test:* ✅ `pnpm acme load` waits for all 20 K8s-discovered services to appear as nodes.
+  *Acme test:* ✅ `pnpm acme load` waits for all 21 K8s-discovered services to appear as nodes.
 - [x] **1.2 — Declared dependencies.** *As an engineer, I record that service A calls service B.*
   `POST/PUT/DELETE /v1/dependencies` validated against `graph_nodes` (404 unknown node, 409 duplicate edge, 422 self-edge — the CHECK constraint already exists). Every mutation calls `markDirty()` on the MV scheduler.
-  *Acme test:* ✅ `verify`: all 40 declared edges present; second `load` creates none.
+  *Acme test:* ✅ `verify`: all 43 declared edges present; second `load` creates none.
 - [x] **1.3 — Graph read API.** `GET /v1/graph?teamId=&type=&limit=` returns `{nodes[], edges[], truncated}` from `dependency_graph_edges` joined to `graph_nodes`. Hard node cap with `truncated: true` rather than an unbounded payload.
-  *Acme test:* ✅ `verify`: declared and observed graph queries return the expected edges (20 nodes).
+  *Acme test:* ✅ `verify`: declared and observed graph queries return the expected edges (21 nodes).
 - [x] **1.4 — Graph page.** D3 force-directed canvas replacing `PhasePlaceholder` in `routes/_authenticated/graph.tsx`: zoom, pan, node select, declared/observed toggle (observed empty until Phase 3), shadcn chrome, TanStack Query, `Skeleton` + `Alert`-with-`traceId`. Deletes `MOCK_GRAPH_NODES` / `MOCK_GRAPH_EDGES`.
-  *Acme test:* 🔎 manual: open `/graph` on the Acme tenant (20 nodes, 40 edges, 2 cycle badges).
+  *Acme test:* 🔎 manual: open `/graph` on the Acme tenant (21 nodes, 43 declared edges, 2 cycle badges).
 - [x] **1.5 — Dependencies on the service page.** Upstream/downstream lists on `catalog.$serviceId` with add/remove, so the graph is editable from where users already work.
   *Acme test:* 🔎 manual: `ledger-service` shows 12 upstream dependents.
 - [x] **1.6 — `docs/api/topology.openapi.yaml`** reduced to exactly the endpoints that exist.
@@ -198,9 +198,9 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 - [x] **3.1 — Observed edges from traces.** OTel Collector exports spans (OTLP/JSON) to `cartogra.observability.spans` (config in `infra/docker-compose/otel-collector.yml`); `OtelSpanWorker` derives `dependency_type='observed'` edges idempotently on the existing edge-identity index, with `last_seen_at` freshness. Synthetic span fixtures work without a live collector. ADR-0029.
   *Acme test:* ✅ `verify`: every enabled declared call appears as an observed edge within ~60 s.
-- [x] **3.2 — Acme Fintech seed.** `seed/acme-fintech/seed-data.json`: 20 services, 5 teams, 3 orphans, 2 cycles, 1 god service (12 dependents), 3 undeclared + 1 missing drift. A standalone simulated customer stack in the kind cluster: one generic fake-service image run as 20 Deployments in a tenant-labelled namespace (services come from K8s discovery, never from `POST /services`), emitting real OTel spans through the collector. Idempotent loader (`pnpm acme load`) adds teams, owners, tiers and declared edges through the gateway API; `pnpm acme drift on` switches on the one undeclared call. Replaces `seed/graph-perf-seed.sql`. See `seed/acme-fintech/README.md`.
+- [x] **3.2 — Acme Fintech seed.** `seed/acme-fintech/seed-data.json`: 21 services, 5 teams, 3 orphans, 2 cycles, 1 god service (12 dependents), 3 undeclared + 1 missing drift. A standalone simulated customer stack in the kind cluster: one generic fake-service image run as 21 Deployments in a tenant-labelled namespace (services come from K8s discovery, never from `POST /services`), emitting real OTel spans through the collector. Idempotent loader (`pnpm acme load`) adds teams, owners, tiers and declared edges through the gateway API; `pnpm acme drift on` switches on the 3 dormant undeclared calls. Replaces `seed/graph-perf-seed.sql`. See `seed/acme-fintech/README.md`.
   *Acme test:* ✅ `verify`: second `load` is a no-op and state is identical.
-- [x] **3.3 — Drift detection.** Declared-without-observed and observed-without-declared written to `dependency_drifts`; A sweep (`topology.drift.sweep-interval`, default 5 min) compares declared and observed pairs, protocol ignored: *undeclared* = observed with no declared pair; *missing* = declared for longer than `topology.drift.missing-after` (default 7 days) with no recent observed call, only for tenants that have observed edges. `GET /v1/drifts` + `POST /v1/drifts/{id}/resolve` (`ACCEPT_OBSERVED` declares the observed edge / `REMOVE_DECLARED` deletes the declared one / `DISMISS`, which is never re-raised); a drift whose condition clears closes itself. Edge mode (All / Declared / Observed / Drift) and an Inspector Drift tab on the graph. Plan: `plans/014-drift-detection.md`.
+- [x] **3.3 — Drift detection.** Declared-without-observed and observed-without-declared written to `dependency_drifts`; A sweep (`topology.drift.sweep-interval`, default 5 min) compares declared and observed pairs, protocol ignored: *undeclared* = observed since the `missing-after` cutoff with no declared pair (a long-silent observed edge raises nothing, so removing a missing edge doesn't bounce back as undeclared); *missing* = declared for longer than `topology.drift.missing-after` (default 7 days) with no recent observed call, only for tenants that have observed edges. `GET /v1/drifts` + `POST /v1/drifts/{id}/resolve` (`ACCEPT_OBSERVED` declares the observed edge / `REMOVE_DECLARED` deletes the declared one / `DISMISS`, which is never re-raised); a drift whose condition clears closes itself. Edge mode (All / Declared / Observed / Drift) and an Inspector Drift tab on the graph. Plan: `plans/014-drift-detection.md`.
   *Acme test:* ✅ `verify --with-drift`: `drift on` enables 3 dormant undeclared calls (`reporting-service` → `payments-service`, `webhook-relay` → `fraud-service`, `legacy-batch` → `notification-service`) and the declared-but-silent `loyalty-service` → `fx-service` is reported as missing; accept / remove / dismiss each get their own drift. Needs `TOPOLOGY_DRIFT_SWEEP_INTERVAL` / `TOPOLOGY_DRIFT_MISSING_AFTER` set short (e.g. `PT15S` / `PT2M`) for a quick demo.
 - [x] **3.4 — CODEOWNERS team mapping (orphan risk from ownership events).** No Topology consumer: ownership already reaches `graph_nodes.team_id` through `service.{registered,updated}` and feeds the 2.5 risk list (ADR-0028, superseding ADR-0027). The gap was the mapping itself — CODEOWNERS never assigned a team. Ingestion providers now reduce handles to bare team names (GitHub `@org/team`; Azure DevOps `@team`, `[Project]\Team`, `[Team]`); Registry finds the service by SCM external id (falling back to the repo-URL suffix) and matches handles to teams by slug, assigning when exactly one distinct team matches. Already-owned services are still never overridden. Plan: `plans/015-codeowners-team-mapping.md`.
   *Acme test:* 🔎 `AcmeCodeownersMappingIT` asserts 17 owned / 3 orphans from the seed's CODEOWNERS handles; the live check (`pnpm acme load --skip-owners` + SCM sync) is manual, see `seed/acme-fintech/README.md`. Orphans in `/risks` already asserted by `verify`.
@@ -215,19 +215,19 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 **Gate**
 
-- [ ] A synthetic span fixture produces an observed edge with no live collector running.
-- [ ] Declared-without-observed and observed-without-declared drift are both raised; accept / remove / dismiss all covered by ITs.
-- [ ] The Acme seed loader run twice leaves identical state.
-- [ ] A `service.updated` that clears `teamId` updates `graph_nodes.team_id`, and the resulting orphan appears in `GET /v1/risks`; CODEOWNERS handles resolve to Registry teams.
-- [ ] No new Kafka topic exists without a consumer — topology lifecycle events remain deferred.
+- [x] A synthetic span fixture produces an observed edge with no live collector running.
+- [x] Declared-without-observed and observed-without-declared drift are both raised; accept / remove / dismiss all covered by ITs.
+- [x] The Acme seed loader run twice leaves identical state.
+- [x] A `service.updated` that clears `teamId` updates `graph_nodes.team_id`, and the resulting orphan appears in `GET /v1/risks`; CODEOWNERS handles resolve to Registry teams.
+- [x] No new Kafka topic exists without a consumer — topology lifecycle events remain deferred.
 
 *Standing checks (§2 — Definition of done):*
 
-- [ ] Every story in this phase passed `/code-review` and `/security-review` before merge.
-- [ ] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
-- [ ] `/impeccable critique` run over every screen this phase touched; findings fixed or recorded.
-- [ ] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
-- [ ] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
+- [x] Every story in this phase passed `/code-review` and `/security-review` before merge.
+- [x] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
+- [x] `/impeccable critique` run over every screen this phase touched; findings fixed or recorded.
+- [x] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
+- [x] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
 
 **Worth writing about**
 

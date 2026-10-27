@@ -19,7 +19,7 @@ import java.time.Duration;
 @EnableConfigurationProperties({SpanLinkProperties.class, SpanTopicProperties.class})
 public class SpanLinkConfig {
 
-    private static final String SPANS_TOPIC = "cartogra.observability.spans";
+    public static final String SPANS_TOPIC = "cartogra.observability.spans";
 
     @Bean
     public NewTopic spansTopic(SpanTopicProperties properties) {

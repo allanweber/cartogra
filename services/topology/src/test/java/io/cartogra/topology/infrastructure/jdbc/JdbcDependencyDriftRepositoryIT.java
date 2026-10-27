@@ -65,18 +65,18 @@ class JdbcDependencyDriftRepositoryIT extends AbstractTopologyIT {
     }
 
     @Test
-    void findActiveByEdgeReturnsOnlyTheUnresolvedMatch() {
+    void activeLookupReturnsOnlyTheUnresolvedMatch() {
         UUID tenant = UUID.randomUUID();
         UUID source = UUID.randomUUID();
         UUID target = UUID.randomUUID();
         DependencyDrift saved = repository.save(newDrift(tenant, source, target, DriftType.UNDECLARED));
 
-        assertThat(repository.findActiveByEdge(tenant, source, target, DriftType.UNDECLARED)).contains(saved);
-        assertThat(repository.findActiveByEdge(tenant, source, target, DriftType.MISSING)).isEmpty();
+        assertThat(activeDrift(tenant, source, target, DriftType.UNDECLARED)).contains(saved);
+        assertThat(activeDrift(tenant, source, target, DriftType.MISSING)).isEmpty();
 
         repository.resolve(tenant, saved.id(), UUID.randomUUID(), DriftResolution.DISMISSED, Instant.now());
 
-        assertThat(repository.findActiveByEdge(tenant, source, target, DriftType.UNDECLARED)).isEmpty();
+        assertThat(activeDrift(tenant, source, target, DriftType.UNDECLARED)).isEmpty();
     }
 
     @Test
@@ -101,7 +101,7 @@ class JdbcDependencyDriftRepositoryIT extends AbstractTopologyIT {
         DependencyDrift redetected = repository.save(newDrift(tenant, source, target, DriftType.UNDECLARED));
 
         assertThat(redetected.id()).isNotEqualTo(first.id());
-        assertThat(repository.findActiveByEdge(tenant, source, target, DriftType.UNDECLARED)).contains(redetected);
+        assertThat(activeDrift(tenant, source, target, DriftType.UNDECLARED)).contains(redetected);
     }
 
     @Test
@@ -164,5 +164,12 @@ class JdbcDependencyDriftRepositoryIT extends AbstractTopologyIT {
 
     private DependencyDrift newDrift(UUID tenant, UUID source, UUID target, DriftType type, Instant detectedAt) {
         return new DependencyDrift(UUID.randomUUID(), tenant, source, target, type, detectedAt, null, null);
+    }
+
+    private Optional<DependencyDrift> activeDrift(UUID tenant, UUID source, UUID target, DriftType type) {
+        return repository.findAllActive(tenant).stream()
+                .filter(d -> d.sourceServiceId().equals(source) && d.targetServiceId().equals(target)
+                        && d.type() == type)
+                .findFirst();
     }
 }

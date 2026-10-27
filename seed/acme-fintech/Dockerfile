@@ -6,7 +6,9 @@ RUN pnpm install --frozen-lockfile --prod
 COPY app ./app
 
 FROM node:24.10.0-alpine3.22 AS runtime
-RUN apk upgrade --no-cache
+RUN apk upgrade --no-cache \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 WORKDIR /srv
 COPY --from=builder --chown=node:node /build/node_modules ./node_modules
 COPY --from=builder --chown=node:node /build/package.json ./package.json

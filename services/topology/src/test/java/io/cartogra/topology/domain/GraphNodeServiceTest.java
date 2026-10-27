@@ -10,7 +10,6 @@ import io.cartogra.topology.repository.DependencyRepository;
 import io.cartogra.topology.repository.GraphNodeRepository;
 import io.cartogra.topology.repository.GraphNodeUpsert;
 import io.cartogra.topology.repository.ProcessedEventRepository;
-import io.cartogra.topology.repository.UnresolvedSpanServiceRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,14 +38,14 @@ class GraphNodeServiceTest {
     @Mock RegistryGraphNodeClient registryClient;
     @Mock DependencyRepository dependencyRepository;
     @Mock DependencyGraphViewRefreshScheduler graphViewRefreshScheduler;
-    @Mock UnresolvedSpanServiceRepository unresolvedSpanServiceRepository;
+    @Mock UnresolvedSpanServiceService unresolvedSpanServiceService;
 
     private GraphNodeService service;
 
     @BeforeEach
     void setUp() {
         service = new GraphNodeService(graphNodeRepository, processedEventRepository, registryClient,
-                dependencyRepository, graphViewRefreshScheduler, unresolvedSpanServiceRepository);
+                dependencyRepository, graphViewRefreshScheduler, unresolvedSpanServiceService);
     }
 
     private static EventEnvelope<ServiceLifecyclePayload> envelope(String eventType, ServiceLifecyclePayload payload) {
@@ -64,7 +63,7 @@ class GraphNodeServiceTest {
         service.applyLifecycleEvent(env);
 
         verify(graphNodeRepository).upsert(new GraphNodeUpsert(tenantId, serviceId, "payments", null, "STANDARD", "HEALTHY"));
-        verify(unresolvedSpanServiceRepository).markRegistered(eq(tenantId), eq("payments"), any());
+        verify(unresolvedSpanServiceService).markRegistered(tenantId, "payments");
         verify(graphNodeRepository, never()).softDelete(any(), any(), any());
         verify(dependencyRepository, never()).softDeleteAllForService(any(), any());
         verify(graphViewRefreshScheduler, never()).markDirty();
@@ -83,7 +82,7 @@ class GraphNodeServiceTest {
 
         verify(graphNodeRepository).softDelete(tenantId, serviceId, deletedAt);
         verify(graphNodeRepository, never()).upsert(any());
-        verify(unresolvedSpanServiceRepository, never()).markRegistered(any(), any(), any());
+        verify(unresolvedSpanServiceService, never()).markRegistered(any(), any());
         verify(dependencyRepository).softDeleteAllForService(tenantId, serviceId);
         verify(graphViewRefreshScheduler).markDirty();
     }
@@ -121,8 +120,8 @@ class GraphNodeServiceTest {
         assertThat(upserted).isEqualTo(201);
         verify(registryClient, times(2)).listActiveServices(anyInt(), anyInt());
         verify(graphNodeRepository, times(201)).upsert(any());
-        verify(unresolvedSpanServiceRepository).markRegistered(eq(tenantId), eq("svc-last"), any());
-        verify(unresolvedSpanServiceRepository, times(201)).markRegistered(eq(tenantId), any(), any());
+        verify(unresolvedSpanServiceService).markRegistered(tenantId, "svc-last");
+        verify(unresolvedSpanServiceService, times(201)).markRegistered(eq(tenantId), any());
     }
 
     @Test

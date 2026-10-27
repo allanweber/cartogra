@@ -4,9 +4,6 @@ name: Perf
 # Gating: k6 thresholds (errors, p95) and JVM memory health (no OOM-kill/restart, live data under the ceiling).
 # CPU/memory samples are reported as a trend only — shared runners are too noisy to gate on them.
 on:
-  # TEMPORARY: lets the workflow run before it exists on main. Remove before merging.
-  push:
-    branches: [feat/3.6-unresolved-span-services]
   schedule:
     - cron: '0 3 * * *'
   workflow_dispatch:

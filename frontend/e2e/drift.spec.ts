@@ -73,32 +73,35 @@ test('triage drift from the graph: accept, remove declared and dismiss', async (
     await page.getByRole('radio', { name: 'Drift' }).click()
   }
 
+  const driftRow = () => page.getByRole('listitem').filter({ hasText: `${source} → ${target}` })
+
   await openDriftMode()
-  const row = page.getByRole('listitem').filter({ hasText: `${source} → ${target}` })
+  const row = driftRow()
   await expect(row).toBeVisible()
   await expect(row.getByText('Undeclared')).toBeVisible()
 
-  await row.getByRole('button', { name: 'Accept' }).click()
-  await page.getByRole('dialog').getByRole('button', { name: 'Accept' }).click()
+  await row.getByRole('button', { name: /^Accept/ }).click()
+  await page.getByRole('dialog').getByRole('button', { name: /^Accept/ }).click()
   await expect(page.getByRole('dialog')).not.toBeVisible()
   await expect(row).not.toBeVisible()
   expect(resolveBodies.at(-1)).toEqual({ id: '11111111-1111-1111-1111-111111111111', action: 'ACCEPT_OBSERVED' })
 
   drifts = [drift('22222222-2222-2222-2222-222222222222', 'MISSING')]
   await openDriftMode()
-  const missingRow = page.getByRole('listitem').filter({ hasText: 'Missing' })
-  await expect(missingRow).toBeVisible()
-  await missingRow.getByRole('button', { name: 'Remove declared' }).click()
-  await page.getByRole('dialog').getByRole('button', { name: 'Remove declared' }).click()
+  const missingRow = driftRow()
+  await expect(missingRow.getByText('Missing')).toBeVisible()
+  await missingRow.getByRole('button', { name: /^Remove declared/ }).click()
+  await page.getByRole('dialog').getByRole('button', { name: /^Remove declared/ }).click()
   await expect(page.getByRole('dialog')).not.toBeVisible()
   await expect(missingRow).not.toBeVisible()
   expect(resolveBodies.at(-1)).toEqual({ id: '22222222-2222-2222-2222-222222222222', action: 'REMOVE_DECLARED' })
 
   drifts = [drift('33333333-3333-3333-3333-333333333333', 'UNDECLARED')]
   await openDriftMode()
-  const dismissRow = page.getByRole('listitem').filter({ hasText: 'Undeclared' })
-  await dismissRow.getByRole('button', { name: 'Dismiss' }).click()
-  await page.getByRole('dialog').getByRole('button', { name: 'Dismiss' }).click()
+  const dismissRow = driftRow()
+  await expect(dismissRow.getByText('Undeclared')).toBeVisible()
+  await dismissRow.getByRole('button', { name: /^Dismiss/ }).click()
+  await page.getByRole('dialog').getByRole('button', { name: /^Dismiss/ }).click()
   await expect(page.getByRole('dialog')).not.toBeVisible()
   await expect(dismissRow).not.toBeVisible()
   expect(resolveBodies.at(-1)).toEqual({ id: '33333333-3333-3333-3333-333333333333', action: 'DISMISS' })

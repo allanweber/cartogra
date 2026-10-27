@@ -64,23 +64,6 @@ public class JdbcDependencyDriftRepository implements DependencyDriftRepository 
     }
 
     @Override
-    public Optional<DependencyDrift> findActiveByEdge(UUID tenantId, UUID sourceServiceId, UUID targetServiceId,
-            DriftType type) {
-        String sql = """
-                SELECT * FROM dependency_drifts
-                WHERE tenant_id = :tenantId AND source_service_id = :sourceServiceId
-                  AND target_service_id = :targetServiceId AND drift_type = :type
-                  AND resolved_at IS NULL
-                """;
-        var params = new MapSqlParameterSource()
-                .addValue("tenantId", tenantId)
-                .addValue("sourceServiceId", sourceServiceId)
-                .addValue("targetServiceId", targetServiceId)
-                .addValue("type", type.toDbValue());
-        return jdbc.query(sql, params, DRIFT_MAPPER).stream().findFirst();
-    }
-
-    @Override
     public DependencyDrift save(DependencyDrift drift) {
         String sql = """
                 INSERT INTO dependency_drifts (

@@ -50,8 +50,10 @@ export async function verify(api: CartograApi, seed: SeedData, options: VerifyOp
   const after = await waitForDeclared(api, seed, options, sleep)
   add('second load changes nothing', second.teamsCreated + second.tiersUpdated + second.ownersAssigned + second.edgesCreated === 0, JSON.stringify(second))
   add('state identical after second load', JSON.stringify(first) === JSON.stringify(after))
-  add(`${seed.teams.length} teams present`, seed.teams.every((t) => after.teams.includes(t)))
-  add('all declared edges present', after.declaredEdges.length === declaredCalls(seed).length, `${after.declaredEdges.length}/${declaredCalls(seed).length}`)
+  const presentTeams = new Set(after.teams.map((t) => t.toLowerCase()))
+  add(`${seed.teams.length} teams present`, seed.teams.every((t) => presentTeams.has(t.toLowerCase())))
+  const absentDeclared = missingDeclared(seed, after)
+  add('all declared edges present', absentDeclared.length === 0, absentDeclared.join(', '))
 
   const graph = await api.graph()
   const nodeId = new Map(graph.nodes.map((n) => [n.name, n.serviceId]))
@@ -121,11 +123,16 @@ export function godService(seed: SeedData): string {
   return [...counts].sort((a, b) => b[1].size - a[1].size)[0][0]
 }
 
+function missingDeclared(seed: SeedData, snap: Snapshot): string[] {
+  const present = new Set(snap.declaredEdges)
+  return declaredCalls(seed).map(callKey).filter((key) => !present.has(key))
+}
+
 async function waitForDeclared(api: CartograApi, seed: SeedData, options: VerifyOptions, sleep: (ms: number) => Promise<void>) {
   const deadline = Date.now() + (options.syncTimeoutMs ?? 60_000)
   for (;;) {
     const snap = await snapshot(api, seed)
-    if (snap.declaredEdges.length >= declaredCalls(seed).length || Date.now() >= deadline) return snap
+    if (missingDeclared(seed, snap).length === 0 || Date.now() >= deadline) return snap
     await sleep(options.pollMs ?? 3000)
   }
 }

@@ -12,6 +12,7 @@ interface ConfirmDialogProps {
   pendingLabel?: string
   isPending?: boolean
   error?: Error | null
+  tone?: 'default' | 'destructive'
   onConfirm: () => void
 }
 
@@ -24,6 +25,7 @@ export function ConfirmDialog({
   pendingLabel = 'Working…',
   isPending,
   error,
+  tone = 'destructive',
   onConfirm,
 }: ConfirmDialogProps) {
   return (
@@ -52,7 +54,7 @@ export function ConfirmDialog({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
             Cancel
           </Button>
-          <Button type="button" variant="destructive" onClick={onConfirm} disabled={isPending}>
+          <Button type="button" variant={tone} onClick={onConfirm} disabled={isPending}>
             {isPending ? pendingLabel : confirmLabel}
           </Button>
         </DialogFooter>
