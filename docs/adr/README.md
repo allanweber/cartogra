@@ -19,9 +19,9 @@ This directory captures significant architectural decisions made during the deve
 | [ADR-0014](ADR-0014-sync-command-idempotency.md) | Sync command idempotency: concurrent-execution guard | Accepted | 2026-05-20 |
 | [ADR-0015](ADR-0015-codeowners-persistence-shape.md) | CODEOWNERS persistence shape (auto-assign on `services.team_id`) | Proposed | 2026-05-20 |
 | [ADR-0016](ADR-0016-otel-span-worker-ingestion.md) | OtelSpanWorker ingestion path (Kafka topic from OTel Collector) | Superseded by 0029 | 2026-05-20 |
-| [ADR-0017](ADR-0017-audit-events-ownership-port.md) | Audit events: registry-owned table + `AuditEventPort` in shared:common | Proposed | 2026-05-20 |
+| [ADR-0017](ADR-0017-audit-events-ownership-port.md) | Audit events: registry-owned table + `AuditEventPort` in shared:common | Accepted (amended 2026-10-28) | 2026-05-20 |
 | [ADR-0018](ADR-0018-spec-discovery-transport.md) | Spec discovery transport (Kafka topic from ingestion) | Proposed | 2026-05-20 |
-| [ADR-0019](ADR-0019-guest-enforcement-mechanism.md) | Guest enforcement via special JWT role (no anonymous path) | Proposed | 2026-05-20 |
+| [ADR-0019](ADR-0019-guest-enforcement-mechanism.md) | Guest enforcement via special JWT role (no anonymous path) | Accepted (amended 2026-10-28) | 2026-05-20 |
 | [ADR-0020](ADR-0020-shared-web-module.md) | New `shared:web` Gradle module for cross-service web filters | Proposed | 2026-05-20 |
 | [ADR-0021](ADR-0021-service-discovery-upsert-keying.md) | Service Discovery Upsert Keying Strategy | Accepted | 2026-06-04 |
 | [0022](0022-team-owner-role-tenant-wide-enforcement.md) | TEAM_OWNER role enforced tenant-wide until team membership exists | Superseded by ADR-0025 | 2026-07-01 |
@@ -32,6 +32,7 @@ This directory captures significant architectural decisions made during the deve
 | [0027](0027-topology-consumes-ownership-events-for-orphan-risk.md) | Topology consumes a Registry ownership event to compute orphan risk | Superseded by 0028 | 2026-08-05 |
 | [0028](0028-topology-reads-team-id-directly-for-orphan-risk.md) | Topology reads `graph_nodes.team_id` directly for orphan risk, superseding ADR-0027 | Accepted | 2026-09-30 |
 | [0029](0029-observed-edges-from-otel-spans.md) | Observed edges from OTel spans: raw OTLP/JSON topic, tenant stamping, span-id join fallback, supersedes ADR-0016 | Accepted | 2026-10-07 |
+| [0030](0030-demo-on-single-node-k3s.md) | Public demo on single-node k3s; demo env exempt from HA rules (PDB/HPA/replicas) | Accepted | 2026-10-28 |
 
 ## Process
 

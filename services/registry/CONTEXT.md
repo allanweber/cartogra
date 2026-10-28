@@ -30,6 +30,8 @@ The Registry is Cartogra's source of truth for the service estate. It owns every
 | **Ownership Resolution** | Assigning a Team to a Service based on CODEOWNERS or K8s namespace labels |
 | **Team Member** | A tenant User attached to a Team via `team_members` (any tenant role — VIEWER/MEMBER/ADMIN — is eligible). All members of a Team are equal; there is no distinguished lead |
 | **Team management** | Mutating a Team's own state: rename, delete, add/remove members. Gated to ADMIN or an existing member of that Team; creating a new Team is ADMIN-only (a new Team has no members yet). Distinct from editing the Services a Team owns |
+| **Audit Event** | An immutable record that something changed in a Tenant: what (entity type + id), which action, who (the Actor), when, and the details. Covers changes from every context, not just the Service Catalog. Shown to users as the Timeline and as recent activity |
+| **Actor** | Who caused an Audit Event: a `user` (a human User) or `system` (discovery, sync, observed traffic, drift detection — no User behind it) |
 
 ---
 
@@ -205,7 +207,7 @@ Flyway history table: `flyway_schema_history_registry`
 
 - ADR-0009 — Spring Data JDBC (no JPA/Hibernate)
 - ADR-0015 — CODEOWNERS → auto-assign team_id when exactly one team matches; ambiguous/no-match → log WARN, skip
-- ADR-0017 — Audit events ownership port (`AuditEventPort` in `shared:common`, planned for Phase 4)
+- ADR-0017 — Audit events ownership port (`AuditEventPort` in `shared:common`; topic `cartogra.platform.audit.recorded`; Phase 4)
 - ADR-0021 — Service discovery upsert keyed on `(tenantId, externalId)`
 - ADR-0022 — `TEAM_OWNER` enforced tenant-wide (superseded by ADR-0025)
 - ADR-0025 — Live `team_members` check replaces the `TEAM_OWNER` role
