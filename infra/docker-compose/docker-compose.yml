@@ -84,6 +84,30 @@ services:
     networks:
       - cartogra-net
 
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.151.0
+    container_name: cartogra-otel-collector
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+    command: ["--config=/etc/otel-collector.yml"]
+    environment:
+      CARTOGRA_TENANT_ID: ${CARTOGRA_TENANT_ID:-unset}
+      KAFKA_BROKERS: kafka:29092
+    volumes:
+      - ./otel-collector.demo.yml:/etc/otel-collector.yml:ro
+    # No healthcheck: the image has no shell or wget; dependents wait on service_started.
+    # Loopback only: lets host tools (e2e, curl) post spans; never published beyond the host.
+    ports:
+      - "127.0.0.1:4318:4318"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - cartogra-net
+
   gateway:
     build:
       context: ../..
@@ -116,6 +140,7 @@ services:
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     depends_on:
       postgres:
         condition: service_healthy
@@ -123,6 +148,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      otel-collector:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health/live"]
       interval: 15s
@@ -152,11 +179,14 @@ services:
       SPRING_FLYWAY_TABLE: flyway_schema_history_registry
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     depends_on:
       postgres:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      otel-collector:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/api/v1/registry/actuator/health/live"]
       interval: 15s
@@ -186,11 +216,14 @@ services:
       SPRING_FLYWAY_TABLE: flyway_schema_history_topology
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     depends_on:
       postgres:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      otel-collector:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8082/api/v1/topology/actuator/health/live"]
       interval: 15s
@@ -220,11 +253,14 @@ services:
       SPRING_FLYWAY_TABLE: flyway_schema_history_ingestion
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     depends_on:
       postgres:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      otel-collector:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8085/api/v1/ingestion/actuator/health/live"]
       interval: 15s

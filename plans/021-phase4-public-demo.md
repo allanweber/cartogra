@@ -8,7 +8,7 @@ Order: app code first (testable on compose) → charts → deploy → ops → ga
 
 ## Checklist
 
-- [ ] 1. Collector in compose (#192)
+- [x] 1. Collector in compose (#192)
 - [ ] 2. Audit trail (#125)
 - [ ] 3. Dashboard on real data (#126)
 - [ ] 4. Guest mode + signup off (#128, signup part of #129)

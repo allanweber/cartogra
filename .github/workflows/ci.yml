@@ -334,6 +334,7 @@ jobs:
           E2E_BASE_URL: http://localhost:3016
           E2E_API_BASE_URL: http://localhost:8080
           E2E_DB_URL: postgresql://cartogra:cartogra@localhost:5436/cartogra
+          E2E_OBSERVED: 'true'
         run: pnpm run test:e2e
 
       # Runs even when e2e failed: an OOM-killed service is a likely cause and should be named.
