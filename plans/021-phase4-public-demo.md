@@ -2,7 +2,7 @@
 
 Gate #130. Source: `/grill-with-docs` session 2026-10-27/28. Roadmap `docs/roadmap.md` Phase 4 (now ≈6 weeks, 7.1 pulled in).
 
-**Branch: `docs/phase-4-plan` (all steps).** Run one step at a time when called; commit each step to this branch. Build green (`./gradlew build`, frontend tests) before the next step. Rebase on main between steps if main moves.
+**Branch: `docs/phase-4-plan` (all steps).** Run one step at a time when called; changes stay uncommitted until the user says to commit. Build green (`./gradlew build`, frontend tests) before the next step. Rebase on main between steps if main moves.
 
 Order: app code first (testable on compose) → charts → deploy → ops → gate.
 
@@ -19,7 +19,7 @@ Order: app code first (testable on compose) → charts → deploy → ops → ga
 
 ## 1. Collector in compose (#192)
 
-As written (compose + `E2E_OBSERVED=true` in CI). Plus a demo collector config without Tempo/Loki/Prometheus exporters, consumed by the Helm chart. Collector is never exposed via ingress.
+As written (compose collector; `demo-flow` observed-edge step always runs, `E2E_OBSERVED` gate removed). Plus a demo collector config without Tempo/Loki/Prometheus exporters, consumed by the Helm chart. Collector is never exposed via ingress.
 
 Done when: `pnpm acme verify` observed-edge check passes against compose.
 
