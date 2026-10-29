@@ -1,0 +1,60 @@
+# Collector for the deployable stack (docker-compose.yml, Helm demo values): observed-edges feed only.
+# Same span path as otel-collector.yml (ADR-0029) without the Tempo/Loki/Prometheus backends.
+# Metrics and logs are accepted and discarded so services exporting them don't get 404s.
+# NEVER expose 4317/4318 publicly: cartogra.tenant.id is unauthenticated until roadmap 5.9.
+extensions:
+  health_check: {}
+
+receivers:
+  otlp:
+    protocols:
+      grpc: { endpoint: 0.0.0.0:4317 }
+      http: { endpoint: 0.0.0.0:4318 }
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 192
+    spike_limit_mib: 48
+  resource:
+    attributes:
+      - { action: upsert, key: service.namespace, value: cartogra }
+  resource/tenant:
+    attributes:
+      - { action: insert, key: cartogra.tenant.id, value: "${env:CARTOGRA_TENANT_ID}" }
+  filter/no-self:
+    error_mode: ignore
+    traces:
+      span:
+        - 'resource.attributes["service.name"] == "topology"'
+        - 'resource.attributes["service.name"] == "gateway"'
+        - 'resource.attributes["service.name"] == "registry"'
+        - 'resource.attributes["service.name"] == "ingestion"'
+        - 'resource.attributes["cartogra.tenant.id"] == "unset"'
+
+exporters:
+  kafka/spans:
+    brokers: ["${env:KAFKA_BROKERS}"]
+    traces:
+      topic: cartogra.observability.spans
+      encoding: otlp_json
+  nop: {}
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces/spans:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, resource/tenant, filter/no-self, batch]
+      exporters: [kafka/spans]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter]
+      exporters: [nop]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter]
+      exporters: [nop]

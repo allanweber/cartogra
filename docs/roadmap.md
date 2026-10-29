@@ -237,28 +237,30 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 ---
 
-## ⬜ Phase 4 — A product a stranger can try (≈4 weeks)
+## ⬜ Phase 4 — A product a stranger can try (≈6 weeks)
 
-**Goal:** the first public artifact. Moved forward from the old plan's Phase 5 — nothing is validated until someone outside can click it.
+**Goal:** the first public artifact. Moved forward from the old plan's Phase 5 — nothing is validated until someone outside can click it. Grown from ≈4 weeks: it now runs on k3s with 7.1's Helm charts pulled in (ADR-0030). Plan: `plans/021-phase4-public-demo.md`.
 
-- [ ] **4.1 — Audit trail.** `audit_events` migration in registry (`entity_type`, `entity_id`, `action`, `actor_id`, `payload` JSONB, RLS, GIN); `AuditEventPort` in `shared:common`; registry writes directly, topology publishes `cartogra.platform.audit.recorded` for registry to consume. Admin `GET /v1/audit-events` filterable + paginated. `timeline.tsx` drops `MOCK_TIMELINE`.
-  *Acme test:* 🔎 loader owner/tier/edge writes produce audit events; assert once 4.1 lands.
+- [ ] **4.1 — Audit trail.** `audit_events` migration in registry (`entity_type`, `entity_id`, `action`, `actor_kind` user|system, `actor_id`, `payload` JSONB of changed fields before → after, RLS, GIN); `AuditEventPort` in `shared:common`; registry writes directly; topology, ingestion and gateway publish `cartogra.platform.audit.recorded` for registry to consume (ADR-0017, accepted). State changes only — no logins or per-span bumps. `GET /v1/audit-events` paginated + filterable, readable by every role incl. guest. `timeline.tsx` drops `MOCK_TIMELINE`.
+  *Acme test:* 🔎 loader owner/tier/edge writes produce audit events; `demo-flow` e2e asserts they reach the Timeline.
 - [ ] **4.2 — Dashboard on real data.** Health summary from registry, top risks from 2.5, recent activity from 4.1. `dashboard.tsx` drops all `MOCK_*`. Vitest covers loading/error/empty.
   *Acme test:* 🔎 manual: dashboard shows Acme risks and activity.
-- [ ] **4.3 — Guest read-only mode.** Gateway issues a short-lived `roles=["guest"]` token bound to the demo tenant; no anonymous path. Audit every mutating endpoint in registry + topology for `@PreAuthorize`; IT proves guest reads succeed and every write is 403. ADR-0030.
+- [ ] **4.3 — Guest read-only mode.** `/demo` mints a 60-min `roles=["GUEST"]` token bound to the demo tenant (UUID `sub`, silent re-mint, no anonymous path). Gateway rejects every non-GET guest request (primary guard); `@PreAuthorize` sweep across registry + topology + ingestion (topology writes guarded, `TEAM_OWNER` → ADR-0025 membership). Per-IP mint limit, per-guest API bucket. Read-only banner, write controls disabled. IT enumerates every write route → 403; `guest-demo.spec` e2e. ADR-0019 (accepted, amended).
   *Acme test:* 🔎 Acme is the demo tenant; the guest-403 matrix is an IT, not seed work.
-- [ ] **4.4 — Collector in the deployable compose.** Add `otel-collector` (same `otel-collector.yml`) to `docker-compose.yml`, wire every service's `OTEL_EXPORTER_OTLP_ENDPOINT` to it, and add a `kafka` dependency, so observed edges work in the public environment. Also set `E2E_OBSERVED=true` in the CI e2e job so the `demo-flow` observed-edge step (currently skipped in CI) runs there.
+- [x] **4.4 — Collector in the deployable compose.** Add `otel-collector` (same `otel-collector.yml`) to `docker-compose.yml`, wire every service's `OTEL_EXPORTER_OTLP_ENDPOINT` to it, and add a `kafka` dependency, so observed edges work in the public environment. The `demo-flow` observed-edge step runs unconditionally (CI included). Plus a demo collector config without Tempo/Loki for the Helm chart.
   *Acme test:* ✅ run `pnpm acme verify` against the compose stack with the collector (observed-edge check).
-- [ ] **4.5 — One public environment.** Cheapest thing that holds the demo: the existing `docker-compose.yml` on a single host behind TLS on `cartogra.dev`, documented in `docs/runbooks/deployment.md`. Depends on 4.4. Kubernetes waits for Phase 7 — do not build a cluster to host a demo.
+- [ ] **7.1 — Helm charts (pulled forward from Phase 7).** Per-service charts + umbrella with infra.md probes, resources and security contexts; single-replica Postgres/Kafka/Valkey StatefulSets; `values-demo.yaml` with 1 replica, no PDB/HPA and 8GB sizing (ADR-0030); multi-arch images (amd64 + arm64); secrets via Sealed Secrets.
+- [ ] **4.5 — One public environment.** Single-node k3s on a Hetzner ARM VM (CAX21, 8GB; multi-arch images, memory-sized `values-demo.yaml`), Traefik + cert-manager TLS on `cartogra.dev` (ADR-0030). CI pushes SHA-tagged images to GHCR; manual `helm upgrade` workflow. Acme runs live in-cluster; a bootstrap Job creates the demo tenant, registers the cluster read-only, connects a public GitHub mirror of the Acme repos, and runs `acme load`. Self-registration off (`app.signup.enabled=false`). Nightly `pg_dump`, external uptime check. `docs/runbooks/deployment.md` rewritten. Depends on 4.4 and 7.1.
 
 **Demo:** send someone a link. They browse Acme Fintech, run a blast radius, and cannot change anything.
 
 **Gate**
 
-- [ ] A public URL serves the Acme tenant over TLS, and the runbook rebuilds that host from scratch.
+- [ ] A public URL serves the Acme tenant over TLS, and the runbook rebuilds that host from scratch (VM → k3s → helm → bootstrap Job).
+- [ ] `/demo` gets a stranger in with no credentials; the public host has no self-registration path.
 - [ ] Guest token reads succeed and every mutating endpoint returns 403 — the IT enumerates the routes rather than sampling them.
 - [ ] Dashboard and Timeline mocks deleted; `mock-data.ts` retains only fixtures for unshipped screens.
-- [ ] Audit events are written by both registry and topology mutations; the admin list is paginated.
+- [ ] Audit events are written by registry, topology, ingestion and gateway mutations; the list is paginated and readable by guests.
 
 *Standing checks (§2 — Definition of done):*
 
@@ -377,9 +379,9 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 ## ⬜ Phase 7 — Production hardening (≈5 weeks)
 
-Triggered by real users, not by a calendar. Before this, Phase 4's single host is enough.
+Triggered by real users, not by a calendar. Before this, Phase 4's single-node k3s host is enough.
 
-- [ ] **7.1** Helm charts per service + umbrella, with the probes, resources, and security contexts already mandated in `.claude/rules/infra.md`.
+- [ ] ~~**7.1** Helm charts per service + umbrella~~ — moved into Phase 4 (ADR-0030); Phase 7 adds staging values and HA settings.
 - [ ] **7.2** Terraform modules + one staging environment + remote state (S3 + DynamoDB lock + encryption + versioning).
 - [ ] **7.3** Staging deploy pipeline + `:smoke:test` (readiness on every service, one authenticated call each, envelope conformance) gating the deploy.
 - [ ] **7.4** NetworkPolicy restricting services to gateway-namespace ingress + short-lived `X-Gateway-Token` validated by a shared filter in `shared:common`; IT proves direct access is rejected.

@@ -335,14 +335,14 @@ Webhook responses are **not** wrapped in the standard response envelope.
 
 ## 11. Observed edges / OTel intake
 
-Observed dependency edges ([ADR-0029](../adr/0029-observed-edges-from-otel-spans.md)) need an OTel collector that exports spans to Kafka. **No deployable environment has that yet.** Local procedure: [`local-development.md` → Testing observed edges](local-development.md#testing-observed-edges-otel-spans).
+Observed dependency edges ([ADR-0029](../adr/0029-observed-edges-from-otel-spans.md)) need an OTel collector that exports spans to Kafka. The deployable compose has one; Kubernetes gets it with the Helm charts (roadmap 7.1). Local procedure: [`local-development.md` → Testing observed edges](local-development.md#testing-observed-edges-otel-spans).
 
 ### Current state per environment
 
 | Environment | Collector | Spans → Kafka | Observed edges |
 |-------------|-----------|---------------|----------------|
 | Local (`docker-compose.dev.yml`) | yes, single tenant via `CARTOGRA_TENANT_ID` | yes | works |
-| `docker-compose.yml` (deployable) | none (roadmap 4.4) | no | no edges; Observed graph shows the empty-state alert |
+| `docker-compose.yml` (deployable) | yes, `otel-collector.demo.yml` (spans only, no Tempo/Loki/Prometheus), OTLP/HTTP on `127.0.0.1:4318` | yes | works, single tenant via `CARTOGRA_TENANT_ID` |
 | Kubernetes (`infra/k8s/infra/otel-collector`) | yes, 2 replicas, config in `configmap.yml` | **no** — pipelines go only to Tempo/Prometheus/Loki | no edges |
 
 Topology is safe to deploy anyway: the `OtelSpanWorker` simply idles when `cartogra.observability.spans` receives nothing.
@@ -397,5 +397,4 @@ and set `CARTOGRA_TENANT_ID` (a non-secret UUID) on the collector Deployment. Ke
 
 | Roadmap | Change |
 |---------|--------|
-| 4.4 | `otel-collector` added to the deployable `docker-compose.yml`; every service's `OTEL_EXPORTER_OTLP_ENDPOINT` wired to it; `kafka` dependency. |
 | 5.9 | Authenticated gateway intake `POST /v1/otlp/traces` (`X-Cartogra-Api-Key`, scope `spans:write`); the gateway overwrites `cartogra.tenant.id` from the key and the collector stops accepting external traffic. `CARTOGRA_TENANT_ID` is dropped. Settings → Connections → OpenTelemetry card for keys, endpoint and status. |

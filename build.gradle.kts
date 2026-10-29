@@ -86,6 +86,7 @@ subprojects {
             dependency("org.springframework:spring-expression:7.0.8") // CVE-2026-41850
             dependency("org.springframework:spring-webmvc:7.0.9") // CVE-2026-47884, CVE-2026-47890 (supersedes the 7.0.8 override for CVE-2026-41842, CVE-2026-41845)
             dependency("at.yawk.lz4:lz4-java:1.11.4") // CVE-2026-106451
+            dependency("org.xerial.snappy:snappy-java:1.1.10.9") // CVE-2026-108106, CVE-2026-93451
             dependency("io.netty:netty-codec-dns:4.2.17.Final") // CVE-2026-75595 (supersedes the 4.2.15.Final override for CVE-2026-42579 etc.)
             dependency("io.netty:netty-handler:4.2.17.Final") // CVE-2026-75595
             dependency("io.netty:netty-resolver-dns:4.2.17.Final") // CVE-2026-75595

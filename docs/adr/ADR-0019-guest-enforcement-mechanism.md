@@ -1,6 +1,6 @@
 # ADR-0019 — Guest enforcement mechanism
 
-**Status**: Proposed
+**Status**: Accepted 2026-10-28 (amended for Phase 4 roadmap 4.3 — see Amendment)
 **Date**: 2026-05-20
 **Deciders**: Allan Weber
 
@@ -45,6 +45,18 @@ The 5.4 acceptance criteria therefore become:
 - A guest token can read Acme tenant data — proven by a happy-path Playwright test (task 5.20).
 
 ---
+
+### Amendment — 2026-10-28 (Phase 4, roadmap 4.3)
+
+Delivered in Phase 4, not Phase 5. Changes to the shape above:
+
+1. **Gateway deny is the primary guard.** A GUEST token on any method other than GET/HEAD/OPTIONS gets 403 at the gateway, before proxying; allowlist `POST /api/auth/guest` and `/api/auth/logout`. Relying only on per-endpoint `@PreAuthorize` means one missed annotation is a public write; the method gate is fail-closed for endpoints that don't exist yet.
+2. **`@PreAuthorize` sweep stays**, as the fix for VIEWER (topology had no guards on its writes) and as defence in depth. `TEAM_OWNER` guards are replaced with ADMIN-or-member per ADR-0025.
+3. **`sub` is a plain random UUID**, not `guest-<uuid>`: downstream parses `X-User-Id` as a UUID. Guest-ness comes from `roles=["GUEST"]`.
+4. **Token**: 60 min, httpOnly cookie, no refresh token; the frontend re-mints silently on 401 in a guest session. Demo tenant from `app.guest.tenant-id`; minting is off when unset.
+5. **Rate limits**: per IP on `/api/auth/guest`; guest API calls bucketed per guest `sub`, so one noisy visitor doesn't exhaust the shared demo-tenant bucket.
+6. **Entry**: `/demo` mints and lands on the dashboard; write controls render disabled with a "Read-only demo" banner.
+7. Sandbox isolation for authenticated demo users is dropped: self-registration is switched off on the public host (`app.signup.enabled=false`).
 
 ## Consequences
 
