@@ -33,6 +33,7 @@ This directory captures significant architectural decisions made during the deve
 | [0028](0028-topology-reads-team-id-directly-for-orphan-risk.md) | Topology reads `graph_nodes.team_id` directly for orphan risk, superseding ADR-0027 | Accepted | 2026-09-30 |
 | [0029](0029-observed-edges-from-otel-spans.md) | Observed edges from OTel spans: raw OTLP/JSON topic, tenant stamping, span-id join fallback, supersedes ADR-0016 | Accepted | 2026-10-07 |
 | [0030](0030-demo-on-single-node-k3s.md) | Public demo on single-node k3s; demo env exempt from HA rules (PDB/HPA/replicas) | Accepted | 2026-10-28 |
+| [0031](0031-apache-2-core-hosted-first-monetization.md) | Keep Apache-2.0 core; monetize hosted-first with thin proprietary `ee/`; DCO not CLA | Accepted | 2026-11-02 |
 
 ## Process
 
