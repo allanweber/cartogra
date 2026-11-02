@@ -64,7 +64,8 @@ class RegisterUserUseCaseTest {
     void setUp() {
         JwtConfig config = new JwtConfig("secret", 900L, 2592000L, false);
         auth = new AuthService(userRepository, tenantRepository, refreshTokenRepository,
-            teamMembershipRepository, invitationRepository, emailSender, passwordEncoder, jwtTokenProvider, config, billingPlanService);
+            teamMembershipRepository, invitationRepository, emailSender, passwordEncoder, jwtTokenProvider, config, billingPlanService,
+            _ -> { });
         when(tenantRepository.save(any(Tenant.class)))
             .thenReturn(new Tenant(fixedTenantId, fixedTenantId, "name", "slug", "free", null, null, null));
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));

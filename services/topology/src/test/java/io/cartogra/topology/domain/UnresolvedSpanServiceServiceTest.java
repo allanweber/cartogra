@@ -1,5 +1,6 @@
 package io.cartogra.topology.domain;
 
+import io.cartogra.common.identity.Actor;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.topology.config.SpanLinkProperties;
 import io.cartogra.topology.domain.exception.UnresolvedSpanServiceAlreadyResolvedException;
@@ -92,7 +93,7 @@ class UnresolvedSpanServiceServiceTest {
     void dismissUnknownIdThrowsNotFound() {
         when(repository.findById(tenant, id)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.dismiss(tenant, null, id))
+        assertThatThrownBy(() -> service.dismiss(tenant, Actor.ANONYMOUS, id))
                 .isInstanceOf(UnresolvedSpanServiceNotFoundException.class);
     }
 
@@ -101,7 +102,7 @@ class UnresolvedSpanServiceServiceTest {
         when(repository.findById(tenant, id))
                 .thenReturn(Optional.of(row(Instant.now(), UnresolvedResolution.REGISTERED)));
 
-        assertThatThrownBy(() -> service.dismiss(tenant, null, id))
+        assertThatThrownBy(() -> service.dismiss(tenant, Actor.ANONYMOUS, id))
                 .isInstanceOf(UnresolvedSpanServiceAlreadyResolvedException.class);
         verify(repository, never()).dismiss(any(), any(), any(), any());
     }
@@ -111,7 +112,7 @@ class UnresolvedSpanServiceServiceTest {
         when(repository.findById(tenant, id)).thenReturn(Optional.of(row(null, null)));
         when(repository.dismiss(eq(tenant), eq(id), any(), any())).thenReturn(false);
 
-        assertThatThrownBy(() -> service.dismiss(tenant, null, id))
+        assertThatThrownBy(() -> service.dismiss(tenant, Actor.ANONYMOUS, id))
                 .isInstanceOf(UnresolvedSpanServiceAlreadyResolvedException.class);
     }
 
@@ -122,6 +123,6 @@ class UnresolvedSpanServiceServiceTest {
         when(repository.findById(tenant, id)).thenReturn(Optional.of(row(null, null)), Optional.of(dismissed));
         when(repository.dismiss(eq(tenant), eq(id), eq(user), any())).thenReturn(true);
 
-        assertThat(service.dismiss(tenant, user, id)).isEqualTo(dismissed);
+        assertThat(service.dismiss(tenant, Actor.user(user), id)).isEqualTo(dismissed);
     }
 }

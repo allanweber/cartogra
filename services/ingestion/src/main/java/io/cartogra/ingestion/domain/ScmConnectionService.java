@@ -1,5 +1,6 @@
 package io.cartogra.ingestion.domain;
 
+import io.cartogra.common.identity.Actor;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.ingestion.api.dto.ScmConnectionRequest;
 import io.cartogra.ingestion.domain.exception.PlanLimitExceededException;
@@ -40,19 +41,21 @@ public class ScmConnectionService {
     private final RegistryPlanLimitClient planLimitClient;
     private final CredentialEncryptor credentialEncryptor;
     private final ScmApiBaseUrlValidator scmApiBaseUrlValidator;
+    private final IngestionAuditRecorder auditRecorder;
 
     public ScmConnectionService(ScmConnectionRepository repository, SyncCommandProducer syncCommandProducer,
                                 RegistryPlanLimitClient planLimitClient, CredentialEncryptor credentialEncryptor,
-                                ScmApiBaseUrlValidator scmApiBaseUrlValidator) {
+                                ScmApiBaseUrlValidator scmApiBaseUrlValidator, IngestionAuditRecorder auditRecorder) {
         this.repository = repository;
         this.syncCommandProducer = syncCommandProducer;
         this.planLimitClient = planLimitClient;
         this.credentialEncryptor = credentialEncryptor;
         this.scmApiBaseUrlValidator = scmApiBaseUrlValidator;
+        this.auditRecorder = auditRecorder;
     }
 
     @Transactional
-    public ScmConnection create(UUID tenantId, ScmConnectionRequest req) {
+    public ScmConnection create(UUID tenantId, Actor actor, ScmConnectionRequest req) {
         if (req.provider() == null || req.provider().isBlank()) {
             throw new IllegalArgumentException("provider is required");
         }
@@ -88,12 +91,13 @@ public class ScmConnectionService {
                 webhook,
                 now, now, null
         ));
+        auditRecorder.scmConnectionCreated(actor, connection);
         syncCommandProducer.publish(connection);
         return connection;
     }
 
     @Transactional
-    public ScmConnection update(UUID tenantId, UUID id, ScmConnectionRequest req) {
+    public ScmConnection update(UUID tenantId, Actor actor, UUID id, ScmConnectionRequest req) {
         ScmConnection existing = get(tenantId, id);
 
         boolean scheduler = req.syncScheduler() != null ? req.syncScheduler() : existing.syncScheduler();
@@ -150,6 +154,7 @@ public class ScmConnectionService {
                 Instant.now(),
                 null
         ));
+        auditRecorder.scmConnectionUpdated(actor, existing, updated);
 
         // Config changes (e.g. a rotated token) fix the reason a sync was failing —
         // don't make the user wait for the next scheduled tick to find out.
@@ -245,8 +250,10 @@ public class ScmConnectionService {
     }
 
     @Transactional
-    public void delete(UUID tenantId, UUID id) {
+    public void delete(UUID tenantId, Actor actor, UUID id) {
+        var existing = repository.findById(tenantId, id);
         repository.softDelete(tenantId, id);
+        existing.ifPresent(c -> auditRecorder.scmConnectionDeleted(actor, c));
     }
 
     /** Publish a sync command for an existing connection (on-demand trigger). */

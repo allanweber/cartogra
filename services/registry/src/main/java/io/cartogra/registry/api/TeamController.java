@@ -1,5 +1,6 @@
 package io.cartogra.registry.api;
 
+import io.cartogra.common.identity.Actor;
 import io.cartogra.common.api.ApiResponse;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.registry.api.dto.AddTeamMemberRequest;
@@ -10,6 +11,7 @@ import io.cartogra.registry.api.dto.UpdateTeamRequest;
 import io.cartogra.registry.domain.TeamService;
 import io.cartogra.web.api.TracedResponse;
 import jakarta.validation.Valid;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,9 +32,9 @@ public class TeamController {
     @PostMapping
     public ResponseEntity<ApiResponse<TeamResponse>> create(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
-            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
+            @AuthenticationPrincipal Actor actor,
             @Valid @RequestBody CreateTeamRequest req) {
-        var result = TeamResponse.from(service.create(tenantId, req.name(), userId));
+        var result = TeamResponse.from(service.create(tenantId, actor, req.name()));
         return TracedResponse.created(result);
     }
 
@@ -50,8 +52,8 @@ public class TeamController {
     @GetMapping("/mine")
     public ResponseEntity<ApiResponse<Set<UUID>>> mine(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
-            @RequestHeader(value = "X-User-Id", required = false) UUID userId) {
-        var result = service.myTeamIds(tenantId, userId);
+            @AuthenticationPrincipal Actor actor) {
+        var result = service.myTeamIds(tenantId, actor);
         return TracedResponse.ok(result);
     }
 
@@ -66,19 +68,19 @@ public class TeamController {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<TeamResponse>> update(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
-            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
+            @AuthenticationPrincipal Actor actor,
             @PathVariable UUID id,
             @Valid @RequestBody UpdateTeamRequest req) {
-        var result = TeamResponse.from(service.update(tenantId, id, req.name(), userId));
+        var result = TeamResponse.from(service.update(tenantId, actor, id, req.name()));
         return TracedResponse.ok(result);
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
-            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
+            @AuthenticationPrincipal Actor actor,
             @PathVariable UUID id) {
-        service.delete(tenantId, id, userId);
+        service.delete(tenantId, actor, id);
         return TracedResponse.noContent();
     }
 
@@ -93,20 +95,20 @@ public class TeamController {
     @PostMapping("/{id}/members")
     public ResponseEntity<ApiResponse<TeamMemberResponse>> addMember(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
-            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
+            @AuthenticationPrincipal Actor actor,
             @PathVariable UUID id,
             @Valid @RequestBody AddTeamMemberRequest req) {
-        var result = TeamMemberResponse.from(service.addMember(tenantId, id, req.userId(), userId));
+        var result = TeamMemberResponse.from(service.addMember(tenantId, actor, id, req.userId()));
         return TracedResponse.created(result);
     }
 
     @DeleteMapping("/{id}/members/{memberUserId}")
     public ResponseEntity<Void> removeMember(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
-            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
+            @AuthenticationPrincipal Actor actor,
             @PathVariable UUID id,
             @PathVariable UUID memberUserId) {
-        service.removeMember(tenantId, id, memberUserId, userId);
+        service.removeMember(tenantId, actor, id, memberUserId);
         return TracedResponse.noContent();
     }
 }

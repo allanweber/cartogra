@@ -1,5 +1,6 @@
 package io.cartogra.ingestion.api;
 
+import io.cartogra.common.identity.Actor;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.ingestion.domain.ScmConnection;
 import io.cartogra.ingestion.domain.ScmConnectionService;
@@ -18,6 +19,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import static io.cartogra.web.filter.InternalAuthMockMvc.withInternalAuth;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -44,8 +46,8 @@ class ScmConnectionControllerTest {
     void setUp() {
         var validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
-        mockMvc = MockMvcBuilders
-                .standaloneSetup(new ScmConnectionController(scmConnectionService))
+        mockMvc = withInternalAuth(MockMvcBuilders
+                .standaloneSetup(new ScmConnectionController(scmConnectionService)))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setValidator(validator)
                 .build();
@@ -53,7 +55,7 @@ class ScmConnectionControllerTest {
 
     @Test
     void createReturns201WithEnvelopeAndTraceHeader() throws Exception {
-        when(scmConnectionService.create(eq(TENANT), any())).thenReturn(connection());
+        when(scmConnectionService.create(eq(TENANT), any(), any())).thenReturn(connection());
 
         mockMvc.perform(post("/scm-connections")
                         .header("X-Tenant-Id", TENANT)
@@ -102,7 +104,7 @@ class ScmConnectionControllerTest {
         ScmConnection conn = new ScmConnection(UUID.randomUUID(), TENANT, "github",
                 "{\"org\":\"acme\",\"token\":\"secret\",\"pat\":\"also-secret\"}",
                 true, 60, null, null, null, null, false, Instant.now(), Instant.now(), null);
-        when(scmConnectionService.create(eq(TENANT), any())).thenReturn(conn);
+        when(scmConnectionService.create(eq(TENANT), any(), any())).thenReturn(conn);
 
         mockMvc.perform(post("/scm-connections")
                         .header("X-Tenant-Id", TENANT)
@@ -168,7 +170,7 @@ class ScmConnectionControllerTest {
     @Test
     void updateReturns200WithUpdatedConnection() throws Exception {
         UUID id = UUID.randomUUID();
-        when(scmConnectionService.update(eq(TENANT), eq(id), any())).thenReturn(connection());
+        when(scmConnectionService.update(eq(TENANT), any(), eq(id), any())).thenReturn(connection());
 
         mockMvc.perform(put("/scm-connections/{id}", id)
                         .header("X-Tenant-Id", TENANT)
@@ -183,7 +185,7 @@ class ScmConnectionControllerTest {
     @Test
     void updateNotFoundReturns404() throws Exception {
         UUID id = UUID.randomUUID();
-        when(scmConnectionService.update(eq(TENANT), eq(id), any()))
+        when(scmConnectionService.update(eq(TENANT), any(), eq(id), any()))
                 .thenThrow(new ScmConnectionNotFoundException(id));
 
         mockMvc.perform(put("/scm-connections/{id}", id)
@@ -217,14 +219,14 @@ class ScmConnectionControllerTest {
                 .andExpect(status().isNoContent())
                 .andExpect(header().exists("X-Trace-Id"));
 
-        verify(scmConnectionService).delete(TENANT, id);
+        verify(scmConnectionService).delete(TENANT, Actor.ANONYMOUS, id);
     }
 
     @Test
     void deleteNotFoundReturns404() throws Exception {
         UUID id = UUID.randomUUID();
         org.mockito.Mockito.doThrow(new ScmConnectionNotFoundException(id))
-                .when(scmConnectionService).delete(TENANT, id);
+                .when(scmConnectionService).delete(TENANT, Actor.ANONYMOUS, id);
 
         mockMvc.perform(delete("/scm-connections/{id}", id)
                         .header("X-Tenant-Id", TENANT))

@@ -1,5 +1,6 @@
 package io.cartogra.ingestion.infrastructure.jdbc;
 
+import io.cartogra.common.identity.Actor;
 import io.cartogra.ingestion.api.dto.ScmConnectionRequest;
 import io.cartogra.ingestion.domain.ScmConnection;
 import io.cartogra.ingestion.domain.ScmConnectionService;
@@ -87,7 +88,7 @@ class ScmConnectionRepositoryIT {
                         .formatted(plaintextToken, plaintextWebhookSecret),
                 null, null, true);
 
-        ScmConnection saved = service.create(tenantId, req);
+        ScmConnection saved = service.create(tenantId, Actor.ANONYMOUS, req);
 
         String rawConfig = jdbc.queryForObject(
                 "SELECT config::text FROM scm_connections WHERE id = :id",
@@ -104,11 +105,11 @@ class ScmConnectionRepositoryIT {
         UUID tenantId = UUID.randomUUID();
         lenient().when(planLimitClient.fetchLimits(tenantId)).thenReturn(Optional.empty());
 
-        ScmConnection created = service.create(tenantId, new ScmConnectionRequest(
+        ScmConnection created = service.create(tenantId, Actor.ANONYMOUS, new ScmConnectionRequest(
                 "github", "{\"org\":\"acme\",\"token\":\"ghp_original\"}", null, null, null));
 
         String rotatedToken = "ghp_rotated-value-67890";
-        service.update(tenantId, created.id(), new ScmConnectionRequest(
+        service.update(tenantId, Actor.ANONYMOUS, created.id(), new ScmConnectionRequest(
                 null, "{\"org\":\"acme\",\"token\":\"%s\"}".formatted(rotatedToken), null, null, null));
 
         String rawConfig = jdbc.queryForObject(

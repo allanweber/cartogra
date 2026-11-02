@@ -1,5 +1,6 @@
 package io.cartogra.topology.api;
 
+import io.cartogra.common.identity.Actor;
 import io.cartogra.common.api.ApiResponse;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.topology.api.dto.DriftResponse;
@@ -7,6 +8,7 @@ import io.cartogra.topology.api.dto.ResolveDriftRequest;
 import io.cartogra.topology.domain.DriftService;
 import io.cartogra.web.api.TracedResponse;
 import jakarta.validation.Valid;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -40,9 +42,9 @@ public class DriftController {
     @PostMapping("/{id}/resolve")
     public ResponseEntity<ApiResponse<DriftResponse>> resolve(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
-            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
+            @AuthenticationPrincipal Actor actor,
             @PathVariable UUID id,
             @Valid @RequestBody ResolveDriftRequest request) {
-        return TracedResponse.ok(DriftResponse.from(driftService.resolve(tenantId, userId, id, request.action())));
+        return TracedResponse.ok(DriftResponse.from(driftService.resolve(tenantId, actor, id, request.action())));
     }
 }

@@ -9,7 +9,7 @@ Order: app code first (testable on compose) → charts → deploy → ops → ga
 ## Checklist
 
 - [x] 1. Collector in compose (#192)
-- [ ] 2. Audit trail (#125)
+- [x] 2. Audit trail (#125)
 - [ ] 3. Dashboard on real data (#126)
 - [ ] 4. Guest mode + signup off (#128, signup part of #129)
 - [ ] 5. Helm charts (#148)
@@ -28,15 +28,14 @@ Done when: `pnpm acme verify` observed-edge check passes against compose.
 ADR-0017 → Accepted, topic `cartogra.platform.audit.recorded`.
 
 - Registry owns `audit_events`: `tenant_id`, `entity_type`, `entity_id`, `action`, `actor_kind` (`user` | `system`), `actor_id` (null for `system`), `payload` JSONB, `occurred_at`, `event_id` (unique, consumer idempotency). RLS, GIN on `payload`, index `(tenant_id, occurred_at DESC)`. Kept forever (no purge; Phase 8 GDPR anonymises).
-- `AuditEventPort` + `AuditEvent` record in `shared:common`. Registry: Jdbc adapter, same transaction as the mutation. Topology, ingestion, gateway: Kafka adapter → `cartogra.platform.audit.recorded`; registry consumes idempotently on `event_id`.
-- Gateway gains a Kafka producer (it has none today); publish off the request path.
+- `AuditEventPort` + `AuditEvent` record in `shared:common`; adapters in `shared:web`. Registry **and gateway** (same `registry` schema): Jdbc adapter, same transaction as the mutation — gateway needs no Kafka producer (decided 2026-10-29). Topology, ingestion: Kafka adapter → `cartogra.platform.audit.recorded`, sent after commit off the request thread; registry consumes idempotently on `event_id`.
 - Payload = changed fields `{changes: {field: {from, to}}}` for updates, key fields for create/delete. Per-entity field allowlist — tokens, kubeconfigs, password hashes never enter.
 - Emit on **state changes only**:
   - registry: service create/update/delete, discovery merge, team CRUD + membership, ownership, tier.
   - topology: declared edge CRUD, observed edge first seen, drift detected/resolved. NOT per span / `last_seen` bumps.
   - ingestion: SCM connection + cluster CRUD, sync completed/failed.
   - gateway: user invited / role changed / disabled / enabled, OIDC config. NOT logins, refreshes, guest mints.
-- `GET /v1/audit-events`: tenant-scoped, paginated (`PageResult`), filters `entityType`, `entityId`, `actorKind`, `from`/`to`. Readable by **every role incl. GUEST** (not admin-only).
+- `GET /api/v1/registry/audit-events`: tenant-scoped, paginated (`PageResult`), filters `entityType`, `entityId`, `actorKind`, `from`/`to`. Readable by **every role incl. GUEST** (not admin-only).
 - `timeline.tsx` drops `MOCK_TIMELINE`.
 - Tests: Jdbc adapter IT; consumer idempotency IT (same `event_id` twice → one row); per-service IT asserting one representative mutation emits; payload allowlist unit test (secret field never present).
 

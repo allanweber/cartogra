@@ -1,5 +1,6 @@
 package io.cartogra.ingestion.domain;
 
+import io.cartogra.common.identity.Actor;
 import io.cartogra.ingestion.api.dto.ScmConnectionRequest;
 import io.cartogra.ingestion.infrastructure.k8s.CredentialEncryptor;
 import io.cartogra.ingestion.infrastructure.kafka.SyncCommandProducer;
@@ -61,7 +62,7 @@ class ScmConnectionServiceTest {
                     return s.startsWith("enc:") ? s.substring("enc:".length()) : s;
                 });
         service = new ScmConnectionService(repository, syncCommandProducer, planLimitClient, credentialEncryptor,
-                scmApiBaseUrlValidator);
+                scmApiBaseUrlValidator, new IngestionAuditRecorder(_ -> { }, new tools.jackson.databind.ObjectMapper()));
     }
 
     @SuppressWarnings("unchecked")
@@ -89,7 +90,7 @@ class ScmConnectionServiceTest {
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         ScmConnectionRequest req = new ScmConnectionRequest(null, "{\"org\":\"acme-renamed\"}", null, null, null);
-        service.update(TENANT, CONN_ID, req);
+        service.update(TENANT, Actor.ANONYMOUS, CONN_ID, req);
 
         ArgumentCaptor<ScmConnection> captor = ArgumentCaptor.forClass(ScmConnection.class);
         verify(repository).save(captor.capture());
@@ -104,7 +105,7 @@ class ScmConnectionServiceTest {
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         ScmConnectionRequest req = new ScmConnectionRequest(null, "{\"org\":\"acme\",\"token\":\"ghp_new\"}", null, null, null);
-        service.update(TENANT, CONN_ID, req);
+        service.update(TENANT, Actor.ANONYMOUS, CONN_ID, req);
 
         ArgumentCaptor<ScmConnection> captor = ArgumentCaptor.forClass(ScmConnection.class);
         verify(repository).save(captor.capture());
@@ -120,7 +121,7 @@ class ScmConnectionServiceTest {
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         ScmConnectionRequest req = new ScmConnectionRequest(null, "{\"org\":\"acme\",\"token\":\"ghp_new\"}", null, null, null);
-        ScmConnection result = service.update(TENANT, CONN_ID, req);
+        ScmConnection result = service.update(TENANT, Actor.ANONYMOUS, CONN_ID, req);
 
         verify(syncCommandProducer).publish(result);
     }
@@ -132,7 +133,7 @@ class ScmConnectionServiceTest {
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         ScmConnectionRequest req = new ScmConnectionRequest(null, null, null, 30, null);
-        service.update(TENANT, CONN_ID, req);
+        service.update(TENANT, Actor.ANONYMOUS, CONN_ID, req);
 
         verifyNoInteractions(syncCommandProducer);
     }
@@ -143,7 +144,7 @@ class ScmConnectionServiceTest {
 
         ScmConnectionRequest req = new ScmConnectionRequest("github", "{\"org\":\"acme\"}", null, null, true);
 
-        assertThatThrownBy(() -> service.create(TENANT, req))
+        assertThatThrownBy(() -> service.create(TENANT, Actor.ANONYMOUS, req))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("webhookSecret");
     }
@@ -156,7 +157,7 @@ class ScmConnectionServiceTest {
         ScmConnectionRequest req = new ScmConnectionRequest(
                 "github", "{\"org\":\"acme\",\"webhookSecret\":\"whsec_123\"}", null, null, true);
 
-        ScmConnection result = service.create(TENANT, req);
+        ScmConnection result = service.create(TENANT, Actor.ANONYMOUS, req);
 
         assertThat(result.webhookEnabled()).isTrue();
         String storedSecret = secretValue(result.config(), "webhookSecret");
@@ -172,7 +173,7 @@ class ScmConnectionServiceTest {
         ScmConnectionRequest req = new ScmConnectionRequest(
                 "github", "{\"org\":\"acme\",\"token\":\"plaintext-value\"}", null, null, null);
 
-        service.create(TENANT, req);
+        service.create(TENANT, Actor.ANONYMOUS, req);
 
         ArgumentCaptor<ScmConnection> captor = ArgumentCaptor.forClass(ScmConnection.class);
         verify(repository).save(captor.capture());
@@ -189,7 +190,7 @@ class ScmConnectionServiceTest {
         ScmConnectionRequest req = new ScmConnectionRequest(
                 "github", "{\"org\":\"acme\",\"token\":\"plaintext-value\"}", null, null, null);
 
-        assertThatThrownBy(() -> service.create(TENANT, req))
+        assertThatThrownBy(() -> service.create(TENANT, Actor.ANONYMOUS, req))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("encryption key missing");
 
@@ -203,7 +204,7 @@ class ScmConnectionServiceTest {
 
         ScmConnectionRequest req = new ScmConnectionRequest("github", "{\"org\":\"acme\"}", null, null, null);
 
-        ScmConnection result = service.create(TENANT, req);
+        ScmConnection result = service.create(TENANT, Actor.ANONYMOUS, req);
 
         assertThat(result.webhookEnabled()).isFalse();
     }
@@ -215,7 +216,7 @@ class ScmConnectionServiceTest {
 
         ScmConnectionRequest req = new ScmConnectionRequest(null, null, null, null, true);
 
-        assertThatThrownBy(() -> service.update(TENANT, CONN_ID, req))
+        assertThatThrownBy(() -> service.update(TENANT, Actor.ANONYMOUS, CONN_ID, req))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("webhookSecret");
     }
@@ -230,7 +231,7 @@ class ScmConnectionServiceTest {
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         ScmConnectionRequest req = new ScmConnectionRequest(null, null, null, 30, null);
-        ScmConnection result = service.update(TENANT, CONN_ID, req);
+        ScmConnection result = service.update(TENANT, Actor.ANONYMOUS, CONN_ID, req);
 
         assertThat(result.pollIntervalMinutes()).isEqualTo(30);
         assertThat(result.webhookEnabled()).isTrue();
@@ -244,7 +245,7 @@ class ScmConnectionServiceTest {
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         ScmConnectionRequest req = new ScmConnectionRequest("github", "{\"org\":\"acme\"}", null, null, null);
-        service.create(TENANT, req);
+        service.create(TENANT, Actor.ANONYMOUS, req);
 
         verifyNoInteractions(scmApiBaseUrlValidator);
     }
@@ -258,7 +259,7 @@ class ScmConnectionServiceTest {
         ScmConnectionRequest req = new ScmConnectionRequest(
                 "github", "{\"org\":\"acme\",\"apiBaseUrl\":\"http://169.254.169.254/\"}", null, null, null);
 
-        assertThatThrownBy(() -> service.create(TENANT, req))
+        assertThatThrownBy(() -> service.create(TENANT, Actor.ANONYMOUS, req))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("loopback or link-local");
 
@@ -273,7 +274,7 @@ class ScmConnectionServiceTest {
         ScmConnectionRequest req = new ScmConnectionRequest(
                 "github", "{\"org\":\"acme\",\"apiBaseUrl\":\"https://ghes.example-corp.com/api/v3\"}", null, null, null);
 
-        ScmConnection result = service.create(TENANT, req);
+        ScmConnection result = service.create(TENANT, Actor.ANONYMOUS, req);
 
         verify(scmApiBaseUrlValidator).validate("https://ghes.example-corp.com/api/v3");
         assertThat(result).isNotNull();
@@ -286,7 +287,7 @@ class ScmConnectionServiceTest {
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         ScmConnectionRequest req = new ScmConnectionRequest(null, null, null, 30, null);
-        service.update(TENANT, CONN_ID, req);
+        service.update(TENANT, Actor.ANONYMOUS, CONN_ID, req);
 
         verifyNoInteractions(scmApiBaseUrlValidator);
     }
@@ -301,7 +302,7 @@ class ScmConnectionServiceTest {
         ScmConnectionRequest req = new ScmConnectionRequest(
                 null, "{\"org\":\"acme\",\"apiBaseUrl\":\"http://10.0.0.5/\"}", null, null, null);
 
-        assertThatThrownBy(() -> service.update(TENANT, CONN_ID, req))
+        assertThatThrownBy(() -> service.update(TENANT, Actor.ANONYMOUS, CONN_ID, req))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("private address");
 

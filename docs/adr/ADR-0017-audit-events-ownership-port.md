@@ -1,6 +1,6 @@
 # ADR-0017 — Audit events: owning service and `AuditEventPort` shape
 
-**Status**: Accepted 2026-10-28 (amended: topic name, gateway + ingestion adapters, actor kind — see Amendment)
+**Status**: Accepted 2026-10-28 (amended: topic name, ingestion adapter, gateway on JDBC, actor kind — see Amendment)
 **Date**: 2026-05-20
 **Deciders**: Allan Weber
 
@@ -63,11 +63,11 @@ The choice between in-transaction (registry) and async (everyone else) is delibe
 ### Amendment — 2026-10-28 (Phase 4, roadmap 4.1)
 
 - Topic is `cartogra.platform.audit.recorded` (fits `cartogra.{domain}.{entity}.{event}`; `audit` is not a domain).
-- Kafka adapters ship in **topology, ingestion and gateway** for Phase 4 (contract/intelligence when they exist). Gateway gains a Kafka producer for this.
+- Kafka adapters ship in **topology and ingestion** for Phase 4 (contract/intelligence when they exist). **Gateway uses the JDBC adapter** (2026-10-29): it already runs on registry's schema, so it writes `audit_events` in the mutation's transaction — no Kafka producer, no audit gap. Both adapters live in `shared:web` (`JdbcAuditEventAdapter`, `KafkaAuditEventAdapter`); the Kafka one sends after commit, off the request thread, and never fails the mutation.
 - `AuditEvent` gains an **actor kind** (`user` | `system`); `actorId` is null for `system` (discovery, sync, observed traffic, drift).
 - `payload` holds changed fields before → after, built from a per-entity allowlist so secrets never enter.
 - Only state changes are audited: no logins, refreshes, guest token mints, or per-span `last_seen` bumps.
-- `GET /v1/audit-events` is readable by every tenant role, Guest included — the Timeline and dashboard activity are product surfaces, not an admin tool.
+- `GET /api/v1/registry/audit-events` is readable by every tenant role, Guest included — the Timeline and dashboard activity are product surfaces, not an admin tool.
 
 ## Consequences
 

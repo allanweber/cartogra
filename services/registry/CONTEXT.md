@@ -148,10 +148,11 @@ SCM Connection created/synced there. See `docs/architecture/kafka-topics.md`.
 |---|---|---|
 | `cartogra.ingestion.service.discovered` | `RegistryServiceDiscoveryConsumer` | `ServiceService.upsertDiscovered` |
 | `cartogra.ingestion.ownership.resolved` | `OwnershipResolvedConsumer` | `ServiceService.resolveOwnership` (service by external id, else repo-URL suffix; handles matched to teams by slug; assign when exactly one distinct team matches; never overrides an existing owner) |
+| `cartogra.platform.audit.recorded` | `AuditRecordedConsumer` | `AuditEventService.recordPublished` (insert into `audit_events`, ignored on a repeated `event_id`) |
 
 ---
 
-## Database (Flyway V001–V015)
+## Database (Flyway V001–V017)
 
 | Version | Description |
 |---|---|
@@ -168,6 +169,8 @@ SCM Connection created/synced there. See `docs/architecture/kafka-topics.md`.
 | V013 | Add `max_teams` to `billing_plans` |
 | V014 | `invitations` table |
 | V015 | Add `disabled_at` to `users` |
+| V016 | Rotate refresh tokens in place |
+| V017 | `audit_events` table — append-only audit trail for every service (ADR-0017); also written by Gateway |
 
 V004 and V007 are gaps in the sequence — no migration with those numbers exists in this service (nothing to restore; Flyway only requires versions to be increasing, not contiguous). Neither `scm_connections` nor `scm_webhooks` live here — both moved to `services/ingestion`.
 

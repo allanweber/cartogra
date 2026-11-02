@@ -1,10 +1,12 @@
 package io.cartogra.topology.api;
 
+import io.cartogra.common.identity.Actor;
 import io.cartogra.common.api.ApiResponse;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.topology.api.dto.UnresolvedSpanServiceResponse;
 import io.cartogra.topology.domain.UnresolvedSpanServiceService;
 import io.cartogra.web.api.TracedResponse;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -38,9 +40,9 @@ public class UnresolvedSpanServiceController {
     @PostMapping("/{id}/dismiss")
     public ResponseEntity<ApiResponse<UnresolvedSpanServiceResponse>> dismiss(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
-            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
+            @AuthenticationPrincipal Actor actor,
             @PathVariable UUID id) {
         return TracedResponse.ok(UnresolvedSpanServiceResponse.from(
-                unresolvedSpanServiceService.dismiss(tenantId, userId, id)));
+                unresolvedSpanServiceService.dismiss(tenantId, actor, id)));
     }
 }

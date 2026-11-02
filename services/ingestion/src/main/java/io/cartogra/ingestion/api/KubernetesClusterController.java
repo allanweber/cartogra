@@ -1,5 +1,6 @@
 package io.cartogra.ingestion.api;
 
+import io.cartogra.common.identity.Actor;
 import io.cartogra.common.api.ApiResponse;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.ingestion.api.dto.KubernetesClusterRequest;
@@ -7,6 +8,7 @@ import io.cartogra.ingestion.api.dto.KubernetesClusterResponse;
 import io.cartogra.ingestion.domain.ClusterService;
 import io.cartogra.web.api.TracedResponse;
 import jakarta.validation.Valid;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,8 +27,9 @@ public class KubernetesClusterController {
     @PostMapping
     public ResponseEntity<ApiResponse<KubernetesClusterResponse>> create(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @AuthenticationPrincipal Actor actor,
             @Valid @RequestBody KubernetesClusterRequest request) {
-        KubernetesClusterResponse result = KubernetesClusterResponse.from(clusterService.create(tenantId, request));
+        KubernetesClusterResponse result = KubernetesClusterResponse.from(clusterService.create(tenantId, actor, request));
         return TracedResponse.created(result);
     }
 
@@ -53,17 +56,19 @@ public class KubernetesClusterController {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<KubernetesClusterResponse>> update(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @AuthenticationPrincipal Actor actor,
             @PathVariable UUID id,
             @Valid @RequestBody KubernetesClusterRequest request) {
-        KubernetesClusterResponse result = KubernetesClusterResponse.from(clusterService.update(tenantId, id, request));
+        KubernetesClusterResponse result = KubernetesClusterResponse.from(clusterService.update(tenantId, actor, id, request));
         return TracedResponse.ok(result);
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @AuthenticationPrincipal Actor actor,
             @PathVariable UUID id) {
-        clusterService.delete(tenantId, id);
+        clusterService.delete(tenantId, actor, id);
         return ResponseEntity.noContent().build();
     }
 }

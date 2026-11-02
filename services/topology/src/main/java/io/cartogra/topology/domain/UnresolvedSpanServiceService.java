@@ -5,7 +5,7 @@ import io.cartogra.topology.config.SpanLinkProperties;
 import io.cartogra.topology.domain.exception.UnresolvedSpanServiceAlreadyResolvedException;
 import io.cartogra.topology.domain.exception.UnresolvedSpanServiceNotFoundException;
 import io.cartogra.topology.repository.UnresolvedSpanServiceRepository;
-import org.jspecify.annotations.Nullable;
+import io.cartogra.common.identity.Actor;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -52,10 +52,10 @@ public class UnresolvedSpanServiceService {
                 repository.countActive(tenantId), boundedLimit, boundedOffset);
     }
 
-    public UnresolvedSpanService dismiss(UUID tenantId, @Nullable UUID userId, UUID id) {
+    public UnresolvedSpanService dismiss(UUID tenantId, Actor actor, UUID id) {
         UnresolvedSpanService existing = repository.findById(tenantId, id)
                 .orElseThrow(() -> new UnresolvedSpanServiceNotFoundException(id));
-        if (existing.isResolved() || !repository.dismiss(tenantId, id, userId, Instant.now())) {
+        if (existing.isResolved() || !repository.dismiss(tenantId, id, actor.userId(), Instant.now())) {
             throw new UnresolvedSpanServiceAlreadyResolvedException(id);
         }
         return repository.findById(tenantId, id).orElseThrow(() -> new UnresolvedSpanServiceNotFoundException(id));

@@ -9,13 +9,14 @@ import io.cartogra.topology.infrastructure.registry.RegistryMembershipClient;
 import io.cartogra.topology.infrastructure.scheduled.DependencyGraphViewRefreshScheduler;
 import io.cartogra.topology.repository.DependencyRepository;
 import io.cartogra.topology.repository.GraphNodeRepository;
+import io.cartogra.common.identity.Actor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -42,21 +43,24 @@ public class DependencyService {
     private final RegistryMembershipClient registryMembershipClient;
     private final DependencyGraphViewRefreshScheduler graphViewRefreshScheduler;
     private final TransactionTemplate transactionTemplate;
+    private final EdgeAuditRecorder auditRecorder;
 
     public DependencyService(DependencyRepository dependencyRepository,
             GraphNodeRepository graphNodeRepository,
             RegistryMembershipClient registryMembershipClient,
             DependencyGraphViewRefreshScheduler graphViewRefreshScheduler,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            EdgeAuditRecorder auditRecorder) {
         this.dependencyRepository = dependencyRepository;
         this.graphNodeRepository = graphNodeRepository;
         this.registryMembershipClient = registryMembershipClient;
         this.graphViewRefreshScheduler = graphViewRefreshScheduler;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.auditRecorder = auditRecorder;
     }
 
-    public Dependency create(UUID tenantId, @Nullable UUID userId, DeclareDependencyRequest request) {
-        requirePairAccess(tenantId, userId, request.sourceServiceId(), request.targetServiceId());
+    public Dependency create(UUID tenantId, Actor actor, DeclareDependencyRequest request) {
+        requirePairAccess(tenantId, actor, request.sourceServiceId(), request.targetServiceId());
         return transactionTemplate.execute(status -> {
             NodePair nodes = validateNodes(tenantId, request.sourceServiceId(), request.targetServiceId());
             requireNotSelfEdge(request.sourceServiceId(), request.targetServiceId());
@@ -68,15 +72,16 @@ public class DependencyService {
                     UUID.randomUUID(), tenantId, request.sourceServiceId(), request.targetServiceId(),
                     DependencyType.DECLARED, request.protocol(), request.metadata(), now, now, null));
             graphViewRefreshScheduler.markDirty();
+            audit(saved, "declared", actor, Map.of("protocol", saved.protocol().toDbValue()));
             return saved;
         });
     }
 
-    public Dependency update(UUID tenantId, @Nullable UUID userId, UUID id, DeclareDependencyRequest request) {
+    public Dependency update(UUID tenantId, Actor actor, UUID id, DeclareDependencyRequest request) {
         Dependency existing = loadDeclared(tenantId, id);
 
-        if (!isAdmin()) {
-            Map<UUID, Boolean> access = fetchAccess(tenantId, userId,
+        if (!actor.admin()) {
+            Map<UUID, Boolean> access = fetchAccess(tenantId, actor.userId(),
                     existing.sourceServiceId(), existing.targetServiceId(),
                     request.sourceServiceId(), request.targetServiceId());
             requirePairAuthorized(access, existing.sourceServiceId(), existing.targetServiceId());
@@ -94,17 +99,25 @@ public class DependencyService {
                     DependencyType.DECLARED, request.protocol(), request.metadata(),
                     existing.createdAt(), Instant.now(), null));
             graphViewRefreshScheduler.markDirty();
+            Map<String, Object> changes = new LinkedHashMap<>();
+            putChange(changes, "sourceServiceId", existing.sourceServiceId(), saved.sourceServiceId());
+            putChange(changes, "targetServiceId", existing.targetServiceId(), saved.targetServiceId());
+            putChange(changes, "protocol", existing.protocol().toDbValue(), saved.protocol().toDbValue());
+            if (!changes.isEmpty()) {
+                audit(saved, "updated", actor, Map.of("protocol", saved.protocol().toDbValue(), "changes", changes));
+            }
             return saved;
         });
     }
 
-    public void delete(UUID tenantId, @Nullable UUID userId, UUID id) {
+    public void delete(UUID tenantId, Actor actor, UUID id) {
         Dependency existing = loadDeclared(tenantId, id);
-        requirePairAccess(tenantId, userId, existing.sourceServiceId(), existing.targetServiceId());
+        requirePairAccess(tenantId, actor, existing.sourceServiceId(), existing.targetServiceId());
 
         transactionTemplate.executeWithoutResult(status -> {
             dependencyRepository.softDelete(tenantId, id);
             graphViewRefreshScheduler.markDirty();
+            audit(existing, "removed", actor, Map.of("protocol", existing.protocol().toDbValue()));
         });
     }
 
@@ -184,6 +197,17 @@ public class DependencyService {
                 dependency.createdAt(), dependency.updatedAt());
     }
 
+    private void audit(Dependency dependency, String action, Actor actor, Map<String, Object> extra) {
+        auditRecorder.record(dependency.tenantId(), "dependency", dependency.id(), action, actor,
+                dependency.sourceServiceId(), dependency.targetServiceId(), extra);
+    }
+
+    private static void putChange(Map<String, Object> changes, String field, Object from, Object to) {
+        if (!from.equals(to)) {
+            changes.put(field, Map.of("from", from, "to", to));
+        }
+    }
+
     private Dependency loadDeclared(UUID tenantId, UUID id) {
         Dependency existing = dependencyRepository.findById(tenantId, id)
                 .orElseThrow(() -> new DependencyNotFoundException(id));
@@ -227,11 +251,11 @@ public class DependencyService {
     }
 
     /** ADMIN, or a member of the team owning either side; checked before any state-revealing validation. */
-    public void requirePairAccess(UUID tenantId, @Nullable UUID userId, UUID sourceServiceId, UUID targetServiceId) {
-        if (isAdmin()) {
+    public void requirePairAccess(UUID tenantId, Actor actor, UUID sourceServiceId, UUID targetServiceId) {
+        if (actor.admin()) {
             return;
         }
-        Map<UUID, Boolean> access = fetchAccess(tenantId, userId, sourceServiceId, targetServiceId);
+        Map<UUID, Boolean> access = fetchAccess(tenantId, actor.userId(), sourceServiceId, targetServiceId);
         requirePairAuthorized(access, sourceServiceId, targetServiceId);
     }
 
@@ -251,9 +275,4 @@ public class DependencyService {
         }
     }
 
-    private static boolean isAdmin() {
-        return SecurityContextHolder.getContext().getAuthentication() != null
-                && SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
-                        .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
-    }
 }

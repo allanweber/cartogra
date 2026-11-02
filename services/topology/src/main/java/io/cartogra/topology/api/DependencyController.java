@@ -1,11 +1,13 @@
 package io.cartogra.topology.api;
 
+import io.cartogra.common.identity.Actor;
 import io.cartogra.common.api.ApiResponse;
 import io.cartogra.web.api.TracedResponse;
 import io.cartogra.topology.api.dto.DeclareDependencyRequest;
 import io.cartogra.topology.api.dto.DependencyResponse;
 import io.cartogra.topology.domain.DependencyService;
 import jakarta.validation.Valid;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,28 +33,28 @@ public class DependencyController {
     @PostMapping
     public ResponseEntity<ApiResponse<DependencyResponse>> create(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
-            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
+            @AuthenticationPrincipal Actor actor,
             @Valid @RequestBody DeclareDependencyRequest request) {
-        DependencyResponse result = DependencyResponse.from(dependencyService.create(tenantId, userId, request));
+        DependencyResponse result = DependencyResponse.from(dependencyService.create(tenantId, actor, request));
         return TracedResponse.created(result);
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<DependencyResponse>> update(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
-            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
+            @AuthenticationPrincipal Actor actor,
             @PathVariable UUID id,
             @Valid @RequestBody DeclareDependencyRequest request) {
-        DependencyResponse result = DependencyResponse.from(dependencyService.update(tenantId, userId, id, request));
+        DependencyResponse result = DependencyResponse.from(dependencyService.update(tenantId, actor, id, request));
         return TracedResponse.ok(result);
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
-            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
+            @AuthenticationPrincipal Actor actor,
             @PathVariable UUID id) {
-        dependencyService.delete(tenantId, userId, id);
+        dependencyService.delete(tenantId, actor, id);
         return TracedResponse.noContent();
     }
 }

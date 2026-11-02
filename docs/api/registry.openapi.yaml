@@ -437,6 +437,75 @@ paths:
 
   # ── CI ─────────────────────────────────────────────────────────────────────
 
+  /audit-events:
+    get:
+      summary: Tenant audit trail, newest first (backs the Timeline)
+      description: |
+        State changes recorded by every service (ADR-0017). Readable by every tenant role, Guest included.
+        Payloads hold allowlisted fields only — never tokens, kubeconfigs, password hashes or client secrets.
+      operationId: listAuditEvents
+      tags: [audit]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: entityType
+          in: query
+          description: One or more entity types, comma-separated (e.g. `scm_connection,cluster`).
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [service, team, dependency, drift, scm_connection, cluster, user, invitation, oidc_config]
+          style: form
+          explode: false
+        - name: entityId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: actorKind
+          in: query
+          schema:
+            type: string
+            enum: [user, system]
+        - name: from
+          in: query
+          description: Inclusive lower bound on `occurredAt` (ISO-8601).
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: Exclusive upper bound on `occurredAt` (ISO-8601).
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 20
+        - $ref: "#/components/parameters/OffsetParam"
+      responses:
+        "200":
+          description: Paginated audit events
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditEventPageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
   /ci/check:
     post:
       summary: Submit a contract check from CI pipeline
@@ -926,6 +995,62 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/TeamDto"
+            total:
+              type: integer
+              format: int64
+            limit:
+              type: integer
+            offset:
+              type: integer
+        traceId:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
+
+    AuditEventDto:
+      type: object
+      required: [eventId, entityType, entityId, action, actorKind, payload, occurredAt]
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        entityType:
+          type: string
+        entityId:
+          type: string
+          format: uuid
+        action:
+          type: string
+          description: e.g. `created`, `updated`, `owner_changed`, `declared`, `observed`, `detected`, `resolved`, `sync_failed`, `role_changed`.
+        actorKind:
+          type: string
+          enum: [user, system]
+        actorId:
+          type: ["string", "null"]
+          format: uuid
+          description: Null when `actorKind` is `system`.
+        actorName:
+          type: ["string", "null"]
+          description: Actor's name or email at read time; null for system or a deleted user.
+        payload:
+          type: object
+          additionalProperties: true
+          description: "Key fields for create/delete; `{changes: {field: {from, to}}}` for updates."
+        occurredAt:
+          type: string
+          format: date-time
+
+    AuditEventPageResponse:
+      type: object
+      required: [data, traceId]
+      properties:
+        data:
+          type: object
+          required: [items, total, limit, offset]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/AuditEventDto"
             total:
               type: integer
               format: int64

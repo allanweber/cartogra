@@ -1,5 +1,6 @@
 package io.cartogra.topology.domain;
 
+import io.cartogra.common.identity.Actor;
 import io.cartogra.topology.api.dto.DeclareDependencyRequest;
 import io.cartogra.topology.domain.exception.DependencyNotFoundException;
 import io.cartogra.topology.domain.exception.DuplicateDependencyException;
@@ -9,7 +10,6 @@ import io.cartogra.topology.infrastructure.registry.RegistryMembershipClient;
 import io.cartogra.topology.infrastructure.scheduled.DependencyGraphViewRefreshScheduler;
 import io.cartogra.topology.repository.DependencyRepository;
 import io.cartogra.topology.repository.GraphNodeRepository;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,9 +17,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.authentication.TestingAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
@@ -61,16 +58,10 @@ class DependencyServiceTest {
     @BeforeEach
     void setUp() {
         service = new DependencyService(dependencyRepository, graphNodeRepository,
-                registryMembershipClient, graphViewRefreshScheduler, transactionManager);
+                registryMembershipClient, graphViewRefreshScheduler, transactionManager,
+                new EdgeAuditRecorder(_ -> { }, graphNodeRepository));
         lenient().when(transactionManager.getTransaction(any(TransactionDefinition.class)))
                 .thenReturn(transactionStatus);
-        SecurityContextHolder.getContext().setAuthentication(
-                new TestingAuthenticationToken("user", null, new SimpleGrantedAuthority("ROLE_MEMBER")));
-    }
-
-    @AfterEach
-    void tearDown() {
-        SecurityContextHolder.clearContext();
     }
 
     private GraphNode liveNode(UUID serviceId) {
@@ -113,7 +104,7 @@ class DependencyServiceTest {
         stubFullAccess();
         when(dependencyRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        Dependency result = service.create(tenantId, userId, request(sourceId, targetId));
+        Dependency result = service.create(tenantId, Actor.user(userId), request(sourceId, targetId));
 
         assertThat(result.type()).isEqualTo(DependencyType.DECLARED);
         assertThat(result.sourceServiceId()).isEqualTo(sourceId);
@@ -126,7 +117,7 @@ class DependencyServiceTest {
         stubFullAccess();
         when(graphNodeRepository.findByServiceId(tenantId, sourceId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.create(tenantId, userId, request(sourceId, targetId)))
+        assertThatThrownBy(() -> service.create(tenantId, Actor.user(userId), request(sourceId, targetId)))
                 .isInstanceOf(UnknownServiceNodeException.class);
         verify(dependencyRepository, never()).save(any());
         verify(graphViewRefreshScheduler, never()).markDirty();
@@ -138,7 +129,7 @@ class DependencyServiceTest {
         when(graphNodeRepository.findByServiceId(tenantId, sourceId)).thenReturn(Optional.of(liveNode(sourceId)));
         when(graphNodeRepository.findByServiceId(tenantId, targetId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.create(tenantId, userId, request(sourceId, targetId)))
+        assertThatThrownBy(() -> service.create(tenantId, Actor.user(userId), request(sourceId, targetId)))
                 .isInstanceOf(UnknownServiceNodeException.class);
         verify(graphViewRefreshScheduler, never()).markDirty();
     }
@@ -148,7 +139,7 @@ class DependencyServiceTest {
         stubFullAccess();
         when(graphNodeRepository.findByServiceId(tenantId, sourceId)).thenReturn(Optional.of(deletedNode(sourceId)));
 
-        assertThatThrownBy(() -> service.create(tenantId, userId, request(sourceId, targetId)))
+        assertThatThrownBy(() -> service.create(tenantId, Actor.user(userId), request(sourceId, targetId)))
                 .isInstanceOf(UnknownServiceNodeException.class);
     }
 
@@ -158,7 +149,7 @@ class DependencyServiceTest {
         when(graphNodeRepository.findByServiceId(tenantId, sourceId)).thenReturn(Optional.of(liveNode(sourceId)));
         when(graphNodeRepository.findByServiceId(tenantId, targetId)).thenReturn(Optional.of(deletedNode(targetId)));
 
-        assertThatThrownBy(() -> service.create(tenantId, userId, request(sourceId, targetId)))
+        assertThatThrownBy(() -> service.create(tenantId, Actor.user(userId), request(sourceId, targetId)))
                 .isInstanceOf(UnknownServiceNodeException.class);
     }
 
@@ -167,7 +158,7 @@ class DependencyServiceTest {
         stubFullAccess();
         when(graphNodeRepository.findByServiceId(tenantId, sourceId)).thenReturn(Optional.of(liveNode(sourceId)));
 
-        assertThatThrownBy(() -> service.create(tenantId, userId, request(sourceId, sourceId)))
+        assertThatThrownBy(() -> service.create(tenantId, Actor.user(userId), request(sourceId, sourceId)))
                 .isInstanceOf(SelfDependencyException.class);
         verify(graphViewRefreshScheduler, never()).markDirty();
     }
@@ -180,7 +171,7 @@ class DependencyServiceTest {
         when(dependencyRepository.findByEdgeIdentity(tenantId, sourceId, targetId, DependencyType.DECLARED, DependencyProtocol.HTTP))
                 .thenReturn(Optional.of(existing));
 
-        assertThatThrownBy(() -> service.create(tenantId, userId, request(sourceId, targetId)))
+        assertThatThrownBy(() -> service.create(tenantId, Actor.user(userId), request(sourceId, targetId)))
                 .isInstanceOf(DuplicateDependencyException.class);
         verify(graphViewRefreshScheduler, never()).markDirty();
     }
@@ -193,20 +184,18 @@ class DependencyServiceTest {
                 .thenReturn(Optional.empty());
         when(dependencyRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        Dependency result = service.create(tenantId, userId, request(sourceId, targetId));
+        Dependency result = service.create(tenantId, Actor.user(userId), request(sourceId, targetId));
 
         assertThat(result.protocol()).isEqualTo(DependencyProtocol.HTTP);
     }
 
     @Test
     void create_adminCaller_skipsRegistryCallEntirely() {
-        SecurityContextHolder.getContext().setAuthentication(
-                new TestingAuthenticationToken("admin", null, new SimpleGrantedAuthority("ROLE_ADMIN")));
         stubLiveNodes();
         stubNoDuplicate();
         when(dependencyRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service.create(tenantId, userId, request(sourceId, targetId));
+        service.create(tenantId, Actor.admin(userId), request(sourceId, targetId));
 
         verifyNoInteractions(registryMembershipClient);
     }
@@ -219,7 +208,7 @@ class DependencyServiceTest {
                 .thenReturn(Map.of(sourceId, true, targetId, false));
         when(dependencyRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThat(service.create(tenantId, userId, request(sourceId, targetId))).isNotNull();
+        assertThat(service.create(tenantId, Actor.user(userId), request(sourceId, targetId))).isNotNull();
     }
 
     @Test
@@ -230,7 +219,7 @@ class DependencyServiceTest {
                 .thenReturn(Map.of(sourceId, false, targetId, true));
         when(dependencyRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThat(service.create(tenantId, userId, request(sourceId, targetId))).isNotNull();
+        assertThat(service.create(tenantId, Actor.user(userId), request(sourceId, targetId))).isNotNull();
     }
 
     @Test
@@ -238,7 +227,7 @@ class DependencyServiceTest {
         when(registryMembershipClient.checkAccess(eq(tenantId), eq(userId), anyList()))
                 .thenReturn(Map.of(sourceId, false, targetId, false));
 
-        assertThatThrownBy(() -> service.create(tenantId, userId, request(sourceId, targetId)))
+        assertThatThrownBy(() -> service.create(tenantId, Actor.user(userId), request(sourceId, targetId)))
                 .isInstanceOf(AccessDeniedException.class);
         verify(dependencyRepository, never()).save(any());
         verify(graphViewRefreshScheduler, never()).markDirty();
@@ -250,7 +239,7 @@ class DependencyServiceTest {
         when(registryMembershipClient.checkAccess(eq(tenantId), eq(userId), anyList()))
                 .thenReturn(Map.of(sourceId, false, targetId, false));
 
-        assertThatThrownBy(() -> service.create(tenantId, userId, request(sourceId, targetId)))
+        assertThatThrownBy(() -> service.create(tenantId, Actor.user(userId), request(sourceId, targetId)))
                 .isInstanceOf(AccessDeniedException.class);
         verifyNoInteractions(graphNodeRepository);
         verify(dependencyRepository, never()).findByEdgeIdentity(any(), any(), any(), any(), any());
@@ -261,7 +250,7 @@ class DependencyServiceTest {
         when(registryMembershipClient.checkAccess(eq(tenantId), eq(userId), anyList()))
                 .thenReturn(Map.of(sourceId, false, targetId, false));
 
-        assertThatThrownBy(() -> service.create(tenantId, userId, request(sourceId, targetId)))
+        assertThatThrownBy(() -> service.create(tenantId, Actor.user(userId), request(sourceId, targetId)))
                 .isInstanceOf(AccessDeniedException.class);
         verifyNoInteractions(dependencyRepository);
         verifyNoInteractions(graphNodeRepository);
@@ -282,7 +271,7 @@ class DependencyServiceTest {
                 .thenReturn(Map.of(sourceId, true, targetId, true, newTarget, true));
         when(dependencyRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        Dependency result = service.update(tenantId, userId, id, request(sourceId, newTarget));
+        Dependency result = service.update(tenantId, Actor.user(userId), id, request(sourceId, newTarget));
 
         assertThat(result.targetServiceId()).isEqualTo(newTarget);
         assertThat(result.id()).isEqualTo(id);
@@ -294,7 +283,7 @@ class DependencyServiceTest {
         UUID id = UUID.randomUUID();
         when(dependencyRepository.findById(tenantId, id)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.update(tenantId, userId, id, request(sourceId, targetId)))
+        assertThatThrownBy(() -> service.update(tenantId, Actor.user(userId), id, request(sourceId, targetId)))
                 .isInstanceOf(DependencyNotFoundException.class);
     }
 
@@ -304,7 +293,7 @@ class DependencyServiceTest {
         Dependency observed = existingDependency(id, sourceId, targetId, DependencyType.OBSERVED);
         when(dependencyRepository.findById(tenantId, id)).thenReturn(Optional.of(observed));
 
-        assertThatThrownBy(() -> service.update(tenantId, userId, id, request(sourceId, targetId)))
+        assertThatThrownBy(() -> service.update(tenantId, Actor.user(userId), id, request(sourceId, targetId)))
                 .isInstanceOf(DependencyNotFoundException.class);
     }
 
@@ -318,7 +307,7 @@ class DependencyServiceTest {
         when(registryMembershipClient.checkAccess(eq(tenantId), eq(userId), anyList()))
                 .thenReturn(Map.of(sourceId, false, targetId, false, newSource, true, newTarget, true));
 
-        assertThatThrownBy(() -> service.update(tenantId, userId, id, request(newSource, newTarget)))
+        assertThatThrownBy(() -> service.update(tenantId, Actor.user(userId), id, request(newSource, newTarget)))
                 .isInstanceOf(AccessDeniedException.class);
         verify(dependencyRepository, never()).save(any());
     }
@@ -333,7 +322,7 @@ class DependencyServiceTest {
         when(registryMembershipClient.checkAccess(eq(tenantId), eq(userId), anyList()))
                 .thenReturn(Map.of(sourceId, true, targetId, true, newSource, false, newTarget, false));
 
-        assertThatThrownBy(() -> service.update(tenantId, userId, id, request(newSource, newTarget)))
+        assertThatThrownBy(() -> service.update(tenantId, Actor.user(userId), id, request(newSource, newTarget)))
                 .isInstanceOf(AccessDeniedException.class);
         verify(dependencyRepository, never()).save(any());
     }
@@ -353,7 +342,7 @@ class DependencyServiceTest {
         when(dependencyRepository.findByEdgeIdentity(tenantId, sourceId, newTarget, DependencyType.DECLARED, DependencyProtocol.HTTP))
                 .thenReturn(Optional.of(collidingRow));
 
-        assertThatThrownBy(() -> service.update(tenantId, userId, id, request(sourceId, newTarget)))
+        assertThatThrownBy(() -> service.update(tenantId, Actor.user(userId), id, request(sourceId, newTarget)))
                 .isInstanceOf(DuplicateDependencyException.class);
     }
 
@@ -368,7 +357,7 @@ class DependencyServiceTest {
         stubFullAccess();
         when(dependencyRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThat(service.update(tenantId, userId, id, request(sourceId, targetId))).isNotNull();
+        assertThat(service.update(tenantId, Actor.user(userId), id, request(sourceId, targetId))).isNotNull();
     }
 
     @Test
@@ -380,7 +369,7 @@ class DependencyServiceTest {
                 .thenReturn(Map.of(sourceId, true, targetId, true));
         when(graphNodeRepository.findByServiceId(tenantId, sourceId)).thenReturn(Optional.of(liveNode(sourceId)));
 
-        assertThatThrownBy(() -> service.update(tenantId, userId, id, request(sourceId, sourceId)))
+        assertThatThrownBy(() -> service.update(tenantId, Actor.user(userId), id, request(sourceId, sourceId)))
                 .isInstanceOf(SelfDependencyException.class);
     }
 
@@ -391,7 +380,7 @@ class DependencyServiceTest {
         when(dependencyRepository.findById(tenantId, id)).thenReturn(Optional.of(existing));
         stubFullAccess();
 
-        service.delete(tenantId, userId, id);
+        service.delete(tenantId, Actor.user(userId), id);
 
         verify(dependencyRepository).softDelete(tenantId, id);
         verify(graphViewRefreshScheduler).markDirty();
@@ -402,7 +391,7 @@ class DependencyServiceTest {
         UUID id = UUID.randomUUID();
         when(dependencyRepository.findById(tenantId, id)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.delete(tenantId, userId, id))
+        assertThatThrownBy(() -> service.delete(tenantId, Actor.user(userId), id))
                 .isInstanceOf(DependencyNotFoundException.class);
         verify(graphViewRefreshScheduler, never()).markDirty();
     }
@@ -413,7 +402,7 @@ class DependencyServiceTest {
         Dependency observed = existingDependency(id, sourceId, targetId, DependencyType.OBSERVED);
         when(dependencyRepository.findById(tenantId, id)).thenReturn(Optional.of(observed));
 
-        assertThatThrownBy(() -> service.delete(tenantId, userId, id))
+        assertThatThrownBy(() -> service.delete(tenantId, Actor.user(userId), id))
                 .isInstanceOf(DependencyNotFoundException.class);
     }
 
@@ -425,7 +414,7 @@ class DependencyServiceTest {
         when(registryMembershipClient.checkAccess(eq(tenantId), eq(userId), anyList()))
                 .thenReturn(Map.of(sourceId, false, targetId, false));
 
-        assertThatThrownBy(() -> service.delete(tenantId, userId, id))
+        assertThatThrownBy(() -> service.delete(tenantId, Actor.user(userId), id))
                 .isInstanceOf(AccessDeniedException.class);
         verify(dependencyRepository, never()).softDelete(any(), any());
         verify(graphViewRefreshScheduler, never()).markDirty();

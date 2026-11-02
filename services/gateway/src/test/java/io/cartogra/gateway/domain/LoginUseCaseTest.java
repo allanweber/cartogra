@@ -67,7 +67,8 @@ class LoginUseCaseTest {
     void setUp() {
         JwtConfig config = new JwtConfig("secret", 900L, 2592000L, false);
         auth = new AuthService(userRepository, tenantRepository, refreshTokenRepository,
-            teamMembershipRepository, invitationRepository, emailSender, encoder, jwtTokenProvider, config, billingPlanService);
+            teamMembershipRepository, invitationRepository, emailSender, encoder, jwtTokenProvider, config, billingPlanService,
+            _ -> { });
     }
 
     private User verifiedUser(String password) {

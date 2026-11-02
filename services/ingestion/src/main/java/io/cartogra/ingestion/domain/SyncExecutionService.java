@@ -50,6 +50,7 @@ public class SyncExecutionService {
     private final ServiceDiscoveredProducer serviceDiscoveredProducer;
     private final CredentialEncryptor credentialEncryptor;
     private final ObjectMapper objectMapper;
+    private final IngestionAuditRecorder auditRecorder;
 
     public SyncExecutionService(
             List<ScmProvider> providers,
@@ -60,7 +61,8 @@ public class SyncExecutionService {
             TechStackDetector techStackDetector,
             ServiceDiscoveredProducer serviceDiscoveredProducer,
             CredentialEncryptor credentialEncryptor,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            IngestionAuditRecorder auditRecorder) {
         this.providers = providers.stream()
                 .collect(Collectors.toMap(ScmProvider::providerType, Function.identity()));
         this.syncJobRepository = syncJobRepository;
@@ -71,6 +73,7 @@ public class SyncExecutionService {
         this.serviceDiscoveredProducer = serviceDiscoveredProducer;
         this.credentialEncryptor = credentialEncryptor;
         this.objectMapper = objectMapper;
+        this.auditRecorder = auditRecorder;
     }
 
     public Optional<SyncJob> execute(SyncCommandPayload command) {
@@ -102,7 +105,7 @@ public class SyncExecutionService {
             String msg = "No provider registered for type: " + command.providerType();
             syncJobRepository.markFailed(job.id(), msg);
             resultProducer.publishFailure(job, msg);
-            recordResult(command.connectionId(), STATUS_FAILED, msg);
+            recordResult(command, STATUS_FAILED, msg, 0);
             throw new ScmProviderException(command.providerType(), msg);
         }
 
@@ -144,21 +147,21 @@ public class SyncExecutionService {
             int count = active.size();
             syncJobRepository.markCompleted(job.id(), count);
             resultProducer.publishSuccess(job, count);
-            recordResult(command.connectionId(), STATUS_SUCCESS, null);
+            recordResult(command, STATUS_SUCCESS, null, count);
             log.info("Sync completed for connection={} repos={}", command.connectionId(), count);
             return Optional.of(syncJobRepository.findById(command.tenantId(), job.id()).orElse(job));
         } catch (ScmProviderException ex) {
             log.error("Sync failed for connection={}: {}", command.connectionId(), ex.getMessage());
             syncJobRepository.markFailed(job.id(), ex.getMessage());
             resultProducer.publishFailure(job, ex.getMessage());
-            recordResult(command.connectionId(), STATUS_FAILED, ex.getMessage());
+            recordResult(command, STATUS_FAILED, ex.getMessage(), 0);
             throw ex;
         } catch (Exception ex) {
             String msg = "Unexpected error during sync: " + ex.getMessage();
             log.error(msg, ex);
             syncJobRepository.markFailed(job.id(), msg);
             resultProducer.publishFailure(job, msg);
-            recordResult(command.connectionId(), STATUS_FAILED, msg);
+            recordResult(command, STATUS_FAILED, msg, 0);
             throw new ScmProviderException(command.providerType(), msg, ex);
         }
     }
@@ -208,12 +211,14 @@ public class SyncExecutionService {
         return decrypted;
     }
 
-    /** Best-effort feedback write; a stale connection row must not fail the sync. */
-    private void recordResult(java.util.UUID connectionId, String status, String error) {
+    /** Best-effort feedback write and audit; a stale connection row must not fail the sync. */
+    private void recordResult(SyncCommandPayload command, String status, String error, int repositoriesSynced) {
         try {
-            scmConnectionRepository.updateSyncResult(connectionId, status, error, Instant.now());
+            scmConnectionRepository.updateSyncResult(command.connectionId(), status, error, Instant.now());
         } catch (Exception ex) {
-            log.warn("Failed to record sync result for connection={}: {}", connectionId, ex.getMessage());
+            log.warn("Failed to record sync result for connection={}: {}", command.connectionId(), ex.getMessage());
         }
+        auditRecorder.syncFinished(command.tenantId(), command.connectionId(), command.providerType(),
+                STATUS_SUCCESS.equals(status), repositoriesSynced, error);
     }
 }

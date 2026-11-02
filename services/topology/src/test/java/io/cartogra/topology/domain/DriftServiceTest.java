@@ -1,5 +1,6 @@
 package io.cartogra.topology.domain;
 
+import io.cartogra.common.identity.Actor;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.topology.config.DriftProperties;
 import io.cartogra.topology.domain.exception.DriftAlreadyResolvedException;
@@ -53,7 +54,7 @@ class DriftServiceTest {
         org.mockito.Mockito.lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         service = new DriftService(driftRepository, dependencyRepository, dependencyService,
                 new DriftProperties(Duration.ofMinutes(5), Duration.ofDays(7)), new SimpleMeterRegistry(),
-                transactionManager);
+                transactionManager, new EdgeAuditRecorder(_ -> { }, org.mockito.Mockito.mock(io.cartogra.topology.repository.GraphNodeRepository.class)));
     }
 
     private DependencyDrift drift(DriftType type, boolean resolved) {
@@ -73,7 +74,7 @@ class DriftServiceTest {
                 .thenReturn(true);
         when(dependencyService.declareObservedPair(TENANT, A, B)).thenReturn(true);
 
-        service.resolve(TENANT, USER, drift.id(), DriftAction.ACCEPT_OBSERVED);
+        service.resolve(TENANT, Actor.user(USER), drift.id(), DriftAction.ACCEPT_OBSERVED);
 
         verify(dependencyService).declareObservedPair(TENANT, A, B);
         verify(transactionManager).commit(any());
@@ -86,7 +87,7 @@ class DriftServiceTest {
                 .thenReturn(true);
         when(dependencyService.declareObservedPair(TENANT, A, B)).thenReturn(false);
 
-        assertThatThrownBy(() -> service.resolve(TENANT, USER, drift.id(), DriftAction.ACCEPT_OBSERVED))
+        assertThatThrownBy(() -> service.resolve(TENANT, Actor.user(USER), drift.id(), DriftAction.ACCEPT_OBSERVED))
                 .isInstanceOf(DriftNoLongerObservedException.class);
 
         verify(transactionManager).rollback(any());
@@ -98,7 +99,7 @@ class DriftServiceTest {
         when(driftRepository.resolve(eq(TENANT), eq(drift.id()), eq(USER), eq(DriftResolution.REMOVED), any()))
                 .thenReturn(true);
 
-        service.resolve(TENANT, USER, drift.id(), DriftAction.REMOVE_DECLARED);
+        service.resolve(TENANT, Actor.user(USER), drift.id(), DriftAction.REMOVE_DECLARED);
 
         verify(dependencyService).removeDeclaredPair(TENANT, A, B);
     }
@@ -109,7 +110,7 @@ class DriftServiceTest {
         when(driftRepository.resolve(eq(TENANT), eq(drift.id()), eq(USER), eq(DriftResolution.DISMISSED), any()))
                 .thenReturn(true);
 
-        service.resolve(TENANT, USER, drift.id(), DriftAction.DISMISS);
+        service.resolve(TENANT, Actor.user(USER), drift.id(), DriftAction.DISMISS);
 
         verify(dependencyService, never()).declareObservedPair(any(), any(), any());
         verify(dependencyService, never()).removeDeclaredPair(any(), any(), any());
@@ -120,9 +121,9 @@ class DriftServiceTest {
         DependencyDrift undeclared = stub(drift(DriftType.UNDECLARED, false));
         DependencyDrift missing = stub(drift(DriftType.MISSING, false));
 
-        assertThatThrownBy(() -> service.resolve(TENANT, USER, undeclared.id(), DriftAction.REMOVE_DECLARED))
+        assertThatThrownBy(() -> service.resolve(TENANT, Actor.user(USER), undeclared.id(), DriftAction.REMOVE_DECLARED))
                 .isInstanceOf(InvalidDriftActionException.class);
-        assertThatThrownBy(() -> service.resolve(TENANT, USER, missing.id(), DriftAction.ACCEPT_OBSERVED))
+        assertThatThrownBy(() -> service.resolve(TENANT, Actor.user(USER), missing.id(), DriftAction.ACCEPT_OBSERVED))
                 .isInstanceOf(InvalidDriftActionException.class);
         verify(driftRepository, never()).resolve(any(), any(), any(), any(), any());
     }
@@ -131,7 +132,7 @@ class DriftServiceTest {
     void alreadyResolvedDriftIsRejected() {
         DependencyDrift drift = stub(drift(DriftType.MISSING, true));
 
-        assertThatThrownBy(() -> service.resolve(TENANT, USER, drift.id(), DriftAction.DISMISS))
+        assertThatThrownBy(() -> service.resolve(TENANT, Actor.user(USER), drift.id(), DriftAction.DISMISS))
                 .isInstanceOf(DriftAlreadyResolvedException.class);
     }
 
@@ -140,7 +141,7 @@ class DriftServiceTest {
         DependencyDrift drift = stub(drift(DriftType.MISSING, false));
         when(driftRepository.resolve(eq(TENANT), eq(drift.id()), eq(USER), any(), any())).thenReturn(false);
 
-        assertThatThrownBy(() -> service.resolve(TENANT, USER, drift.id(), DriftAction.REMOVE_DECLARED))
+        assertThatThrownBy(() -> service.resolve(TENANT, Actor.user(USER), drift.id(), DriftAction.REMOVE_DECLARED))
                 .isInstanceOf(DriftAlreadyResolvedException.class);
         verify(dependencyService, never()).removeDeclaredPair(any(), any(), any());
     }
@@ -150,7 +151,7 @@ class DriftServiceTest {
         UUID id = UUID.randomUUID();
         when(driftRepository.findById(TENANT, id)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.resolve(TENANT, USER, id, DriftAction.DISMISS))
+        assertThatThrownBy(() -> service.resolve(TENANT, Actor.user(USER), id, DriftAction.DISMISS))
                 .isInstanceOf(DriftNotFoundException.class);
     }
 
@@ -158,9 +159,9 @@ class DriftServiceTest {
     void unauthorizedCallerChangesNothing() {
         DependencyDrift drift = stub(drift(DriftType.MISSING, false));
         doThrow(new AccessDeniedException("no")).when(dependencyService)
-                .requirePairAccess(TENANT, USER, A, B);
+                .requirePairAccess(TENANT, Actor.user(USER), A, B);
 
-        assertThatThrownBy(() -> service.resolve(TENANT, USER, drift.id(), DriftAction.DISMISS))
+        assertThatThrownBy(() -> service.resolve(TENANT, Actor.user(USER), drift.id(), DriftAction.DISMISS))
                 .isInstanceOf(AccessDeniedException.class);
         verify(driftRepository, never()).resolve(any(), any(), any(), any(), any());
     }

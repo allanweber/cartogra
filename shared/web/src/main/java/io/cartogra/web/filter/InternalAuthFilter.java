@@ -1,5 +1,6 @@
 package io.cartogra.web.filter;
 
+import io.cartogra.common.identity.Actor;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -7,6 +8,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -31,10 +33,22 @@ public class InternalAuthFilter extends OncePerRequestFilter {
                 .filter(r -> !r.isEmpty())
                 .map(r -> new SimpleGrantedAuthority("ROLE_" + r))
                 .toList();
-            String userId = request.getHeader("X-User-Id");
-            var auth = new UsernamePasswordAuthenticationToken(userId, null, authorities);
+            boolean admin = authorities.stream().anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
+            var actor = new Actor(parseUserId(request.getHeader("X-User-Id")), admin);
+            var auth = new UsernamePasswordAuthenticationToken(actor, null, authorities);
             SecurityContextHolder.getContext().setAuthentication(auth);
         }
         filterChain.doFilter(request, response);
+    }
+
+    private static UUID parseUserId(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(raw.trim());
+        } catch (IllegalArgumentException _) {
+            return null;
+        }
     }
 }

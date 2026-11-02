@@ -60,7 +60,8 @@ class ObservedDependencyServiceTest {
     void setUp() {
         service = new ObservedDependencyService(graphNodeRepository, dependencyRepository,
                 pendingSpanLinkRepository, unresolvedSpanServiceService, refreshScheduler,
-                new SpanLinkProperties(Duration.ofMinutes(5), Duration.ofMinutes(1), 1000, Duration.ofHours(24)), meters);
+                new SpanLinkProperties(Duration.ofMinutes(5), Duration.ofMinutes(1), 1000, Duration.ofHours(24)), meters,
+                new EdgeAuditRecorder(_ -> { }, graphNodeRepository));
     }
 
     @SuppressWarnings("unchecked")

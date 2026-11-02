@@ -1,5 +1,6 @@
 package io.cartogra.ingestion.api;
 
+import io.cartogra.common.identity.Actor;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.ingestion.domain.Cluster;
 import io.cartogra.ingestion.domain.ClusterService;
@@ -20,6 +21,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import static io.cartogra.web.filter.InternalAuthMockMvc.withInternalAuth;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -46,8 +48,8 @@ class KubernetesClusterControllerTest {
     void setUp() {
         var validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
-        mockMvc = MockMvcBuilders
-                .standaloneSetup(new KubernetesClusterController(clusterService))
+        mockMvc = withInternalAuth(MockMvcBuilders
+                .standaloneSetup(new KubernetesClusterController(clusterService)))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setValidator(validator)
                 .build();
@@ -55,7 +57,7 @@ class KubernetesClusterControllerTest {
 
     @Test
     void createReturns201WithEnvelopeAndTraceHeader() throws Exception {
-        when(clusterService.create(eq(TENANT), any())).thenReturn(cluster("prod"));
+        when(clusterService.create(eq(TENANT), any(), any())).thenReturn(cluster("prod"));
 
         mockMvc.perform(post("/k8s/clusters")
                         .header("X-Tenant-Id", TENANT)
@@ -101,7 +103,7 @@ class KubernetesClusterControllerTest {
 
     @Test
     void createServiceRejectsIllegalArgumentReturns400() throws Exception {
-        when(clusterService.create(eq(TENANT), any()))
+        when(clusterService.create(eq(TENANT), any(), any()))
                 .thenThrow(new IllegalArgumentException("apiServerUrl is required when source is MANUAL"));
 
         mockMvc.perform(post("/k8s/clusters")
@@ -171,14 +173,14 @@ class KubernetesClusterControllerTest {
                         .header("X-Tenant-Id", TENANT))
                 .andExpect(status().isNoContent());
 
-        verify(clusterService).delete(TENANT, id);
+        verify(clusterService).delete(TENANT, Actor.ANONYMOUS, id);
     }
 
     @Test
     void deleteNotFoundReturns404() throws Exception {
         UUID id = UUID.randomUUID();
         org.mockito.Mockito.doThrow(new ClusterNotFoundException(id))
-                .when(clusterService).delete(TENANT, id);
+                .when(clusterService).delete(TENANT, Actor.ANONYMOUS, id);
 
         mockMvc.perform(delete("/k8s/clusters/{id}", id)
                         .header("X-Tenant-Id", TENANT))
@@ -189,7 +191,7 @@ class KubernetesClusterControllerTest {
     @Test
     void updateReturns200WithEnvelopeAndTraceHeader() throws Exception {
         UUID id = UUID.randomUUID();
-        when(clusterService.update(eq(TENANT), eq(id), any())).thenReturn(cluster("prod-updated"));
+        when(clusterService.update(eq(TENANT), any(), eq(id), any())).thenReturn(cluster("prod-updated"));
 
         mockMvc.perform(put("/k8s/clusters/{id}", id)
                         .header("X-Tenant-Id", TENANT)
@@ -205,7 +207,7 @@ class KubernetesClusterControllerTest {
     @Test
     void updateNotFoundReturns404() throws Exception {
         UUID id = UUID.randomUUID();
-        when(clusterService.update(eq(TENANT), eq(id), any()))
+        when(clusterService.update(eq(TENANT), any(), eq(id), any()))
                 .thenThrow(new ClusterNotFoundException(id));
 
         mockMvc.perform(put("/k8s/clusters/{id}", id)
@@ -220,7 +222,7 @@ class KubernetesClusterControllerTest {
     @Test
     void updateServiceRejectsInvalidKubeconfigReturns400() throws Exception {
         UUID id = UUID.randomUUID();
-        when(clusterService.update(eq(TENANT), eq(id), any()))
+        when(clusterService.update(eq(TENANT), any(), eq(id), any()))
                 .thenThrow(new IllegalArgumentException("kubeconfig is missing a cluster server URL"));
 
         mockMvc.perform(put("/k8s/clusters/{id}", id)

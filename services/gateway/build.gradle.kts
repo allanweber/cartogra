@@ -13,6 +13,7 @@ tasks.named<ProcessResources>("processTestResources") {
 
 dependencies {
     implementation(project(":shared:common"))
+    implementation(project(":shared:web"))
     implementation("org.springframework.cloud:spring-cloud-gateway-server-webmvc")
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-actuator")

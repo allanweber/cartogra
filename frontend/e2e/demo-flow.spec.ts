@@ -318,4 +318,20 @@ test('register services, declare a dependency, and see it on the graph', async (
     await page.keyboard.press('Enter')
     await expect(page.getByText(/Truncated at \d+ hops/)).toBeVisible({ timeout: 2_000 })
   }).toPass({ timeout: 20_000, intervals: [2_000] })
+
+  // Audit trail: registry writes its own rows in the request's transaction; topology's
+  // arrive over Kafka (cartogra.platform.audit.recorded), so retry until the consumer lands them.
+  // Asserts on the newest writes (the chain) so they sit on the first page of each filter.
+  const lastEdge = `${chainServices[chainServices.length - 2]} → ${chainServices[chainServices.length - 1]}`
+  await page.goto('/timeline')
+  const timelineEvents = page.getByTestId('timeline-event')
+  await page.getByRole('button', { name: 'Service', exact: true }).click()
+  await expect(timelineEvents.filter({ hasText: chainHeadName }).filter({ hasText: 'Service created' })).toBeVisible()
+  await expect(async () => {
+    await page.reload()
+    await page.getByRole('button', { name: 'Dependency', exact: true }).click()
+    await expect(
+      timelineEvents.filter({ hasText: lastEdge }).filter({ hasText: 'Dependency declared' }),
+    ).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 30_000, intervals: [2_000] })
 })

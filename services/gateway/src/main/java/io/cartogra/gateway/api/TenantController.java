@@ -5,11 +5,10 @@ import io.cartogra.gateway.api.dto.TenantResponse;
 import io.cartogra.gateway.domain.BillingPlanService;
 import io.cartogra.gateway.domain.Tenant;
 import io.cartogra.gateway.domain.TenantService;
-import io.cartogra.gateway.domain.exception.UnauthorizedException;
-import io.cartogra.gateway.infrastructure.security.JwtAuthentication;
+import io.cartogra.gateway.infrastructure.jwt.JwtClaims;
 import io.cartogra.gateway.infrastructure.tracing.TraceContext;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -29,14 +28,10 @@ public class TenantController {
     }
 
     @GetMapping("/tenant")
-    public ResponseEntity<ApiResponse<TenantResponse>> getTenant() {
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-        if (!(auth instanceof JwtAuthentication principal)) {
-            throw new UnauthorizedException("Authentication required");
-        }
+    public ResponseEntity<ApiResponse<TenantResponse>> getTenant(@AuthenticationPrincipal JwtClaims user) {
         String traceId = traceContext.currentTraceId();
-        Tenant tenant = tenantService.getTenant(principal.getTenantId());
-        long usersUsed = tenantService.countUsers(principal.getTenantId());
+        Tenant tenant = tenantService.getTenant(user.tenantId());
+        long usersUsed = tenantService.countUsers(user.tenantId());
         TenantResponse result = TenantResponse.from(tenant, billingPlanService.getBySlug(tenant.plan()), usersUsed);
         return ResponseEntity.ok()
             .header("X-Trace-Id", traceId)

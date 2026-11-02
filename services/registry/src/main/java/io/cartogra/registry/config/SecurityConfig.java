@@ -1,5 +1,6 @@
 package io.cartogra.registry.config;
 
+import io.cartogra.common.identity.Actor;
 import io.cartogra.web.filter.InternalAuthFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,6 +29,7 @@ public class SecurityConfig {
             .httpBasic(AbstractHttpConfigurer::disable)
             .formLogin(AbstractHttpConfigurer::disable)
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .anonymous(a -> a.principal(Actor.ANONYMOUS))
             .addFilterBefore(internalAuthFilter, UsernamePasswordAuthenticationFilter.class)
             .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
             .build();

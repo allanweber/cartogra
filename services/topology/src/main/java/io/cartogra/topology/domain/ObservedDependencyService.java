@@ -1,5 +1,7 @@
 package io.cartogra.topology.domain;
 
+import io.cartogra.common.identity.Actor;
+import io.cartogra.common.event.UuidV5;
 import io.cartogra.topology.config.SpanLinkProperties;
 import io.cartogra.topology.domain.exception.UnattributedSpanBatchException;
 import io.cartogra.topology.domain.exception.UnattributedSpanBatchException.QuarantineReason;
@@ -48,6 +50,7 @@ public class ObservedDependencyService {
     private final DependencyGraphViewRefreshScheduler graphViewRefreshScheduler;
     private final SpanLinkProperties spanLinkProperties;
     private final MeterRegistry meterRegistry;
+    private final EdgeAuditRecorder auditRecorder;
 
     public ObservedDependencyService(GraphNodeRepository graphNodeRepository,
                                      DependencyRepository dependencyRepository,
@@ -55,7 +58,8 @@ public class ObservedDependencyService {
                                      UnresolvedSpanServiceService unresolvedSpanServiceService,
                                      DependencyGraphViewRefreshScheduler graphViewRefreshScheduler,
                                      SpanLinkProperties spanLinkProperties,
-                                     MeterRegistry meterRegistry) {
+                                     MeterRegistry meterRegistry,
+                                     EdgeAuditRecorder auditRecorder) {
         this.graphNodeRepository = graphNodeRepository;
         this.dependencyRepository = dependencyRepository;
         this.pendingSpanLinkRepository = pendingSpanLinkRepository;
@@ -63,6 +67,7 @@ public class ObservedDependencyService {
         this.graphViewRefreshScheduler = graphViewRefreshScheduler;
         this.spanLinkProperties = spanLinkProperties;
         this.meterRegistry = meterRegistry;
+        this.auditRecorder = auditRecorder;
     }
 
     /**
@@ -297,6 +302,13 @@ public class ObservedDependencyService {
         for (EdgeKey edge : ordered) {
             UpsertOutcome outcome = dependencyRepository.upsertObserved(
                     tenantId, edge.source(), edge.target(), edge.protocol(), now);
+            if (outcome == UpsertOutcome.INSERTED) {
+                auditRecorder.record(tenantId, "dependency",
+                        UuidV5.fromNames(tenantId.toString(), edge.source().toString(), edge.target().toString(),
+                                edge.protocol().toDbValue()),
+                        "observed", Actor.SYSTEM, edge.source(), edge.target(),
+                        Map.of("protocol", edge.protocol().toDbValue()));
+            }
             if (outcome != UpsertOutcome.UNCHANGED) {
                 touched = true;
                 count("cartogra.spans.edges", "result", outcome.name().toLowerCase(Locale.ROOT));
