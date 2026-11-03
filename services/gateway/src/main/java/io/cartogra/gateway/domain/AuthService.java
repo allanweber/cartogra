@@ -10,6 +10,8 @@ import io.cartogra.gateway.api.dto.RegisterResponse;
 import io.cartogra.gateway.api.dto.TokenResponse;
 import io.cartogra.gateway.api.dto.UserInfoResponse;
 import io.cartogra.gateway.config.JwtConfig;
+import io.cartogra.gateway.config.SignupProperties;
+import io.cartogra.gateway.domain.exception.SignupDisabledException;
 import io.cartogra.gateway.domain.exception.ConflictException;
 import io.cartogra.gateway.domain.exception.InvalidOtpException;
 import io.cartogra.gateway.domain.exception.NotFoundException;
@@ -70,6 +72,7 @@ public class AuthService {
     private final JwtConfig jwtConfig;
     private final BillingPlanService billingPlanService;
     private final AuditEventPort auditEventPort;
+    private final SignupProperties signup;
 
     public AuthService(UserRepository userRepository,
                        TenantRepository tenantRepository,
@@ -81,7 +84,8 @@ public class AuthService {
                        JwtTokenProvider jwtTokenProvider,
                        JwtConfig jwtConfig,
                        BillingPlanService billingPlanService,
-                       AuditEventPort auditEventPort) {
+                       AuditEventPort auditEventPort,
+                       SignupProperties signup) {
         this.userRepository = userRepository;
         this.tenantRepository = tenantRepository;
         this.refreshTokenRepository = refreshTokenRepository;
@@ -93,9 +97,13 @@ public class AuthService {
         this.jwtConfig = jwtConfig;
         this.billingPlanService = billingPlanService;
         this.auditEventPort = auditEventPort;
+        this.signup = signup;
     }
 
     public RegisterResponse register(RegisterRequest request) {
+        if (!signup.enabled()) {
+            throw new SignupDisabledException();
+        }
         userRepository.findByEmail(request.email()).ifPresent(existing -> {
             if (!"local".equals(existing.authProvider())) {
                 throw new ConflictException(

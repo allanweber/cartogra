@@ -51,6 +51,7 @@ import {
 import { CommandPalette } from '#/components/CommandPalette'
 import { NotificationBell } from '#/components/NotificationBell'
 import { apiMutate } from '#/lib/api'
+import { READ_ONLY_MESSAGE, canUser, useIsReadOnly } from '#/lib/permissions'
 import { clearSessionCookie } from '#/lib/session'
 import { cn } from '#/lib/utils'
 import { useAuthStore } from '#/stores/useAuthStore'
@@ -198,6 +199,8 @@ export function AppLayout({
           </div>
         </header>
 
+        <ReadOnlyBanner />
+
         <main id="main-content" className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 sm:p-6">
           {children}
         </main>
@@ -292,6 +295,8 @@ function SidebarContent({
   onToggleCollapse: () => void
 }) {
   const { theme, toggleTheme } = useThemeStore()
+  const canViewSettings = useAuthStore((s) => canUser(s.user, 'settings.view') === 'allow')
+  const visibleItems = canViewSettings ? navigationItems : navigationItems.filter((item) => item.to !== '/settings')
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -319,7 +324,7 @@ function SidebarContent({
       {/* Nav items */}
       <nav aria-label="Main navigation" className="flex-1 overflow-y-auto py-3">
         <ul className={cn('space-y-0.5', collapsed ? 'px-1.5' : 'px-2')}>
-          {navigationItems.map((item) => {
+          {visibleItems.map((item) => {
             const Icon = item.icon
             const isActive =
               pathname === item.to || pathname.startsWith(`${item.to}/`)
@@ -398,8 +403,27 @@ function SidebarContent({
   )
 }
 
+function ReadOnlyBanner() {
+  const isReadOnly = useIsReadOnly()
+  if (!isReadOnly) return null
+  return (
+    <div
+      role="status"
+      className="flex shrink-0 items-center justify-center gap-2 border-b border-warning/30 bg-warning-subtle px-4 py-1.5 text-xs font-medium text-foreground"
+    >
+      <span>{READ_ONLY_MESSAGE}.</span>
+      <Link to="/login" className="text-primary underline-offset-3 hover:underline">
+        Sign in
+      </Link>
+    </div>
+  )
+}
+
 function UserMenu({ collapsed }: { collapsed: boolean }) {
   const user = useAuthStore((s) => s.user)
+  const isReadOnly = useIsReadOnly()
+  const canViewSettings = useAuthStore((s) => canUser(s.user, 'settings.view') === 'allow')
+  const signOutLabel = isReadOnly ? 'Exit demo' : 'Sign out'
   const clearAuth = useAuthStore((s) => s.clearAuth)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -441,16 +465,20 @@ function UserMenu({ collapsed }: { collapsed: boolean }) {
         <DropdownMenuContent side="right" align="end" className="w-44">
           <DropdownMenuLabel className="truncate text-xs text-muted-foreground">{user?.name ?? user?.email }</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem asChild>
-            <Link to="/settings/profile" className="flex cursor-pointer items-center gap-2">
-              <UserRound className="size-4" />
-              Profile
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
+          {canViewSettings && (
+            <>
+              <DropdownMenuItem asChild>
+                <Link to="/settings/profile" className="flex cursor-pointer items-center gap-2">
+                  <UserRound className="size-4" />
+                  Profile
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
           <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive">
             <LogOut className="size-4" />
-            Sign out
+            {signOutLabel}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -475,16 +503,20 @@ function UserMenu({ collapsed }: { collapsed: boolean }) {
       <DropdownMenuContent side="top" align="start" className="w-52">
         <DropdownMenuLabel className="truncate text-xs text-muted-foreground">{user?.name ?? user?.email}</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link to="/settings/profile" className="flex cursor-pointer items-center gap-2">
-            <UserRound className="size-4" />
-            Profile
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
+        {canViewSettings && (
+          <>
+            <DropdownMenuItem asChild>
+              <Link to="/settings/profile" className="flex cursor-pointer items-center gap-2">
+                <UserRound className="size-4" />
+                Profile
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
         <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive">
           <LogOut className="size-4" />
-          Sign out
+          {signOutLabel}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

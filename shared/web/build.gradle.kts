@@ -12,6 +12,7 @@ dependencies {
     api("io.github.resilience4j:resilience4j-retry:2.3.0")
     api("org.slf4j:slf4j-api")
     compileOnly("jakarta.servlet:jakarta.servlet-api")
+    compileOnly("org.springframework.security:spring-security-web")
     // Only KafkaAuditEventAdapter needs it; services that use that adapter bring spring-kafka themselves.
     compileOnly("org.springframework.kafka:spring-kafka")
 

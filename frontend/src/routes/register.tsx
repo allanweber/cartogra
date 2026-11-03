@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { AuthFormShell } from '#/components/AuthFormShell'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
+import { useAuthFeatures } from '#/hooks/useAuthFeatures'
 import { ApiError, apiMutate } from '#/lib/api'
 
 export const Route = createFileRoute('/register')({
@@ -13,6 +14,7 @@ export const Route = createFileRoute('/register')({
 
 function RegisterPage() {
   const navigate = useNavigate()
+  const { data: features } = useAuthFeatures()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -54,6 +56,29 @@ function RegisterPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  if (features && !features.signupEnabled) {
+    return (
+      <AuthFormShell>
+        <div className="text-center">
+          <h2 className="text-base font-semibold">Sign-up is closed</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            This instance doesn&apos;t accept new workspaces. Ask an admin for an invite.
+          </p>
+          <div className="mt-4 flex flex-col gap-2">
+            {features.guestEnabled && (
+              <Button asChild className="h-10 w-full">
+                <Link to="/demo">Try the demo</Link>
+              </Button>
+            )}
+            <Button asChild variant="outline" className="h-10 w-full">
+              <Link to="/login">Sign in</Link>
+            </Button>
+          </div>
+        </div>
+      </AuthFormShell>
+    )
   }
 
   return (

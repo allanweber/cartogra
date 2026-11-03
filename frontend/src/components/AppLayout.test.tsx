@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AppLayout } from '#/components/AppLayout'
 import { TooltipProvider } from '#/components/ui/tooltip'
+import { useAuthStore } from '#/stores/useAuthStore'
 
 const navigateMock = vi.fn()
 
@@ -126,5 +127,44 @@ describe('AppLayout', () => {
 
     expect(queryClient.getQueryData(['services'])).toBeUndefined()
     expect(useTenantStore.getState().currentTenantId).toBe('ten-2')
+  })
+
+  describe('guest session', () => {
+    function renderAs(roles: string[]) {
+      useAuthStore.getState().hydrateWith({
+        id: 'u1',
+        email: '',
+        name: 'Demo guest',
+        authProvider: roles.includes('GUEST') ? 'guest' : 'local',
+        tenantId: 'ten-1',
+        roles,
+      })
+      render(
+        <QueryClientProvider client={new QueryClient()}>
+          <TooltipProvider>
+            <AppLayout title="Dashboard">
+              <div>Shell content</div>
+            </AppLayout>
+          </TooltipProvider>
+        </QueryClientProvider>,
+      )
+    }
+
+    afterEach(() => useAuthStore.getState().clearAuth())
+
+    it('shows the read-only banner and hides Settings for a guest', () => {
+      renderAs(['GUEST'])
+      expect(screen.getByRole('status')).toHaveTextContent(/read-only demo/i)
+      expect(screen.queryByRole('link', { name: /^settings$/i })).not.toBeInTheDocument()
+      fireEvent.click(screen.getByText('Demo guest'))
+      expect(screen.queryByRole('link', { name: /profile/i })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /exit demo/i })).toBeInTheDocument()
+    })
+
+    it('shows no banner and keeps Settings for a member', () => {
+      renderAs(['MEMBER'])
+      expect(screen.queryByText(/read-only demo/i)).not.toBeInTheDocument()
+      expect(screen.getByRole('link', { name: /^settings$/i })).toBeInTheDocument()
+    })
   })
 })

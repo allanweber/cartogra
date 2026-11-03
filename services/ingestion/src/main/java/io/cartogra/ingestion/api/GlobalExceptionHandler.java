@@ -15,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
@@ -69,6 +70,14 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatusCode.valueOf(402))
                 .header("X-Trace-Id", traceId)
                 .body(new ApiErrorResponse(ApiError.of(ErrorCodes.PLAN_LIMIT_EXCEEDED, ex.getMessage()), traceId));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiErrorResponse> handleAccessDenied(AccessDeniedException ex) {
+        String traceId = Span.current().getSpanContext().getTraceId();
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .header("X-Trace-Id", traceId)
+                .body(new ApiErrorResponse(ApiError.of(ErrorCodes.FORBIDDEN, "Insufficient permissions"), traceId));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

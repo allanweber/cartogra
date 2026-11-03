@@ -1,5 +1,7 @@
 package io.cartogra.topology.domain;
 
+import io.cartogra.common.identity.Roles;
+import org.springframework.security.access.prepost.PreAuthorize;
 import io.cartogra.topology.api.dto.DeclareDependencyRequest;
 import io.cartogra.topology.domain.exception.DependencyNotFoundException;
 import io.cartogra.topology.domain.exception.DuplicateDependencyException;
@@ -59,6 +61,7 @@ public class DependencyService {
         this.auditRecorder = auditRecorder;
     }
 
+    @PreAuthorize(Roles.CAN_WRITE)
     public Dependency create(UUID tenantId, Actor actor, DeclareDependencyRequest request) {
         requirePairAccess(tenantId, actor, request.sourceServiceId(), request.targetServiceId());
         return transactionTemplate.execute(status -> {
@@ -77,6 +80,7 @@ public class DependencyService {
         });
     }
 
+    @PreAuthorize(Roles.CAN_WRITE)
     public Dependency update(UUID tenantId, Actor actor, UUID id, DeclareDependencyRequest request) {
         Dependency existing = loadDeclared(tenantId, id);
 
@@ -110,6 +114,7 @@ public class DependencyService {
         });
     }
 
+    @PreAuthorize(Roles.CAN_WRITE)
     public void delete(UUID tenantId, Actor actor, UUID id) {
         Dependency existing = loadDeclared(tenantId, id);
         requirePairAccess(tenantId, actor, existing.sourceServiceId(), existing.targetServiceId());

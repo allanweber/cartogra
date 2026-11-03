@@ -1,5 +1,6 @@
 package io.cartogra.ingestion.infrastructure.jdbc;
 
+import org.springframework.security.test.context.support.WithMockUser;
 import io.cartogra.common.identity.Actor;
 import io.cartogra.ingestion.api.dto.ScmConnectionRequest;
 import io.cartogra.ingestion.domain.ScmConnection;
@@ -31,6 +32,7 @@ import static org.mockito.Mockito.lenient;
  * accessors, so no application-side decryption can mask a plaintext-at-rest regression.
  */
 @SpringBootTest(properties = "spring.kafka.bootstrap-servers=localhost:9092")
+@WithMockUser(roles = "ADMIN")
 class ScmConnectionRepositoryIT {
 
     // Any valid base64 AES key works here — this test only cares that ciphertext (whatever it

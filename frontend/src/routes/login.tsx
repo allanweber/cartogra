@@ -9,6 +9,8 @@ import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { ApiError, apiMutate } from '#/lib/api'
 import { writeSessionCookie } from '#/lib/session'
+import { sessionFromAccessToken } from '#/lib/token'
+import { useAuthFeatures } from '#/hooks/useAuthFeatures'
 import { useAuthStore } from '#/stores/useAuthStore'
 
 export const Route = createFileRoute('/login')({
@@ -19,19 +21,9 @@ export const Route = createFileRoute('/login')({
   component: LoginPage,
 })
 
-interface TokenPayload {
-  sub: string
-  tid: string
-  email: string
-  name?: string | null
-  auth_provider: string
-  roles: string[]
-  exp: number
-}
-
-function decodeJwtPayload(token: string): TokenPayload {
-  const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
-  return JSON.parse(atob(base64)) as TokenPayload
+const OAUTH_ERRORS: Record<string, string> = {
+  oauth_failed: 'Sign-in with OAuth failed. Please try again or use email.',
+  signup_disabled: 'Sign-up is closed on this instance. Ask an admin for an invite, or try the demo.',
 }
 
 function LoginPage() {
@@ -46,8 +38,9 @@ function LoginPage() {
   const [redirecting, setRedirecting] = useState(false)
   const [oauthLoading, setOauthLoading] = useState<'github' | 'google' | null>(null)
   const [error, setError] = useState<string | null>(
-    oauthError === 'oauth_failed' ? 'Sign-in with OAuth failed. Please try again or use email.' : null,
+    oauthError ? (OAUTH_ERRORS[oauthError] ?? OAUTH_ERRORS.oauth_failed) : null,
   )
+  const { data: features } = useAuthFeatures()
   const [traceId, setTraceId] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({})
 
@@ -82,10 +75,9 @@ function LoginPage() {
         '/auth/login',
         { email, password },
       )
-      const claims = decodeJwtPayload(result.accessToken)
-      const user = { id: claims.sub, email: claims.email, name: claims.name ?? null, authProvider: claims.auth_provider, tenantId: claims.tid, roles: claims.roles }
+      const { user, exp } = sessionFromAccessToken(result.accessToken)
       writeSessionCookie(user, result.expiresIn)
-      hydrateWith(user, claims.exp)
+      hydrateWith(user, exp)
       queryClient.removeQueries({ queryKey: ['session'] })
       setLoading(false)
       setRedirecting(true)
@@ -260,14 +252,22 @@ function LoginPage() {
         </Button>
       </form>
 
-      <div className="mt-4 text-center">
-        <p className="text-xs text-muted-foreground">
-          Don&apos;t have an account?{' '}
-          <Link to="/register" className="font-medium text-primary underline-offset-3 hover:underline">
-            Create account
-          </Link>
-        </p>
-      </div>
+      {features?.guestEnabled && (
+        <Button asChild variant="outline" className="mt-3 h-10 w-full">
+          <Link to="/demo">Try the demo</Link>
+        </Button>
+      )}
+
+      {features?.signupEnabled && (
+        <div className="mt-4 text-center">
+          <p className="text-xs text-muted-foreground">
+            Don&apos;t have an account?{' '}
+            <Link to="/register" className="font-medium text-primary underline-offset-3 hover:underline">
+              Create account
+            </Link>
+          </p>
+        </div>
+      )}
     </AuthFormShell>
   )
 }

@@ -1,5 +1,7 @@
 package io.cartogra.topology.domain;
 
+import io.cartogra.common.identity.Roles;
+import org.springframework.security.access.prepost.PreAuthorize;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.topology.config.DriftProperties;
 import io.cartogra.topology.domain.exception.DriftAlreadyResolvedException;
@@ -76,6 +78,7 @@ public class DriftService {
                 driftRepository.countActive(tenantId), boundedLimit, boundedOffset);
     }
 
+    @PreAuthorize(Roles.CAN_WRITE)
     public DependencyDrift resolve(UUID tenantId, Actor actor, UUID id, DriftAction action) {
         DependencyDrift drift = driftRepository.findById(tenantId, id)
                 .orElseThrow(() -> new DriftNotFoundException(id));

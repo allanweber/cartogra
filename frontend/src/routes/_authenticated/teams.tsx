@@ -14,10 +14,11 @@ import { Skeleton } from '#/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '#/components/ui/tooltip'
 import { ApiError, apiFetch } from '#/lib/api'
 import { normalizeHealth } from '#/lib/registry-types'
-import { useAuthStore } from '#/stores/useAuthStore'
 import { cn } from '#/lib/utils'
 
 import type { PageResult, RegistryService, RegistryTeam, ServiceHealth } from '#/lib/registry-types'
+import { ReadOnlyGuard } from '#/components/ReadOnlyGuard'
+import { useCan } from '#/lib/permissions'
 
 export const Route = createFileRoute('/_authenticated/teams')({
   component: TeamsPage,
@@ -83,9 +84,8 @@ function TeamsPage() {
   const [manageTeamId, setManageTeamId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [criticalOnly, setCriticalOnly] = useState(false)
-  const isAdmin = useAuthStore((s) => s.user?.roles.includes('ADMIN') ?? false)
-  const isTeamOwner = useAuthStore((s) => s.user?.roles.includes('TEAM_OWNER') ?? false)
-  const canCreateTeam = isAdmin || isTeamOwner
+  const can = useCan()
+  const canCreateTeam = can('team.create') !== 'deny'
 
   const { data: teamsPage, isLoading, error } = useQuery({
     queryKey: ['teams'],
@@ -97,13 +97,8 @@ function TeamsPage() {
     queryFn: () => apiFetch<PageResult<RegistryService>>('/v1/registry/services?limit=1000'),
   })
 
-  const { data: myTeamIds } = useQuery({
-    queryKey: ['teams', 'mine'],
-    queryFn: () => apiFetch<string[]>('/v1/registry/teams/mine'),
-    enabled: isTeamOwner && !isAdmin,
-  })
-  const myTeamIdSet = new Set(myTeamIds ?? [])
-  const canManage = (teamId: string) => isAdmin || (isTeamOwner && myTeamIdSet.has(teamId))
+  const canManage = (teamId: string) => can('team.manage', { teamId }) === 'allow'
+  const canManageDetail = (teamId: string) => can('team.manage', { teamId }) !== 'deny'
 
   const teams = teamsPage?.items ?? []
   const totalTeams = teamsPage?.total ?? 0
@@ -138,10 +133,12 @@ function TeamsPage() {
       description="Team ownership, health summary, and risk exposure"
       actions={
         canCreateTeam && (
-          <Button onClick={() => setCreateOpen(true)} size="sm" className="gap-1.5">
-            <Plus className="size-3.5" aria-hidden="true" />
-            Add team
-          </Button>
+          <ReadOnlyGuard>
+            <Button onClick={() => setCreateOpen(true)} size="sm" className="gap-1.5">
+              <Plus className="size-3.5" aria-hidden="true" />
+              Add team
+            </Button>
+          </ReadOnlyGuard>
         )
       }
     >
@@ -195,10 +192,12 @@ function TeamsPage() {
             <p className="text-sm font-medium">No teams yet</p>
             <p className="mt-1 text-xs text-muted-foreground">Create a team to start assigning service ownership</p>
             {canCreateTeam && (
-              <Button onClick={() => setCreateOpen(true)} size="sm" className="mt-4 gap-1.5">
-                <Plus className="size-3.5" aria-hidden="true" />
-                Add team
-              </Button>
+              <ReadOnlyGuard>
+                <Button onClick={() => setCreateOpen(true)} size="sm" className="mt-4 gap-1.5">
+                  <Plus className="size-3.5" aria-hidden="true" />
+                  Add team
+                </Button>
+              </ReadOnlyGuard>
             )}
           </div>
         ) : visibleTeams.length === 0 ? (
@@ -239,7 +238,7 @@ function TeamsPage() {
                 services={teamServiceMap.get(selectedTeam.id) ?? []}
                 health={deriveTeamHealth(teamServiceMap.get(selectedTeam.id) ?? [])}
                 riskExposure={deriveRiskExposure(teamServiceMap.get(selectedTeam.id) ?? [])}
-                canManage={canManage(selectedTeam.id)}
+                canManage={canManageDetail(selectedTeam.id)}
                 onClose={() => setSelectedTeamId(null)}
                 onManage={() => setManageTeamId(selectedTeam.id)}
               />
@@ -521,9 +520,11 @@ function TeamDetailPanel({
 
         <div className="mt-4 flex gap-2">
           {canManage && (
-            <Button onClick={onManage} size="sm" className="flex-1">
-              Manage team
-            </Button>
+            <ReadOnlyGuard>
+              <Button onClick={onManage} size="sm" className="flex-1">
+                Manage team
+              </Button>
+            </ReadOnlyGuard>
           )}
           <Button asChild variant="outline" size="sm" className={canManage ? undefined : 'flex-1'}>
             <Link to="/graph">View graph</Link>

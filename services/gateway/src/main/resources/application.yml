@@ -146,6 +146,12 @@ app:
       redirect-uri: ${APP_BASE_URL:http://localhost:8080}/api/auth/oauth/github/callback
       token-uri: https://github.com/login/oauth/access_token
       userinfo-uri: https://api.github.com/user
+  guest:
+    tenant-id: ${GUEST_TENANT_ID:}
+    token-ttl: ${GUEST_TOKEN_TTL:60m}
+    mints-per-minute: ${GUEST_MINTS_PER_MINUTE:5}
+  signup:
+    enabled: ${SIGNUP_ENABLED:true}
   rate-limit:
     enabled: ${RATE_LIMIT_ENABLED:true}
     default-replenish-rate: ${RATE_LIMIT_DEFAULT_REPLENISH:20}

@@ -2,6 +2,7 @@ package io.cartogra.gateway.domain;
 
 import io.cartogra.gateway.api.dto.TokenResponse;
 import io.cartogra.gateway.config.JwtConfig;
+import io.cartogra.gateway.config.SignupProperties;
 import io.cartogra.gateway.domain.exception.UnauthorizedException;
 import io.cartogra.gateway.infrastructure.email.EmailSender;
 import io.cartogra.gateway.repository.InvitationRepository;
@@ -71,7 +72,7 @@ class RefreshTokenUseCaseTest {
         JwtConfig config = new JwtConfig("secret", 900L, 2592000L, false);
         auth = new AuthService(userRepository, tenantRepository, refreshTokenRepository,
             teamMembershipRepository, invitationRepository, emailSender, encoder, jwtTokenProvider, config, billingPlanService,
-            _ -> { });
+            _ -> { }, new SignupProperties(true));
     }
 
     private String sha256(String input) {

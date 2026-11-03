@@ -1,5 +1,7 @@
 package io.cartogra.ingestion.domain;
 
+import io.cartogra.common.identity.Roles;
+import org.springframework.security.access.prepost.PreAuthorize;
 import io.cartogra.common.identity.Actor;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.ingestion.api.dto.ScmConnectionRequest;
@@ -54,6 +56,7 @@ public class ScmConnectionService {
         this.auditRecorder = auditRecorder;
     }
 
+    @PreAuthorize(Roles.ADMIN_ONLY)
     @Transactional
     public ScmConnection create(UUID tenantId, Actor actor, ScmConnectionRequest req) {
         if (req.provider() == null || req.provider().isBlank()) {
@@ -96,6 +99,7 @@ public class ScmConnectionService {
         return connection;
     }
 
+    @PreAuthorize(Roles.ADMIN_ONLY)
     @Transactional
     public ScmConnection update(UUID tenantId, Actor actor, UUID id, ScmConnectionRequest req) {
         ScmConnection existing = get(tenantId, id);
@@ -249,6 +253,7 @@ public class ScmConnectionService {
         return PageResult.of(repository.findAll(tenantId, limit, offset), repository.count(tenantId), limit, offset);
     }
 
+    @PreAuthorize(Roles.ADMIN_ONLY)
     @Transactional
     public void delete(UUID tenantId, Actor actor, UUID id) {
         var existing = repository.findById(tenantId, id);
@@ -257,6 +262,7 @@ public class ScmConnectionService {
     }
 
     /** Publish a sync command for an existing connection (on-demand trigger). */
+    @PreAuthorize(Roles.ADMIN_ONLY)
     public void triggerSync(UUID tenantId, UUID id) {
         syncCommandProducer.publish(get(tenantId, id));
     }

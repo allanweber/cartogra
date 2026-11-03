@@ -1,5 +1,7 @@
 package io.cartogra.topology.domain;
 
+import io.cartogra.common.identity.Roles;
+import org.springframework.security.access.prepost.PreAuthorize;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.topology.config.SpanLinkProperties;
 import io.cartogra.topology.domain.exception.UnresolvedSpanServiceAlreadyResolvedException;
@@ -52,6 +54,7 @@ public class UnresolvedSpanServiceService {
                 repository.countActive(tenantId), boundedLimit, boundedOffset);
     }
 
+    @PreAuthorize(Roles.CAN_WRITE)
     public UnresolvedSpanService dismiss(UUID tenantId, Actor actor, UUID id) {
         UnresolvedSpanService existing = repository.findById(tenantId, id)
                 .orElseThrow(() -> new UnresolvedSpanServiceNotFoundException(id));

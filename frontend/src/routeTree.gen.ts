@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
+import { Route as DemoRouteImport } from './routes/demo'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as OauthHandoffRouteImport } from './routes/oauth-handoff'
@@ -50,6 +51,11 @@ const AuthenticatedRoute = AuthenticatedRouteImport.update({
 const AcceptInviteRoute = AcceptInviteRouteImport.update({
   id: '/accept-invite',
   path: '/accept-invite',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DemoRoute = DemoRouteImport.update({
+  id: '/demo',
+  path: '/demo',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
@@ -191,6 +197,7 @@ const AuthenticatedSettingsUsersRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
+  '/demo': typeof DemoRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/oauth-handoff': typeof OauthHandoffRoute
@@ -220,6 +227,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
+  '/demo': typeof DemoRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/oauth-handoff': typeof OauthHandoffRoute
@@ -249,6 +257,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/accept-invite': typeof AcceptInviteRoute
+  '/demo': typeof DemoRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/oauth-handoff': typeof OauthHandoffRoute
@@ -280,6 +289,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/accept-invite'
+    | '/demo'
     | '/forgot-password'
     | '/login'
     | '/oauth-handoff'
@@ -309,6 +319,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/accept-invite'
+    | '/demo'
     | '/forgot-password'
     | '/login'
     | '/oauth-handoff'
@@ -337,6 +348,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/accept-invite'
+    | '/demo'
     | '/forgot-password'
     | '/login'
     | '/oauth-handoff'
@@ -368,6 +380,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   AcceptInviteRoute: typeof AcceptInviteRoute
+  DemoRoute: typeof DemoRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
   OauthHandoffRoute: typeof OauthHandoffRoute
@@ -397,6 +410,13 @@ declare module '@tanstack/react-router' {
       path: '/accept-invite'
       fullPath: '/accept-invite'
       preLoaderRoute: typeof AcceptInviteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/demo': {
+      id: '/demo'
+      path: '/demo'
+      fullPath: '/demo'
+      preLoaderRoute: typeof DemoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/forgot-password': {
@@ -650,6 +670,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   AcceptInviteRoute: AcceptInviteRoute,
+  DemoRoute: DemoRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   OauthHandoffRoute: OauthHandoffRoute,

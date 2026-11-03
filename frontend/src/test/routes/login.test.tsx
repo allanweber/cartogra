@@ -35,6 +35,11 @@ vi.mock('#/lib/session', () => ({ writeSessionCookie: vi.fn() }))
 const JWT_PAYLOAD = btoa(JSON.stringify({ sub: 'u1', tid: 't1', email: 'a@b.com', roles: ['user'] }))
 const MOCK_TOKEN = `header.${JWT_PAYLOAD}.sig`
 
+let mockFeatures: { signupEnabled: boolean; guestEnabled: boolean } | undefined
+vi.mock('#/hooks/useAuthFeatures', () => ({
+  useAuthFeatures: () => ({ data: mockFeatures }),
+}))
+
 function renderPage() {
   const Page = (Route as any).component
   return render(
@@ -50,6 +55,38 @@ describe('LoginPage', () => {
     searchParams.redirect = undefined
     searchParams.error = undefined
     sessionStorage.clear()
+    mockFeatures = { signupEnabled: true, guestEnabled: false }
+  })
+
+  describe('instance features', () => {
+    it('offers the demo when guest mode is enabled', () => {
+      mockFeatures = { signupEnabled: true, guestEnabled: true }
+      renderPage()
+      expect(screen.getByRole('link', { name: /try the demo/i })).toHaveAttribute('href', '/demo')
+    })
+
+    it('hides the demo when guest mode is disabled', () => {
+      renderPage()
+      expect(screen.queryByRole('link', { name: /try the demo/i })).not.toBeInTheDocument()
+    })
+
+    it('hides the create-account link when signup is disabled', () => {
+      mockFeatures = { signupEnabled: false, guestEnabled: true }
+      renderPage()
+      expect(screen.queryByRole('link', { name: /create account/i })).not.toBeInTheDocument()
+    })
+
+    it('hides the create-account link until features load', () => {
+      mockFeatures = undefined
+      renderPage()
+      expect(screen.queryByRole('link', { name: /create account/i })).not.toBeInTheDocument()
+    })
+
+    it('explains a refused OAuth sign-up', () => {
+      searchParams.error = 'signup_disabled'
+      renderPage()
+      expect(screen.getByText(/sign-up is closed on this instance/i)).toBeInTheDocument()
+    })
   })
 
   it('renders heading, email/password fields, and submit button', () => {

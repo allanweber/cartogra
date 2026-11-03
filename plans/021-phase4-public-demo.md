@@ -11,7 +11,7 @@ Order: app code first (testable on compose) → charts → deploy → ops → ga
 - [x] 1. Collector in compose (#192)
 - [x] 2. Audit trail (#125)
 - [x] 3. Dashboard on real data (#126)
-- [ ] 4. Guest mode + signup off (#128, signup part of #129)
+- [x] 4. Guest mode + signup off (#128, signup part of #129)
 - [ ] 5. Helm charts (#148)
 - [ ] 6. Deploy pipeline + in-cluster Acme (#129, code)
 - [ ] 7. Ops — public host (#129)
@@ -65,6 +65,7 @@ ADR-0019 → Accepted + amended (no ADR-0030 for this).
 - **Cleanup** (charts replace them): port probes/resources/securityContext from `infra/k8s/base` into the charts, then delete `infra/k8s/base`, `infra/k8s/overlays`, `infra/k8s/infra/otel-collector`, `infra/k8s/infra/namespace.yml`, and `infra/k8s/cluster/` (personal kubeadm lab, not deploy code). Keep `infra/k8s/infra/helm/*` (monitoring values) for 7.6. Repoint `docs/runbooks/quickstart.md` §53 to the charts.
 - Multi-arch images (`linux/amd64,linux/arm64`) via `docker buildx` in CI, Acme fake-service image included.
 - `values-demo.yaml` sized for 8GB per ADR-0030: JVMs 512Mi limit, `-XX:MaxRAMPercentage=75 -XX:+UseSerialGC -Xss512k`; Kafka `-Xmx384m`; Postgres `shared_buffers=128MB`.
+- `values-demo.yaml` sets gateway `GUEST_TENANT_ID` = the Acme tenant's fixed UUID (step 6 bootstrap) and `SIGNUP_ENABLED=false` (step 4 defaults: guest off, signup on).
 - `values-demo.yaml` sets topology `TOPOLOGY_DRIFT_MISSING_AFTER=PT1H` (default `P7D` would hide the seeded `loyalty-service → fx-service` missing drift for a week after install). Only safe with continuous in-cluster Acme traffic (step 6) — bursty traffic + short window makes missing drift flap and floods audit/Timeline (seen in dev 2026-11-03 with `PT2M`).
 
 Done when: `helm lint` + `helm template` clean; umbrella installs on local k3d.

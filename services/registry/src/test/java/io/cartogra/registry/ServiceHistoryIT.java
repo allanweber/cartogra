@@ -105,6 +105,7 @@ class ServiceHistoryIT {
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", TENANT.toString())
+                .header("X-User-Roles", "ADMIN")
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
     }
@@ -113,6 +114,7 @@ class ServiceHistoryIT {
         return HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("X-Tenant-Id", TENANT.toString())
+                .header("X-User-Roles", "ADMIN")
                 .GET()
                 .build();
     }

@@ -1,5 +1,7 @@
 package io.cartogra.registry.domain;
 
+import io.cartogra.common.identity.Roles;
+import org.springframework.security.access.prepost.PreAuthorize;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.common.audit.AuditEvent;
 import io.cartogra.common.audit.AuditEventPort;
@@ -84,6 +86,7 @@ public class ServiceService {
         this.auditEventPort = auditEventPort;
     }
 
+    @PreAuthorize(Roles.CAN_WRITE)
     @Transactional
     public Service create(UUID tenantId, Actor actor, CreateServiceRequest req) {
         if (serviceRepository.existsByName(tenantId, req.name(), null)) {
@@ -126,6 +129,7 @@ public class ServiceService {
         }
     }
 
+    @PreAuthorize(Roles.CAN_WRITE)
     @Transactional
     public Service update(UUID tenantId, Actor actor, UUID serviceId, UpdateServiceRequest req) {
         Service existing = serviceRepository.findById(tenantId, serviceId)
@@ -199,6 +203,7 @@ public class ServiceService {
         return saved;
     }
 
+    @PreAuthorize(Roles.CAN_WRITE)
     @Transactional
     public void delete(UUID tenantId, Actor actor, UUID serviceId) {
         Service existing = serviceRepository.findById(tenantId, serviceId)
@@ -261,6 +266,7 @@ public class ServiceService {
         return PageResult.of(orphans, orphans.size(), limit, offset);
     }
 
+    @PreAuthorize(Roles.CAN_WRITE)
     @Transactional
     public Service assignOwner(UUID tenantId, Actor actor, UUID serviceId, @Nullable UUID teamId) {
         Service existing = serviceRepository.findById(tenantId, serviceId)

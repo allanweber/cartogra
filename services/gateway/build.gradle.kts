@@ -36,6 +36,7 @@ dependencies {
     implementation("org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j")
 
     testImplementation(project(":shared:test-support"))
+    testImplementation(testFixtures(project(":shared:web")))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("org.testcontainers:testcontainers-postgresql")

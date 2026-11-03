@@ -1,5 +1,6 @@
 package io.cartogra.gateway.api;
 
+import io.cartogra.gateway.domain.exception.SignupDisabledException;
 import io.cartogra.common.api.ApiError;
 import io.cartogra.common.api.ApiErrorResponse;
 import io.cartogra.common.api.ErrorCodes;
@@ -41,6 +42,11 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleUnauthorized(RuntimeException ex) {
         log.warn("Unauthorized: {}", ex.getMessage());
         return error(HttpStatus.UNAUTHORIZED, ErrorCodes.UNAUTHORIZED, ex.getMessage());
+    }
+
+    @ExceptionHandler(SignupDisabledException.class)
+    public ResponseEntity<ApiErrorResponse> handleSignupDisabled(SignupDisabledException ex) {
+        return error(HttpStatus.FORBIDDEN, ErrorCodes.SIGNUP_DISABLED, ex.getMessage());
     }
 
     @ExceptionHandler(ConflictException.class)

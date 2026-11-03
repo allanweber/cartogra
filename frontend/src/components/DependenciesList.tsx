@@ -14,6 +14,7 @@ import { cn } from '#/lib/utils'
 
 import type { ServiceHealth } from '#/lib/registry-types'
 import type { DependencyDirectionEntry, ServiceDependencies } from '#/lib/topology-types'
+import { ReadOnlyGuard } from '#/components/ReadOnlyGuard'
 
 type Direction = 'upstream' | 'downstream'
 
@@ -55,14 +56,18 @@ function DependencyRow({
         </span>
         {canManage && (
           <>
-            <Button variant="ghost" size="icon-sm" onClick={() => onEdit(entry, direction)}>
-              <Pencil className="size-3.5" />
-              <span className="sr-only">Edit dependency on {entry.name}</span>
-            </Button>
-            <Button variant="ghost" size="icon-sm" onClick={() => onRemove(entry)}>
-              <Trash2 className="size-3.5" />
-              <span className="sr-only">Remove dependency on {entry.name}</span>
-            </Button>
+            <ReadOnlyGuard>
+              <Button variant="ghost" size="icon-sm" onClick={() => onEdit(entry, direction)}>
+                <Pencil className="size-3.5" />
+                <span className="sr-only">Edit dependency on {entry.name}</span>
+              </Button>
+            </ReadOnlyGuard>
+            <ReadOnlyGuard>
+              <Button variant="ghost" size="icon-sm" onClick={() => onRemove(entry)}>
+                <Trash2 className="size-3.5" />
+                <span className="sr-only">Remove dependency on {entry.name}</span>
+              </Button>
+            </ReadOnlyGuard>
           </>
         )}
       </div>
@@ -143,17 +148,19 @@ export function DependenciesList({ serviceId, canManage }: { serviceId: string; 
           </Link>
         </Button>
         {canManage && (
-          <Button
-            size="sm"
-            onClick={() => {
-              setDialogState({ mode: 'add' })
-              setDialogOpen(true)
-            }}
-            className="gap-1.5"
-          >
-            <Plus className="size-3.5" />
-            Add dependency
-          </Button>
+          <ReadOnlyGuard>
+            <Button
+              size="sm"
+              onClick={() => {
+                setDialogState({ mode: 'add' })
+                setDialogOpen(true)
+              }}
+              className="gap-1.5"
+            >
+              <Plus className="size-3.5" />
+              Add dependency
+            </Button>
+          </ReadOnlyGuard>
         )}
       </div>
 

@@ -1,5 +1,6 @@
 package io.cartogra.registry.domain;
 
+import io.cartogra.common.identity.Roles;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.common.audit.AuditEvent;
 import io.cartogra.common.audit.AuditEventPort;
@@ -40,7 +41,7 @@ public class TeamService {
         this.auditEventPort = auditEventPort;
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEAM_OWNER')")
+    @PreAuthorize(Roles.CAN_WRITE)
     @Transactional
     public Team create(UUID tenantId, Actor actor, String name) {
         if (teamRepository.existsByName(tenantId, name, null)) {
@@ -68,10 +69,10 @@ public class TeamService {
         }
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEAM_OWNER')")
+    @PreAuthorize(Roles.CAN_WRITE)
     @Transactional
     public Team update(UUID tenantId, Actor actor, UUID teamId, String name) {
-        requireAdminOrOwningTeamOwner(tenantId, teamId, actor);
+        requireAdminOrTeamMember(tenantId, teamId, actor);
         Team existing = teamRepository.findById(tenantId, teamId)
                 .orElseThrow(() -> new TeamNotFoundException(teamId));
 
@@ -92,10 +93,10 @@ public class TeamService {
         return saved;
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEAM_OWNER')")
+    @PreAuthorize(Roles.CAN_WRITE)
     @Transactional
     public void delete(UUID tenantId, Actor actor, UUID teamId) {
-        requireAdminOrOwningTeamOwner(tenantId, teamId, actor);
+        requireAdminOrTeamMember(tenantId, teamId, actor);
         Team existing = teamRepository.findById(tenantId, teamId)
                 .orElseThrow(() -> new TeamNotFoundException(teamId));
         Instant deletedAt = Instant.now();
@@ -106,10 +107,10 @@ public class TeamService {
                 existing.createdAt(), existing.updatedAt(), deletedAt));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEAM_OWNER')")
+    @PreAuthorize(Roles.CAN_WRITE)
     @Transactional
     public TeamMember addMember(UUID tenantId, Actor actor, UUID teamId, UUID userId) {
-        requireAdminOrOwningTeamOwner(tenantId, teamId, actor);
+        requireAdminOrTeamMember(tenantId, teamId, actor);
         Team team = teamRepository.findById(tenantId, teamId).orElseThrow(() -> new TeamNotFoundException(teamId));
         if (teamRepository.isMember(tenantId, teamId, userId)) {
             return teamRepository.findMembers(tenantId, teamId).stream()
@@ -123,10 +124,10 @@ public class TeamService {
         return member;
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEAM_OWNER')")
+    @PreAuthorize(Roles.CAN_WRITE)
     @Transactional
     public void removeMember(UUID tenantId, Actor actor, UUID teamId, UUID userId) {
-        requireAdminOrOwningTeamOwner(tenantId, teamId, actor);
+        requireAdminOrTeamMember(tenantId, teamId, actor);
         Team team = teamRepository.findById(tenantId, teamId).orElseThrow(() -> new TeamNotFoundException(teamId));
         if (!teamRepository.isMember(tenantId, teamId, userId)) {
             return;
@@ -163,13 +164,13 @@ public class TeamService {
         auditEventPort.record(AuditEvent.of(team.tenantId(), "team", team.id(), action, actor, payload));
     }
 
-    private void requireAdminOrOwningTeamOwner(UUID tenantId, UUID teamId, Actor actor) {
+    private void requireAdminOrTeamMember(UUID tenantId, UUID teamId, Actor actor) {
         if (actor.admin()) {
             return;
         }
         if (actor.userId() == null || !teamRepository.isMember(tenantId, teamId, actor.userId())) {
             throw new AccessDeniedException(
-                    "Only ADMIN or an owner who is a member of this team may perform this action");
+                    "Only ADMIN or a member of this team may perform this action");
         }
     }
 

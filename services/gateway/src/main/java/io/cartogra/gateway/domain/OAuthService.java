@@ -2,6 +2,8 @@ package io.cartogra.gateway.domain;
 
 import io.cartogra.gateway.api.dto.TokenResponse;
 import io.cartogra.gateway.config.JwtConfig;
+import io.cartogra.gateway.config.SignupProperties;
+import io.cartogra.gateway.domain.exception.SignupDisabledException;
 import io.cartogra.gateway.config.OAuthConfig;
 import io.cartogra.gateway.domain.exception.InvalidOAuthStateException;
 import io.cartogra.gateway.domain.exception.PlanLimitExceededException;
@@ -39,6 +41,7 @@ public class OAuthService {
     private final JwtConfig jwtConfig;
     private final StringRedisTemplate redis;
     private final BillingPlanService billingPlanService;
+    private final SignupProperties signup;
 
     public OAuthService(List<OAuthProvider> providers,
                         OAuthConfig oauthConfig,
@@ -48,7 +51,8 @@ public class OAuthService {
                         JwtTokenProvider jwtTokenProvider,
                         JwtConfig jwtConfig,
                         StringRedisTemplate redis,
-                        BillingPlanService billingPlanService) {
+                        BillingPlanService billingPlanService,
+                        SignupProperties signup) {
         this.providers = List.copyOf(providers);
         this.oauthConfig = oauthConfig;
         this.userRepository = userRepository;
@@ -58,6 +62,7 @@ public class OAuthService {
         this.jwtConfig = jwtConfig;
         this.redis = redis;
         this.billingPlanService = billingPlanService;
+        this.signup = signup;
     }
 
     public String buildAuthorizationUri(String provider, @Nullable UUID tenantId, String state) {
@@ -107,6 +112,9 @@ public class OAuthService {
             }
             return existing;
         }).orElseGet(() -> {
+            if (!signup.enabled()) {
+                throw new SignupDisabledException();
+            }
             Tenant tenant = tenantRepository.save(
                 new Tenant(null, null, profile.email(), null, "free", null, null, null));
             return userRepository.save(new User(null, tenant.id(), profile.email(), profile.name(),

@@ -1,5 +1,6 @@
 package io.cartogra.gateway.api;
 
+import io.cartogra.gateway.domain.exception.SignupDisabledException;
 import io.cartogra.gateway.api.dto.TokenResponse;
 import io.cartogra.gateway.domain.AuthService;
 import io.cartogra.gateway.domain.OAuthService;
@@ -78,6 +79,11 @@ public class OAuthController {
                         .maxAge(30L * 24 * 3600).build().toString());
             }
             return ResponseEntity.status(HttpStatus.FOUND).headers(headers).build();
+        } catch (SignupDisabledException e) {
+            return ResponseEntity.status(HttpStatus.FOUND)
+                .header(HttpHeaders.LOCATION, frontend.baseUrl() + "/login?error=signup_disabled")
+                .header("X-Trace-Id", traceId)
+                .build();
         } catch (Exception e) {
             log.warn("OAuth callback failed for provider {}: {}", provider, e.getMessage());
             return ResponseEntity.status(HttpStatus.FOUND)

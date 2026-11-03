@@ -1,5 +1,6 @@
 package io.cartogra.gateway.config;
 
+import io.cartogra.common.identity.Roles;
 import io.cartogra.gateway.infrastructure.security.JsonAccessDeniedHandler;
 import io.cartogra.gateway.infrastructure.security.JsonAuthenticationEntryPoint;
 import io.cartogra.gateway.infrastructure.tracing.TraceContext;
@@ -56,6 +57,7 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http,
             JwtAuthenticationFilter jwtFilter,
             RateLimitFilter rateLimitFilter,
+            GuestWriteDenyFilter guestWriteDenyFilter,
             TenantInjectionFilter tenantFilter,
             ProxyRequestLoggingFilter proxyLoggingFilter) throws Exception {
         return http
@@ -66,7 +68,8 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(rateLimitFilter, JwtAuthenticationFilter.class)
-                .addFilterAfter(tenantFilter, RateLimitFilter.class)
+                .addFilterAfter(guestWriteDenyFilter, RateLimitFilter.class)
+                .addFilterAfter(tenantFilter, GuestWriteDenyFilter.class)
                 .addFilterAfter(proxyLoggingFilter, TenantInjectionFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/register", "/api/auth/verify",
@@ -74,7 +77,7 @@ public class SecurityConfig {
                                 "/api/auth/login", "/api/auth/refresh",
                                 "/api/auth/logout", "/api/auth/oauth/**",
                                 "/api/auth/forgot-password", "/api/auth/reset-password",
-                                "/api/auth/accept-invite")
+                                "/api/auth/accept-invite", "/api/auth/guest", "/api/auth/features")
                         .permitAll()
                         .requestMatchers("/actuator/health/**").permitAll()
                         .requestMatchers("/internal/fallback/**").permitAll()
@@ -87,7 +90,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/ingestion/scm-connections/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/ingestion/k8s/clusters/**").hasRole("ADMIN")
-                        .requestMatchers("/api/v1/**").hasAnyRole("VIEWER", "MEMBER", "TEAM_OWNER", "ADMIN")
+                        .requestMatchers("/api/v1/**").hasAnyRole("VIEWER", "MEMBER", "TEAM_OWNER", "ADMIN", Roles.GUEST)
                         .anyRequest().authenticated())
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint(new JsonAuthenticationEntryPoint(traceContext))

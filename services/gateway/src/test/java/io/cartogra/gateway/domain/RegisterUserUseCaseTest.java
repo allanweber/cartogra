@@ -3,6 +3,7 @@ package io.cartogra.gateway.domain;
 import io.cartogra.gateway.api.dto.RegisterRequest;
 import io.cartogra.gateway.api.dto.RegisterResponse;
 import io.cartogra.gateway.config.JwtConfig;
+import io.cartogra.gateway.config.SignupProperties;
 import io.cartogra.gateway.infrastructure.email.EmailSender;
 import io.cartogra.gateway.repository.InvitationRepository;
 import io.cartogra.gateway.repository.RefreshTokenRepository;
@@ -65,7 +66,7 @@ class RegisterUserUseCaseTest {
         JwtConfig config = new JwtConfig("secret", 900L, 2592000L, false);
         auth = new AuthService(userRepository, tenantRepository, refreshTokenRepository,
             teamMembershipRepository, invitationRepository, emailSender, passwordEncoder, jwtTokenProvider, config, billingPlanService,
-            _ -> { });
+            _ -> { }, new SignupProperties(true));
         when(tenantRepository.save(any(Tenant.class)))
             .thenReturn(new Tenant(fixedTenantId, fixedTenantId, "name", "slug", "free", null, null, null));
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));

@@ -1,6 +1,7 @@
 package io.cartogra.gateway.api;
 
 import io.cartogra.gateway.api.dto.AcceptInviteRequest;
+import io.cartogra.gateway.api.dto.AuthFeaturesResponse;
 import io.cartogra.gateway.api.dto.ApiResponse;
 import io.cartogra.gateway.api.dto.ForgotPasswordRequest;
 import io.cartogra.gateway.api.dto.InviteUserRequest;
@@ -17,7 +18,9 @@ import io.cartogra.gateway.api.dto.UserInfoResponse;
 import io.cartogra.gateway.api.dto.UserSummaryResponse;
 import io.cartogra.gateway.api.dto.VerifyEmailRequest;
 import io.cartogra.gateway.config.JwtConfig;
+import io.cartogra.gateway.config.SignupProperties;
 import io.cartogra.gateway.domain.AuthService;
+import io.cartogra.gateway.domain.GuestService;
 import io.cartogra.gateway.domain.UpdateUserInfoResult;
 import io.cartogra.gateway.domain.exception.UnauthorizedException;
 import io.cartogra.gateway.infrastructure.jwt.JwtClaims;
@@ -46,13 +49,45 @@ public class AuthController {
     private static final String COOKIE_REFRESH = "jwt_refresh";
 
     private final AuthService auth;
+    private final GuestService guest;
+    private final SignupProperties signup;
     private final TraceContext traceContext;
     private final boolean cookieSecure;
 
-    public AuthController(AuthService auth, TraceContext traceContext, JwtConfig jwtConfig) {
+    public AuthController(AuthService auth, GuestService guest, SignupProperties signup,
+            TraceContext traceContext, JwtConfig jwtConfig) {
         this.auth = auth;
+        this.guest = guest;
+        this.signup = signup;
         this.traceContext = traceContext;
         this.cookieSecure = jwtConfig.cookieSecure();
+    }
+
+    @GetMapping("/features")
+    public ResponseEntity<ApiResponse<AuthFeaturesResponse>> features() {
+        String traceId = traceContext.currentTraceId();
+        AuthFeaturesResponse result = new AuthFeaturesResponse(signup.enabled(), guest.enabled());
+        return ResponseEntity.ok()
+            .header("X-Trace-Id", traceId)
+            .body(new ApiResponse<>(result, traceId));
+    }
+
+    @PostMapping("/guest")
+    public ResponseEntity<ApiResponse<TokenResponse>> guest(
+            @CookieValue(name = COOKIE_REFRESH, required = false) String replacedRefreshToken,
+            HttpServletResponse response) {
+        String traceId = traceContext.currentTraceId();
+        TokenResponse result = guest.mint();
+        if (replacedRefreshToken != null) {
+            auth.logout(replacedRefreshToken);
+            response.addHeader(HttpHeaders.SET_COOKIE,
+                ResponseCookie.from(COOKIE_REFRESH, "")
+                    .httpOnly(true).secure(cookieSecure).path("/").maxAge(0).build().toString());
+        }
+        setAuthCookies(response, result);
+        return ResponseEntity.ok()
+            .header("X-Trace-Id", traceId)
+            .body(new ApiResponse<>(result, traceId));
     }
 
     @PostMapping("/register")

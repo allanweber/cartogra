@@ -95,6 +95,7 @@ class ServiceAccessInternalControllerIT {
                         .uri(URI.create("http://localhost:" + port + "/api/v1/registry/services"))
                         .header("Content-Type", "application/json")
                         .header("X-Tenant-Id", tenantId.toString())
+                        .header("X-User-Roles", "ADMIN")
                         .POST(HttpRequest.BodyPublishers.ofString(body))
                         .build(),
                 HttpResponse.BodyHandlers.ofString());

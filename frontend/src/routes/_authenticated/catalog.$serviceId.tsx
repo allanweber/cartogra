@@ -19,11 +19,12 @@ import { Skeleton } from '#/components/ui/skeleton'
 import { ApiError, apiFetch } from '#/lib/api'
 import { normalizeHealth, SCM_LABEL } from '#/lib/registry-types'
 import { computeRiskScore } from '#/lib/risk-score'
-import { useAuthStore } from '#/stores/useAuthStore'
 import { cn } from '#/lib/utils'
 
 import type { PageResult, RegistryService, RegistryTeam, ServiceHealth } from '#/lib/registry-types'
 import type { Cycles, Spofs } from '#/lib/topology-types'
+import { ReadOnlyGuard } from '#/components/ReadOnlyGuard'
+import { useCan } from '#/lib/permissions'
 
 type TabId = 'overview' | 'dependencies' | 'contracts' | 'activity'
 
@@ -119,7 +120,7 @@ function ServiceDetailPage() {
     activity: null,
   })
   const [editOpen, setEditOpen] = useState(false)
-  const isAdmin = useAuthStore((s) => s.user?.roles.includes('ADMIN') ?? false)
+  const can = useCan()
 
   const { data: service, isLoading, error } = useQuery({
     queryKey: ['service', serviceId],
@@ -129,12 +130,6 @@ function ServiceDetailPage() {
   const { data: teamsPage } = useQuery({
     queryKey: ['teams'],
     queryFn: () => apiFetch<PageResult<RegistryTeam>>('/v1/registry/teams?limit=200'),
-  })
-
-  const { data: myTeamIds } = useQuery({
-    queryKey: ['teams', 'mine'],
-    queryFn: () => apiFetch<string[]>('/v1/registry/teams/mine'),
-    enabled: !isAdmin,
   })
 
   const teamMap = new Map((teamsPage?.items ?? []).map((t) => [t.id, t.name]))
@@ -195,8 +190,7 @@ function ServiceDetailPage() {
   const riskScore = computeRiskScore(service)
   const insights = buildInsights(service, riskScore)
   const lastDeploy = service.lastDeployedAt ? relativeTime(service.lastDeployedAt) : null
-  const canEdit =
-    isAdmin || (!!service.teamId && (myTeamIds ?? []).includes(service.teamId))
+  const canEdit = can('service.edit', { teamId: service.teamId }) !== 'deny'
 
   return (
     <AppLayout
@@ -204,10 +198,12 @@ function ServiceDetailPage() {
       eyebrow="Service Catalog"
       actions={
         canEdit && (
-          <Button size="sm" onClick={() => setEditOpen(true)} className="gap-1.5">
-            <Pencil className="size-3.5" />
-            Edit
-          </Button>
+          <ReadOnlyGuard>
+            <Button size="sm" onClick={() => setEditOpen(true)} className="gap-1.5">
+              <Pencil className="size-3.5" />
+              Edit
+            </Button>
+          </ReadOnlyGuard>
         )
       }
     >

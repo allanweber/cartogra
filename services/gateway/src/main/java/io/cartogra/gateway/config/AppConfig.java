@@ -20,7 +20,7 @@ import java.nio.charset.StandardCharsets;
 
 @Configuration
 @EnableScheduling
-@EnableConfigurationProperties({JwtConfig.class, ResendConfig.class, OAuthConfig.class, RateLimitProperties.class, CorsProperties.class, FrontendProperties.class})
+@EnableConfigurationProperties({JwtConfig.class, ResendConfig.class, OAuthConfig.class, RateLimitProperties.class, CorsProperties.class, FrontendProperties.class, GuestProperties.class, SignupProperties.class})
 public class AppConfig {
 
     @Bean
