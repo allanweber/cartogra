@@ -10,14 +10,22 @@ import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
 import { Skeleton } from '#/components/ui/skeleton'
+import { useRecentAuditEvents } from '#/hooks/useAuditEvents'
 import { useRiskDismissals } from '#/hooks/useRiskDismissals'
 import { formatAffected, useRisks, useServiceNames } from '#/hooks/useRisks'
 import { ApiError, apiFetch } from '#/lib/api'
-import { MOCK_TIMELINE } from '#/lib/mock-data'
+import {
+  AUDIT_CATEGORY_COLORS,
+  auditActor,
+  auditCategory,
+  auditMessage,
+  auditSubject,
+  relativeTime,
+} from '#/lib/audit-format'
 import { normalizeHealth } from '#/lib/registry-types'
 import { cn } from '#/lib/utils'
 
-import type { TimelineEvent } from '#/lib/mock-data'
+import type { AuditEvent } from '#/lib/audit-types'
 import type { PageResult, RegistryService, RegistryTeam } from '#/lib/registry-types'
 
 export const Route = createFileRoute('/_authenticated/dashboard')({
@@ -47,6 +55,8 @@ function DashboardPage() {
     queryFn: () => apiFetch<PageResult<RegistryTeam>>('/v1/registry/teams?limit=1'),
   })
   const totalTeams = teamsPage?.total ?? 0
+
+  const { data: activityPage, isLoading: activityLoading, error: activityError } = useRecentAuditEvents(5)
 
   const services = servicesPage?.items ?? []
   const totalServices = servicesPage?.total ?? 0
@@ -276,15 +286,23 @@ function DashboardPage() {
             <p className="text-xs text-muted-foreground">Most recent events across all services</p>
           </CardHeader>
           <CardContent>
-            {error ? (
+            {activityError ? (
               <Alert variant="destructive">
                 <AlertDescription>
-                  {error.message}
-                  {error instanceof ApiError && ` (trace: ${error.traceId})`}
+                  {activityError.message}
+                  {activityError instanceof ApiError && ` (trace: ${activityError.traceId})`}
                 </AlertDescription>
               </Alert>
+            ) : activityLoading ? (
+              <div className="space-y-2" aria-label="Loading activity">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-10 w-full" />
+                ))}
+              </div>
+            ) : (activityPage?.items.length ?? 0) === 0 ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">No activity recorded yet.</p>
             ) : (
-              <ActivityList events={MOCK_TIMELINE.slice(0, 5)} />
+              <ActivityList events={activityPage?.items ?? []} />
             )}
           </CardContent>
         </Card>
@@ -349,31 +367,33 @@ function StaleServiceRow({ service }: { service: RegistryService }) {
   )
 }
 
-function ActivityList({ events }: { events: TimelineEvent[] }) {
-  const typeColors: Record<string, string> = {
-    deploy: 'bg-success',
-    contract: 'bg-info',
-    risk: 'bg-critical',
-    ownership: 'bg-warning',
-    dependency: 'bg-info',
-  }
-
+function ActivityList({ events }: { events: AuditEvent[] }) {
   return (
     <div className="space-y-0">
-      {events.map((event, idx) => (
-        <div key={event.id} className="flex gap-3">
-          <div className="flex flex-col items-center">
-            <div className={cn('size-2.5 rounded-full', typeColors[event.type] ?? 'bg-muted-foreground')} />
-            {idx < events.length - 1 && <div className="w-px flex-1 bg-border" />}
+      {events.map((event, idx) => {
+        const category = auditCategory(event.entityType)
+        return (
+          <div key={event.eventId} className="flex gap-3" data-testid="activity-event">
+            <div className="flex flex-col items-center">
+              <div
+                className={cn('size-2.5 rounded-full', category ? AUDIT_CATEGORY_COLORS[category] : 'bg-muted-foreground')}
+              />
+              {idx < events.length - 1 && <div className="w-px flex-1 bg-border" />}
+            </div>
+            <div className="min-w-0 pb-4">
+              <p className="text-sm">
+                <span className="font-medium">{auditSubject(event)}</span> · {auditMessage(event)}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {auditActor(event)} ·{' '}
+                <time dateTime={event.occurredAt} title={new Date(event.occurredAt).toLocaleString()}>
+                  {relativeTime(event.occurredAt)}
+                </time>
+              </p>
+            </div>
           </div>
-          <div className="min-w-0 pb-4">
-            <p className="text-sm">{event.msg}</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {event.service} · {event.time}
-            </p>
-          </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

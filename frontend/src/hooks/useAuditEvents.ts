@@ -1,4 +1,4 @@
-import { useInfiniteQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 
 import { apiFetch } from '#/lib/api'
 
@@ -17,5 +17,12 @@ export function useAuditEvents(entityTypes: string[] | null) {
     initialPageParam: 0,
     getNextPageParam: (last) =>
       last.offset + last.items.length < last.total ? last.offset + last.items.length : undefined,
+  })
+}
+
+export function useRecentAuditEvents(limit: number) {
+  return useQuery({
+    queryKey: ['audit-events', 'recent', limit],
+    queryFn: () => apiFetch<AuditEventsPage>(`/v1/registry/audit-events?limit=${limit}&offset=0`),
   })
 }

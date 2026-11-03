@@ -12,6 +12,15 @@ export const AUDIT_CATEGORY_ENTITY_TYPES: Record<AuditCategory, string[]> = {
   access: ['user', 'invitation', 'oidc_config'],
 }
 
+export const AUDIT_CATEGORY_COLORS: Record<AuditCategory, string> = {
+  service: 'bg-info',
+  team: 'bg-warning',
+  dependency: 'bg-info',
+  drift: 'bg-critical',
+  integration: 'bg-success',
+  access: 'bg-warning',
+}
+
 const ENTITY_LABELS: Record<string, string> = {
   service: 'Service',
   team: 'Team',

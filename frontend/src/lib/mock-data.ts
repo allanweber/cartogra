@@ -42,18 +42,6 @@ export interface Team {
   lead: string
 }
 
-export type TimelineEventType = 'deploy' | 'contract' | 'risk' | 'ownership' | 'dependency'
-
-export interface TimelineEvent {
-  id: string
-  type: TimelineEventType
-  service: string
-  msg: string
-  time: string
-  actor: string
-  team: string | null
-}
-
 export type OperationsEventType = 'github' | 'k8s' | 'otel' | 'azure'
 export type OperationsEventStatus = 'success' | 'error' | 'warning' | 'info'
 
@@ -82,19 +70,6 @@ export const MOCK_TEAMS: Team[] = [
   { id: 't-3', name: 'Payments', members: 5, services: ['Payment Service', 'Billing Service'], health: 'degraded', riskExposure: 'critical', lead: 'Jamie L.' },
   { id: 't-4', name: 'Core', members: 8, services: ['User Service', 'Media Service'], health: 'healthy', riskExposure: 'medium', lead: 'Alice W.' },
   { id: 't-5', name: 'Data', members: 7, services: ['Analytics Engine', 'ML Pipeline', 'Report Service'], health: 'degraded', riskExposure: 'high', lead: 'Bob R.' },
-]
-
-export const MOCK_TIMELINE: TimelineEvent[] = [
-  { id: 'tl-1', type: 'deploy', service: 'API Gateway', msg: 'Deployed v3.2.1 — performance patch', time: '2h ago', actor: 'ci-bot', team: 'Platform' },
-  { id: 'tl-2', type: 'contract', service: 'Payment Service', msg: 'Breaking change in payment-api v2.1', time: '4h ago', actor: 'alice@corp.com', team: 'Payments' },
-  { id: 'tl-3', type: 'deploy', service: 'Auth Service', msg: 'Deployed v1.9.3 — security patch', time: '1d ago', actor: 'ci-bot', team: 'Security' },
-  { id: 'tl-4', type: 'risk', service: 'Search Service', msg: 'Service went offline — no heartbeat', time: '20d ago', actor: 'system', team: null },
-  { id: 'tl-5', type: 'ownership', service: 'Report Service', msg: 'Owner removed — service now unowned', time: '3d ago', actor: 'admin@corp.com', team: 'Data' },
-  { id: 'tl-6', type: 'dependency', service: 'User Service', msg: 'Added dependency on Config Service', time: '5d ago', actor: 'bob@corp.com', team: 'Core' },
-  { id: 'tl-7', type: 'deploy', service: 'ML Pipeline', msg: 'Deployed v2.1.0 — new recommendation model', time: '1d ago', actor: 'ci-bot', team: 'Data' },
-  { id: 'tl-8', type: 'contract', service: 'Auth Service', msg: 'auth-api updated to v1.4 — new scopes added', time: '7d ago', actor: 'alice@corp.com', team: 'Security' },
-  { id: 'tl-9', type: 'deploy', service: 'Billing Service', msg: 'Deployed v1.1.5 — invoice timezone fix', time: '6h ago', actor: 'ci-bot', team: 'Payments' },
-  { id: 'tl-10', type: 'dependency', service: 'Analytics Engine', msg: 'Removed dependency on legacy Event Bus', time: '8d ago', actor: 'bob@corp.com', team: 'Data' },
 ]
 
 export const MOCK_EVENTS: OperationsEvent[] = [

@@ -10,6 +10,7 @@ import { Skeleton } from '#/components/ui/skeleton'
 import { useAuditEvents } from '#/hooks/useAuditEvents'
 import { ApiError } from '#/lib/api'
 import {
+  AUDIT_CATEGORY_COLORS,
   AUDIT_CATEGORY_ENTITY_TYPES,
   auditActor,
   auditCategory,
@@ -37,13 +38,13 @@ const CATEGORY_FILTERS: Array<{ label: string; value: CategoryFilter }> = [
   { label: 'Access', value: 'access' },
 ]
 
-const categoryConfig: Record<AuditCategory, { color: string; label: string; abbr: string }> = {
-  service: { color: 'bg-info', label: 'Service', abbr: 'svc' },
-  team: { color: 'bg-warning', label: 'Team', abbr: 'tm' },
-  dependency: { color: 'bg-info', label: 'Dependency', abbr: 'dep' },
-  drift: { color: 'bg-critical', label: 'Drift', abbr: 'dft' },
-  integration: { color: 'bg-success', label: 'Integration', abbr: 'int' },
-  access: { color: 'bg-warning', label: 'Access', abbr: 'acc' },
+const categoryConfig: Record<AuditCategory, { label: string; abbr: string }> = {
+  service: { label: 'Service', abbr: 'svc' },
+  team: { label: 'Team', abbr: 'tm' },
+  dependency: { label: 'Dependency', abbr: 'dep' },
+  drift: { label: 'Drift', abbr: 'dft' },
+  integration: { label: 'Integration', abbr: 'int' },
+  access: { label: 'Access', abbr: 'acc' },
 }
 
 function TimelinePage() {
@@ -92,7 +93,7 @@ function TimelinePage() {
             >
               {f.value !== 'all' && (
                 <span
-                  className={cn('mr-1.5 inline-block size-1.5 rounded-full', categoryConfig[f.value].color)}
+                  className={cn('mr-1.5 inline-block size-1.5 rounded-full', AUDIT_CATEGORY_COLORS[f.value])}
                 />
               )}
               {f.label}
@@ -120,14 +121,15 @@ function TimelinePage() {
         {!isLoading && !error && (
           <div className="relative ml-3 space-y-0">
             {visible.map((event, idx) => {
-              const config = categoryConfig[auditCategory(event.entityType) ?? 'service']
+              const category = auditCategory(event.entityType) ?? 'service'
+              const config = categoryConfig[category]
               return (
                 <div key={event.eventId} className="flex gap-4" data-testid="timeline-event">
                   <div className="flex flex-col items-center">
                     <div
                       className={cn(
                         'z-10 flex size-7 shrink-0 items-center justify-center rounded-full ring-2 ring-background',
-                        config.color,
+                        AUDIT_CATEGORY_COLORS[category],
                       )}
                     >
                       <span className="text-xs font-bold text-primary-foreground uppercase">{config.abbr}</span>

@@ -6,6 +6,7 @@ import { Route } from '#/routes/_authenticated/dashboard'
 import { TooltipProvider } from '#/components/ui/tooltip'
 import { apiFetch, ApiError } from '#/lib/api'
 
+import type { AuditEvent, AuditEventsPage } from '#/lib/audit-types'
 import type { PageResult, RegistryService } from '#/lib/registry-types'
 import type { RisksPage } from '#/lib/topology-types'
 
@@ -69,11 +70,31 @@ function makeService(overrides: Partial<RegistryService>): RegistryService {
 }
 
 const NO_RISKS: RisksPage = { items: [], total: 0, limit: 200, offset: 0, truncated: false }
+const NO_ACTIVITY: AuditEventsPage = { items: [], total: 0, limit: 5, offset: 0 }
 
-function mockApi(services: unknown, risks: RisksPage = NO_RISKS) {
-  vi.mocked(apiFetch).mockImplementation(async (path: string) =>
-    path.includes('/topology/risks') ? risks : services,
-  )
+function mockApi(services: unknown, risks: RisksPage = NO_RISKS, activity: AuditEventsPage = NO_ACTIVITY) {
+  vi.mocked(apiFetch).mockImplementation(async (path: string) => {
+    if (path.includes('/topology/risks')) return risks
+    if (path.includes('/registry/audit-events')) return activity
+    return services
+  })
+}
+
+const EMPTY_SERVICES: PageResult<RegistryService> = { items: [], total: 0, limit: 200, offset: 0 }
+
+function makeAuditEvent(overrides: Partial<AuditEvent>): AuditEvent {
+  return {
+    eventId: 'ev-1',
+    entityType: 'service',
+    entityId: 'svc-1',
+    action: 'created',
+    actorKind: 'user',
+    actorId: 'u-1',
+    actorName: 'alice@acme.dev',
+    payload: { name: 'checkout-api' },
+    occurredAt: new Date().toISOString(),
+    ...overrides,
+  }
 }
 
 function renderPage() {
@@ -251,5 +272,70 @@ describe('DashboardPage', () => {
     renderPage()
 
     expect(await screen.findByLabelText(/teams unavailable.*trace-teams-1/i)).toBeInTheDocument()
+  })
+
+  describe('Recent Activity', () => {
+    it('requests the five most recent audit events', async () => {
+      mockApi(EMPTY_SERVICES)
+      renderPage()
+
+      await screen.findByText('No activity recorded yet.')
+      expect(vi.mocked(apiFetch)).toHaveBeenCalledWith('/v1/registry/audit-events?limit=5&offset=0')
+    })
+
+    it('shows skeletons while activity loads', async () => {
+      vi.mocked(apiFetch).mockImplementation((path: string) =>
+        path.includes('/registry/audit-events') ? new Promise(() => {}) : Promise.resolve(EMPTY_SERVICES),
+      )
+      renderPage()
+
+      expect(await screen.findByLabelText('Loading activity')).toBeInTheDocument()
+    })
+
+    it('shows an error alert with traceId when audit events fail', async () => {
+      vi.mocked(apiFetch).mockImplementation((path: string) =>
+        path.includes('/registry/audit-events')
+          ? Promise.reject(new ApiError('SERVER_ERROR', 'audit unavailable', 'trace-audit-1'))
+          : Promise.resolve(path.includes('/topology/risks') ? NO_RISKS : EMPTY_SERVICES),
+      )
+      renderPage()
+
+      expect(await screen.findByText(/audit unavailable.*trace-audit-1/)).toBeInTheDocument()
+    })
+
+    it('shows an empty state when no activity is recorded', async () => {
+      mockApi(EMPTY_SERVICES)
+      renderPage()
+
+      expect(await screen.findByText('No activity recorded yet.')).toBeInTheDocument()
+    })
+
+    it('renders live audit events with subject, message and actor', async () => {
+      mockApi(EMPTY_SERVICES, NO_RISKS, {
+        items: [
+          makeAuditEvent({ eventId: 'ev-1' }),
+          makeAuditEvent({
+            eventId: 'ev-2',
+            entityType: 'drift',
+            action: 'detected',
+            actorKind: 'system',
+            actorId: null,
+            actorName: null,
+            payload: { sourceName: 'orders', targetName: 'billing' },
+          }),
+        ],
+        total: 2,
+        limit: 5,
+        offset: 0,
+      })
+      renderPage()
+
+      expect(await screen.findAllByTestId('activity-event')).toHaveLength(2)
+      expect(screen.getByText('checkout-api')).toBeInTheDocument()
+      expect(screen.getByText(/Service created/)).toBeInTheDocument()
+      expect(screen.getByText(/alice@acme\.dev/)).toBeInTheDocument()
+      expect(screen.getByText('orders → billing')).toBeInTheDocument()
+      expect(screen.getByText(/Drift detected/)).toBeInTheDocument()
+    })
   })
 })
