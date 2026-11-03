@@ -1,0 +1,77 @@
+# gateway — API gateway: auth, JWT issuing, routing to backend services.
+# Secret keys (files under secret.mountPath): DB_USERNAME, DB_PASSWORD, JWT_SECRET, RESEND_API_KEY, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_SECRET
+
+# Plain (non-secret) env, rendered into a ConfigMap; values go through `tpl`.
+env:
+  DB_URL: jdbc:postgresql://postgres:5432/cartogra?currentSchema=registry
+  REDIS_HOST: valkey
+  REDIS_PORT: "6379"
+  REGISTRY_URI: http://registry:8081
+  TOPOLOGY_URI: http://topology:8082
+  INGESTION_URI: http://ingestion:8085
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://collector:4318
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info
+  APP_BASE_URL: "https://{{ .Values.global.host }}"
+  FRONTEND_BASE_URL: "https://{{ .Values.global.host }}"
+  CORS_ALLOWED_ORIGINS: "https://{{ .Values.global.host }}"
+  RESEND_FROM: noreply@cartogra.dev
+  RESEND_TEST_MODE: "false"
+  GOOGLE_CLIENT_ID: unset
+  GITHUB_CLIENT_ID: unset
+  # Guest demo mode stays off unless a demo tenant is set (ADR-0019).
+  GUEST_TENANT_ID: ""
+  SIGNUP_ENABLED: "true"
+
+image:
+  # Empty = global.imageRegistry.
+  registry: ""
+  repository: cartogra-gateway
+  # Defaults to global.imageTag, then the chart appVersion. Never `latest`.
+  tag: ""
+
+port: 8080
+
+probes:
+  basePath: ""
+  livePath: /actuator/health/live
+  readyPath: /actuator/health/ready
+  startupPath: /actuator/health
+  startupFailureThreshold: 36
+
+replicaCount: 3
+
+pdb:
+  enabled: true
+  minAvailable: 2
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Memory limit = request (Guaranteed memory); CPU limit ≈ 2× request.
+resources:
+  requests:
+    cpu: 500m
+    memory: 768Mi
+  limits:
+    cpu: "1"
+    memory: 768Mi
+
+javaOpts: ""
+
+podSecurityContext: {}
+
+# Files from this Secret are mounted read-only; create it from a SealedSecret (never commit a plain Secret).
+secret:
+  enabled: true
+  name: ""
+  mountPath: /etc/cartogra/secrets
+  springConfigTree: true
+
+extraVolumes: []
+extraVolumeMounts: []
+extraServicePorts: []

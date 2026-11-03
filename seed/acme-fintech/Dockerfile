@@ -1,4 +1,4 @@
-FROM node:24.10.0-alpine3.22 AS builder
+FROM --platform=$BUILDPLATFORM node:24.10.0-alpine3.22 AS builder
 WORKDIR /build
 RUN npm install -g pnpm@12.3.4
 COPY package.json pnpm-lock.yaml ./

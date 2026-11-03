@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: collector-pipeline
+  labels:
+    {{- include "common.labels" . | nindent 4 }}
+data:
+  otel-collector.yml: |
+    {{- .Files.Get "files/otel-collector.yml" | nindent 4 }}
+---
+{{ include "common.app" . }}

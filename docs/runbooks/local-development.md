@@ -363,7 +363,7 @@ delete from topology.pending_span_links;
 update topology.unresolved_span_services set deleted_at = now() where deleted_at is null;
 ```
 
-`demo-flow.spec.ts` (Playwright) writes to this same database. Its observed-edge step always runs and posts a span to `localhost:4318`, so a collector must be up: the dev stack's, or the deployable `docker-compose.yml`'s (`otel-collector.demo.yml`, bound to `127.0.0.1:4318`).
+`demo-flow.spec.ts` (Playwright) writes to this same database. Its observed-edge step always runs and posts a span to `localhost:4318`, so a collector must be up: the dev stack's, or the deployable `docker-compose.yml`'s (`infra/helm/cartogra/charts/collector/files/otel-collector.yml`, bound to `127.0.0.1:4318`).
 
 ### Limitations
 

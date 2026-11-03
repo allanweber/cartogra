@@ -1,0 +1,85 @@
+# collector — span pipeline only (ADR-0029). Config: files/otel-collector.yml (also mounted by docker-compose.yml).
+# NEVER expose 4317/4318 through ingress: cartogra.tenant.id is unauthenticated until roadmap 5.9.
+
+env:
+  KAFKA_BROKERS: kafka:9092
+  # Tenant stamped on every span; "unset" drops spans (filter/no-self).
+  CARTOGRA_TENANT_ID: unset
+
+image:
+  registry: docker.io
+  repository: otel/opentelemetry-collector-contrib
+  tag: "0.151.0"
+
+args:
+  - --config=/etc/otelcol/otel-collector.yml
+
+port: 4318
+
+extraContainerPorts:
+  - name: grpc
+    containerPort: 4317
+  - name: health
+    containerPort: 13133
+
+extraServicePorts:
+  - name: grpc
+    port: 4317
+    targetPort: grpc
+
+probes:
+  port: health
+  basePath: ""
+  livePath: /
+  readyPath: /
+  startupPath: /
+  startupFailureThreshold: 12
+
+podAnnotations:
+  checksum/pipeline: '{{ .Files.Get "files/otel-collector.yml" | sha256sum | trunc 16 }}'
+
+# Distroless image: no shell for a preStop sleep.
+preStopSleep: false
+
+replicaCount: 3
+
+pdb:
+  enabled: true
+  minAvailable: 2
+
+autoscaling:
+  enabled: false
+  minReplicas: 3
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# memory_limiter in the pipeline caps at 192MiB.
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+# The contrib image runs as uid 10001.
+podSecurityContext:
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+
+secret:
+  enabled: false
+  mountPath: /etc/cartogra/secrets
+  springConfigTree: false
+
+extraVolumes:
+  - name: pipeline
+    configMap:
+      name: collector-pipeline
+
+extraVolumeMounts:
+  - name: pipeline
+    mountPath: /etc/otelcol
+    readOnly: true

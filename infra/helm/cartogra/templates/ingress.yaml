@@ -1,0 +1,47 @@
+{{- if .Values.ingress.enabled }}
+{{- $host := required "global.host is required when ingress is enabled" .Values.global.host -}}
+# Only the frontend and the gateway are reachable from outside. The collector (OTLP) and
+# backend services stay ClusterIP-only.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cartogra
+  labels:
+    app: cartogra
+    version: {{ .Values.global.imageTag | default .Chart.AppVersion | quote }}
+    environment: {{ .Values.global.environment }}
+    team: {{ .Values.global.team }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+    {{- with .Values.ingress.clusterIssuer }}
+    cert-manager.io/cluster-issuer: {{ . }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.clusterIssuer }}
+  tls:
+    - hosts: [{{ $host | quote }}]
+      secretName: cartogra-tls
+  {{- end }}
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  name: http
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  name: http
+{{- end }}

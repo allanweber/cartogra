@@ -12,7 +12,7 @@ Order: app code first (testable on compose) → charts → deploy → ops → ga
 - [x] 2. Audit trail (#125)
 - [x] 3. Dashboard on real data (#126)
 - [x] 4. Guest mode + signup off (#128, signup part of #129)
-- [ ] 5. Helm charts (#148)
+- [x] 5. Helm charts (#148)
 - [ ] 6. Deploy pipeline + in-cluster Acme (#129, code)
 - [ ] 7. Ops — public host (#129)
 - [ ] 8. Gate (#130)
@@ -67,6 +67,8 @@ ADR-0019 → Accepted + amended (no ADR-0030 for this).
 - `values-demo.yaml` sized for 8GB per ADR-0030: JVMs 512Mi limit, `-XX:MaxRAMPercentage=75 -XX:+UseSerialGC -Xss512k`; Kafka `-Xmx384m`; Postgres `shared_buffers=128MB`.
 - `values-demo.yaml` sets gateway `GUEST_TENANT_ID` = the Acme tenant's fixed UUID (step 6 bootstrap) and `SIGNUP_ENABLED=false` (step 4 defaults: guest off, signup on).
 - `values-demo.yaml` sets topology `TOPOLOGY_DRIFT_MISSING_AFTER=PT1H` (default `P7D` would hide the seeded `loyalty-service → fx-service` missing drift for a week after install). Only safe with continuous in-cluster Acme traffic (step 6) — bursty traffic + short window makes missing drift flap and floods audit/Timeline (seen in dev 2026-11-03 with `PT2M`).
+
+Charts: `infra/helm/cartogra` (umbrella + subcharts, `charts/common` library). Demo collector config lives in the collector chart (`files/otel-collector.yml`) and compose mounts it. Acme tenant fixed UUID `a0000000-0000-4000-8000-00000000ac3e` (values-demo; step 6 bootstrap must create it). CI: `helm.yml` (lint + render prod/demo), `images.yml` (amd64+arm64, no push until step 6).
 
 Done when: `helm lint` + `helm template` clean; umbrella installs on local k3d.
 

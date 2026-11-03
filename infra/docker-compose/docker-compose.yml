@@ -97,7 +97,7 @@ services:
       CARTOGRA_TENANT_ID: ${CARTOGRA_TENANT_ID:-unset}
       KAFKA_BROKERS: kafka:29092
     volumes:
-      - ./otel-collector.demo.yml:/etc/otel-collector.yml:ro
+      - ../helm/cartogra/charts/collector/files/otel-collector.yml:/etc/otel-collector.yml:ro
     # No healthcheck: the image has no shell or wget; dependents wait on service_started.
     # Loopback only: lets host tools (e2e, curl) post spans; never published beyond the host.
     ports:

@@ -335,15 +335,15 @@ Webhook responses are **not** wrapped in the standard response envelope.
 
 ## 11. Observed edges / OTel intake
 
-Observed dependency edges ([ADR-0029](../adr/0029-observed-edges-from-otel-spans.md)) need an OTel collector that exports spans to Kafka. The deployable compose has one; Kubernetes gets it with the Helm charts (roadmap 7.1). Local procedure: [`local-development.md` → Testing observed edges](local-development.md#testing-observed-edges-otel-spans).
+Observed dependency edges ([ADR-0029](../adr/0029-observed-edges-from-otel-spans.md)) need an OTel collector that exports spans to Kafka. The deployable compose and the Helm chart (`infra/helm/cartogra`, `collector` subchart) share one config. Local procedure: [`local-development.md` → Testing observed edges](local-development.md#testing-observed-edges-otel-spans).
 
 ### Current state per environment
 
 | Environment | Collector | Spans → Kafka | Observed edges |
 |-------------|-----------|---------------|----------------|
 | Local (`docker-compose.dev.yml`) | yes, single tenant via `CARTOGRA_TENANT_ID` | yes | works |
-| `docker-compose.yml` (deployable) | yes, `otel-collector.demo.yml` (spans only, no Tempo/Loki/Prometheus), OTLP/HTTP on `127.0.0.1:4318` | yes | works, single tenant via `CARTOGRA_TENANT_ID` |
-| Kubernetes (`infra/k8s/infra/otel-collector`) | yes, 2 replicas, config in `configmap.yml` | **no** — pipelines go only to Tempo/Prometheus/Loki | no edges |
+| `docker-compose.yml` (deployable) | yes, `infra/helm/cartogra/charts/collector/files/otel-collector.yml` (spans only, no Tempo/Loki/Prometheus), OTLP/HTTP on `127.0.0.1:4318` | yes | works, single tenant via `CARTOGRA_TENANT_ID` |
+| Kubernetes (Helm `collector` subchart) | yes, same config file; ClusterIP only, never behind ingress | yes | works, single tenant via `collector.env.CARTOGRA_TENANT_ID` |
 
 Topology is safe to deploy anyway: the `OtelSpanWorker` simply idles when `cartogra.observability.spans` receives nothing.
 

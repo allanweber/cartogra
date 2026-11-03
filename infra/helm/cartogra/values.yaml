@@ -1,0 +1,18 @@
+# Production-shaped defaults (HA per .claude/rules/infra.md). The public demo overrides these
+# with values-demo.yaml (single node, ADR-0030).
+
+global:
+  environment: prod
+  team: platform
+  # Public hostname; ingress, OAuth redirects and CORS derive from it.
+  host: ""
+  # Our images: <imageRegistry>/cartogra-<service>:<imageTag>. CI sets imageTag to the commit SHA.
+  imageRegistry: ghcr.io/allanweber
+  imageTag: ""
+
+ingress:
+  enabled: true
+  className: traefik
+  # cert-manager ClusterIssuer; empty disables TLS.
+  clusterIssuer: letsencrypt-prod
+  annotations: {}
