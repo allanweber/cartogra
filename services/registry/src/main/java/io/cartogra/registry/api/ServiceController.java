@@ -15,6 +15,7 @@ import io.cartogra.registry.domain.exception.ServiceNotFoundException;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import io.cartogra.registry.api.dto.ConnectionServiceCountsResponse;
@@ -136,15 +137,21 @@ public class ServiceController {
             @PathVariable UUID id,
             @RequestParam(required = false) Instant at,
             @RequestParam(defaultValue = "20") int limit,
-            @RequestParam(defaultValue = "0") int offset) {
+            @RequestParam(defaultValue = "0") int offset,
+            Authentication authentication) {
+        boolean guest = GuestCaller.is(authentication);
         if (at != null) {
             var snap = service.historyAt(tenantId, id, at)
                     .map(ServiceSnapshotResponse::from)
+                    .map(r -> guest ? r.withoutAuthor() : r)
                     .orElseThrow(() -> new ServiceNotFoundException(id));
             return TracedResponse.ok(PageResult.of(List.of(snap), 1L, 1, 0));
         }
         var page = service.history(tenantId, id, limit, offset);
-        var mapped = PageResult.of(page.items().stream().map(ServiceSnapshotResponse::from).toList(),
+        var mapped = PageResult.of(page.items().stream()
+                        .map(ServiceSnapshotResponse::from)
+                        .map(r -> guest ? r.withoutAuthor() : r)
+                        .toList(),
                 page.total(), page.limit(), page.offset());
         return TracedResponse.ok(mapped);
     }

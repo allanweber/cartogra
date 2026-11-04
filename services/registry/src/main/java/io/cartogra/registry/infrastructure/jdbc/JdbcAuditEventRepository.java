@@ -34,10 +34,11 @@ public class JdbcAuditEventRepository implements AuditEventRepository {
     public List<AuditEntry> findAll(UUID tenantId, AuditEventFilter filter, int limit, int offset) {
         var params = params(tenantId, filter).addValue("limit", limit).addValue("offset", offset);
         String sql = """
-                SELECT a.*, COALESCE(u.name, u.email) AS actor_name
+                SELECT a.*, %s AS actor_name
                 FROM audit_events a
                 LEFT JOIN users u ON u.id = a.actor_id AND u.tenant_id = a.tenant_id
-                """ + where(filter, "a.") + " ORDER BY a.occurred_at DESC, a.id DESC LIMIT :limit OFFSET :offset";
+                """.formatted(filter.redactActorEmails() ? "u.name" : "COALESCE(u.name, u.email)")
+                + where(filter, "a.") + " ORDER BY a.occurred_at DESC, a.id DESC LIMIT :limit OFFSET :offset";
         return jdbc.query(sql, params, mapper());
     }
 
@@ -53,6 +54,9 @@ public class JdbcAuditEventRepository implements AuditEventRepository {
         if (filter.entityTypes() != null && !filter.entityTypes().isEmpty()) {
             sql.append(" AND ").append(alias).append("entity_type IN (:entityTypes)");
         }
+        if (!filter.excludedEntityTypes().isEmpty()) {
+            sql.append(" AND ").append(alias).append("entity_type NOT IN (:excludedEntityTypes)");
+        }
         if (filter.entityId() != null) sql.append(" AND ").append(alias).append("entity_id = :entityId");
         if (filter.actorKind() != null) sql.append(" AND ").append(alias).append("actor_kind = :actorKind");
         if (filter.from() != null) sql.append(" AND ").append(alias).append("occurred_at >= :from");
@@ -64,6 +68,7 @@ public class JdbcAuditEventRepository implements AuditEventRepository {
         return new MapSqlParameterSource()
                 .addValue("tenantId", tenantId)
                 .addValue("entityTypes", filter.entityTypes())
+                .addValue("excludedEntityTypes", filter.excludedEntityTypes())
                 .addValue("entityId", filter.entityId())
                 .addValue("actorKind", filter.actorKind() != null ? filter.actorKind().toDbValue() : null)
                 .addValue("from", filter.from() != null ? Timestamp.from(filter.from()) : null)

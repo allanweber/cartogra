@@ -30,7 +30,7 @@ gateway:
     BOOTSTRAP_TENANT_ID: *acmeTenantId
     BOOTSTRAP_TENANT_NAME: Acme Fintech
     BOOTSTRAP_TENANT_PLAN: business
-    BOOTSTRAP_ADMIN_EMAIL: acme@cartogra.dev
+    BOOTSTRAP_ADMIN_EMAIL: admin@acme-fintech.invalid
 
 registry:
   <<: *jvm

@@ -109,6 +109,31 @@ class AuditEventIT {
     }
 
     @Test
+    void guestSeesNoSettingsEventsAndNoActorEmails() throws Exception {
+        UUID userId = jdbc.queryForObject("""
+                INSERT INTO users (tenant_id, email, auth_provider, email_verified, roles, created_at, updated_at)
+                VALUES (:tenantId, :email, 'local', true, '{ADMIN}', now(), now()) RETURNING id
+                """, new MapSqlParameterSource("tenantId", tenantId).addValue("email", "real.person@corp.test"), UUID.class);
+        Actor admin = Actor.admin(userId);
+        auditEventPort.record(AuditEvent.of(tenantId, "service", UUID.randomUUID(), "created", admin, Map.of()));
+        for (String hidden : new String[] {"user", "invitation", "oidc_config", "cluster"}) {
+            auditEventPort.record(AuditEvent.of(tenantId, hidden, UUID.randomUUID(), "created", admin,
+                    Map.of("email", "real.person@corp.test")));
+        }
+
+        JsonNode asGuest = list("", "GUEST");
+        assertThat(asGuest.get("total").asLong()).isEqualTo(1);
+        assertThat(asGuest.get("items").get(0).get("entityType").asString()).isEqualTo("service");
+        assertThat(asGuest.get("items").get(0).get("actorName").isNull()).isTrue();
+        assertThat(list("?entityType=user,cluster", "GUEST").get("total").asLong()).isZero();
+        assertThat(asGuest.toString()).doesNotContain("real.person@corp.test");
+
+        JsonNode asViewer = list("", "VIEWER");
+        assertThat(asViewer.get("total").asLong()).isEqualTo(5);
+        assertThat(asViewer.toString()).contains("real.person@corp.test");
+    }
+
+    @Test
     void sameEventIdConsumedTwiceStoresOneRow() throws Exception {
         AuditEvent event = AuditEvent.of(tenantId, "dependency", UUID.randomUUID(), "declared",
                 Actor.user(UUID.randomUUID()), Map.of("protocol", "http"));
@@ -166,9 +191,14 @@ class AuditEventIT {
     }
 
     private JsonNode list(String query) throws Exception {
+        return list(query, "VIEWER");
+    }
+
+    private JsonNode list(String query, String roles) throws Exception {
         var response = HTTP.send(HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + "/api/v1/registry/audit-events" + query))
                 .header("X-Tenant-Id", tenantId.toString())
+                .header("X-User-Roles", roles)
                 .GET().build(), HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(200);
         return objectMapper.readTree(response.body()).get("data");

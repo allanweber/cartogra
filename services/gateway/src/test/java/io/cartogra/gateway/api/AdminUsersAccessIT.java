@@ -20,7 +20,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** Writers list tenant users for the team member picker; every other admin user operation stays ADMIN-only. */
+/** Writers list tenant users for the team member picker; every other admin operation stays ADMIN-only. */
 class AdminUsersAccessIT extends AbstractGatewayIT {
 
     @Autowired
@@ -46,6 +46,15 @@ class AdminUsersAccessIT extends AbstractGatewayIT {
 
         mockMvc.perform(get("/api/auth/admin/users").cookie(jwt))
             .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void methodLevelDenialIsForbiddenNotServerError() throws Exception {
+        Cookie jwt = loginAs(insertTenant(), "MEMBER");
+
+        mockMvc.perform(get("/api/auth/tenant").cookie(jwt))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
     }
 
     @Test

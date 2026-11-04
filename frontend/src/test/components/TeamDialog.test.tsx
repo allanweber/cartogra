@@ -561,6 +561,24 @@ describe('TeamDialog — edit mode', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('a guest sees one row per member from a response without user ids', async () => {
+    mockRoles = ['GUEST']
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path.includes('/members')) {
+        return Promise.resolve([
+          { id: 'm1', teamId: 'team-1', userId: null, createdAt: '2024-01-01T00:00:00Z' },
+          { id: 'm2', teamId: 'team-1', userId: null, createdAt: '2024-01-02T00:00:00Z' },
+        ])
+      }
+      if (path.includes('/teams/mine')) return Promise.resolve([])
+      return Promise.resolve(EMPTY_SERVICES)
+    })
+    renderDialog({ team: MOCK_TEAM })
+
+    expect(await screen.findAllByText('Team member')).toHaveLength(2)
+    expect(vi.mocked(apiFetch).mock.calls.some(([path]) => String(path).includes('/auth/'))).toBe(false)
+  })
+
   it.each([['TEAM_OWNER'], ['MEMBER']])('a %s in the team sees the "add existing user" search and can remove members', async (role) => {
     mockRoles = [role]
     vi.mocked(apiFetch).mockImplementation((path: string, init?: RequestInit) => {

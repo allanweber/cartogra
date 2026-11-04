@@ -121,6 +121,16 @@ class GuestModeIT extends AbstractGatewayIT {
     }
 
     @Test
+    void guestCannotReadUserDirectoryOrTenantDetails() throws Exception {
+        Cookie guest = mintGuest();
+
+        mockMvc.perform(get("/api/auth/users").param("ids", UUID.randomUUID().toString()).cookie(guest))
+            .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/auth/tenant").cookie(guest))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
     void guestCanReMintAndLogOut() throws Exception {
         Cookie guest = mintGuest();
         mockMvc.perform(post("/api/auth/guest").cookie(guest)).andExpect(status().isOk());

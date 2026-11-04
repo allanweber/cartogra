@@ -8,6 +8,7 @@ import io.cartogra.registry.domain.AuditEventService;
 import io.cartogra.registry.repository.AuditEventFilter;
 import io.cartogra.web.api.TracedResponse;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -38,9 +39,12 @@ public class AuditEventController {
             @RequestParam(required = false) Instant from,
             @RequestParam(required = false) Instant to,
             @RequestParam(defaultValue = "20") int limit,
-            @RequestParam(defaultValue = "0") int offset) {
+            @RequestParam(defaultValue = "0") int offset,
+            Authentication authentication) {
+        boolean guest = GuestCaller.is(authentication);
         var filter = new AuditEventFilter(entityType, entityId,
                 actorKind != null ? ActorKind.fromDbValue(actorKind) : null, from, to);
-        return TracedResponse.ok(service.list(tenantId, filter, limit, offset).map(AuditEventResponse::from));
+        return TracedResponse.ok(service.list(tenantId, filter, guest, limit, offset)
+                .map(e -> guest ? AuditEventResponse.from(e).withoutPersonalData() : AuditEventResponse.from(e)));
     }
 }

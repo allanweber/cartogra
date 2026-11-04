@@ -1,5 +1,8 @@
 package io.cartogra.gateway.config;
 
+import io.cartogra.gateway.domain.GuestService;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.cartogra.common.api.ApiError;
 import io.cartogra.common.api.ApiErrorResponse;
 import io.cartogra.common.identity.Roles;
@@ -40,19 +43,22 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final RedisScript<String> rateLimitScript;
     private final ObjectMapper objectMapper;
     private final TraceContext traceContext;
+    private final Counter guestMintsRejected;
 
     public RateLimitFilter(RateLimitProperties props,
                            GuestProperties guestProps,
                            StringRedisTemplate redisTemplate,
                            RedisScript<String> rateLimitScript,
                            ObjectMapper objectMapper,
-                           TraceContext traceContext) {
+                           TraceContext traceContext,
+                           MeterRegistry meterRegistry) {
         this.props = props;
         this.guestProps = guestProps;
         this.redisTemplate = redisTemplate;
         this.rateLimitScript = rateLimitScript;
         this.objectMapper = objectMapper;
         this.traceContext = traceContext;
+        this.guestMintsRejected = meterRegistry.counter(GuestService.MINTS_METRIC, "outcome", "rate_limited");
     }
 
     @Override
@@ -70,6 +76,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         String bucketScope = resolveBucketScope(request);
 
         if (GUEST_MINT_PATH.equals(path) && !isGuestMintAllowed(request)) {
+            guestMintsRejected.increment();
             write429(response, 60L);
             return;
         }

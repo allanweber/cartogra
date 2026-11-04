@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import { ApiError, apiFetch } from '#/lib/api'
-import { useCan } from '#/lib/permissions'
+import { useCan, useIsReadOnly } from '#/lib/permissions'
 import { normalizeHealth } from '#/lib/registry-types'
 import { useAuthStore } from '#/stores/useAuthStore'
 import { Alert, AlertDescription } from '#/components/ui/alert'
@@ -82,6 +82,7 @@ export function TeamDialog({
     enabled: canManageMembers && isEdit && open,
   })
 
+  const readOnly = useIsReadOnly()
   const memberIdsKey = useMemo(
     () => [...selectedMemberIds].sort().join(','),
     [selectedMemberIds],
@@ -89,7 +90,7 @@ export function TeamDialog({
   const { data: memberUsers } = useQuery({
     queryKey: ['member-users', memberIdsKey],
     queryFn: () => apiFetch<TenantUser[]>(`/auth/users?ids=${memberIdsKey}`),
-    enabled: isEdit && open && selectedMemberIds.size > 0,
+    enabled: isEdit && open && !readOnly && selectedMemberIds.size > 0,
     placeholderData: keepPreviousData,
   })
 
@@ -136,12 +137,12 @@ export function TeamDialog({
 
   useEffect(() => {
     if (open && isEdit && members) {
-      setSelectedMemberIds(new Set(members.map((m) => m.userId)))
+      setSelectedMemberIds(new Set(members.map(memberKey)))
     }
   }, [open, members])
 
   const initialMemberIds = useMemo(
-    () => new Set((members ?? []).map((m) => m.userId)),
+    () => new Set((members ?? []).map(memberKey)),
     [members],
   )
 
@@ -455,7 +456,7 @@ export function TeamDialog({
                                   ? user.name
                                     ? `${user.name} — ${user.email}`
                                     : user.email
-                                  : userId}
+                                  : 'Team member'}
                                 {isPendingAdd && (
                                   <span className="shrink-0 text-xs text-muted-foreground">
                                     will add
@@ -626,4 +627,9 @@ export function TeamDialog({
       )}
     </>
   )
+}
+
+/** The backend omits `userId` for guests, so a membership falls back to its own id as the list key. */
+function memberKey(m: RegistryTeamMember): string {
+  return m.userId ?? m.id
 }

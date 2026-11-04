@@ -2,6 +2,8 @@ package io.cartogra.gateway.api;
 
 import com.jayway.jsonpath.JsonPath;
 import io.cartogra.gateway.AbstractGatewayIT;
+import io.cartogra.gateway.domain.GuestService;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -9,6 +11,7 @@ import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 
@@ -31,11 +34,16 @@ class GuestRateLimitIT extends AbstractGatewayIT {
     @LocalServerPort
     private int port;
 
+    @Autowired
+    private MeterRegistry meterRegistry;
+
     @Test
     void guestsGetTheirOwnBucketAndMintingIsLimitedPerIp() throws Exception {
         String first = mint().body();
         String second = mint().body();
         assertThat(mint().statusCode()).isEqualTo(429);
+        assertThat(mints("issued")).isEqualTo(2);
+        assertThat(mints("rate_limited")).isEqualTo(1);
 
         String firstToken = JsonPath.read(first, "$.data.accessToken");
         String secondToken = JsonPath.read(second, "$.data.accessToken");
@@ -46,6 +54,10 @@ class GuestRateLimitIT extends AbstractGatewayIT {
         }
         assertThat(firstStatuses).contains(429);
         assertThat(read(secondToken)).isNotEqualTo(429);
+    }
+
+    private double mints(String outcome) {
+        return meterRegistry.counter(GuestService.MINTS_METRIC, "outcome", outcome).count();
     }
 
     private HttpResponse<String> mint() throws Exception {

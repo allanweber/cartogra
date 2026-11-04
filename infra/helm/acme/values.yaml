@@ -35,7 +35,7 @@ bootstrap:
   apiUrl: http://gateway.cartogra.svc.cluster.local:8080
   clusterName: demo
   # Must match the gateway's BOOTSTRAP_ADMIN_EMAIL.
-  adminEmail: acme@cartogra.dev
+  adminEmail: admin@acme-fintech.invalid
   # Empty = no SCM connection. Public org holding the `pnpm acme repos` mirror.
   githubOrg: ""
   # Secret files: ACME_PASSWORD (= gateway BOOTSTRAP_ADMIN_PASSWORD), optional ACME_GITHUB_TOKEN.

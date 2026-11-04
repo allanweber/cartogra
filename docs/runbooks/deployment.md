@@ -129,9 +129,16 @@ gh auth login && gh auth setup-git
 cd seed/acme-fintech && ACME_GITHUB_ORG=<org> pnpm acme repos --provider github
 ```
 
-A fine-grained token with read-only access to that org's public repos is `ACME_GITHUB_TOKEN`.
+`ACME_GITHUB_TOKEN` is a fine-grained token, resource owner = that org, repository access **Public repositories
+(read-only)**, no other permissions. Never reuse a personal token here: the demo tenant is publicly readable.
+
+The Acme tenant is publicly readable, so it holds only fabricated data (ADR-0019 §9): the bootstrap admin is
+`admin@acme-fintech.invalid` (reserved TLD, no mail delivered; recover a lost password by re-sealing
+`BOOTSTRAP_ADMIN_PASSWORD` and resetting the hash in the database), and nobody is invited into the tenant.
 
 ## 7. Install / upgrade
+
+To test chart changes before deploying, run them on a local cluster first: see [Test on a local cluster](../../infra/helm/cartogra/README.md#test-on-a-local-cluster).
 
 Normally **Actions → Deploy demo → Run workflow** (optionally with a SHA). By hand, the same commands:
 

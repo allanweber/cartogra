@@ -13,6 +13,7 @@ import io.cartogra.web.api.TracedResponse;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -87,8 +88,13 @@ public class TeamController {
     @GetMapping("/{id}/members")
     public ResponseEntity<ApiResponse<List<TeamMemberResponse>>> listMembers(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
-            @PathVariable UUID id) {
-        var result = service.listMembers(tenantId, id).stream().map(TeamMemberResponse::from).toList();
+            @PathVariable UUID id,
+            Authentication authentication) {
+        boolean guest = GuestCaller.is(authentication);
+        var result = service.listMembers(tenantId, id).stream()
+                .map(TeamMemberResponse::from)
+                .map(m -> guest ? m.withoutUser() : m)
+                .toList();
         return TracedResponse.ok(result);
     }
 
