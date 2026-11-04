@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       sha:
-        description: Commit SHA whose images to deploy (default: this run's commit)
+        description: "Commit SHA whose images to deploy (default: this run's commit)"
         required: false
 
 permissions:
