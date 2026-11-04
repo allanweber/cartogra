@@ -12,6 +12,7 @@ import { useServiceNames } from '#/hooks/useRisks'
 import { RiskScoreBadge } from '#/components/RiskScoreBadge'
 import { SpofBadge } from '#/components/SpofBadge'
 import { TierBadge } from '#/components/TierBadge'
+import { UnderDevelopmentBanner } from '#/components/UnderDevelopmentBanner'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
@@ -492,6 +493,7 @@ function ServiceDetailPage() {
             {/* Contracts */}
             {tab === 'contracts' && (
               <div id="panel-contracts" role="tabpanel" aria-labelledby="tab-contracts">
+                <UnderDevelopmentBanner kind="placeholder" className="mb-3 rounded-lg border" />
                 <EmptyTab
                   icon={<Shield className="size-8" />}
                   message="Per-service contract detail isn't built yet."
@@ -504,6 +506,7 @@ function ServiceDetailPage() {
             {/* Activity */}
             {tab === 'activity' && (
               <div id="panel-activity" role="tabpanel" aria-labelledby="tab-activity">
+                <UnderDevelopmentBanner kind="placeholder" className="mb-3 rounded-lg border" />
                 <EmptyTab
                   icon={<Activity className="size-8" />}
                   message="Per-service activity detail isn't built yet."
@@ -516,6 +519,7 @@ function ServiceDetailPage() {
 
           {/* Right sidebar */}
           <div className="space-y-4">
+            <UnderDevelopmentBanner kind="placeholder" className="rounded-lg border" />
             <Card className="border-dashed">
               <CardHeader className="pb-2 pt-5">
                 <CardTitle className="text-sm font-semibold text-muted-foreground">Active Risks</CardTitle>

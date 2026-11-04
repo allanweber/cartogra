@@ -50,6 +50,7 @@ import {
 } from '#/components/ui/tooltip'
 import { CommandPalette } from '#/components/CommandPalette'
 import { NotificationBell } from '#/components/NotificationBell'
+import { UnderDevelopmentBanner, type UnderDevelopmentKind } from '#/components/UnderDevelopmentBanner'
 import { apiMutate } from '#/lib/api'
 import { READ_ONLY_MESSAGE, canUser, useIsReadOnly } from '#/lib/permissions'
 import { clearSessionCookie } from '#/lib/session'
@@ -66,6 +67,8 @@ interface AppLayoutProps {
   description?: string
   eyebrow?: string
   actions?: ReactNode
+  /** The page shows mock or placeholder content: renders a banner the user cannot close. */
+  underDevelopment?: UnderDevelopmentKind
   children: ReactNode
 }
 
@@ -105,6 +108,7 @@ export function AppLayout({
   description,
   eyebrow,
   actions,
+  underDevelopment,
   children,
 }: AppLayoutProps) {
   const pathname = useRouterState({
@@ -200,6 +204,7 @@ export function AppLayout({
         </header>
 
         <ReadOnlyBanner />
+        {underDevelopment && <UnderDevelopmentBanner kind={underDevelopment} />}
 
         <main id="main-content" className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 sm:p-6">
           {children}

@@ -33,7 +33,7 @@ function ContractsPage() {
   }
 
   return (
-    <AppLayout title="Contracts" description="API compatibility status across all services">
+    <AppLayout title="Contracts" description="API compatibility status across all services" underDevelopment="mock">
       <div className="space-y-4">
         {/* Summary bar */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

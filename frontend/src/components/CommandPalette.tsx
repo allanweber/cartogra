@@ -20,6 +20,7 @@ import { Button } from '#/components/ui/button'
 
 import { Input } from '#/components/ui/input'
 import { apiFetch } from '#/lib/api'
+import { UnderDevelopmentBanner } from '#/components/UnderDevelopmentBanner'
 import { MOCK_TEAMS } from '#/lib/mock-data'
 import { normalizeHealth } from '#/lib/registry-types'
 import { cn } from '#/lib/utils'
@@ -143,9 +144,9 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" />
         <Dialog.Content
-          className="fixed left-1/2 top-[12%] z-50 w-full max-w-2xl -translate-x-1/2 overflow-hidden rounded-2xl border border-border bg-popover shadow-2xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=open]:slide-in-from-left-1/2"
+          className="fixed left-1/2 top-[12%] z-50 w-full max-w-2xl -translate-x-1/2 overflow-hidden rounded-2xl border border-border bg-popover shadow-2xl"
           aria-label="Command palette"
           onKeyDown={handleKeyDown}
           onOpenAutoFocus={(e) => { e.preventDefault(); inputRef.current?.focus() }}
@@ -160,12 +161,14 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search pages, services, teams…"
-              className="h-auto flex-1 border-0 bg-transparent p-0 text-sm shadow-none outline-none focus-visible:ring-0 placeholder:text-muted-foreground"
+              className="h-auto flex-1 border-0 bg-transparent p-0 text-sm shadow-none transition-none outline-none focus-visible:ring-0 placeholder:text-muted-foreground"
             />
             <kbd className="hidden rounded border border-border bg-muted px-1.5 py-0.5 text-xs text-muted-foreground sm:block">
               ESC
             </kbd>
           </div>
+
+          {filtered.some((item) => item.group === 'Teams') && <UnderDevelopmentBanner kind="mock" />}
 
           {/* Results */}
           <div className="max-h-130 overflow-y-auto py-2">
@@ -188,7 +191,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                         onClick={item.action}
                         onMouseEnter={() => setActiveIdx(globalIdx)}
                         className={cn(
-                          'h-auto w-full items-center justify-start gap-3 rounded-none px-4 py-2.5 text-left text-sm font-normal',
+                          'h-auto w-full items-center justify-start gap-3 rounded-none px-4 py-2.5 text-left text-sm font-normal transition-none active:not-aria-[haspopup]:translate-y-0',
                           globalIdx === activeIdx
                             ? 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground'
                             : 'text-foreground hover:bg-muted',

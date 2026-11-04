@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AppLayout } from '#/components/AppLayout'
@@ -103,6 +103,27 @@ describe('AppLayout', () => {
     expect(screen.getByRole('heading', { name: 'Catalog' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Operations/i })).toBeInTheDocument()
     expect(screen.getByText('Shell content')).toBeInTheDocument()
+  })
+
+  it('shows the under-development banner, with no way to close it, only on pages that declare one', () => {
+    const shell = (underDevelopment?: 'mock' | 'placeholder') => (
+      <QueryClientProvider client={new QueryClient()}>
+        <TooltipProvider>
+          <AppLayout title="Contracts" underDevelopment={underDevelopment}>
+            <div>Shell content</div>
+          </AppLayout>
+        </TooltipProvider>
+      </QueryClientProvider>
+    )
+    const { rerender } = render(shell())
+    expect(screen.queryByText(/under development/i)).not.toBeInTheDocument()
+
+    rerender(shell('placeholder'))
+    expect(screen.getByText(/this is a placeholder.*under development and coming live soon/i)).toBeInTheDocument()
+
+    rerender(shell('mock'))
+    const banner = screen.getByText(/this is mock data.*under development and coming live soon/i)
+    expect(within(banner).queryByRole('button')).not.toBeInTheDocument()
   })
 
   it('clears the React Query cache and switches tenants when a workspace is picked', () => {
