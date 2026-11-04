@@ -28,6 +28,8 @@ env:
   BOOTSTRAP_TENANT_NAME: ""
   BOOTSTRAP_TENANT_PLAN: free
   BOOTSTRAP_ADMIN_EMAIL: ""
+  # Only a tenant created with this on can take guests (ADR-0019 §10); never applied to an existing tenant.
+  BOOTSTRAP_TENANT_PUBLIC_SANDBOX: "false"
 
 image:
   # Empty = global.imageRegistry.

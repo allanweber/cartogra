@@ -3,6 +3,8 @@ package io.cartogra.gateway.api;
 import com.jayway.jsonpath.JsonPath;
 import io.cartogra.gateway.AbstractGatewayIT;
 import io.cartogra.gateway.domain.GuestService;
+import io.cartogra.gateway.domain.Tenant;
+import io.cartogra.gateway.repository.TenantRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -10,6 +12,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -22,12 +26,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  * limit filter is registered, which MockMvc does not reproduce.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-    "app.guest.tenant-id=6f1d2c3b-0000-4000-8000-00000000acdf",
+    "app.guest.tenant-id=" + GuestRateLimitIT.DEMO_TENANT,
     "app.guest.mints-per-minute=2",
     "app.rate-limit.default-replenish-rate=1",
     "app.rate-limit.default-burst-capacity=3"
 })
 class GuestRateLimitIT extends AbstractGatewayIT {
+
+    static final String DEMO_TENANT = "6f1d2c3b-0000-4000-8000-00000000acdf";
 
     private static final HttpClient HTTP = HttpClient.newHttpClient();
 
@@ -36,6 +42,15 @@ class GuestRateLimitIT extends AbstractGatewayIT {
 
     @Autowired
     private MeterRegistry meterRegistry;
+
+    @Autowired
+    private TenantRepository tenantRepository;
+
+    @BeforeEach
+    void createSandboxTenant() {
+        UUID id = UUID.fromString(DEMO_TENANT);
+        tenantRepository.save(new Tenant(id, id, "Rate limit demo", null, "free", null, null, null, true));
+    }
 
     @Test
     void guestsGetTheirOwnBucketAndMintingIsLimitedPerIp() throws Exception {

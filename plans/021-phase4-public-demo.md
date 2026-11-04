@@ -92,6 +92,8 @@ Status (2026-11-03, k3d): both charts install; bootstrap Job registers the clust
 
 Abuse alerting (decided 2026-11-04, in-cluster option): `charts/alerting` (off by default, on in `values-demo.yaml`) runs Prometheus + Alertmanager in one pod. Collector exposes metrics on 8889, Prometheus keeps only `cartogra_*`, Alertmanager emails through Resend SMTP on port 587 with the existing `RESEND_API_KEY`. k3d: 75 rate-limited mints fired `GuestMintsRateLimited`, Alertmanager reached Resend, which rejected the placeholder key (535); pod used 40Mi with 15 series. Real delivery is checked in step 7.
 
+Guest second key (2026-11-04): guest mode needs `tenants.public_sandbox` as well as `GUEST_TENANT_ID` (ADR-0019 §10). Set only when bootstrap creates the tenant, so an existing tenant cannot be flagged by config. `/api/auth/features` reads it per request with no cache: an indexed lookup behind the auth rate limit.
+
 Done when: chart + bootstrap Job run on local k3d and Acme is discovered; Acme fake services generate traffic continuously (no gaps > `missing-after`), so drift does not flap.
 
 ## 7. Ops — public host (#129)

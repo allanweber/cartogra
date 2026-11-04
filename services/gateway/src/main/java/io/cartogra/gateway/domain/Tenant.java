@@ -11,5 +11,6 @@ public record Tenant(
     String plan,
     Instant createdAt,
     Instant updatedAt,
-    Instant deletedAt
+    Instant deletedAt,
+    boolean publicSandbox
 ) {}

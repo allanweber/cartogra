@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS tenants (
     slug        VARCHAR(255)  NOT NULL UNIQUE,
     plan_id     UUID          NOT NULL REFERENCES billing_plans(id),
     metadata    JSONB,
+    public_sandbox BOOLEAN    NOT NULL DEFAULT false,
     created_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),
     updated_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),
     deleted_at  TIMESTAMPTZ

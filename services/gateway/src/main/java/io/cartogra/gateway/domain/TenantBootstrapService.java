@@ -13,7 +13,8 @@ import org.springframework.stereotype.Service;
 
 /**
  * Creates the bootstrap tenant and its verified admin when missing. Never changes an existing tenant or user,
- * so a password rotation means deleting the admin first. Not transactional on purpose: concurrent callers
+ * so a password rotation means deleting the admin first, and config can never turn an existing tenant into a
+ * public sandbox. Not transactional on purpose: concurrent callers
  * (retry scheduler, other replicas) lose the insert race on a unique key and treat it as already done.
  */
 @Service
@@ -44,7 +45,7 @@ public class TenantBootstrapService {
         if (tenantRepository.findByTenantId(props.tenantId()).isEmpty()) {
             try {
                 tenantRepository.save(new Tenant(props.tenantId(), props.tenantId(), props.name(), null,
-                    props.plan(), null, null, null));
+                    props.plan(), null, null, null, props.publicSandbox()));
                 log.info("tenant_bootstrap.created tenantId={} plan={}", props.tenantId(), props.plan());
             } catch (DuplicateKeyException _) {
                 log.debug("tenant_bootstrap.already_created tenantId={}", props.tenantId());

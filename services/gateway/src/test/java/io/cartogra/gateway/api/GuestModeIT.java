@@ -2,8 +2,10 @@ package io.cartogra.gateway.api;
 
 import com.jayway.jsonpath.JsonPath;
 import io.cartogra.gateway.AbstractGatewayIT;
+import io.cartogra.gateway.domain.Tenant;
 import io.cartogra.gateway.infrastructure.jwt.JwtClaims;
 import io.cartogra.gateway.infrastructure.jwt.JwtTokenProvider;
+import io.cartogra.gateway.repository.TenantRepository;
 import io.cartogra.web.security.WriteRoutes;
 import jakarta.servlet.http.Cookie;
 import java.time.Duration;
@@ -12,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpMethod;
@@ -50,7 +53,18 @@ class GuestModeIT extends AbstractGatewayIT {
     private JwtTokenProvider jwtTokenProvider;
 
     @Autowired
+    private TenantRepository tenantRepository;
+
+    @Autowired
     private WebApplicationContext context;
+
+    @BeforeEach
+    void createSandboxTenant() {
+        UUID id = UUID.fromString(DEMO_TENANT);
+        if (tenantRepository.findByTenantId(id).isEmpty()) {
+            tenantRepository.save(new Tenant(id, id, "Demo", null, "free", null, null, null, true));
+        }
+    }
 
     @Test
     void mintIssuesShortLivedReadOnlyTokenForDemoTenant() throws Exception {

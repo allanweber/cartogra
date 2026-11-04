@@ -15,7 +15,8 @@ public record TenantBootstrapProperties(
     @Nullable String name,
     @DefaultValue("free") String plan,
     @Nullable String adminEmail,
-    @Nullable String adminPassword
+    @Nullable String adminPassword,
+    @DefaultValue("false") boolean publicSandbox
 ) {
 
     public boolean enabled() {

@@ -68,7 +68,7 @@ class RegisterUserUseCaseTest {
             teamMembershipRepository, invitationRepository, emailSender, passwordEncoder, jwtTokenProvider, config, billingPlanService,
             _ -> { }, new SignupProperties(true));
         when(tenantRepository.save(any(Tenant.class)))
-            .thenReturn(new Tenant(fixedTenantId, fixedTenantId, "name", "slug", "free", null, null, null));
+            .thenReturn(new Tenant(fixedTenantId, fixedTenantId, "name", "slug", "free", null, null, null, false));
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 

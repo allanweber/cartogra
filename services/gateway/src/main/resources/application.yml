@@ -159,6 +159,7 @@ app:
       plan: ${BOOTSTRAP_TENANT_PLAN:free}
       admin-email: ${BOOTSTRAP_ADMIN_EMAIL:}
       admin-password: ${BOOTSTRAP_ADMIN_PASSWORD:}
+      public-sandbox: ${BOOTSTRAP_TENANT_PUBLIC_SANDBOX:false}
   rate-limit:
     enabled: ${RATE_LIMIT_ENABLED:true}
     default-replenish-rate: ${RATE_LIMIT_DEFAULT_REPLENISH:20}

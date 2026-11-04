@@ -31,6 +31,7 @@ gateway:
     BOOTSTRAP_TENANT_NAME: Acme Fintech
     BOOTSTRAP_TENANT_PLAN: business
     BOOTSTRAP_ADMIN_EMAIL: admin@acme-fintech.invalid
+    BOOTSTRAP_TENANT_PUBLIC_SANDBOX: "true"
 
 registry:
   <<: *jvm

@@ -116,7 +116,7 @@ public class OAuthService {
                 throw new SignupDisabledException();
             }
             Tenant tenant = tenantRepository.save(
-                new Tenant(null, null, profile.email(), null, "free", null, null, null));
+                new Tenant(null, null, profile.email(), null, "free", null, null, null, false));
             return userRepository.save(new User(null, tenant.id(), profile.email(), profile.name(),
                 provider, profile.subject(), null, true, List.of("ADMIN"),
                 null, null, null, null, null, null, null, null));

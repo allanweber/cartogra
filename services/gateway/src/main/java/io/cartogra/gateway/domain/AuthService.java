@@ -117,7 +117,7 @@ public class AuthService {
             ? request.orgName()
             : request.email();
 
-        Tenant tenant = tenantRepository.save(new Tenant(null, null, name, null, "free", null, null, null));
+        Tenant tenant = tenantRepository.save(new Tenant(null, null, name, null, "free", null, null, null, false));
 
         String otp = generateOtp();
         Instant otpExp = Instant.now().plusSeconds(OTP_TTL_SECONDS);

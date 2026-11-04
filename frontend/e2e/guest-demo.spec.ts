@@ -32,6 +32,7 @@ async function seedDemoTenant(upstream: string, downstream: string) {
        WHERE NOT EXISTS (SELECT 1 FROM registry.tenants WHERE tenant_id = $1::uuid)`,
       [demoTenantId],
     )
+    await client.query('UPDATE registry.tenants SET public_sandbox = true WHERE tenant_id = $1::uuid', [demoTenantId])
     await client.query(
       `INSERT INTO registry.users (tenant_id, email, auth_provider, password_hash, email_verified, roles, created_at, updated_at)
        SELECT $1::uuid, $2, 'local', password_hash, true, '{ADMIN}', now(), now()
