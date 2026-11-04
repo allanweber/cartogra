@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import { ApiError, apiFetch } from '#/lib/api'
+import { useCan } from '#/lib/permissions'
 import { normalizeHealth } from '#/lib/registry-types'
 import { useAuthStore } from '#/stores/useAuthStore'
 import { Alert, AlertDescription } from '#/components/ui/alert'
@@ -43,9 +44,8 @@ export function TeamDialog({
   onDeleted,
 }: TeamDialogProps) {
   const queryClient = useQueryClient()
-  const currentUserId = useAuthStore((s) => s.user?.id)
   const isAdmin = useAuthStore((s) => s.user?.roles.includes('ADMIN') ?? false)
-  const isTeamOwner = useAuthStore((s) => s.user?.roles.includes('TEAM_OWNER') ?? false)
+  const can = useCan()
   const isEdit = team !== undefined
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [serviceSearch, setServiceSearch] = useState('')
@@ -72,9 +72,9 @@ export function TeamDialog({
     enabled: isEdit && open,
   })
 
-  const isMemberOfThisTeam = members?.some((m) => m.userId === currentUserId) ?? false
-  const canManageMembers =
-    isAdmin || (isTeamOwner && (!isEdit || isMemberOfThisTeam))
+  const canManageMembers = isEdit
+    ? can('team.manage', { teamId: team.id }) === 'allow'
+    : can('team.create') === 'allow'
 
   const { data: tenantUsers } = useQuery({
     queryKey: ['tenant-users'],

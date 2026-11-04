@@ -1,0 +1,375 @@
+{
+  "namespace": "acme-fintech",
+  "services": [
+    {
+      "name": "api-gateway",
+      "team": "platform",
+      "calls": [
+        {
+          "to": "auth-service",
+          "enabled": true
+        },
+        {
+          "to": "user-service",
+          "enabled": true
+        },
+        {
+          "to": "payments-service",
+          "enabled": true
+        },
+        {
+          "to": "card-service",
+          "enabled": true
+        },
+        {
+          "to": "transfer-service",
+          "enabled": true
+        },
+        {
+          "to": "onboarding-service",
+          "enabled": true
+        }
+      ],
+      "produces": [],
+      "consumes": [],
+      "databases": []
+    },
+    {
+      "name": "auth-service",
+      "team": "platform",
+      "calls": [
+        {
+          "to": "user-service",
+          "enabled": true
+        }
+      ],
+      "produces": [],
+      "consumes": [],
+      "databases": []
+    },
+    {
+      "name": "notification-service",
+      "team": "platform",
+      "calls": [],
+      "produces": [],
+      "consumes": [
+        "payments.completed"
+      ],
+      "databases": []
+    },
+    {
+      "name": "user-service",
+      "team": "growth",
+      "calls": [
+        {
+          "to": "kyc-service",
+          "enabled": true
+        },
+        {
+          "to": "notification-service",
+          "enabled": true
+        }
+      ],
+      "produces": [],
+      "consumes": [],
+      "databases": []
+    },
+    {
+      "name": "onboarding-service",
+      "team": "growth",
+      "calls": [
+        {
+          "to": "user-service",
+          "enabled": true
+        },
+        {
+          "to": "notification-service",
+          "enabled": true
+        }
+      ],
+      "produces": [],
+      "consumes": [],
+      "databases": []
+    },
+    {
+      "name": "loyalty-service",
+      "team": "growth",
+      "calls": [
+        {
+          "to": "user-service",
+          "enabled": true
+        },
+        {
+          "to": "ledger-service",
+          "enabled": true
+        },
+        {
+          "to": "fx-service",
+          "enabled": false
+        }
+      ],
+      "produces": [],
+      "consumes": [
+        "payments.completed"
+      ],
+      "databases": []
+    },
+    {
+      "name": "payments-service",
+      "team": "payments",
+      "calls": [
+        {
+          "to": "fraud-service",
+          "enabled": true
+        },
+        {
+          "to": "billing-service",
+          "enabled": true
+        },
+        {
+          "to": "notification-service",
+          "enabled": true
+        },
+        {
+          "to": "ledger-service",
+          "enabled": true
+        },
+        {
+          "to": "stripe-gateway",
+          "enabled": true
+        }
+      ],
+      "produces": [
+        "payments.completed"
+      ],
+      "consumes": [],
+      "databases": []
+    },
+    {
+      "name": "card-service",
+      "team": "payments",
+      "calls": [
+        {
+          "to": "fraud-service",
+          "enabled": true
+        },
+        {
+          "to": "ledger-service",
+          "enabled": true
+        }
+      ],
+      "produces": [],
+      "consumes": [],
+      "databases": []
+    },
+    {
+      "name": "transfer-service",
+      "team": "payments",
+      "calls": [
+        {
+          "to": "payments-service",
+          "enabled": true
+        },
+        {
+          "to": "fx-service",
+          "enabled": true
+        },
+        {
+          "to": "notification-service",
+          "enabled": true
+        },
+        {
+          "to": "ledger-service",
+          "enabled": true
+        }
+      ],
+      "produces": [],
+      "consumes": [],
+      "databases": []
+    },
+    {
+      "name": "billing-service",
+      "team": "payments",
+      "calls": [
+        {
+          "to": "notification-service",
+          "enabled": true
+        },
+        {
+          "to": "ledger-service",
+          "enabled": true
+        }
+      ],
+      "produces": [],
+      "consumes": [],
+      "databases": []
+    },
+    {
+      "name": "ledger-service",
+      "team": "ledger",
+      "calls": [],
+      "produces": [],
+      "consumes": [],
+      "databases": [
+        "ledger-db"
+      ]
+    },
+    {
+      "name": "reporting-service",
+      "team": "ledger",
+      "calls": [
+        {
+          "to": "ledger-service",
+          "enabled": true
+        },
+        {
+          "to": "payments-service",
+          "enabled": false
+        }
+      ],
+      "produces": [],
+      "consumes": [],
+      "databases": []
+    },
+    {
+      "name": "fx-service",
+      "team": "ledger",
+      "calls": [
+        {
+          "to": "ledger-service",
+          "enabled": true
+        }
+      ],
+      "produces": [],
+      "consumes": [],
+      "databases": []
+    },
+    {
+      "name": "statements-service",
+      "team": "ledger",
+      "calls": [
+        {
+          "to": "reporting-service",
+          "enabled": true
+        },
+        {
+          "to": "ledger-service",
+          "enabled": true
+        }
+      ],
+      "produces": [],
+      "consumes": [],
+      "databases": []
+    },
+    {
+      "name": "fraud-service",
+      "team": "risk",
+      "calls": [
+        {
+          "to": "limits-service",
+          "enabled": true
+        },
+        {
+          "to": "ledger-service",
+          "enabled": true
+        }
+      ],
+      "produces": [],
+      "consumes": [],
+      "databases": []
+    },
+    {
+      "name": "kyc-service",
+      "team": "risk",
+      "calls": [
+        {
+          "to": "onboarding-service",
+          "enabled": true
+        }
+      ],
+      "produces": [],
+      "consumes": [],
+      "databases": []
+    },
+    {
+      "name": "limits-service",
+      "team": "risk",
+      "calls": [
+        {
+          "to": "payments-service",
+          "enabled": true
+        },
+        {
+          "to": "ledger-service",
+          "enabled": true
+        }
+      ],
+      "produces": [],
+      "consumes": [],
+      "databases": []
+    },
+    {
+      "name": "legacy-batch",
+      "team": "unowned",
+      "calls": [
+        {
+          "to": "billing-service",
+          "enabled": true
+        },
+        {
+          "to": "ledger-service",
+          "enabled": true
+        },
+        {
+          "to": "notification-service",
+          "enabled": false
+        }
+      ],
+      "produces": [],
+      "consumes": [],
+      "databases": []
+    },
+    {
+      "name": "webhook-relay",
+      "team": "unowned",
+      "calls": [
+        {
+          "to": "payments-service",
+          "enabled": true
+        },
+        {
+          "to": "fraud-service",
+          "enabled": false
+        }
+      ],
+      "produces": [],
+      "consumes": [],
+      "databases": []
+    },
+    {
+      "name": "rewards-calculator",
+      "team": "unowned",
+      "calls": [
+        {
+          "to": "loyalty-service",
+          "enabled": true
+        },
+        {
+          "to": "ledger-service",
+          "enabled": true
+        }
+      ],
+      "produces": [],
+      "consumes": [],
+      "databases": []
+    },
+    {
+      "name": "ledger-db",
+      "team": "ledger",
+      "calls": [],
+      "produces": [],
+      "consumes": [],
+      "databases": []
+    }
+  ]
+}

@@ -19,7 +19,7 @@ The chart creates no Secrets. Each one is mounted read-only at `/etc/cartogra/se
 
 | Secret | Keys |
 |---|---|
-| `gateway-secrets` | `DB_USERNAME` `DB_PASSWORD` `JWT_SECRET` `RESEND_API_KEY` `GOOGLE_CLIENT_SECRET` `GITHUB_CLIENT_SECRET` |
+| `gateway-secrets` | `DB_USERNAME` `DB_PASSWORD` `JWT_SECRET` `RESEND_API_KEY` `GOOGLE_CLIENT_SECRET` `GITHUB_CLIENT_SECRET`, plus `BOOTSTRAP_ADMIN_PASSWORD` when `BOOTSTRAP_TENANT_ID` is set (demo) |
 | `registry-secrets`, `topology-secrets` | `DB_USERNAME` `DB_PASSWORD` |
 | `ingestion-secrets` | `DB_USERNAME` `DB_PASSWORD` `CLUSTER_CREDENTIALS_KEY` |
 | `postgres-secrets` | `DB_USERNAME` `DB_PASSWORD` (same values the services use) |

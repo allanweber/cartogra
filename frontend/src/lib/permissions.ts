@@ -29,15 +29,16 @@ export function resolvePermission(subject: Subject, action: Action, ctx: Permiss
   if (has('ADMIN')) return 'allow'
 
   const isMemberOf = !!ctx.teamId && subject.myTeamIds.includes(ctx.teamId)
+  const canWrite = has('MEMBER') || has('TEAM_OWNER')
   switch (action) {
     case 'settings.view':
       return 'allow'
     case 'service.edit':
       return allowIf(isMemberOf)
     case 'team.create':
-      return allowIf(has('TEAM_OWNER'))
+      return allowIf(canWrite)
     case 'team.manage':
-      return allowIf(has('TEAM_OWNER') && isMemberOf)
+      return allowIf(canWrite && isMemberOf)
   }
 }
 

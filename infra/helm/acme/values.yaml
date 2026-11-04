@@ -1,0 +1,50 @@
+# Acme Fintech: a simulated customer, not part of Cartogra. Install after the cartogra chart:
+#   helm upgrade --install acme infra/helm/acme -n acme-system --create-namespace --set image.tag=<sha>
+# Services come from files/services.json (`pnpm acme manifests --helm`, never edit by hand).
+
+global:
+  environment: demo
+
+# Cartogra tenant that owns the services; must match the gateway's BOOTSTRAP_TENANT_ID.
+tenantId: a0000000-0000-4000-8000-00000000ac3e
+
+image:
+  registry: ghcr.io/allanweber
+  repository: cartogra-acme
+  # Required, never `latest`.
+  tag: ""
+
+# Where the fake services send spans (the cartogra release's collector).
+otlpEndpoint: http://collector.cartogra.svc.cluster.local:4318
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 96Mi
+  limits:
+    cpu: 50m
+    memory: 96Mi
+
+# Read-only identity Cartogra uses to discover the Services (get/list/watch only).
+reader:
+  name: cartogra-reader
+
+# post-install/post-upgrade hook: registers the cluster (+ GitHub), then `acme load`. Idempotent.
+bootstrap:
+  enabled: true
+  apiUrl: http://gateway.cartogra.svc.cluster.local:8080
+  clusterName: demo
+  # Must match the gateway's BOOTSTRAP_ADMIN_EMAIL.
+  adminEmail: acme@cartogra.dev
+  # Empty = no SCM connection. Public org holding the `pnpm acme repos` mirror.
+  githubOrg: ""
+  # Secret files: ACME_PASSWORD (= gateway BOOTSTRAP_ADMIN_PASSWORD), optional ACME_GITHUB_TOKEN.
+  secretName: acme-bootstrap
+  timeoutSeconds: 900
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi

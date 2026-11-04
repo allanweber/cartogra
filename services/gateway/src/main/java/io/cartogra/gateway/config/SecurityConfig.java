@@ -85,7 +85,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/ingestion/webhooks/**").permitAll()
                         .requestMatchers("/api/auth/userinfo", "/api/auth/tenant").authenticated()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/auth/admin/users")
-                        .hasAnyRole("ADMIN", "TEAM_OWNER")
+                        .hasAnyRole("ADMIN", "TEAM_OWNER", "MEMBER")
                         .requestMatchers("/api/auth/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/ingestion/scm-connections/**").hasRole("ADMIN")

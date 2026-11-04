@@ -1,12 +1,13 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { HttpCartograApi } from './api.ts'
+import { connectSources, retry } from './bootstrap.ts'
 import { setDrift } from './drift.ts'
 import { loadSeed } from './load.ts'
-import { renderManifests } from './manifests.ts'
+import { renderHelmServices, renderManifests } from './manifests.ts'
 import { pushRepos } from './repos.ts'
-import { declaredCalls, declaredCycles, loadSeedFile, unownedServices } from './schema.ts'
+import { declaredCalls, declaredCycles, loadSeedFile, unownedServices, withRepoProvider } from './schema.ts'
 import { verify } from './verify.ts'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -25,6 +26,12 @@ async function main(): Promise<number> {
       return 0
 
     case 'manifests': {
+      if (arg === '--helm') {
+        const helmOut = resolve(root, process.env.ACME_HELM_SERVICES_OUT ?? '../../infra/helm/acme/files/services.json')
+        writeFileSync(helmOut, renderHelmServices(seed))
+        console.log(`wrote ${helmOut}`)
+        return 0
+      }
       const out = resolve(root, process.env.ACME_MANIFEST_OUT ?? 'k8s/acme-fintech.yaml')
       const yaml = renderManifests(seed, {
         tenantId: env('ACME_TENANT_ID'),
@@ -39,8 +46,11 @@ async function main(): Promise<number> {
     }
 
     case 'repos': {
+      const providerFlag = [arg, ...flags].indexOf('--provider')
+      const provider = providerFlag >= 0 ? [arg, ...flags][providerFlag + 1] : undefined
+      if (provider !== undefined && provider !== 'github' && provider !== 'azure') throw new Error('--provider must be github or azure')
       const summary = pushRepos(
-        seed,
+        provider ? withRepoProvider(seed, provider) : seed,
         { githubOrg: process.env.ACME_GITHUB_ORG, azureOrg: process.env.ACME_AZURE_ORG, azureProject: process.env.ACME_AZURE_PROJECT },
         console.log,
       )
@@ -65,6 +75,25 @@ async function main(): Promise<number> {
       return checks.every((c) => c.ok) ? 0 : 1
     }
 
+    case 'bootstrap': {
+      const timeoutMs = Number(process.env.ACME_BOOTSTRAP_TIMEOUT_MS ?? 900_000)
+      const api = await retry(authenticated, { timeoutMs, intervalMs: 10_000, log: console.log })
+      const githubOrg = process.env.ACME_GITHUB_ORG
+      const githubToken = optionalEnv('ACME_GITHUB_TOKEN')
+      await connectSources(api, {
+        cluster: {
+          name: process.env.ACME_CLUSTER_NAME ?? 'demo',
+          apiServerUrl: process.env.ACME_K8S_API ?? 'https://kubernetes.default.svc',
+          caCertPem: readFileSync(process.env.ACME_K8S_CA_FILE ?? '/var/run/acme-reader/ca.crt', 'utf8'),
+          saToken: readFileSync(process.env.ACME_K8S_TOKEN_FILE ?? '/var/run/acme-reader/token', 'utf8').trim(),
+        },
+        github: githubOrg && githubToken ? { org: githubOrg, token: githubToken } : undefined,
+        log: console.log,
+      })
+      await loadSeed(api, seed, { log: console.log, discoveryTimeoutMs: timeoutMs })
+      return 0
+    }
+
     case 'drift': {
       if (arg !== 'on' && arg !== 'off') throw new Error('usage: drift on|off')
       for (const call of await setDrift(seed, arg === 'on')) console.log(`${call.from} -> ${call.to}: ${arg}`)
@@ -72,7 +101,7 @@ async function main(): Promise<number> {
     }
 
     default:
-      console.error('usage: acme <validate|manifests|repos|load [--skip-owners]|verify [--with-drift] [--no-spans]|drift on|off>')
+      console.error('usage: acme <validate|manifests [--helm]|repos [--provider github|azure]|bootstrap|load [--skip-owners]|verify [--with-drift] [--no-spans]|drift on|off>')
       return 2
   }
 }
@@ -87,8 +116,16 @@ async function authenticated(): Promise<HttpCartograApi> {
   return api
 }
 
+/** Env var, else a file named after it in ACME_SECRETS_DIR (Kubernetes Secret volume). */
+function optionalEnv(name: string): string | undefined {
+  if (process.env[name]) return process.env[name]
+  const dir = process.env.ACME_SECRETS_DIR
+  const file = dir ? resolve(dir, name) : undefined
+  return file && existsSync(file) ? readFileSync(file, 'utf8').trim() || undefined : undefined
+}
+
 function env(name: string): string {
-  const value = process.env[name]
+  const value = optionalEnv(name)
   if (!value) throw new Error(`${name} is required`)
   return value
 }

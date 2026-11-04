@@ -27,16 +27,17 @@ describe('resolvePermission', () => {
     expect(resolvePermission(subject(['MEMBER'], [TEAM]), 'service.edit', { teamId: null })).toBe('deny')
   })
 
-  it('team.create requires TEAM_OWNER', () => {
+  it('team.create is open to every writer (MEMBER, TEAM_OWNER), matching the backend', () => {
     expect(resolvePermission(subject(['TEAM_OWNER']), 'team.create')).toBe('allow')
-    expect(resolvePermission(subject(['MEMBER']), 'team.create')).toBe('deny')
+    expect(resolvePermission(subject(['MEMBER']), 'team.create')).toBe('allow')
     expect(resolvePermission(subject(['VIEWER']), 'team.create')).toBe('deny')
   })
 
-  it('team.manage requires TEAM_OWNER of that team', () => {
+  it('team.manage requires a writer who is a member of that team (ADR-0025)', () => {
     expect(resolvePermission(subject(['TEAM_OWNER'], [TEAM]), 'team.manage', { teamId: TEAM })).toBe('allow')
+    expect(resolvePermission(subject(['MEMBER'], [TEAM]), 'team.manage', { teamId: TEAM })).toBe('allow')
     expect(resolvePermission(subject(['TEAM_OWNER'], ['other']), 'team.manage', { teamId: TEAM })).toBe('deny')
-    expect(resolvePermission(subject(['MEMBER'], [TEAM]), 'team.manage', { teamId: TEAM })).toBe('deny')
+    expect(resolvePermission(subject(['VIEWER'], [TEAM]), 'team.manage', { teamId: TEAM })).toBe('deny')
   })
 })
 

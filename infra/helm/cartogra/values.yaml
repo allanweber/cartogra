@@ -16,3 +16,29 @@ ingress:
   # cert-manager ClusterIssuer; empty disables TLS.
   clusterIssuer: letsencrypt-prod
   annotations: {}
+
+# Nightly pg_dump to S3-compatible object storage (Hetzner Object Storage in the demo).
+# Secret `backup.secretName` keys: S3_ACCESS_KEY, S3_SECRET_KEY. Retention = a bucket lifecycle rule.
+backup:
+  enabled: false
+  schedule: "0 2 * * *"
+  secretName: backup-secrets
+  s3:
+    endpoint: ""
+    region: ""
+    bucket: ""
+    prefix: postgres
+  postgres:
+    host: postgres
+    database: cartogra
+    secretName: postgres-secrets
+    image: docker.io/library/postgres:16-alpine
+  uploader:
+    image: docker.io/amazon/aws-cli:2.17.0
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi

@@ -1,5 +1,6 @@
 # gateway — API gateway: auth, JWT issuing, routing to backend services.
-# Secret keys (files under secret.mountPath): DB_USERNAME, DB_PASSWORD, JWT_SECRET, RESEND_API_KEY, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_SECRET
+# Secret keys (files under secret.mountPath): DB_USERNAME, DB_PASSWORD, JWT_SECRET, RESEND_API_KEY, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_SECRET,
+# BOOTSTRAP_ADMIN_PASSWORD (only when BOOTSTRAP_TENANT_ID is set)
 
 # Plain (non-secret) env, rendered into a ConfigMap; values go through `tpl`.
 env:
@@ -22,6 +23,11 @@ env:
   # Guest demo mode stays off unless a demo tenant is set (ADR-0019).
   GUEST_TENANT_ID: ""
   SIGNUP_ENABLED: "true"
+  # First tenant + admin created at startup; off while empty. Password: secret key BOOTSTRAP_ADMIN_PASSWORD.
+  BOOTSTRAP_TENANT_ID: ""
+  BOOTSTRAP_TENANT_NAME: ""
+  BOOTSTRAP_TENANT_PLAN: free
+  BOOTSTRAP_ADMIN_EMAIL: ""
 
 image:
   # Empty = global.imageRegistry.

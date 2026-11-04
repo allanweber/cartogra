@@ -1,8 +1,26 @@
 {{- $name := include "common.name" . -}}
+# Clients use this ClusterIP Service: its name resolves before the broker is Ready, so they retry
+# connecting instead of failing on "No resolvable bootstrap urls" (a headless name has no DNS
+# record until the pod is Ready). The headless Service below only governs the StatefulSet.
 apiVersion: v1
 kind: Service
 metadata:
   name: {{ $name }}
+  labels:
+    {{- include "common.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "common.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: kafka
+      port: 9092
+      targetPort: kafka
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-headless
   labels:
     {{- include "common.labels" . | nindent 4 }}
 spec:
@@ -22,7 +40,7 @@ metadata:
   labels:
     {{- include "common.labels" . | nindent 4 }}
 spec:
-  serviceName: {{ $name }}
+  serviceName: {{ $name }}-headless
   replicas: 1
   selector:
     matchLabels:

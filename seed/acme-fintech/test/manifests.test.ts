@@ -1,6 +1,7 @@
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { renderManifests } from '../src/manifests.ts'
+import { readFileSync } from 'node:fs'
+import { renderHelmServices, renderManifests } from '../src/manifests.ts'
 import { loadSeedFile } from '../src/schema.ts'
 
 const seed = loadSeedFile(resolve(import.meta.dirname, '../seed-data.json'))
@@ -55,5 +56,19 @@ describe('renderManifests', () => {
     expect(() => renderManifests(seed, { ...options, tenantId: 'nope' })).toThrow(/UUID/)
     expect(() => renderManifests(seed, { ...options, otlpEndpoint: '' })).toThrow(/OTLP/)
     expect(() => renderManifests(seed, { ...options, image: 'acme:latest' })).toThrow(/tag/)
+  })
+})
+
+describe('renderHelmServices', () => {
+  it('matches the committed chart file (run `pnpm acme manifests --helm` after editing seed-data.json)', () => {
+    const committed = readFileSync(resolve(import.meta.dirname, '../../../infra/helm/acme/files/services.json'), 'utf8')
+    expect(renderHelmServices(seed)).toBe(committed)
+  })
+
+  it('carries every service with its runtime config', () => {
+    const { namespace, services } = JSON.parse(renderHelmServices(seed))
+    expect(namespace).toBe('acme-fintech')
+    expect(services).toHaveLength(seed.services.length)
+    expect(services.find((s: { name: string }) => s.name === 'ledger-service').databases).toEqual(['ledger-db'])
   })
 })

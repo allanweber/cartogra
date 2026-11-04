@@ -4,6 +4,8 @@ RUN npm install -g pnpm@12.3.4
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 COPY app ./app
+COPY src ./src
+COPY seed-data.json ./
 
 FROM node:24.10.0-alpine3.22 AS runtime
 RUN apk upgrade --no-cache \
@@ -13,6 +15,8 @@ WORKDIR /srv
 COPY --from=builder --chown=node:node /build/node_modules ./node_modules
 COPY --from=builder --chown=node:node /build/package.json ./package.json
 COPY --from=builder --chown=node:node /build/app ./app
+COPY --from=builder --chown=node:node /build/src ./src
+COPY --from=builder --chown=node:node /build/seed-data.json ./seed-data.json
 USER node
 ENV NODE_ENV=production
 EXPOSE 8080

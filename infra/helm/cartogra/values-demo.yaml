@@ -26,6 +26,11 @@ gateway:
   env:
     GUEST_TENANT_ID: *acmeTenantId
     SIGNUP_ENABLED: "false"
+    # Acme Fintech, the simulated customer (infra/helm/acme). Signup is off, so the gateway creates it.
+    BOOTSTRAP_TENANT_ID: *acmeTenantId
+    BOOTSTRAP_TENANT_NAME: Acme Fintech
+    BOOTSTRAP_TENANT_PLAN: business
+    BOOTSTRAP_ADMIN_EMAIL: acme@cartogra.dev
 
 registry:
   <<: *jvm
@@ -70,3 +75,10 @@ kafka:
   resources:
     requests: { cpu: 250m, memory: 640Mi }
     limits: { cpu: 500m, memory: 640Mi }
+
+backup:
+  enabled: true
+  s3:
+    endpoint: https://fsn1.your-objectstorage.com
+    region: fsn1
+    bucket: cartogra-demo-backups
