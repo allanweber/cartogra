@@ -1,5 +1,6 @@
 # Acme Fintech: a simulated customer, not part of Cartogra. Install after the cartogra chart:
 #   helm upgrade --install acme infra/helm/acme -n acme-system --create-namespace --set image.tag=<sha>
+# On the demo host infra/k8s/cluster-setup.yaml creates the namespaces, so CI omits --create-namespace.
 # Services come from files/services.json (`pnpm acme manifests --helm`, never edit by hand).
 
 global:

@@ -76,6 +76,12 @@ kafka:
     requests: { cpu: 250m, memory: 640Mi }
     limits: { cpu: 500m, memory: 640Mi }
 
+alerting:
+  enabled: true
+  email:
+    from: alerts@cartogra.dev
+    # to: set at deploy time (GitHub environment variable ALERT_EMAIL).
+
 backup:
   enabled: true
   s3:

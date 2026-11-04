@@ -27,7 +27,7 @@ jobs:
         run: helm lint infra/helm/cartogra --strict --set global.host=cartogra.example --set global.imageTag=ci
 
       - name: Lint (demo values)
-        run: helm lint infra/helm/cartogra --strict -f infra/helm/cartogra/values-demo.yaml --set global.imageTag=ci
+        run: helm lint infra/helm/cartogra --strict -f infra/helm/cartogra/values-demo.yaml --set global.imageTag=ci --set alerting.email.to=ci@example.invalid
 
       - name: Lint (acme)
         run: helm lint infra/helm/acme --strict --set image.tag=ci
@@ -36,7 +36,7 @@ jobs:
         run: helm template cartogra infra/helm/cartogra --set global.host=cartogra.example --set global.imageTag=ci > "$RUNNER_TEMP/prod.yaml"
 
       - name: Render (demo values)
-        run: helm template cartogra infra/helm/cartogra -f infra/helm/cartogra/values-demo.yaml --set global.imageTag=ci > "$RUNNER_TEMP/demo.yaml"
+        run: helm template cartogra infra/helm/cartogra -f infra/helm/cartogra/values-demo.yaml --set global.imageTag=ci --set alerting.email.to=ci@example.invalid > "$RUNNER_TEMP/demo.yaml"
 
       - name: Render (acme)
         run: helm template acme infra/helm/acme -n acme-system --set image.tag=ci > "$RUNNER_TEMP/acme.yaml"

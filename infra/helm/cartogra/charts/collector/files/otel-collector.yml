@@ -1,6 +1,6 @@
-# Collector for the deployable stack (Helm collector chart; also mounted by docker-compose.yml): observed-edges feed only.
-# Same span path as otel-collector.yml (ADR-0029) without the Tempo/Loki/Prometheus backends.
-# Metrics and logs are accepted and discarded so services exporting them don't get 404s.
+# Collector for the deployable stack (Helm collector chart; also mounted by docker-compose.yml).
+# Same span path as otel-collector.yml (ADR-0029) without the Tempo/Loki backends.
+# Metrics are exposed on :8889 for the optional alerting chart to scrape; logs are discarded.
 # NEVER expose 4317/4318 publicly: cartogra.tenant.id is unauthenticated until roadmap 5.9.
 extensions:
   health_check:
@@ -42,6 +42,8 @@ exporters:
     traces:
       topic: cartogra.observability.spans
       encoding: otlp_json
+  prometheus:
+    endpoint: 0.0.0.0:8889
   nop: {}
 
 service:
@@ -54,7 +56,7 @@ service:
     metrics:
       receivers: [otlp]
       processors: [memory_limiter]
-      exporters: [nop]
+      exporters: [prometheus]
     logs:
       receivers: [otlp]
       processors: [memory_limiter]

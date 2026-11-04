@@ -1,5 +1,5 @@
 # collector — span pipeline only (ADR-0029). Config: files/otel-collector.yml (also mounted by docker-compose.yml).
-# NEVER expose 4317/4318 through ingress: cartogra.tenant.id is unauthenticated until roadmap 5.9.
+# NEVER expose 4317/4318/8889 through ingress: cartogra.tenant.id is unauthenticated until roadmap 5.9.
 
 env:
   KAFKA_BROKERS: kafka:9092
@@ -21,11 +21,16 @@ extraContainerPorts:
     containerPort: 4317
   - name: health
     containerPort: 13133
+  - name: metrics
+    containerPort: 8889
 
 extraServicePorts:
   - name: grpc
     port: 4317
     targetPort: grpc
+  - name: metrics
+    port: 8889
+    targetPort: metrics
 
 probes:
   port: health

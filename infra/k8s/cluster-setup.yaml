@@ -1,0 +1,106 @@
+# Applied once by hand with the admin kubeconfig (docs/runbooks/deployment.md section 3), before any secret or chart.
+# Namespaces plus the identity deploy.yml uses, so CI never holds the k3s admin kubeconfig.
+# Baseline Pod Security blocks privileged and hostPath pods; without it, namespace admin means root on the node.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cartogra
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: acme-system
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+---
+# Also declared by the acme chart; the Helm metadata lets the chart adopt it, so CI needs no namespace write.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: acme-fintech
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    cartogra.io/tenant-id: a0000000-0000-4000-8000-00000000ac3e
+    pod-security.kubernetes.io/enforce: baseline
+  annotations:
+    meta.helm.sh/release-name: acme
+    meta.helm.sh/release-namespace: acme-system
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ci-deploy
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: deployer
+  namespace: ci-deploy
+automountServiceAccountToken: false
+---
+# Long-lived token for the KUBECONFIG GitHub secret. Rotate by deleting this Secret and re-applying.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: deployer-token
+  namespace: ci-deploy
+  annotations:
+    kubernetes.io/service-account.name: deployer
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deployer-admin
+  namespace: cartogra
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: admin }
+subjects:
+  - { kind: ServiceAccount, name: deployer, namespace: ci-deploy }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deployer-admin
+  namespace: acme-system
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: admin }
+subjects:
+  - { kind: ServiceAccount, name: deployer, namespace: ci-deploy }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deployer-admin
+  namespace: acme-fintech
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: admin }
+subjects:
+  - { kind: ServiceAccount, name: deployer, namespace: ci-deploy }
+---
+# The acme chart owns one ClusterRole and binding (the read-only discovery identity). Kubernetes only lets
+# CI grant what it holds, so it holds that read access and cannot create anything broader.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ci-deployer
+rules:
+  - apiGroups: [""]
+    resources: [namespaces, services, endpoints]
+    verbs: [get, list, watch]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [clusterroles, clusterrolebindings]
+    verbs: [create]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [clusterroles, clusterrolebindings]
+    resourceNames: [acme-cartogra-reader]
+    verbs: [get, update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ci-deployer
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: ci-deployer }
+subjects:
+  - { kind: ServiceAccount, name: deployer, namespace: ci-deploy }

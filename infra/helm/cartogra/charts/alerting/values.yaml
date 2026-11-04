@@ -1,0 +1,48 @@
+# alerting — scrapes cartogra_* metrics from the collector, evaluates files/rules.yml, emails through SMTP.
+# Off by default; a production install is expected to bring its own monitoring. No Service, no ingress.
+
+image:
+  registry: docker.io
+  repository: prom/prometheus
+  tag: v3.15.1
+
+# Enough to look back at an incident; lost when the pod is replaced, which only resets rule windows.
+retention: 2d
+
+scrape:
+  target: collector:8889
+  interval: 30s
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 192Mi
+  limits:
+    cpu: 100m
+    memory: 192Mi
+
+alertmanager:
+  image: docker.io/prom/alertmanager:v0.34.2
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      cpu: 40m
+      memory: 64Mi
+
+email:
+  # Both required when enabled.
+  to: ""
+  from: ""
+  # Port 587: Hetzner Cloud blocks outbound 25 and 465 by default.
+  smarthost: smtp.resend.com:587
+  username: resend
+  # Secret holding the SMTP password; the file name is the key.
+  passwordSecret: gateway-secrets
+  passwordKey: RESEND_API_KEY
+
+podSecurityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000

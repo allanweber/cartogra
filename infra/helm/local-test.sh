@@ -6,7 +6,7 @@
 #   sh infra/helm/local-test.sh --no-build   skips docker build, uses the images already built (combines with --reuse)
 #   sh infra/helm/local-test.sh --down       deletes the cluster and its data, leaves the docker images
 #
-# Not covered: GHCR push, deploy.yml, sealed secrets, TLS, S3 upload, GitHub mirror scan, sizing on the 8GB VM.
+# Not covered: GHCR push, deploy.yml, sealed secrets, TLS, S3 upload, GitHub mirror scan, alert email delivery, sizing on the 8GB VM.
 set -eu
 
 CLUSTER="${CLUSTER:-cartogra-local}"
@@ -122,6 +122,7 @@ helm upgrade --install cartogra infra/helm/cartogra -n cartogra \
   --set global.host=localhost \
   --set ingress.clusterIssuer= \
   --set backup.enabled=false \
+  --set alerting.email.to=alerts@k3d.invalid \
   --wait --timeout 10m
 
 if [ "$REUSE" = true ]; then
@@ -266,5 +267,15 @@ wait_for "unowned service back in risks" "$RISK_TIMEOUT" has_orphan_risk
 
 remove_check_service
 wait_for "check service removed from catalog" "$REGISTRY_TIMEOUT" absent in_orphan_list
+
+step "Check alerting (the gateway exports its metrics once a minute)"
+query='http://localhost:9090/api/v1/query?query=cartogra_guest_mints_total%7Boutcome%3D%22issued%22%7D'
+tries=0
+until kubectl -n cartogra exec deploy/alerting -c prometheus -- wget -qO- "$query" | grep -q '"outcome":"issued"'; do
+  tries=$((tries + 1))
+  [ "$tries" -lt 30 ] || fail "guest mint counter never reached Prometheus"
+  sleep 5
+done
+pass "guest mint counter reached Prometheus"
 
 printf '\nAll checks passed. Open %s/demo\nkubectl: export KUBECONFIG=%s\n' "$URL" "$KUBECONFIG"

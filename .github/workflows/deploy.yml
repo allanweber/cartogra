@@ -1,7 +1,7 @@
 name: Deploy demo
 
 # Manual: installs one commit's images (built by images.yml) on the demo k3s host (ADR-0030).
-# Needs the `demo` environment: secret KUBECONFIG (CI-scoped kubeconfig), variable ACME_GITHUB_ORG.
+# Needs the `demo` environment: secret KUBECONFIG (the deployer ServiceAccount from infra/k8s/cluster-setup.yaml, which creates the namespaces), variables ACME_GITHUB_ORG and ALERT_EMAIL.
 
 on:
   workflow_dispatch:
@@ -48,14 +48,15 @@ jobs:
 
       - name: Cartogra
         run: |
-          helm upgrade --install cartogra infra/helm/cartogra -n cartogra --create-namespace \
+          helm upgrade --install cartogra infra/helm/cartogra -n cartogra \
             -f infra/helm/cartogra/values-demo.yaml \
             --set global.imageTag="$SHA" \
+            --set alerting.email.to="${{ vars.ALERT_EMAIL }}" \
             --wait --timeout 15m
 
       - name: Acme (runs the bootstrap Job)
         run: |
-          helm upgrade --install acme infra/helm/acme -n acme-system --create-namespace \
+          helm upgrade --install acme infra/helm/acme -n acme-system \
             --set image.tag="$SHA" \
             --set bootstrap.githubOrg="${{ vars.ACME_GITHUB_ORG }}" \
             --wait --timeout 20m

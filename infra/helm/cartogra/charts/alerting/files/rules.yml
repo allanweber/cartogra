@@ -1,0 +1,27 @@
+groups:
+  - name: guest-demo
+    rules:
+      # The per-IP limit allows 5 mints a minute, so this needs many addresses or a very busy demo.
+      - alert: GuestMintSpike
+        expr: sum(increase(cartogra_guest_mints_total{outcome="issued"}[15m])) > 100
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 100 guest sessions created in 15 minutes
+          runbook: docs/runbooks/incident-response.md, section 4 (turn guest mode off)
+      - alert: GuestMintsRateLimited
+        expr: sum(increase(cartogra_guest_mints_total{outcome="rate_limited"}[10m])) > 50
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 50 guest mints rate limited in 10 minutes
+          runbook: docs/runbooks/incident-response.md, section 4 (turn guest mode off)
+      # Without this, a broken metrics path looks the same as a quiet demo.
+      - alert: GuestMintsMetricMissing
+        expr: absent(cartogra_guest_mints_total)
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Prometheus has no guest mint metric, so the other guest alerts cannot fire
+          runbook: Check the gateway and collector pods, then the alerting pod's Prometheus logs

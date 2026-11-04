@@ -90,6 +90,8 @@ Decisions (2026-11-03):
 
 Status (2026-11-03, k3d): both charts install; bootstrap Job registers the cluster via the reader token, discovery finds 21 services, `acme load` gives 5 teams / 18 owned / 43 declared / 2 cycles; 42 observed edges from live spans; guest read 200, write 403; second upgrade re-runs the Job with no duplicates; backup dump OK (upload untested without real S3). GHCR push + `deploy.yml` untested until merged to main. 17h soak (2026-11-04): 0 Acme pod restarts, one drift record total (the seed's intentional never-called `loyalty-service -> fx-service`), no repeats, so no flapping. `AdminUsersAccessIT` covers the MEMBER/TEAM_OWNER opening of `GET /api/auth/admin/users`. Kafka startup race fixed: clients use a ClusterIP `kafka` Service (name resolves before the broker is Ready), headless `kafka-headless` governs the StatefulSet; JVM services started with Kafka down 3 min had 0 restarts and all consumer groups rejoined.
 
+Abuse alerting (decided 2026-11-04, in-cluster option): `charts/alerting` (off by default, on in `values-demo.yaml`) runs Prometheus + Alertmanager in one pod. Collector exposes metrics on 8889, Prometheus keeps only `cartogra_*`, Alertmanager emails through Resend SMTP on port 587 with the existing `RESEND_API_KEY`. k3d: 75 rate-limited mints fired `GuestMintsRateLimited`, Alertmanager reached Resend, which rejected the placeholder key (535); pod used 40Mi with 15 series. Real delivery is checked in step 7.
+
 Done when: chart + bootstrap Job run on local k3d and Acme is discovered; Acme fake services generate traffic continuously (no gaps > `missing-after`), so drift does not flap.
 
 ## 7. Ops — public host (#129)
@@ -106,9 +108,9 @@ Done when: chart + bootstrap Job run on local k3d and Acme is discovered; Acme f
 **7b. Host setup.** Human steps, following the rewritten `deployment.md` (doubles as its test):
 
 - Hetzner **CAX21 (ARM, 4 vCPU, 8GB)**, resize to CAX31 only on measured pressure; single-node k3s, Traefik (bundled) + cert-manager Let's Encrypt on `cartogra.dev`.
-- Sealed Secrets controller; encrypted `SealedSecret`s committed.
+- Sealed Secrets controller, restored key on a rebuild; encrypted `SealedSecret`s committed.
 - GitHub mirror: `pnpm acme repos --provider github` pushes the 21 repos to a public org; demo syncs with a read-only public-repos token.
-- Kubeconfig CI secret; first `helm install`.
+- `infra/k8s/cluster-setup.yaml` (namespaces, CI `deployer` ServiceAccount; admin kubeconfig never in CI), `KUBECONFIG` CI secret, `ALERT_EMAIL` variable; first `helm install`; send the test alert (`deployment.md` section 8).
 - External uptime check on `/api/auth/features` through ingress (actuator is not routed).
 
 ## 8. Gate (#130)

@@ -52,6 +52,8 @@ kubectl -n cartogra exec deploy/registry -- curl -sf localhost:8081/api/v1/regis
 | Missing-drift records appear and resolve repeatedly | Acme traffic gaps longer than `TOPOLOGY_DRIFT_MISSING_AFTER` (PT1H) | Find why the fake services stopped (restarts, node pressure); never shorten `missing-after` |
 | Acme services gone from the catalog | Reader token deleted/rotated or cluster disconnected | Settings → Connections → Kubernetes status; re-run **Deploy demo** |
 | Guests get 429 | Per-IP mint or per-guest API bucket exhausted | Expected under abuse; see section 4 if legitimate |
+| Email `GuestMintSpike` or `GuestMintsRateLimited` | Someone scripting guest mints, or a real traffic spike | Check gateway logs and `kubectl top pods`; if abuse, turn guest mode off (section 4) |
+| Email `GuestMintsMetricMissing` | Gateway, collector or scrape broken; the other guest alerts are blind | Check those pods, then `kubectl -n cartogra logs deploy/alerting -c prometheus` |
 
 ### Kafka consumer lag and DLQs
 
