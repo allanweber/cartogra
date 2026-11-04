@@ -1,5 +1,6 @@
 package io.cartogra.ingestion.domain;
 
+import io.cartogra.common.identity.Actor;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.ingestion.api.dto.KubernetesClusterRequest;
 import io.cartogra.ingestion.domain.exception.ClusterNotFoundException;
@@ -25,22 +26,25 @@ public class ClusterService {
     private final CredentialEncryptor encryptor;
     private final KubeconfigParser kubeconfigParser;
     private final RegistryPlanLimitClient planLimitClient;
+    private final IngestionAuditRecorder auditRecorder;
 
     public ClusterService(ClusterRepository repository,
                           ClusterWorkerManager workerManager,
                           CredentialEncryptor encryptor,
                           KubeconfigParser kubeconfigParser,
-                          RegistryPlanLimitClient planLimitClient) {
+                          RegistryPlanLimitClient planLimitClient,
+                          IngestionAuditRecorder auditRecorder) {
         this.repository = repository;
         this.workerManager = workerManager;
         this.encryptor = encryptor;
         this.kubeconfigParser = kubeconfigParser;
         this.planLimitClient = planLimitClient;
+        this.auditRecorder = auditRecorder;
     }
 
     @PreAuthorize("hasRole('ADMIN')")
     @Transactional
-    public Cluster create(UUID tenantId, KubernetesClusterRequest req) {
+    public Cluster create(UUID tenantId, Actor actor, KubernetesClusterRequest req) {
         if (req.name() == null || req.name().isBlank()) {
             throw new IllegalArgumentException("name is required");
         }
@@ -99,13 +103,14 @@ public class ClusterService {
                 rawKubeconfig != null ? encryptor.encrypt(rawKubeconfig) : null
         ));
 
+        auditRecorder.clusterCreated(actor, cluster);
         workerManager.start(cluster);
         return cluster;
     }
 
     @PreAuthorize("hasRole('ADMIN')")
     @Transactional
-    public Cluster update(UUID tenantId, UUID id, KubernetesClusterRequest req) {
+    public Cluster update(UUID tenantId, Actor actor, UUID id, KubernetesClusterRequest req) {
         Cluster existing = repository.findById(tenantId, id)
                 .orElseThrow(() -> new ClusterNotFoundException(id));
 
@@ -142,6 +147,7 @@ public class ClusterService {
                 kubeconfigEncrypted
         ));
 
+        auditRecorder.clusterUpdated(actor, existing, updated);
         workerManager.stop(id);
         workerManager.start(updated);
         return updated;
@@ -162,10 +168,11 @@ public class ClusterService {
 
     @PreAuthorize("hasRole('ADMIN')")
     @Transactional
-    public void delete(UUID tenantId, UUID id) {
-        repository.findById(tenantId, id)
+    public void delete(UUID tenantId, Actor actor, UUID id) {
+        Cluster existing = repository.findById(tenantId, id)
                 .orElseThrow(() -> new ClusterNotFoundException(id));
         repository.softDelete(tenantId, id);
+        auditRecorder.clusterDeleted(actor, existing);
         workerManager.stop(id);
     }
 }

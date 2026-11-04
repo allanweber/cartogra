@@ -1,5 +1,7 @@
 package io.cartogra.registry.domain;
 
+import io.cartogra.common.audit.AuditEventPort;
+import io.cartogra.common.identity.Actor;
 import io.cartogra.registry.infrastructure.kafka.TeamLifecycleEventProducer;
 import io.cartogra.registry.repository.PlanLimitRepository;
 import io.cartogra.registry.repository.TeamRepository;
@@ -27,6 +29,7 @@ class TeamServiceSecurityTest {
 
     @MockitoBean TeamRepository teamRepository;
     @MockitoBean TeamLifecycleEventProducer eventProducer;
+    @MockitoBean AuditEventPort auditEventPort;
     @MockitoBean PlanLimitRepository planLimitRepository;
 
     @DynamicPropertySource
@@ -43,14 +46,14 @@ class TeamServiceSecurityTest {
 
     @Test
     void update_withoutAuthentication_throwsSecurityException() {
-        assertThatThrownBy(() -> teamService.update(TENANT, UUID.randomUUID(), "x", null))
+        assertThatThrownBy(() -> teamService.update(TENANT, Actor.ANONYMOUS, UUID.randomUUID(), "x"))
                 .isInstanceOf(AuthenticationCredentialsNotFoundException.class);
     }
 
     @Test
     @WithMockUser(roles = "MEMBER")
     void update_asPlainMember_throwsAccessDenied() {
-        assertThatThrownBy(() -> teamService.update(TENANT, UUID.randomUUID(), "x", null))
+        assertThatThrownBy(() -> teamService.update(TENANT, Actor.ANONYMOUS, UUID.randomUUID(), "x"))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -66,7 +69,7 @@ class TeamServiceSecurityTest {
         when(teamRepository.existsByName(TENANT, "new-name", teamId)).thenReturn(false);
         when(teamRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        teamService.update(TENANT, teamId, "new-name", requestedBy);
+        teamService.update(TENANT, Actor.user(requestedBy), teamId, "new-name");
     }
 
     @Test
@@ -76,28 +79,28 @@ class TeamServiceSecurityTest {
         UUID requestedBy = UUID.randomUUID();
         when(teamRepository.isMember(TENANT, teamId, requestedBy)).thenReturn(false);
 
-        assertThatThrownBy(() -> teamService.update(TENANT, teamId, "new-name", requestedBy))
+        assertThatThrownBy(() -> teamService.update(TENANT, Actor.user(requestedBy), teamId, "new-name"))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
     @WithMockUser(roles = "MEMBER")
     void delete_asPlainMember_throwsAccessDenied() {
-        assertThatThrownBy(() -> teamService.delete(TENANT, UUID.randomUUID(), null))
+        assertThatThrownBy(() -> teamService.delete(TENANT, Actor.ANONYMOUS, UUID.randomUUID()))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
     @WithMockUser(roles = "MEMBER")
     void addMember_asPlainMember_throwsAccessDenied() {
-        assertThatThrownBy(() -> teamService.addMember(TENANT, UUID.randomUUID(), UUID.randomUUID(), null))
+        assertThatThrownBy(() -> teamService.addMember(TENANT, Actor.ANONYMOUS, UUID.randomUUID(), UUID.randomUUID()))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
     @WithMockUser(roles = "MEMBER")
     void removeMember_asPlainMember_throwsAccessDenied() {
-        assertThatThrownBy(() -> teamService.removeMember(TENANT, UUID.randomUUID(), UUID.randomUUID(), null))
+        assertThatThrownBy(() -> teamService.removeMember(TENANT, Actor.ANONYMOUS, UUID.randomUUID(), UUID.randomUUID()))
                 .isInstanceOf(AccessDeniedException.class);
     }
 }

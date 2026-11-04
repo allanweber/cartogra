@@ -1,5 +1,6 @@
 package io.cartogra.ingestion.domain;
 
+import io.cartogra.common.identity.Actor;
 import io.cartogra.ingestion.api.dto.KubernetesClusterRequest;
 import io.cartogra.ingestion.infrastructure.kafka.SyncCommandConsumer;
 import io.cartogra.ingestion.infrastructure.kafka.SyncResultProducer;
@@ -51,14 +52,14 @@ class ClusterServiceSecurityTest {
 
     @Test
     void create_withoutAuthentication_throwsSecurityException() {
-        assertThatThrownBy(() -> clusterService.create(TENANT, manualRequest()))
+        assertThatThrownBy(() -> clusterService.create(TENANT, Actor.ANONYMOUS, manualRequest()))
                 .isInstanceOf(AuthenticationCredentialsNotFoundException.class);
     }
 
     @Test
     @WithMockUser(roles = "VIEWER")
     void create_asViewer_throwsAccessDenied() {
-        assertThatThrownBy(() -> clusterService.create(TENANT, manualRequest()))
+        assertThatThrownBy(() -> clusterService.create(TENANT, Actor.ANONYMOUS, manualRequest()))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -68,7 +69,7 @@ class ClusterServiceSecurityTest {
         when(credentialEncryptor.encrypt(any())).thenAnswer(i -> i.getArgument(0));
         when(clusterRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        clusterService.create(TENANT, manualRequest());
+        clusterService.create(TENANT, Actor.ANONYMOUS, manualRequest());
         // no exception — ADMIN is allowed
     }
 
@@ -96,7 +97,7 @@ class ClusterServiceSecurityTest {
 
     @Test
     void delete_withoutAuthentication_throwsSecurityException() {
-        assertThatThrownBy(() -> clusterService.delete(TENANT, UUID.randomUUID()))
+        assertThatThrownBy(() -> clusterService.delete(TENANT, Actor.ANONYMOUS, UUID.randomUUID()))
                 .isInstanceOf(AuthenticationCredentialsNotFoundException.class);
     }
 
@@ -109,7 +110,7 @@ class ClusterServiceSecurityTest {
                         false, ClusterStatus.CONNECTING, null,
                         java.time.Instant.now(), java.time.Instant.now(), null, null)));
 
-        clusterService.delete(TENANT, id);
+        clusterService.delete(TENANT, Actor.ANONYMOUS, id);
     }
 
     private static KubernetesClusterRequest manualRequest() {

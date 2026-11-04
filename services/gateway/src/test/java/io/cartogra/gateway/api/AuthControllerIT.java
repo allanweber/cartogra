@@ -15,6 +15,7 @@ import jakarta.servlet.http.Cookie;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -425,6 +426,82 @@ class AuthControllerIT extends AbstractGatewayIT {
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"))
             .andExpect(jsonPath("$.traceId").isNotEmpty());
+    }
+
+    @Test
+    void changingAUserRoleRecordsExactlyOneAuditRow() throws Exception {
+        UUID tenantId = insertTenant();
+        String adminEmail = "audit-admin-" + UUID.randomUUID() + "@test.com";
+        String targetEmail = "audit-target-" + UUID.randomUUID() + "@test.com";
+        insertVerifiedUser(tenantId, adminEmail, "Pass1!");
+        insertVerifiedUser(tenantId, targetEmail, "Pass1!");
+        UUID adminId = userId(tenantId, adminEmail);
+        UUID targetId = userId(tenantId, targetEmail);
+
+        String loginBody = mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"%s","password":"Pass1!","tenantId":"%s"}
+                    """.formatted(adminEmail, tenantId)))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+        String accessToken = JsonPath.read(loginBody, "$.data.accessToken");
+
+        mockMvc.perform(patch("/api/auth/admin/users/" + targetId + "/role")
+                .cookie(new Cookie("jwt", accessToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"role\":\"MEMBER\"}"))
+            .andExpect(status().isOk());
+
+        var rows = jdbcTemplate.queryForList(
+            "SELECT action, actor_kind, actor_id, payload::text AS payload FROM audit_events WHERE entity_id = :id",
+            new MapSqlParameterSource("id", targetId));
+        assertThat(rows).hasSize(1);
+        assertThat(rows.getFirst().get("action")).isEqualTo("role_changed");
+        assertThat(rows.getFirst().get("actor_kind")).isEqualTo("user");
+        assertThat(rows.getFirst().get("actor_id")).isEqualTo(adminId);
+        assertThat((String) rows.getFirst().get("payload")).contains("MEMBER").doesNotContain("password");
+    }
+
+    @Test
+    void creatingAnOidcConfigReturns201AndAuditsTheAdminWithoutTheSecret() throws Exception {
+        UUID tenantId = insertTenant();
+        String adminEmail = "oidc-admin-" + UUID.randomUUID() + "@test.com";
+        insertVerifiedUser(tenantId, adminEmail, "Pass1!");
+        UUID adminId = userId(tenantId, adminEmail);
+
+        String loginBody = mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"%s","password":"Pass1!","tenantId":"%s"}
+                    """.formatted(adminEmail, tenantId)))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+        String accessToken = JsonPath.read(loginBody, "$.data.accessToken");
+
+        String body = mockMvc.perform(post("/api/auth/admin/oidc-config")
+                .cookie(new Cookie("jwt", accessToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"discoveryUri":"https://idp.example.com/.well-known/openid-configuration",
+                     "clientId":"cartogra","clientSecret":"s3cret-value"}
+                    """))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString();
+        UUID configId = UUID.fromString(JsonPath.read(body, "$.data.id"));
+
+        var rows = jdbcTemplate.queryForList(
+            "SELECT action, actor_id, payload::text AS payload FROM audit_events WHERE entity_id = :id",
+            new MapSqlParameterSource("id", configId));
+        assertThat(rows).hasSize(1);
+        assertThat(rows.getFirst().get("action")).isEqualTo("created");
+        assertThat(rows.getFirst().get("actor_id")).isEqualTo(adminId);
+        assertThat((String) rows.getFirst().get("payload")).contains("cartogra").doesNotContain("s3cret-value");
+    }
+
+    private UUID userId(UUID tenantId, String email) {
+        return jdbcTemplate.queryForObject("SELECT id FROM users WHERE tenant_id = :t AND email = :e",
+            new MapSqlParameterSource().addValue("t", tenantId).addValue("e", email), UUID.class);
     }
 
     private UUID insertTenant() {

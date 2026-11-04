@@ -4,6 +4,11 @@ import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import io.cartogra.test.KafkaTestSupport;
 import io.cartogra.test.PostgresTestSupport;
+import io.cartogra.web.audit.KafkaAuditEventAdapter;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import io.cartogra.topology.infrastructure.scheduled.DependencyGraphViewRefreshScheduler;
 import io.cartogra.topology.repository.GraphNodeRepository;
 import io.cartogra.topology.repository.GraphNodeUpsert;
@@ -24,6 +29,10 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -141,6 +150,50 @@ class DependencyControllerIT {
         if (!resp.body().isBlank()) {
             String bodyTraceId = objectMapper.readTree(resp.body()).get("traceId").stringValue();
             assertThat(bodyTraceId).isEqualTo(headerTraceId);
+        }
+    }
+
+    @Test
+    void postDependency_publishesExactlyOneAuditEvent() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID source = seedNode(tenantId);
+        UUID target = seedNode(tenantId);
+
+        try (var consumer = new KafkaConsumer<String, String>(Map.of(
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaTestSupport.KAFKA.getBootstrapServers(),
+                ConsumerConfig.GROUP_ID_CONFIG, "audit-it-" + UUID.randomUUID(),
+                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"),
+                new StringDeserializer(), new StringDeserializer())) {
+            consumer.subscribe(List.of(KafkaAuditEventAdapter.TOPIC));
+
+            HttpResponse<String> resp = send("POST", "", tenantId, userId, "ADMIN", declareBody(source, target));
+            assertThat(resp.statusCode()).isEqualTo(201);
+            String dependencyId = objectMapper.readTree(resp.body()).get("data").get("id").stringValue();
+
+            List<JsonNode> events = new ArrayList<>();
+            long deadline = System.nanoTime() + Duration.ofSeconds(15).toNanos();
+            while (System.nanoTime() < deadline && events.isEmpty()) {
+                for (ConsumerRecord<String, String> record : consumer.poll(Duration.ofMillis(300))) {
+                    if (dependencyId.equals(record.key())) {
+                        events.add(objectMapper.readTree(record.value()).get("payload"));
+                    }
+                }
+            }
+            for (ConsumerRecord<String, String> record : consumer.poll(Duration.ofSeconds(1))) {
+                if (dependencyId.equals(record.key())) {
+                    events.add(objectMapper.readTree(record.value()).get("payload"));
+                }
+            }
+
+            assertThat(events).hasSize(1);
+            JsonNode event = events.getFirst();
+            assertThat(event.get("entityType").stringValue()).isEqualTo("dependency");
+            assertThat(event.get("action").stringValue()).isEqualTo("declared");
+            assertThat(event.get("actorKind").stringValue()).isEqualTo("USER");
+            assertThat(event.get("actorId").stringValue()).isEqualTo(userId.toString());
+            assertThat(event.get("payload").get("sourceName").stringValue()).isEqualTo("svc-" + source);
+            assertThat(event.get("payload").get("protocol").stringValue()).isEqualTo("http");
         }
     }
 

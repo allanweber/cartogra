@@ -1,0 +1,90 @@
+{{- if .Values.backup.enabled }}
+{{- $b := .Values.backup }}
+{{- $labels := dict "app" "postgres-backup" "version" (.Values.global.imageTag | default .Chart.AppVersion) "environment" .Values.global.environment "team" .Values.global.team }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+spec:
+  schedule: {{ $b.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            {{- toYaml $labels | nindent 12 }}
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            - name: dump
+              image: {{ $b.postgres.image }}
+              command: ["sh", "-c"]
+              args:
+                - >-
+                  PGPASSWORD="$(cat /secrets/postgres/DB_PASSWORD)"
+                  pg_dump -h {{ $b.postgres.host }} -U "$(cat /secrets/postgres/DB_USERNAME)"
+                  -d {{ $b.postgres.database }} -Fc -f /backup/cartogra.dump
+              resources:
+                {{- toYaml $b.resources | nindent 16 }}
+              securityContext:
+                readOnlyRootFilesystem: true
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: [ALL]
+              volumeMounts:
+                - { name: backup, mountPath: /backup }
+                - { name: postgres-secrets, mountPath: /secrets/postgres, readOnly: true }
+                - { name: tmp, mountPath: /tmp }
+          containers:
+            - name: upload
+              image: {{ $b.uploader.image }}
+              command: ["sh", "-c"]
+              args:
+                - >-
+                  export AWS_ACCESS_KEY_ID="$(cat /secrets/s3/S3_ACCESS_KEY)"
+                  AWS_SECRET_ACCESS_KEY="$(cat /secrets/s3/S3_SECRET_KEY)" &&
+                  aws s3 cp /backup/cartogra.dump
+                  "s3://{{ required "backup.s3.bucket is required" $b.s3.bucket }}/{{ $b.s3.prefix }}/cartogra-$(date -u +%Y-%m-%dT%H%MZ).dump"
+                  --endpoint-url {{ required "backup.s3.endpoint is required" $b.s3.endpoint }}
+                  --region {{ required "backup.s3.region is required" $b.s3.region }}
+              env:
+                - name: HOME
+                  value: /tmp
+              resources:
+                {{- toYaml $b.resources | nindent 16 }}
+              securityContext:
+                readOnlyRootFilesystem: true
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: [ALL]
+              volumeMounts:
+                - { name: backup, mountPath: /backup, readOnly: true }
+                - { name: s3-secrets, mountPath: /secrets/s3, readOnly: true }
+                - { name: tmp, mountPath: /tmp }
+          volumes:
+            - name: backup
+              emptyDir: {}
+            - name: tmp
+              emptyDir: {}
+            - name: postgres-secrets
+              secret:
+                secretName: {{ $b.postgres.secretName }}
+            - name: s3-secrets
+              secret:
+                secretName: {{ $b.secretName }}
+{{- end }}

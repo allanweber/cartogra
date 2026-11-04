@@ -1,5 +1,6 @@
 package io.cartogra.ingestion.domain;
 
+import io.cartogra.common.identity.Actor;
 import io.cartogra.ingestion.api.dto.KubernetesClusterRequest;
 import io.cartogra.ingestion.domain.exception.ClusterNotFoundException;
 import io.cartogra.ingestion.infrastructure.k8s.ClusterWorkerManager;
@@ -26,7 +27,8 @@ class ClusterServiceTest {
     private final KubeconfigParser kubeconfigParser = mock(KubeconfigParser.class);
     private final RegistryPlanLimitClient planLimitClient = mock(RegistryPlanLimitClient.class);
     private final ClusterService service =
-            new ClusterService(repository, workerManager, encryptor, kubeconfigParser, planLimitClient);
+            new ClusterService(repository, workerManager, encryptor, kubeconfigParser, planLimitClient,
+                    new IngestionAuditRecorder(_ -> { }, new tools.jackson.databind.ObjectMapper()));
 
     private static final UUID TENANT_ID = UUID.randomUUID();
 
@@ -39,7 +41,7 @@ class ClusterServiceTest {
         var req = new KubernetesClusterRequest("prod", ClusterSource.MANUAL,
                 null, "https://1.2.3.4:6443", "my-ca", "my-token", false);
 
-        Cluster result = service.create(TENANT_ID, req);
+        Cluster result = service.create(TENANT_ID, Actor.ANONYMOUS, req);
 
         assertThat(result.name()).isEqualTo("prod");
         assertThat(result.source()).isEqualTo(ClusterSource.MANUAL);
@@ -65,7 +67,7 @@ class ClusterServiceTest {
         var req = new KubernetesClusterRequest("local", ClusterSource.KUBECONFIG,
                 "kubeconfig-yaml", null, null, null, null);
 
-        Cluster result = service.create(TENANT_ID, req);
+        Cluster result = service.create(TENANT_ID, Actor.ANONYMOUS, req);
 
         assertThat(result.source()).isEqualTo(ClusterSource.KUBECONFIG);
         assertThat(result.apiServerUrl()).isEqualTo("https://127.0.0.1:6443");
@@ -79,7 +81,7 @@ class ClusterServiceTest {
         var req = new KubernetesClusterRequest("local", ClusterSource.MANUAL,
                 null, "https://127.0.0.1:6443", null, null, true);
 
-        assertThatThrownBy(() -> service.create(TENANT_ID, req))
+        assertThatThrownBy(() -> service.create(TENANT_ID, Actor.ANONYMOUS, req))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("saToken is required");
 
@@ -91,7 +93,7 @@ class ClusterServiceTest {
         var req = new KubernetesClusterRequest("local", ClusterSource.MANUAL,
                 null, "https://127.0.0.1:6443", null, "  ", true);
 
-        assertThatThrownBy(() -> service.create(TENANT_ID, req))
+        assertThatThrownBy(() -> service.create(TENANT_ID, Actor.ANONYMOUS, req))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("saToken is required");
 
@@ -103,7 +105,7 @@ class ClusterServiceTest {
         var req = new KubernetesClusterRequest("", ClusterSource.MANUAL,
                 null, "https://127.0.0.1:6443", null, null, null);
 
-        assertThatThrownBy(() -> service.create(TENANT_ID, req))
+        assertThatThrownBy(() -> service.create(TENANT_ID, Actor.ANONYMOUS, req))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("name is required");
     }
@@ -113,7 +115,7 @@ class ClusterServiceTest {
         var req = new KubernetesClusterRequest("prod", null,
                 null, "https://1.2.3.4:6443", null, null, null);
 
-        assertThatThrownBy(() -> service.create(TENANT_ID, req))
+        assertThatThrownBy(() -> service.create(TENANT_ID, Actor.ANONYMOUS, req))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("source is required");
     }
@@ -123,7 +125,7 @@ class ClusterServiceTest {
         var req = new KubernetesClusterRequest("local", ClusterSource.KUBECONFIG,
                 null, null, null, null, null);
 
-        assertThatThrownBy(() -> service.create(TENANT_ID, req))
+        assertThatThrownBy(() -> service.create(TENANT_ID, Actor.ANONYMOUS, req))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("kubeconfig is required");
     }
@@ -133,7 +135,7 @@ class ClusterServiceTest {
         var req = new KubernetesClusterRequest("local", ClusterSource.MANUAL,
                 null, null, null, null, null);
 
-        assertThatThrownBy(() -> service.create(TENANT_ID, req))
+        assertThatThrownBy(() -> service.create(TENANT_ID, Actor.ANONYMOUS, req))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("apiServerUrl is required");
     }
@@ -148,7 +150,7 @@ class ClusterServiceTest {
         var req = new KubernetesClusterRequest("prod-v2", ClusterSource.MANUAL,
                 null, "https://5.6.7.8:6443", null, "new-token", null);
 
-        Cluster result = service.update(TENANT_ID, existing.id(), req);
+        Cluster result = service.update(TENANT_ID, Actor.ANONYMOUS, existing.id(), req);
 
         assertThat(result.name()).isEqualTo("prod-v2");
         assertThat(result.apiServerUrl()).isEqualTo("https://5.6.7.8:6443");
@@ -169,7 +171,7 @@ class ClusterServiceTest {
         var req = new KubernetesClusterRequest("prod", ClusterSource.MANUAL,
                 null, null, null, null, null);
 
-        Cluster result = service.update(TENANT_ID, existing.id(), req);
+        Cluster result = service.update(TENANT_ID, Actor.ANONYMOUS, existing.id(), req);
 
         assertThat(result.caCertPem()).isEqualTo("enc-ca");
         assertThat(result.saToken()).isEqualTo("enc-token");
@@ -190,7 +192,7 @@ class ClusterServiceTest {
         var req = new KubernetesClusterRequest("local", ClusterSource.KUBECONFIG,
                 "new-yaml", null, null, null, null);
 
-        Cluster result = service.update(TENANT_ID, existing.id(), req);
+        Cluster result = service.update(TENANT_ID, Actor.ANONYMOUS, existing.id(), req);
 
         assertThat(result.apiServerUrl()).isEqualTo("https://new:6443");
         assertThat(result.status()).isEqualTo(ClusterStatus.CONNECTING);
@@ -208,7 +210,7 @@ class ClusterServiceTest {
         var req = new KubernetesClusterRequest("local-renamed", ClusterSource.KUBECONFIG,
                 null, null, null, null, null);
 
-        Cluster result = service.update(TENANT_ID, existing.id(), req);
+        Cluster result = service.update(TENANT_ID, Actor.ANONYMOUS, existing.id(), req);
 
         assertThat(result.name()).isEqualTo("local-renamed");
         assertThat(result.apiServerUrl()).isEqualTo("https://old:6443");
@@ -223,7 +225,7 @@ class ClusterServiceTest {
         var req = new KubernetesClusterRequest("prod", ClusterSource.MANUAL,
                 null, "https://1.2.3.4:6443", null, null, null);
 
-        assertThatThrownBy(() -> service.update(TENANT_ID, id, req))
+        assertThatThrownBy(() -> service.update(TENANT_ID, Actor.ANONYMOUS, id, req))
                 .isInstanceOf(ClusterNotFoundException.class);
 
         verify(repository, never()).save(any());
@@ -242,7 +244,7 @@ class ClusterServiceTest {
         var req = new KubernetesClusterRequest("local", ClusterSource.KUBECONFIG,
                 "bad-yaml", null, null, null, null);
 
-        assertThatThrownBy(() -> service.update(TENANT_ID, existing.id(), req))
+        assertThatThrownBy(() -> service.update(TENANT_ID, Actor.ANONYMOUS, existing.id(), req))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("clusters");
     }
@@ -271,7 +273,7 @@ class ClusterServiceTest {
         Cluster cluster = cluster(TENANT_ID);
         when(repository.findById(TENANT_ID, cluster.id())).thenReturn(Optional.of(cluster));
 
-        service.delete(TENANT_ID, cluster.id());
+        service.delete(TENANT_ID, Actor.ANONYMOUS, cluster.id());
 
         verify(repository).softDelete(TENANT_ID, cluster.id());
         verify(workerManager).stop(cluster.id());
@@ -282,7 +284,7 @@ class ClusterServiceTest {
         UUID id = UUID.randomUUID();
         when(repository.findById(TENANT_ID, id)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.delete(TENANT_ID, id))
+        assertThatThrownBy(() -> service.delete(TENANT_ID, Actor.ANONYMOUS, id))
                 .isInstanceOf(ClusterNotFoundException.class);
 
         verify(repository, never()).softDelete(any(), any());

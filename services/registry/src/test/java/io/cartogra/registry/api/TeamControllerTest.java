@@ -1,5 +1,6 @@
 package io.cartogra.registry.api;
 
+import io.cartogra.common.identity.Actor;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.registry.domain.Team;
 import io.cartogra.registry.domain.TeamService;
@@ -18,6 +19,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import static io.cartogra.web.filter.InternalAuthMockMvc.withInternalAuth;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -37,8 +39,8 @@ class TeamControllerTest {
     void setUp() {
         var validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
-        mockMvc = MockMvcBuilders
-                .standaloneSetup(new TeamController(teamService))
+        mockMvc = withInternalAuth(MockMvcBuilders
+                .standaloneSetup(new TeamController(teamService)))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setValidator(validator)
                 .build();
@@ -46,7 +48,7 @@ class TeamControllerTest {
 
     @Test
     void createReturns201WithEnvelopeAndTraceHeader() throws Exception {
-        when(teamService.create(TENANT, "platform", null)).thenReturn(team("platform"));
+        when(teamService.create(TENANT, Actor.ANONYMOUS, "platform")).thenReturn(team("platform"));
 
         mockMvc.perform(post("/teams")
                         .header("X-Tenant-Id", TENANT)
@@ -130,7 +132,7 @@ class TeamControllerTest {
     @Test
     void updateReturns200() throws Exception {
         UUID id = UUID.randomUUID();
-        when(teamService.update(TENANT, id, "platform-eng", null)).thenReturn(team("platform-eng"));
+        when(teamService.update(TENANT, Actor.ANONYMOUS, id, "platform-eng")).thenReturn(team("platform-eng"));
 
         mockMvc.perform(put("/teams/{id}", id)
                         .header("X-Tenant-Id", TENANT)
@@ -144,7 +146,7 @@ class TeamControllerTest {
     @Test
     void updateNotFoundReturns404() throws Exception {
         UUID id = UUID.randomUUID();
-        when(teamService.update(eq(TENANT), eq(id), anyString(), any())).thenThrow(new TeamNotFoundException(id));
+        when(teamService.update(eq(TENANT), any(), eq(id), anyString())).thenThrow(new TeamNotFoundException(id));
 
         mockMvc.perform(put("/teams/{id}", id)
                         .header("X-Tenant-Id", TENANT)
@@ -163,13 +165,13 @@ class TeamControllerTest {
                 .andExpect(status().isNoContent())
                 .andExpect(header().exists("X-Trace-Id"));
 
-        verify(teamService).delete(TENANT, id, null);
+        verify(teamService).delete(TENANT, Actor.ANONYMOUS, id);
     }
 
     @Test
     void deleteNotFoundReturns404() throws Exception {
         UUID id = UUID.randomUUID();
-        doThrow(new TeamNotFoundException(id)).when(teamService).delete(TENANT, id, null);
+        doThrow(new TeamNotFoundException(id)).when(teamService).delete(TENANT, Actor.ANONYMOUS, id);
 
         mockMvc.perform(delete("/teams/{id}", id)
                         .header("X-Tenant-Id", TENANT))

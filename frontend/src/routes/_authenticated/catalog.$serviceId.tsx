@@ -12,6 +12,7 @@ import { useServiceNames } from '#/hooks/useRisks'
 import { RiskScoreBadge } from '#/components/RiskScoreBadge'
 import { SpofBadge } from '#/components/SpofBadge'
 import { TierBadge } from '#/components/TierBadge'
+import { UnderDevelopmentBanner } from '#/components/UnderDevelopmentBanner'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
@@ -19,11 +20,12 @@ import { Skeleton } from '#/components/ui/skeleton'
 import { ApiError, apiFetch } from '#/lib/api'
 import { normalizeHealth, SCM_LABEL } from '#/lib/registry-types'
 import { computeRiskScore } from '#/lib/risk-score'
-import { useAuthStore } from '#/stores/useAuthStore'
 import { cn } from '#/lib/utils'
 
 import type { PageResult, RegistryService, RegistryTeam, ServiceHealth } from '#/lib/registry-types'
 import type { Cycles, Spofs } from '#/lib/topology-types'
+import { ReadOnlyGuard } from '#/components/ReadOnlyGuard'
+import { useCan } from '#/lib/permissions'
 
 type TabId = 'overview' | 'dependencies' | 'contracts' | 'activity'
 
@@ -119,7 +121,7 @@ function ServiceDetailPage() {
     activity: null,
   })
   const [editOpen, setEditOpen] = useState(false)
-  const isAdmin = useAuthStore((s) => s.user?.roles.includes('ADMIN') ?? false)
+  const can = useCan()
 
   const { data: service, isLoading, error } = useQuery({
     queryKey: ['service', serviceId],
@@ -129,12 +131,6 @@ function ServiceDetailPage() {
   const { data: teamsPage } = useQuery({
     queryKey: ['teams'],
     queryFn: () => apiFetch<PageResult<RegistryTeam>>('/v1/registry/teams?limit=200'),
-  })
-
-  const { data: myTeamIds } = useQuery({
-    queryKey: ['teams', 'mine'],
-    queryFn: () => apiFetch<string[]>('/v1/registry/teams/mine'),
-    enabled: !isAdmin,
   })
 
   const teamMap = new Map((teamsPage?.items ?? []).map((t) => [t.id, t.name]))
@@ -195,8 +191,7 @@ function ServiceDetailPage() {
   const riskScore = computeRiskScore(service)
   const insights = buildInsights(service, riskScore)
   const lastDeploy = service.lastDeployedAt ? relativeTime(service.lastDeployedAt) : null
-  const canEdit =
-    isAdmin || (!!service.teamId && (myTeamIds ?? []).includes(service.teamId))
+  const canEdit = can('service.edit', { teamId: service.teamId }) !== 'deny'
 
   return (
     <AppLayout
@@ -204,10 +199,12 @@ function ServiceDetailPage() {
       eyebrow="Service Catalog"
       actions={
         canEdit && (
-          <Button size="sm" onClick={() => setEditOpen(true)} className="gap-1.5">
-            <Pencil className="size-3.5" />
-            Edit
-          </Button>
+          <ReadOnlyGuard>
+            <Button size="sm" onClick={() => setEditOpen(true)} className="gap-1.5">
+              <Pencil className="size-3.5" />
+              Edit
+            </Button>
+          </ReadOnlyGuard>
         )
       }
     >
@@ -496,6 +493,7 @@ function ServiceDetailPage() {
             {/* Contracts */}
             {tab === 'contracts' && (
               <div id="panel-contracts" role="tabpanel" aria-labelledby="tab-contracts">
+                <UnderDevelopmentBanner kind="placeholder" className="mb-3 rounded-lg border" />
                 <EmptyTab
                   icon={<Shield className="size-8" />}
                   message="Per-service contract detail isn't built yet."
@@ -508,6 +506,7 @@ function ServiceDetailPage() {
             {/* Activity */}
             {tab === 'activity' && (
               <div id="panel-activity" role="tabpanel" aria-labelledby="tab-activity">
+                <UnderDevelopmentBanner kind="placeholder" className="mb-3 rounded-lg border" />
                 <EmptyTab
                   icon={<Activity className="size-8" />}
                   message="Per-service activity detail isn't built yet."
@@ -520,6 +519,7 @@ function ServiceDetailPage() {
 
           {/* Right sidebar */}
           <div className="space-y-4">
+            <UnderDevelopmentBanner kind="placeholder" className="rounded-lg border" />
             <Card className="border-dashed">
               <CardHeader className="pb-2 pt-5">
                 <CardTitle className="text-sm font-semibold text-muted-foreground">Active Risks</CardTitle>

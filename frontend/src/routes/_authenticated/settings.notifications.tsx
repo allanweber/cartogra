@@ -9,7 +9,7 @@ export const Route = createFileRoute('/_authenticated/settings/notifications')({
 
 function NotificationsPage() {
   return (
-    <SettingsTabsLayout>
+    <SettingsTabsLayout underDevelopment="placeholder">
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">Notifications</CardTitle>

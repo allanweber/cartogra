@@ -21,6 +21,7 @@ import { normalizeHealth, SCM_LABEL } from '#/lib/registry-types'
 import { cn, preventNavigationFromPopoverTrigger } from '#/lib/utils'
 
 import type { PageResult, RegistryService, RegistryTeam, ScmSource, ServiceHealth } from '#/lib/registry-types'
+import { ReadOnlyGuard } from '#/components/ReadOnlyGuard'
 
 const catalogSearchSchema = z.object({
   q: z.string().optional(),
@@ -189,10 +190,12 @@ function CatalogPage() {
       title="Service Catalog"
       description={pageDescription}
       actions={
-        <Button onClick={() => setRegisterOpen(true)} size="sm" className="gap-1.5">
-          <Plus className="size-3.5" aria-hidden="true" />
-          Register service
-        </Button>
+        <ReadOnlyGuard>
+          <Button onClick={() => setRegisterOpen(true)} size="sm" className="gap-1.5">
+            <Plus className="size-3.5" aria-hidden="true" />
+            Register service
+          </Button>
+        </ReadOnlyGuard>
       }
     >
       <div className="space-y-4">

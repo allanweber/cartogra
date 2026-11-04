@@ -1,0 +1,53 @@
+name: Images
+
+# Multi-arch (amd64 + arm64) image builds; the public demo runs on an ARM VM (ADR-0030).
+# Builder stages run on the runner's platform (jars and JS bundles are arch-independent),
+# so only runtime stages run under QEMU. Pushes ghcr.io/<owner>/cartogra-<image>:<commit sha>;
+# deploy.yml installs a given sha. Every image is rebuilt on each push so one sha tags a full set.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.image }} (amd64+arm64)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: gateway,   context: .,                 dockerfile: infra/docker/gateway/Dockerfile }
+          - { image: registry,  context: .,                 dockerfile: infra/docker/registry/Dockerfile }
+          - { image: topology,  context: .,                 dockerfile: infra/docker/topology/Dockerfile }
+          - { image: ingestion, context: .,                 dockerfile: infra/docker/ingestion/Dockerfile }
+          - { image: frontend,  context: .,                 dockerfile: infra/docker/frontend/Dockerfile }
+          - { image: acme,      context: seed/acme-fintech, dockerfile: seed/acme-fintech/Dockerfile }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/cartogra-${{ matrix.image }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}

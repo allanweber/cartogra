@@ -10,6 +10,7 @@ import { UNRESOLVED_SPAN_SERVICES_KEY, useUnresolvedSpanServices } from '#/hooks
 import { ApiError, apiMutate } from '#/lib/api'
 
 import type { UnresolvedSpanService, UnresolvedSpanServicesPage } from '#/lib/topology-types'
+import { ReadOnlyGuard } from '#/components/ReadOnlyGuard'
 
 export const UNRESOLVED_PAGE_SIZE = 20
 const MAX_LIMIT = 200
@@ -93,22 +94,26 @@ export function UnresolvedSpanServices() {
                 </span>
               </div>
               <div className="mt-2 flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  aria-label={`Create service ${item.name}`}
-                  onClick={() => setRegistering(item)}
-                >
-                  Create service
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  aria-label={`Dismiss ${item.name}`}
-                  onClick={() => setPendingDismiss(item)}
-                >
-                  Dismiss
-                </Button>
+                <ReadOnlyGuard>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    aria-label={`Create service ${item.name}`}
+                    onClick={() => setRegistering(item)}
+                  >
+                    Create service
+                  </Button>
+                </ReadOnlyGuard>
+                <ReadOnlyGuard>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`Dismiss ${item.name}`}
+                    onClick={() => setPendingDismiss(item)}
+                  >
+                    Dismiss
+                  </Button>
+                </ReadOnlyGuard>
               </div>
             </li>
           ))}

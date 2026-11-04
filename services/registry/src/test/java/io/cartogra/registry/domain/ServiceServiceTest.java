@@ -1,6 +1,6 @@
 package io.cartogra.registry.domain;
 
-import io.cartogra.common.identity.SystemActors;
+import io.cartogra.common.identity.Actor;
 import io.cartogra.registry.api.dto.CreateServiceRequest;
 import io.cartogra.registry.api.dto.UpdateServiceRequest;
 import io.cartogra.registry.domain.event.OwnershipResolvedPayload;
@@ -14,7 +14,6 @@ import io.cartogra.registry.repository.ServiceHistoryRepository;
 import io.cartogra.registry.repository.ServiceRepository;
 import io.cartogra.registry.repository.TeamRepository;
 import io.cartogra.web.lock.AdvisoryLockRepository;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,9 +21,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.authentication.TestingAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
@@ -41,6 +37,8 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class ServiceServiceTest {
+
+    private static final Actor ADMIN = Actor.admin(UUID.randomUUID());
 
     @Mock ServiceRepository serviceRepository;
     @Mock ServiceHistoryRepository historyRepository;
@@ -60,14 +58,7 @@ class ServiceServiceTest {
         serviceService = new ServiceService(
                 serviceRepository, historyRepository, teamRepository,
                 new ObjectMapper(), eventProducer, healthEndpointValidator, planLimitService,
-                advisoryLockRepository);
-        SecurityContextHolder.getContext().setAuthentication(
-                new TestingAuthenticationToken("admin", null, new SimpleGrantedAuthority("ROLE_ADMIN")));
-    }
-
-    @AfterEach
-    void tearDown() {
-        SecurityContextHolder.clearContext();
+                advisoryLockRepository, _ -> { });
     }
 
     // ── create ────────────────────────────────────────────────────────────────
@@ -80,7 +71,7 @@ class ServiceServiceTest {
         when(serviceRepository.existsByName(tenantId, "payments", null)).thenReturn(false);
         when(serviceRepository.save(any())).thenReturn(saved);
 
-        serviceService.create(tenantId, req, null);
+        serviceService.create(tenantId, ADMIN, req);
 
         verify(serviceRepository).save(any());
         verify(historyRepository).save(any());
@@ -96,7 +87,7 @@ class ServiceServiceTest {
         var req = new CreateServiceRequest("payments", null, null, null, null, null, null);
         when(serviceRepository.existsByName(tenantId, "payments", null)).thenReturn(true);
 
-        assertThatThrownBy(() -> serviceService.create(tenantId, req, null))
+        assertThatThrownBy(() -> serviceService.create(tenantId, ADMIN, req))
                 .isInstanceOf(DuplicateServiceNameException.class);
 
         verify(serviceRepository, never()).save(any());
@@ -111,7 +102,7 @@ class ServiceServiceTest {
         when(serviceRepository.existsByName(tenantId, "payments", null)).thenReturn(false);
         when(teamRepository.findById(tenantId, teamId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> serviceService.create(tenantId, req, null))
+        assertThatThrownBy(() -> serviceService.create(tenantId, ADMIN, req))
                 .isInstanceOf(TeamNotFoundException.class);
 
         verify(serviceRepository, never()).save(any());
@@ -130,7 +121,7 @@ class ServiceServiceTest {
         when(serviceRepository.count(eq(tenantId), any())).thenReturn(0L);
         when(serviceRepository.save(any())).thenReturn(saved);
 
-        serviceService.create(tenantId, req, null);
+        serviceService.create(tenantId, ADMIN, req);
 
         InOrder inOrder = inOrder(advisoryLockRepository, serviceRepository);
         inOrder.verify(advisoryLockRepository).tryAcquireLock(anyLong());
@@ -148,7 +139,7 @@ class ServiceServiceTest {
                 .thenReturn(new PlanLimits(0, PlanLimits.UNLIMITED, PlanLimits.UNLIMITED, PlanLimits.UNLIMITED));
         when(serviceRepository.count(eq(tenantId), any())).thenReturn(5L);
 
-        assertThatThrownBy(() -> serviceService.create(tenantId, req, null))
+        assertThatThrownBy(() -> serviceService.create(tenantId, ADMIN, req))
                 .isInstanceOf(io.cartogra.registry.domain.exception.PlanLimitExceededException.class);
 
         verify(advisoryLockRepository).tryAcquireLock(anyLong());
@@ -163,7 +154,7 @@ class ServiceServiceTest {
         when(serviceRepository.existsByName(tenantId, "payments", null)).thenReturn(false);
         when(advisoryLockRepository.tryAcquireLock(anyLong())).thenReturn(false);
 
-        assertThatThrownBy(() -> serviceService.create(tenantId, req, null))
+        assertThatThrownBy(() -> serviceService.create(tenantId, ADMIN, req))
                 .isInstanceOf(IllegalStateException.class);
 
         verify(advisoryLockRepository, never()).releaseLock(anyLong());
@@ -178,7 +169,7 @@ class ServiceServiceTest {
         when(serviceRepository.existsByName(tenantId, "payments", null)).thenReturn(false);
         when(serviceRepository.save(any())).thenReturn(saved);
 
-        serviceService.create(tenantId, req, null);
+        serviceService.create(tenantId, ADMIN, req);
 
         verify(healthEndpointValidator).validate("http://example.com/health");
     }
@@ -196,7 +187,7 @@ class ServiceServiceTest {
         when(serviceRepository.existsByName(tenantId, "new", serviceId)).thenReturn(false);
         when(serviceRepository.save(any())).thenReturn(saved);
 
-        serviceService.update(tenantId, serviceId, req, null);
+        serviceService.update(tenantId, ADMIN, serviceId, req);
 
         verify(serviceRepository).save(any());
         verify(historyRepository).save(any());
@@ -210,7 +201,7 @@ class ServiceServiceTest {
         var req = new UpdateServiceRequest("new", null, null, null, null, null, null, null, null, null, null, null);
         when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> serviceService.update(tenantId, serviceId, req, null))
+        assertThatThrownBy(() -> serviceService.update(tenantId, ADMIN, serviceId, req))
                 .isInstanceOf(ServiceNotFoundException.class);
 
         verifyNoInteractions(eventProducer);
@@ -225,7 +216,7 @@ class ServiceServiceTest {
         when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.of(existing));
         when(serviceRepository.existsByName(tenantId, "taken", serviceId)).thenReturn(true);
 
-        assertThatThrownBy(() -> serviceService.update(tenantId, serviceId, req, null))
+        assertThatThrownBy(() -> serviceService.update(tenantId, ADMIN, serviceId, req))
                 .isInstanceOf(DuplicateServiceNameException.class);
 
         verifyNoInteractions(eventProducer);
@@ -233,8 +224,6 @@ class ServiceServiceTest {
 
     @Test
     void updateOrphanServiceByNonAdminIsDenied() {
-        SecurityContextHolder.getContext().setAuthentication(
-                new TestingAuthenticationToken("user", null, new SimpleGrantedAuthority("ROLE_VIEWER")));
         UUID tenantId = UUID.randomUUID();
         UUID serviceId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
@@ -242,7 +231,7 @@ class ServiceServiceTest {
         var req = new UpdateServiceRequest("new", null, null, null, null, null, null, null, null, null, null, null);
         when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.of(existing));
 
-        assertThatThrownBy(() -> serviceService.update(tenantId, serviceId, req, userId))
+        assertThatThrownBy(() -> serviceService.update(tenantId, Actor.user(userId), serviceId, req))
                 .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
 
         verifyNoInteractions(eventProducer);
@@ -250,8 +239,6 @@ class ServiceServiceTest {
 
     @Test
     void updateByOwningTeamMemberSucceeds() {
-        SecurityContextHolder.getContext().setAuthentication(
-                new TestingAuthenticationToken("user", null, new SimpleGrantedAuthority("ROLE_VIEWER")));
         UUID tenantId = UUID.randomUUID();
         UUID serviceId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
@@ -264,7 +251,7 @@ class ServiceServiceTest {
         when(serviceRepository.existsByName(tenantId, "new", serviceId)).thenReturn(false);
         when(serviceRepository.save(any())).thenReturn(saved);
 
-        serviceService.update(tenantId, serviceId, req, userId);
+        serviceService.update(tenantId, Actor.user(userId), serviceId, req);
 
         verify(eventProducer).publishUpdated(any());
     }
@@ -278,7 +265,7 @@ class ServiceServiceTest {
         Service existing = service(tenantId, serviceId, "payments");
         when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.of(existing));
 
-        serviceService.delete(tenantId, serviceId, null);
+        serviceService.delete(tenantId, ADMIN, serviceId);
 
         verify(serviceRepository).softDelete(tenantId, serviceId);
         verify(historyRepository).save(any());
@@ -293,7 +280,7 @@ class ServiceServiceTest {
         UUID serviceId = UUID.randomUUID();
         when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> serviceService.delete(tenantId, serviceId, null))
+        assertThatThrownBy(() -> serviceService.delete(tenantId, ADMIN, serviceId))
                 .isInstanceOf(ServiceNotFoundException.class);
 
         verifyNoInteractions(eventProducer);
@@ -301,8 +288,6 @@ class ServiceServiceTest {
 
     @Test
     void deleteByOwningTeamMemberSucceeds() {
-        SecurityContextHolder.getContext().setAuthentication(
-                new TestingAuthenticationToken("user", null, new SimpleGrantedAuthority("ROLE_VIEWER")));
         UUID tenantId = UUID.randomUUID();
         UUID serviceId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
@@ -311,7 +296,7 @@ class ServiceServiceTest {
         when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.of(existing));
         when(teamRepository.isMember(tenantId, teamId, userId)).thenReturn(true);
 
-        serviceService.delete(tenantId, serviceId, userId);
+        serviceService.delete(tenantId, Actor.user(userId), serviceId);
 
         verify(serviceRepository).softDelete(tenantId, serviceId);
         verify(eventProducer).publishDeleted(eq(existing), any());
@@ -319,8 +304,6 @@ class ServiceServiceTest {
 
     @Test
     void deleteByNonMemberIsDenied() {
-        SecurityContextHolder.getContext().setAuthentication(
-                new TestingAuthenticationToken("user", null, new SimpleGrantedAuthority("ROLE_VIEWER")));
         UUID tenantId = UUID.randomUUID();
         UUID serviceId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
@@ -329,7 +312,7 @@ class ServiceServiceTest {
         when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.of(existing));
         when(teamRepository.isMember(tenantId, teamId, userId)).thenReturn(false);
 
-        assertThatThrownBy(() -> serviceService.delete(tenantId, serviceId, userId))
+        assertThatThrownBy(() -> serviceService.delete(tenantId, Actor.user(userId), serviceId))
                 .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
 
         verify(serviceRepository, never()).softDelete(any(), any());
@@ -339,15 +322,13 @@ class ServiceServiceTest {
     @Test
     void deleteByUnauthenticatedNonMemberIsDenied() {
         // requestedBy = null with no team membership — this used to be the unauthorized bypass.
-        SecurityContextHolder.getContext().setAuthentication(
-                new TestingAuthenticationToken("user", null, new SimpleGrantedAuthority("ROLE_VIEWER")));
         UUID tenantId = UUID.randomUUID();
         UUID serviceId = UUID.randomUUID();
         UUID teamId = UUID.randomUUID();
         Service existing = serviceWithTeam(tenantId, serviceId, "payments", teamId);
         when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.of(existing));
 
-        assertThatThrownBy(() -> serviceService.delete(tenantId, serviceId, null))
+        assertThatThrownBy(() -> serviceService.delete(tenantId, Actor.ANONYMOUS, serviceId))
                 .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
 
         verify(serviceRepository, never()).softDelete(any(), any());
@@ -379,7 +360,7 @@ class ServiceServiceTest {
         when(teamRepository.findById(tenantId, teamId)).thenReturn(Optional.of(team(tenantId, teamId)));
         when(serviceRepository.save(any())).thenReturn(saved);
 
-        serviceService.assignOwner(tenantId, serviceId, teamId, null);
+        serviceService.assignOwner(tenantId, ADMIN, serviceId, teamId);
 
         var captor = ArgumentCaptor.forClass(Service.class);
         verify(serviceRepository).save(captor.capture());
@@ -393,7 +374,7 @@ class ServiceServiceTest {
         UUID serviceId = UUID.randomUUID();
         when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> serviceService.assignOwner(tenantId, serviceId, UUID.randomUUID(), null))
+        assertThatThrownBy(() -> serviceService.assignOwner(tenantId, ADMIN, serviceId, UUID.randomUUID()))
                 .isInstanceOf(ServiceNotFoundException.class);
 
         verifyNoInteractions(eventProducer);
@@ -408,7 +389,7 @@ class ServiceServiceTest {
         when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.of(existing));
         when(teamRepository.findById(tenantId, teamId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> serviceService.assignOwner(tenantId, serviceId, teamId, null))
+        assertThatThrownBy(() -> serviceService.assignOwner(tenantId, ADMIN, serviceId, teamId))
                 .isInstanceOf(TeamNotFoundException.class);
 
         verifyNoInteractions(eventProducer);
@@ -416,8 +397,6 @@ class ServiceServiceTest {
 
     @Test
     void assignOwnerByOwningTeamMemberSucceeds() {
-        SecurityContextHolder.getContext().setAuthentication(
-                new TestingAuthenticationToken("user", null, new SimpleGrantedAuthority("ROLE_VIEWER")));
         UUID tenantId = UUID.randomUUID();
         UUID serviceId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
@@ -430,15 +409,13 @@ class ServiceServiceTest {
         when(teamRepository.findById(tenantId, newTeamId)).thenReturn(Optional.of(team(tenantId, newTeamId)));
         when(serviceRepository.save(any())).thenReturn(saved);
 
-        serviceService.assignOwner(tenantId, serviceId, newTeamId, userId);
+        serviceService.assignOwner(tenantId, Actor.user(userId), serviceId, newTeamId);
 
         verify(eventProducer).publishUpdated(any());
     }
 
     @Test
     void assignOwnerByNonMemberIsDenied() {
-        SecurityContextHolder.getContext().setAuthentication(
-                new TestingAuthenticationToken("user", null, new SimpleGrantedAuthority("ROLE_VIEWER")));
         UUID tenantId = UUID.randomUUID();
         UUID serviceId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
@@ -448,7 +425,7 @@ class ServiceServiceTest {
         when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.of(existing));
         when(teamRepository.isMember(tenantId, teamId, userId)).thenReturn(false);
 
-        assertThatThrownBy(() -> serviceService.assignOwner(tenantId, serviceId, newTeamId, userId))
+        assertThatThrownBy(() -> serviceService.assignOwner(tenantId, Actor.user(userId), serviceId, newTeamId))
                 .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
 
         verify(serviceRepository, never()).save(any());
@@ -458,15 +435,13 @@ class ServiceServiceTest {
     @Test
     void assignOwnerByUnauthenticatedNonMemberIsDenied() {
         // requestedBy = null with no team membership — this used to be the unauthorized bypass.
-        SecurityContextHolder.getContext().setAuthentication(
-                new TestingAuthenticationToken("user", null, new SimpleGrantedAuthority("ROLE_VIEWER")));
         UUID tenantId = UUID.randomUUID();
         UUID serviceId = UUID.randomUUID();
         UUID teamId = UUID.randomUUID();
         Service existing = serviceWithTeam(tenantId, serviceId, "payments", teamId);
         when(serviceRepository.findById(tenantId, serviceId)).thenReturn(Optional.of(existing));
 
-        assertThatThrownBy(() -> serviceService.assignOwner(tenantId, serviceId, UUID.randomUUID(), null))
+        assertThatThrownBy(() -> serviceService.assignOwner(tenantId, Actor.ANONYMOUS, serviceId, UUID.randomUUID()))
                 .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
 
         verify(serviceRepository, never()).save(any());
@@ -474,11 +449,7 @@ class ServiceServiceTest {
     }
 
     @Test
-    void assignOwnerBySystemActorBypassesAuthCheckEvenWithoutAuthentication() {
-        // Simulates the Kafka-consumer-triggered CODEOWNERS auto-assignment path
-        // (resolveOwnership -> assignOwner(..., SystemActors.SYSTEM)), where the
-        // listener thread has no SecurityContextHolder authentication at all.
-        SecurityContextHolder.clearContext();
+    void assignOwnerBySystemActorBypassesOwningTeamCheck() {
         UUID tenantId = UUID.randomUUID();
         UUID serviceId = UUID.randomUUID();
         UUID teamId = UUID.randomUUID();
@@ -488,7 +459,7 @@ class ServiceServiceTest {
         when(teamRepository.findById(tenantId, teamId)).thenReturn(Optional.of(team(tenantId, teamId)));
         when(serviceRepository.save(any())).thenReturn(saved);
 
-        serviceService.assignOwner(tenantId, serviceId, teamId, SystemActors.SYSTEM);
+        serviceService.assignOwner(tenantId, Actor.SYSTEM, serviceId, teamId);
 
         verify(eventProducer).publishUpdated(any());
     }

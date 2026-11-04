@@ -24,7 +24,12 @@ public class JwtAuthentication extends AbstractAuthenticationToken {
     }
 
     @Override
-    public Object getPrincipal() {
+    public JwtClaims getPrincipal() {
+        return claims;
+    }
+
+    @Override
+    public String getName() {
         return claims.userId().toString();
     }
 

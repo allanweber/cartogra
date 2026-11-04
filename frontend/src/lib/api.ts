@@ -1,4 +1,6 @@
-import { clearSessionCookie } from '#/lib/session'
+import { isGuestUser } from '#/lib/guest'
+import { clearSessionCookie, writeSessionCookie } from '#/lib/session'
+import { sessionFromAccessToken } from '#/lib/token'
 import { useAuthStore } from '#/stores/useAuthStore'
 import { useTenantStore } from '#/stores/useTenantStore'
 
@@ -42,6 +44,40 @@ export async function tryRefresh(baseUrl: string): Promise<RefreshResult> {
       })
   }
   return refreshPromise
+}
+
+let guestMintPromise: Promise<RefreshResult> | null = null
+
+/** Starts (or replaces) a guest session: sets the jwt cookie server-side and hydrates the auth store. */
+export function startGuestSession(): Promise<RefreshResult> {
+  if (!guestMintPromise) {
+    guestMintPromise = apiFetch<{ accessToken: string; expiresIn: number }>('/auth/guest', { method: 'POST' })
+      .then((tokens) => {
+        const { user, exp } = sessionFromAccessToken(tokens.accessToken)
+        writeSessionCookie(user, tokens.expiresIn)
+        useAuthStore.getState().hydrateWith(user, exp)
+        return { expiresIn: tokens.expiresIn }
+      })
+      .finally(() => {
+        guestMintPromise = null
+      })
+  }
+  return guestMintPromise
+}
+
+/** Silent re-mint for an expired guest session; null on failure. */
+export async function tryGuestRemint(): Promise<RefreshResult> {
+  try {
+    return await startGuestSession()
+  } catch (err) {
+    console.warn('[auth] guest re-mint failed', err)
+    return null
+  }
+}
+
+/** Renews an expiring session: guests get a fresh guest token, everyone else uses the refresh cookie. */
+export function renewSession(baseUrl: string): Promise<RefreshResult> {
+  return isGuestUser(useAuthStore.getState().user) ? tryGuestRemint() : tryRefresh(baseUrl)
 }
 
 function redirectToLogin() {
@@ -106,7 +142,7 @@ export async function apiFetch<T>(
   const isAuthEndpoint = path.startsWith('/auth/')
 
   if (response.status === 401 && !isAuthEndpoint) {
-    const refreshed = await tryRefresh(baseUrl)
+    const refreshed = await renewSession(baseUrl)
     if (!refreshed) {
       redirectToLogin()
       throw new ApiError('UNAUTHORIZED', 'Session expired.', response.headers.get('X-Trace-Id') ?? 'unknown')

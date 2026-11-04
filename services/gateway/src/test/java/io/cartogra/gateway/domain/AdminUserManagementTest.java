@@ -1,6 +1,8 @@
 package io.cartogra.gateway.domain;
 
+import io.cartogra.common.identity.Actor;
 import io.cartogra.gateway.config.JwtConfig;
+import io.cartogra.gateway.config.SignupProperties;
 import io.cartogra.gateway.infrastructure.email.EmailSender;
 import io.cartogra.gateway.infrastructure.jwt.JwtTokenProvider;
 import io.cartogra.gateway.repository.InvitationRepository;
@@ -57,7 +59,8 @@ class AdminUserManagementTest {
     void setUp() {
         JwtConfig config = new JwtConfig("secret", 900L, 2592000L, false);
         auth = new AuthService(userRepository, tenantRepository, refreshTokenRepository,
-            teamMembershipRepository, invitationRepository, emailSender, passwordEncoder, jwtTokenProvider, config, billingPlanService);
+            teamMembershipRepository, invitationRepository, emailSender, passwordEncoder, jwtTokenProvider, config, billingPlanService,
+            _ -> { }, new SignupProperties(true));
     }
 
     private User user(UUID id, List<String> roles) {
@@ -74,7 +77,7 @@ class AdminUserManagementTest {
             user(adminA, List.of("ADMIN")), user(adminB, List.of("ADMIN"))));
         when(userRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        auth.updateUserRole(tenantId, adminA, "MEMBER");
+        auth.updateUserRole(tenantId, Actor.user(adminB), adminA, "MEMBER");
 
         ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(captor.capture());
@@ -87,7 +90,7 @@ class AdminUserManagementTest {
         when(userRepository.findById(onlyAdmin)).thenReturn(Optional.of(user(onlyAdmin, List.of("ADMIN"))));
         when(userRepository.findAllByTenant(tenantId)).thenReturn(List.of(user(onlyAdmin, List.of("ADMIN"))));
 
-        assertThatThrownBy(() -> auth.updateUserRole(tenantId, onlyAdmin, "MEMBER"))
+        assertThatThrownBy(() -> auth.updateUserRole(tenantId, Actor.user(onlyAdmin), onlyAdmin, "MEMBER"))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("last admin");
     }
@@ -96,7 +99,7 @@ class AdminUserManagementTest {
     void removeUserRejectsSelfRemoval() {
         UUID self = UUID.randomUUID();
 
-        assertThatThrownBy(() -> auth.removeUser(tenantId, self, self))
+        assertThatThrownBy(() -> auth.removeUser(tenantId, Actor.user(self), self))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("own account");
         verifyNoInteractions(userRepository);
@@ -109,7 +112,7 @@ class AdminUserManagementTest {
         when(userRepository.findById(admin)).thenReturn(Optional.of(user(admin, List.of("ADMIN"))));
         when(userRepository.findAllByTenant(tenantId)).thenReturn(List.of(user(admin, List.of("ADMIN"))));
 
-        assertThatThrownBy(() -> auth.removeUser(tenantId, requester, admin))
+        assertThatThrownBy(() -> auth.removeUser(tenantId, Actor.user(requester), admin))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("last admin");
     }
@@ -123,7 +126,7 @@ class AdminUserManagementTest {
         when(userRepository.findAllByTenant(tenantId)).thenReturn(List.of(
             user(admin, List.of("ADMIN")), user(otherAdmin, List.of("ADMIN"))));
 
-        auth.removeUser(tenantId, requester, admin);
+        auth.removeUser(tenantId, Actor.user(requester), admin);
 
         verify(userRepository).softDelete(tenantId, admin);
     }
@@ -132,7 +135,7 @@ class AdminUserManagementTest {
     void setUserDisabledRejectsDisablingSelf() {
         UUID self = UUID.randomUUID();
 
-        assertThatThrownBy(() -> auth.setUserDisabled(tenantId, self, self, true))
+        assertThatThrownBy(() -> auth.setUserDisabled(tenantId, Actor.user(self), self, true))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("own account");
         verifyNoInteractions(userRepository);
@@ -145,7 +148,7 @@ class AdminUserManagementTest {
         when(userRepository.findById(admin)).thenReturn(Optional.of(user(admin, List.of("ADMIN"))));
         when(userRepository.findAllByTenant(tenantId)).thenReturn(List.of(user(admin, List.of("ADMIN"))));
 
-        assertThatThrownBy(() -> auth.setUserDisabled(tenantId, requester, admin, true))
+        assertThatThrownBy(() -> auth.setUserDisabled(tenantId, Actor.user(requester), admin, true))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("last admin");
     }
@@ -160,7 +163,7 @@ class AdminUserManagementTest {
             user(admin, List.of("ADMIN")), user(otherAdmin, List.of("ADMIN"))));
         when(userRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        User result = auth.setUserDisabled(tenantId, requester, admin, true);
+        User result = auth.setUserDisabled(tenantId, Actor.user(requester), admin, true);
 
         assertThat(result.disabledAt()).isNotNull();
     }
@@ -174,7 +177,7 @@ class AdminUserManagementTest {
         when(userRepository.findById(targetId)).thenReturn(Optional.of(disabledUser));
         when(userRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        User result = auth.setUserDisabled(tenantId, requester, targetId, false);
+        User result = auth.setUserDisabled(tenantId, Actor.user(requester), targetId, false);
 
         assertThat(result.disabledAt()).isNull();
     }

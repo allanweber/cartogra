@@ -1,5 +1,7 @@
 package io.cartogra.topology.domain;
 
+import io.cartogra.common.identity.Roles;
+import org.springframework.security.access.prepost.PreAuthorize;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.topology.config.DriftProperties;
 import io.cartogra.topology.domain.exception.DriftAlreadyResolvedException;
@@ -9,8 +11,8 @@ import io.cartogra.topology.domain.exception.InvalidDriftActionException;
 import io.cartogra.topology.repository.DependencyDriftRepository;
 import io.cartogra.topology.repository.DependencyRepository;
 import io.cartogra.topology.repository.EdgePairStat;
+import io.cartogra.common.identity.Actor;
 import io.micrometer.core.instrument.MeterRegistry;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -49,13 +51,15 @@ public class DriftService {
     private final MeterRegistry meterRegistry;
     private final TransactionTemplate resolveTransaction;
     private final TransactionTemplate sweepTransaction;
+    private final EdgeAuditRecorder auditRecorder;
 
     public DriftService(DependencyDriftRepository driftRepository,
                         DependencyRepository dependencyRepository,
                         DependencyService dependencyService,
                         DriftProperties properties,
                         MeterRegistry meterRegistry,
-                        PlatformTransactionManager transactionManager) {
+                        PlatformTransactionManager transactionManager,
+                        EdgeAuditRecorder auditRecorder) {
         this.driftRepository = driftRepository;
         this.dependencyRepository = dependencyRepository;
         this.dependencyService = dependencyService;
@@ -64,6 +68,7 @@ public class DriftService {
         this.resolveTransaction = new TransactionTemplate(transactionManager);
         this.sweepTransaction = new TransactionTemplate(transactionManager);
         this.sweepTransaction.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
+        this.auditRecorder = auditRecorder;
     }
 
     public PageResult<DependencyDrift> list(UUID tenantId, int limit, int offset) {
@@ -73,10 +78,11 @@ public class DriftService {
                 driftRepository.countActive(tenantId), boundedLimit, boundedOffset);
     }
 
-    public DependencyDrift resolve(UUID tenantId, @Nullable UUID userId, UUID id, DriftAction action) {
+    @PreAuthorize(Roles.CAN_WRITE)
+    public DependencyDrift resolve(UUID tenantId, Actor actor, UUID id, DriftAction action) {
         DependencyDrift drift = driftRepository.findById(tenantId, id)
                 .orElseThrow(() -> new DriftNotFoundException(id));
-        dependencyService.requirePairAccess(tenantId, userId, drift.sourceServiceId(), drift.targetServiceId());
+        dependencyService.requirePairAccess(tenantId, actor, drift.sourceServiceId(), drift.targetServiceId());
         if (drift.isResolved()) {
             throw new DriftAlreadyResolvedException(id);
         }
@@ -85,7 +91,7 @@ public class DriftService {
         }
 
         resolveTransaction.executeWithoutResult(status -> {
-            if (!driftRepository.resolve(tenantId, id, userId, action.resolution(), Instant.now())) {
+            if (!driftRepository.resolve(tenantId, id, actor.userId(), action.resolution(), Instant.now())) {
                 throw new DriftAlreadyResolvedException(id);
             }
             switch (action) {
@@ -99,6 +105,7 @@ public class DriftService {
                         drift.targetServiceId());
                 case DISMISS -> { }
             }
+            audit(drift, "resolved", actor, action.resolution());
         });
         return driftRepository.findById(tenantId, id).orElseThrow(() -> new DriftNotFoundException(id));
     }
@@ -149,6 +156,7 @@ public class DriftService {
             if (wanted.contains(key)) {
                 active.add(key);
             } else if (driftRepository.resolve(tenantId, drift.id(), null, DriftResolution.AUTO, now)) {
+                audit(drift, "resolved", Actor.SYSTEM, DriftResolution.AUTO);
                 meterRegistry.counter("cartogra.drift.autoclosed", "type", drift.type().toDbValue()).increment();
             }
         }
@@ -163,9 +171,17 @@ public class DriftService {
             DependencyDrift fresh = new DependencyDrift(UUID.randomUUID(), tenantId, key.pair().source(),
                     key.pair().target(), key.type(), now, null, null, null);
             if (driftRepository.insertIfAbsent(fresh)) {
+                auditRecorder.record(tenantId, "drift", fresh.id(), "detected", Actor.SYSTEM,
+                        fresh.sourceServiceId(), fresh.targetServiceId(), Map.of("type", fresh.type().toDbValue()));
                 meterRegistry.counter("cartogra.drift.detected", "type", key.type().toDbValue()).increment();
             }
         }
+    }
+
+    private void audit(DependencyDrift drift, String action, Actor actor, DriftResolution resolution) {
+        auditRecorder.record(drift.tenantId(), "drift", drift.id(), action, actor,
+                drift.sourceServiceId(), drift.targetServiceId(),
+                Map.of("type", drift.type().toDbValue(), "resolution", resolution.toDbValue()));
     }
 
     private static DriftKey keyOf(DependencyDrift drift) {

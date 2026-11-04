@@ -45,7 +45,8 @@ export interface RegistryTeam {
 export interface RegistryTeamMember {
   id: string
   teamId: string
-  userId: string
+  /** Null for guests: the backend never sends them user identifiers. */
+  userId: string | null
   createdAt: string
 }
 

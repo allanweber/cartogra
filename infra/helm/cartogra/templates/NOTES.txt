@@ -1,0 +1,12 @@
+Cartogra {{ .Chart.AppVersion }} installed in namespace {{ .Release.Namespace }} ({{ .Values.global.environment }}).
+
+Secrets are NOT created by this chart. Before pods can start, apply SealedSecrets that produce:
+  gateway-secrets    DB_USERNAME DB_PASSWORD JWT_SECRET RESEND_API_KEY GOOGLE_CLIENT_SECRET GITHUB_CLIENT_SECRET{{ if .Values.gateway.env.BOOTSTRAP_TENANT_ID }} BOOTSTRAP_ADMIN_PASSWORD{{ end }}
+  registry-secrets   DB_USERNAME DB_PASSWORD
+  topology-secrets   DB_USERNAME DB_PASSWORD
+  ingestion-secrets  DB_USERNAME DB_PASSWORD CLUSTER_CREDENTIALS_KEY
+  postgres-secrets   DB_USERNAME DB_PASSWORD
+{{- if .Values.ingress.enabled }}
+
+URL: https://{{ .Values.global.host }}
+{{- end }}

@@ -1,6 +1,7 @@
 package io.cartogra.gateway.api;
 
 import io.cartogra.gateway.api.dto.AcceptInviteRequest;
+import io.cartogra.gateway.api.dto.AuthFeaturesResponse;
 import io.cartogra.gateway.api.dto.ApiResponse;
 import io.cartogra.gateway.api.dto.ForgotPasswordRequest;
 import io.cartogra.gateway.api.dto.InviteUserRequest;
@@ -17,19 +18,21 @@ import io.cartogra.gateway.api.dto.UserInfoResponse;
 import io.cartogra.gateway.api.dto.UserSummaryResponse;
 import io.cartogra.gateway.api.dto.VerifyEmailRequest;
 import io.cartogra.gateway.config.JwtConfig;
+import io.cartogra.gateway.config.SignupProperties;
 import io.cartogra.gateway.domain.AuthService;
+import io.cartogra.gateway.domain.GuestService;
 import io.cartogra.gateway.domain.UpdateUserInfoResult;
 import io.cartogra.gateway.domain.exception.UnauthorizedException;
-import io.cartogra.gateway.infrastructure.security.JwtAuthentication;
+import io.cartogra.gateway.infrastructure.jwt.JwtClaims;
 import io.cartogra.gateway.infrastructure.tracing.TraceContext;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
@@ -46,13 +49,45 @@ public class AuthController {
     private static final String COOKIE_REFRESH = "jwt_refresh";
 
     private final AuthService auth;
+    private final GuestService guest;
+    private final SignupProperties signup;
     private final TraceContext traceContext;
     private final boolean cookieSecure;
 
-    public AuthController(AuthService auth, TraceContext traceContext, JwtConfig jwtConfig) {
+    public AuthController(AuthService auth, GuestService guest, SignupProperties signup,
+            TraceContext traceContext, JwtConfig jwtConfig) {
         this.auth = auth;
+        this.guest = guest;
+        this.signup = signup;
         this.traceContext = traceContext;
         this.cookieSecure = jwtConfig.cookieSecure();
+    }
+
+    @GetMapping("/features")
+    public ResponseEntity<ApiResponse<AuthFeaturesResponse>> features() {
+        String traceId = traceContext.currentTraceId();
+        AuthFeaturesResponse result = new AuthFeaturesResponse(signup.enabled(), guest.enabled());
+        return ResponseEntity.ok()
+            .header("X-Trace-Id", traceId)
+            .body(new ApiResponse<>(result, traceId));
+    }
+
+    @PostMapping("/guest")
+    public ResponseEntity<ApiResponse<TokenResponse>> guest(
+            @CookieValue(name = COOKIE_REFRESH, required = false) String replacedRefreshToken,
+            HttpServletResponse response) {
+        String traceId = traceContext.currentTraceId();
+        TokenResponse result = guest.mint();
+        if (replacedRefreshToken != null) {
+            auth.logout(replacedRefreshToken);
+            response.addHeader(HttpHeaders.SET_COOKIE,
+                ResponseCookie.from(COOKIE_REFRESH, "")
+                    .httpOnly(true).secure(cookieSecure).path("/").maxAge(0).build().toString());
+        }
+        setAuthCookies(response, result);
+        return ResponseEntity.ok()
+            .header("X-Trace-Id", traceId)
+            .body(new ApiResponse<>(result, traceId));
     }
 
     @PostMapping("/register")
@@ -154,13 +189,10 @@ public class AuthController {
 
     @GetMapping("/users")
     public ResponseEntity<ApiResponse<List<UserSummaryResponse>>> usersByIds(
-            @RequestParam List<UUID> ids) {
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (!(authentication instanceof JwtAuthentication principal)) {
-            throw new UnauthorizedException("Authentication required");
-        }
+            @RequestParam List<UUID> ids,
+            @AuthenticationPrincipal JwtClaims user) {
         String traceId = traceContext.currentTraceId();
-        List<UserSummaryResponse> result = auth.listUsersByIds(principal.getTenantId(), Set.copyOf(ids)).stream()
+        List<UserSummaryResponse> result = auth.listUsersByIds(user.tenantId(), Set.copyOf(ids)).stream()
             .map(UserSummaryResponse::from)
             .toList();
         return ResponseEntity.ok()
@@ -169,13 +201,9 @@ public class AuthController {
     }
 
     @GetMapping("/admin/users")
-    public ResponseEntity<ApiResponse<List<UserSummaryResponse>>> listUsers() {
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (!(authentication instanceof JwtAuthentication principal)) {
-            throw new UnauthorizedException("Authentication required");
-        }
+    public ResponseEntity<ApiResponse<List<UserSummaryResponse>>> listUsers(@AuthenticationPrincipal JwtClaims user) {
         String traceId = traceContext.currentTraceId();
-        List<UserSummaryResponse> result = auth.listUsers(principal.getTenantId()).stream()
+        List<UserSummaryResponse> result = auth.listUsers(user.tenantId()).stream()
             .map(UserSummaryResponse::from)
             .toList();
         return ResponseEntity.ok()
@@ -185,13 +213,10 @@ public class AuthController {
 
     @PostMapping("/admin/invite")
     public ResponseEntity<ApiResponse<InviteUserResponse>> invite(
-            @Valid @RequestBody InviteUserRequest request) {
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (!(authentication instanceof JwtAuthentication principal)) {
-            throw new UnauthorizedException("Authentication required");
-        }
+            @Valid @RequestBody InviteUserRequest request,
+            @AuthenticationPrincipal JwtClaims user) {
         String traceId = traceContext.currentTraceId();
-        InviteUserResponse result = auth.inviteUser(principal.getTenantId(), principal.getUserId(), request);
+        InviteUserResponse result = auth.inviteUser(user.tenantId(), user.actor(), request);
         return ResponseEntity.status(201)
             .header("X-Trace-Id", traceId)
             .body(new ApiResponse<>(result, traceId));
@@ -200,55 +225,43 @@ public class AuthController {
     @PatchMapping("/admin/users/{id}/role")
     public ResponseEntity<ApiResponse<UserSummaryResponse>> updateUserRole(
             @PathVariable UUID id,
-            @Valid @RequestBody UpdateUserRoleRequest request) {
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (!(authentication instanceof JwtAuthentication principal)) {
-            throw new UnauthorizedException("Authentication required");
-        }
+            @Valid @RequestBody UpdateUserRoleRequest request,
+            @AuthenticationPrincipal JwtClaims user) {
         String traceId = traceContext.currentTraceId();
         UserSummaryResponse result = UserSummaryResponse.from(
-            auth.updateUserRole(principal.getTenantId(), id, request.role()));
+            auth.updateUserRole(user.tenantId(), user.actor(), id, request.role()));
         return ResponseEntity.ok()
             .header("X-Trace-Id", traceId)
             .body(new ApiResponse<>(result, traceId));
     }
 
     @PostMapping("/admin/users/{id}/disable")
-    public ResponseEntity<ApiResponse<UserSummaryResponse>> disableUser(@PathVariable UUID id) {
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (!(authentication instanceof JwtAuthentication principal)) {
-            throw new UnauthorizedException("Authentication required");
-        }
+    public ResponseEntity<ApiResponse<UserSummaryResponse>> disableUser(@PathVariable UUID id,
+            @AuthenticationPrincipal JwtClaims user) {
         String traceId = traceContext.currentTraceId();
         UserSummaryResponse result = UserSummaryResponse.from(
-            auth.setUserDisabled(principal.getTenantId(), principal.getUserId(), id, true));
+            auth.setUserDisabled(user.tenantId(), user.actor(), id, true));
         return ResponseEntity.ok()
             .header("X-Trace-Id", traceId)
             .body(new ApiResponse<>(result, traceId));
     }
 
     @PostMapping("/admin/users/{id}/enable")
-    public ResponseEntity<ApiResponse<UserSummaryResponse>> enableUser(@PathVariable UUID id) {
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (!(authentication instanceof JwtAuthentication principal)) {
-            throw new UnauthorizedException("Authentication required");
-        }
+    public ResponseEntity<ApiResponse<UserSummaryResponse>> enableUser(@PathVariable UUID id,
+            @AuthenticationPrincipal JwtClaims user) {
         String traceId = traceContext.currentTraceId();
         UserSummaryResponse result = UserSummaryResponse.from(
-            auth.setUserDisabled(principal.getTenantId(), principal.getUserId(), id, false));
+            auth.setUserDisabled(user.tenantId(), user.actor(), id, false));
         return ResponseEntity.ok()
             .header("X-Trace-Id", traceId)
             .body(new ApiResponse<>(result, traceId));
     }
 
     @DeleteMapping("/admin/users/{id}")
-    public ResponseEntity<ApiResponse<Void>> removeUser(@PathVariable UUID id) {
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (!(authentication instanceof JwtAuthentication principal)) {
-            throw new UnauthorizedException("Authentication required");
-        }
+    public ResponseEntity<ApiResponse<Void>> removeUser(@PathVariable UUID id,
+            @AuthenticationPrincipal JwtClaims user) {
         String traceId = traceContext.currentTraceId();
-        auth.removeUser(principal.getTenantId(), principal.getUserId(), id);
+        auth.removeUser(user.tenantId(), user.actor(), id);
         return ResponseEntity.noContent()
             .header("X-Trace-Id", traceId)
             .build();
@@ -267,19 +280,15 @@ public class AuthController {
     }
 
     @GetMapping("/userinfo")
-    public ResponseEntity<ApiResponse<UserInfoResponse>> userinfo() {
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (!(authentication instanceof JwtAuthentication principal)) {
-            throw new UnauthorizedException("Authentication required");
-        }
+    public ResponseEntity<ApiResponse<UserInfoResponse>> userinfo(@AuthenticationPrincipal JwtClaims user) {
         String traceId = traceContext.currentTraceId();
         UserInfoResponse info = new UserInfoResponse(
-            principal.getClaims().userId(),
-            principal.getClaims().email(),
-            principal.getClaims().name(),
-            principal.getClaims().authProvider(),
-            principal.getClaims().tenantId(),
-            principal.getClaims().roles()
+            user.userId(),
+            user.email(),
+            user.name(),
+            user.authProvider(),
+            user.tenantId(),
+            user.roles()
         );
         return ResponseEntity.ok()
             .header("X-Trace-Id", traceId)
@@ -289,13 +298,10 @@ public class AuthController {
     @PutMapping("/userinfo")
     public ResponseEntity<ApiResponse<UserInfoResponse>> updateUserinfo(
             @Valid @RequestBody UpdateUserInfoRequest request,
-            HttpServletResponse response) {
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (!(authentication instanceof JwtAuthentication principal)) {
-            throw new UnauthorizedException("Authentication required");
-        }
+            HttpServletResponse response,
+            @AuthenticationPrincipal JwtClaims user) {
         String traceId = traceContext.currentTraceId();
-        UpdateUserInfoResult result = auth.updateUserInfo(principal.getClaims().userId(), request.name(), request.email());
+        UpdateUserInfoResult result = auth.updateUserInfo(user.userId(), request.name(), request.email());
         response.addHeader(HttpHeaders.SET_COOKIE,
             ResponseCookie.from(COOKIE_JWT, result.accessToken())
                 .httpOnly(true).secure(cookieSecure).sameSite("Lax").path("/")

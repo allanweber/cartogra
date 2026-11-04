@@ -28,6 +28,13 @@ in separate traces, so Cartogra joins them on the topic name) and `"kind": "db"`
 `db.system=postgresql`, `db.namespace=ledger-db`; `ledger-db` is a catalog service that makes no calls). Both are declared
 with protocol `KAFKA`/`DB`, so they add `kafka`/`db` edges without extra drift or cycles.
 
+## In-cluster (public demo)
+
+On the demo host Acme is not set up by hand: the `infra/helm/acme` chart runs the 21 services (from
+`infra/helm/acme/files/services.json`) and a hook Job that runs `pnpm acme bootstrap`. The tenant comes from the
+gateway's startup bootstrap (`BOOTSTRAP_*`), since signup is off. See `docs/runbooks/deployment.md`. The steps
+below are the local (kind) setup.
+
 ## Prerequisites
 
 `JDK 25`, `docker`, `kind`, `kubectl`, Node >= 24, pnpm. For `pnpm acme repos` only: `git`, `jq`, `az` with the `azure-devops` extension (`az login`), and a PAT (section 4b).
@@ -282,7 +289,9 @@ Clean up the scratch namespaces: `kubectl delete namespace no-tenant late-adopte
 |---|---|
 | `pnpm acme validate` | Prints seed counts (no network) |
 | `pnpm acme manifests` | Writes the k8s yml (needs `ACME_TENANT_ID`, `ACME_OTLP_ENDPOINT`) |
-| `pnpm acme repos` | Generates and pushes the 21 source repos (idempotent) |
+| `pnpm acme manifests --helm` | Rewrites `infra/helm/acme/files/services.json`; run after editing `seed-data.json` (a test fails otherwise) |
+| `pnpm acme repos [--provider github]` | Generates and pushes the 21 source repos (idempotent); `--provider github` mirrors them all to `ACME_GITHUB_ORG` (needs `gh auth setup-git`) |
+| `pnpm acme bootstrap` | In-cluster onboarding (the chart's Job): waits for login, registers the cluster with the reader token, connects GitHub, then `load` |
 | `pnpm acme load` | Teams, owners, tiers, declared edges via the gateway |
 | `pnpm acme verify [--with-drift] [--no-spans]` | End-to-end checks against the live stack |
 | `pnpm acme drift on\|off` | `kubectl port-forward` to each caller and toggles the dormant calls |
@@ -300,6 +309,11 @@ Clean up the scratch namespaces: `kubectl delete namespace no-tenant late-adopte
 | `ACME_AZURE_ORG`, `ACME_AZURE_PROJECT` | | required for `repos` |
 | `ACME_AZURE_PAT` | | git auth for `repos` (Code: Read & write) |
 | `ACME_SEED_FILE` / `ACME_MANIFEST_OUT` | `seed-data.json` / `k8s/acme-fintech.yaml` | |
+| `ACME_GITHUB_ORG` | | `repos --provider github`; `bootstrap` connects it when `ACME_GITHUB_TOKEN` is set |
+| `ACME_GITHUB_TOKEN` | | read-only token for the SCM connection (`bootstrap`) |
+| `ACME_SECRETS_DIR` | | directory of files named after variables (a mounted Secret); used when the variable is unset |
+| `ACME_CLUSTER_NAME`, `ACME_K8S_API`, `ACME_K8S_TOKEN_FILE`, `ACME_K8S_CA_FILE` | `demo`, `https://kubernetes.default.svc`, `/var/run/acme-reader/{token,ca.crt}` | `bootstrap` |
+| `ACME_BOOTSTRAP_TIMEOUT_MS` | `900000` | `bootstrap`: login and discovery wait |
 
 ## How the simulation works
 

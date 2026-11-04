@@ -217,6 +217,7 @@ describe('ServiceDetailPage', () => {
     await screen.findByRole('heading', { name: 'payments-api' })
     fireEvent.click(screen.getByRole('tab', { name: /contracts/i }))
     expect(screen.getByText(/contract detail isn't built yet/i)).toBeInTheDocument()
+    expect(within(screen.getByRole('tabpanel')).getByText(/this is a placeholder/i)).toBeInTheDocument()
   })
 
   it('activity tab shows placeholder', async () => {
@@ -225,6 +226,7 @@ describe('ServiceDetailPage', () => {
     await screen.findByRole('heading', { name: 'payments-api' })
     fireEvent.click(screen.getByRole('tab', { name: /activity/i }))
     expect(screen.getByText(/activity detail isn't built yet/i)).toBeInTheDocument()
+    expect(within(screen.getByRole('tabpanel')).getByText(/this is a placeholder/i)).toBeInTheDocument()
   })
 
   it('dependencies tab shows empty state when there are none', async () => {

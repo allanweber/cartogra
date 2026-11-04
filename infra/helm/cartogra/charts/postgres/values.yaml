@@ -1,0 +1,35 @@
+# postgres — one instance, schemas registry/topology/ingestion (Flyway creates them).
+# Secret keys (files under /etc/cartogra/secrets): DB_USERNAME, DB_PASSWORD — same values the services use.
+
+image:
+  registry: docker.io
+  repository: postgres
+  tag: "16-alpine"
+
+secret:
+  name: postgres-secrets
+
+database: cartogra
+
+# Rendered as `-c key=value` server flags.
+config:
+  max_connections: "100"
+
+persistence:
+  size: 10Gi
+  # Empty = cluster default StorageClass (k3s: local-path).
+  storageClass: ""
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# The alpine image's postgres user is uid 70.
+podSecurityContext:
+  runAsUser: 70
+  runAsGroup: 70
+  fsGroup: 70

@@ -49,6 +49,12 @@ removed — "No producer, no consumer, no module. Violates the project's own no-
 | `cartogra.ingestion.sync.completed` | Ingestion (`SyncResultProducer`) | none (tests subscribe directly; no production consumer) | A Sync Job finished (success or failure) |
 | `cartogra.registry.sync.command` | Ingestion (`SyncCommandProducer`) | Ingestion (`SyncCommandConsumer`) | **Not** a Registry→Ingestion handoff despite the `registry.` prefix. `ScmConnectionService`/`WebhookService`/`ScheduledSyncService` in Ingestion publish this to queue a sync job for its own `SyncCommandConsumer`; the name is a leftover from before SCM Connections moved from Registry to Ingestion (see `services/registry/CONTEXT.md`) |
 
+### Platform
+
+| Topic | Producer | Consumers today | Description |
+| ----- | -------- | ---------------- | ----------- |
+| `cartogra.platform.audit.recorded` | Topology, Ingestion (`KafkaAuditEventAdapter`, `shared:web`) | Registry (`AuditRecordedConsumer`) | A state change for the audit trail (ADR-0017). Envelope payload is the `AuditEvent`; key = entity id. Registry inserts idempotently on `AuditEvent.eventId`. Registry and Gateway don't publish — they write `audit_events` directly |
+
 ### Dead-letter topics
 
 The two Registry consumers and Topology's `GraphNodeEventConsumer` have DLQ handling configured

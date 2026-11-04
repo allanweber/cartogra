@@ -537,7 +537,7 @@ describe('TeamDialog — edit mode', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('lets a non-admin team member see members (by email) but not remove them', async () => {
+  it('lets a writer outside the team see members (by email) but not remove them', async () => {
     mockRoles = ['MEMBER']
     vi.mocked(apiFetch).mockImplementation((path: string, init?: RequestInit) => {
       if (!init?.method || init.method === 'GET') {
@@ -546,6 +546,7 @@ describe('TeamDialog — edit mode', () => {
             { id: 'm1', teamId: 'team-1', userId: 'user-1', createdAt: '2024-01-01T00:00:00Z' },
           ])
         }
+        if (path.includes('/teams/mine')) return Promise.resolve([])
         if (path.includes('/auth/users?ids=')) return Promise.resolve(TENANT_USERS)
         return Promise.resolve(EMPTY_SERVICES)
       }
@@ -560,8 +561,26 @@ describe('TeamDialog — edit mode', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('a team owner sees the "add existing user" search and can remove members', async () => {
-    mockRoles = ['TEAM_OWNER']
+  it('a guest sees one row per member from a response without user ids', async () => {
+    mockRoles = ['GUEST']
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path.includes('/members')) {
+        return Promise.resolve([
+          { id: 'm1', teamId: 'team-1', userId: null, createdAt: '2024-01-01T00:00:00Z' },
+          { id: 'm2', teamId: 'team-1', userId: null, createdAt: '2024-01-02T00:00:00Z' },
+        ])
+      }
+      if (path.includes('/teams/mine')) return Promise.resolve([])
+      return Promise.resolve(EMPTY_SERVICES)
+    })
+    renderDialog({ team: MOCK_TEAM })
+
+    expect(await screen.findAllByText('Team member')).toHaveLength(2)
+    expect(vi.mocked(apiFetch).mock.calls.some(([path]) => String(path).includes('/auth/'))).toBe(false)
+  })
+
+  it.each([['TEAM_OWNER'], ['MEMBER']])('a %s in the team sees the "add existing user" search and can remove members', async (role) => {
+    mockRoles = [role]
     vi.mocked(apiFetch).mockImplementation((path: string, init?: RequestInit) => {
       if (!init?.method || init.method === 'GET') {
         if (path.includes('/members')) {
@@ -569,6 +588,7 @@ describe('TeamDialog — edit mode', () => {
             { id: 'm1', teamId: 'team-1', userId: 'user-1', createdAt: '2024-01-01T00:00:00Z' },
           ])
         }
+        if (path.includes('/teams/mine')) return Promise.resolve(['team-1'])
         if (path.includes('/admin/users')) return Promise.resolve(TENANT_USERS)
         return Promise.resolve(EMPTY_SERVICES)
       }

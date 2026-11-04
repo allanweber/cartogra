@@ -1,5 +1,6 @@
 package io.cartogra.gateway.api;
 
+import io.cartogra.gateway.domain.exception.SignupDisabledException;
 import io.cartogra.common.api.ApiError;
 import io.cartogra.common.api.ApiErrorResponse;
 import io.cartogra.common.api.ErrorCodes;
@@ -17,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -41,6 +43,11 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleUnauthorized(RuntimeException ex) {
         log.warn("Unauthorized: {}", ex.getMessage());
         return error(HttpStatus.UNAUTHORIZED, ErrorCodes.UNAUTHORIZED, ex.getMessage());
+    }
+
+    @ExceptionHandler(SignupDisabledException.class)
+    public ResponseEntity<ApiErrorResponse> handleSignupDisabled(SignupDisabledException ex) {
+        return error(HttpStatus.FORBIDDEN, ErrorCodes.SIGNUP_DISABLED, ex.getMessage());
     }
 
     @ExceptionHandler(ConflictException.class)
@@ -85,6 +92,11 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleServiceUnavailable(ServiceUnavailableException ex) {
         log.warn("Service unavailable: {}", ex.getMessage());
         return error(HttpStatus.SERVICE_UNAVAILABLE, ErrorCodes.SERVICE_UNAVAILABLE, ex.getMessage());
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiErrorResponse> handleAccessDenied(AccessDeniedException ex) {
+        return error(HttpStatus.FORBIDDEN, ErrorCodes.FORBIDDEN, "Access denied");
     }
 
     @ExceptionHandler(NoResourceFoundException.class)

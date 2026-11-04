@@ -1,11 +1,11 @@
 package io.cartogra.registry.domain;
 
+import io.cartogra.common.identity.Actor;
 import io.cartogra.registry.domain.exception.DuplicateTeamNameException;
 import io.cartogra.registry.domain.exception.TeamNotFoundException;
 import io.cartogra.registry.infrastructure.kafka.TeamLifecycleEventProducer;
 import io.cartogra.registry.repository.TeamRepository;
 import io.cartogra.web.lock.AdvisoryLockRepository;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,9 +13,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.authentication.TestingAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -30,6 +27,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class TeamServiceTest {
 
+    private static final Actor ADMIN = Actor.admin(UUID.randomUUID());
+
     @Mock TeamRepository teamRepository;
     @Mock TeamLifecycleEventProducer eventProducer;
     @Mock PlanLimitService planLimitService;
@@ -40,14 +39,7 @@ class TeamServiceTest {
     @BeforeEach
     void setUp() {
         lenient().when(advisoryLockRepository.tryAcquireLock(anyLong())).thenReturn(true);
-        teamService = new TeamService(teamRepository, eventProducer, planLimitService, advisoryLockRepository);
-        SecurityContextHolder.getContext().setAuthentication(
-                new TestingAuthenticationToken("admin", null, new SimpleGrantedAuthority("ROLE_ADMIN")));
-    }
-
-    @AfterEach
-    void tearDown() {
-        SecurityContextHolder.clearContext();
+        teamService = new TeamService(teamRepository, eventProducer, planLimitService, advisoryLockRepository, _ -> { });
     }
 
     @Test
@@ -59,7 +51,7 @@ class TeamServiceTest {
                 .thenReturn(new PlanLimits(PlanLimits.UNLIMITED, PlanLimits.UNLIMITED, PlanLimits.UNLIMITED, PlanLimits.UNLIMITED));
         when(teamRepository.save(any())).thenReturn(saved);
 
-        teamService.create(tenantId, "platform", null);
+        teamService.create(tenantId, ADMIN, "platform");
 
         var captor = ArgumentCaptor.forClass(Team.class);
         verify(eventProducer).publishCreated(captor.capture());
@@ -72,7 +64,7 @@ class TeamServiceTest {
         UUID tenantId = UUID.randomUUID();
         when(teamRepository.existsByName(tenantId, "platform", null)).thenReturn(true);
 
-        assertThatThrownBy(() -> teamService.create(tenantId, "platform", null))
+        assertThatThrownBy(() -> teamService.create(tenantId, ADMIN, "platform"))
                 .isInstanceOf(DuplicateTeamNameException.class);
 
         verifyNoInteractions(eventProducer);
@@ -88,7 +80,7 @@ class TeamServiceTest {
         when(teamRepository.existsByName(tenantId, "new-name", teamId)).thenReturn(false);
         when(teamRepository.save(any())).thenReturn(saved);
 
-        teamService.update(tenantId, teamId, "new-name", null);
+        teamService.update(tenantId, ADMIN, teamId, "new-name");
 
         var captor = ArgumentCaptor.forClass(Team.class);
         verify(eventProducer).publishUpdated(captor.capture());
@@ -101,7 +93,7 @@ class TeamServiceTest {
         UUID teamId = UUID.randomUUID();
         when(teamRepository.findById(tenantId, teamId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> teamService.update(tenantId, teamId, "x", null))
+        assertThatThrownBy(() -> teamService.update(tenantId, ADMIN, teamId, "x"))
                 .isInstanceOf(TeamNotFoundException.class);
 
         verifyNoInteractions(eventProducer);
@@ -114,7 +106,7 @@ class TeamServiceTest {
         Team existing = team(tenantId, teamId, "platform");
         when(teamRepository.findById(tenantId, teamId)).thenReturn(Optional.of(existing));
 
-        teamService.delete(tenantId, teamId, null);
+        teamService.delete(tenantId, ADMIN, teamId);
 
         verify(teamRepository).softDelete(tenantId, teamId);
         var captor = ArgumentCaptor.forClass(Team.class);
@@ -129,7 +121,7 @@ class TeamServiceTest {
         UUID teamId = UUID.randomUUID();
         when(teamRepository.findById(tenantId, teamId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> teamService.delete(tenantId, teamId, null))
+        assertThatThrownBy(() -> teamService.delete(tenantId, ADMIN, teamId))
                 .isInstanceOf(TeamNotFoundException.class);
 
         verifyNoInteractions(eventProducer);
@@ -142,7 +134,7 @@ class TeamServiceTest {
         when(planLimitService.getLimits(tenantId)).thenReturn(new PlanLimits(-1, -1, -1, 2));
         when(teamRepository.count(tenantId)).thenReturn(2L);
 
-        assertThatThrownBy(() -> teamService.create(tenantId, "platform", null))
+        assertThatThrownBy(() -> teamService.create(tenantId, ADMIN, "platform"))
                 .isInstanceOf(io.cartogra.registry.domain.exception.PlanLimitExceededException.class);
 
         verifyNoInteractions(eventProducer);
@@ -158,7 +150,7 @@ class TeamServiceTest {
         when(teamRepository.count(tenantId)).thenReturn(0L);
         when(teamRepository.save(any())).thenReturn(saved);
 
-        teamService.create(tenantId, "platform", null);
+        teamService.create(tenantId, ADMIN, "platform");
 
         InOrder inOrder = inOrder(advisoryLockRepository, teamRepository);
         inOrder.verify(advisoryLockRepository).tryAcquireLock(anyLong());
@@ -174,7 +166,7 @@ class TeamServiceTest {
         when(planLimitService.getLimits(tenantId)).thenReturn(new PlanLimits(-1, -1, -1, 2));
         when(teamRepository.count(tenantId)).thenReturn(2L);
 
-        assertThatThrownBy(() -> teamService.create(tenantId, "platform", null))
+        assertThatThrownBy(() -> teamService.create(tenantId, ADMIN, "platform"))
                 .isInstanceOf(io.cartogra.registry.domain.exception.PlanLimitExceededException.class);
 
         verify(advisoryLockRepository).tryAcquireLock(anyLong());
@@ -188,7 +180,7 @@ class TeamServiceTest {
         when(teamRepository.existsByName(tenantId, "platform", null)).thenReturn(false);
         when(advisoryLockRepository.tryAcquireLock(anyLong())).thenReturn(false);
 
-        assertThatThrownBy(() -> teamService.create(tenantId, "platform", null))
+        assertThatThrownBy(() -> teamService.create(tenantId, ADMIN, "platform"))
                 .isInstanceOf(IllegalStateException.class);
 
         verify(advisoryLockRepository, never()).releaseLock(anyLong());
@@ -197,8 +189,6 @@ class TeamServiceTest {
 
     @Test
     void createByTeamOwnerAutoAddsCreatorAsMember() {
-        SecurityContextHolder.getContext().setAuthentication(
-                new TestingAuthenticationToken("owner", null, new SimpleGrantedAuthority("ROLE_TEAM_OWNER")));
         UUID tenantId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
         Team saved = team(tenantId, "platform");
@@ -207,7 +197,7 @@ class TeamServiceTest {
                 .thenReturn(new PlanLimits(PlanLimits.UNLIMITED, PlanLimits.UNLIMITED, PlanLimits.UNLIMITED, PlanLimits.UNLIMITED));
         when(teamRepository.save(any())).thenReturn(saved);
 
-        teamService.create(tenantId, "platform", userId);
+        teamService.create(tenantId, Actor.user(userId), "platform");
 
         var captor = ArgumentCaptor.forClass(TeamMember.class);
         verify(teamRepository).addMember(captor.capture());
@@ -225,15 +215,13 @@ class TeamServiceTest {
                 .thenReturn(new PlanLimits(PlanLimits.UNLIMITED, PlanLimits.UNLIMITED, PlanLimits.UNLIMITED, PlanLimits.UNLIMITED));
         when(teamRepository.save(any())).thenReturn(saved);
 
-        teamService.create(tenantId, "platform", userId);
+        teamService.create(tenantId, Actor.admin(userId), "platform");
 
         verify(teamRepository, never()).addMember(any());
     }
 
     @Test
     void updateByTeamOwnerSucceeds() {
-        SecurityContextHolder.getContext().setAuthentication(
-                new TestingAuthenticationToken("owner", null, new SimpleGrantedAuthority("ROLE_TEAM_OWNER")));
         UUID tenantId = UUID.randomUUID();
         UUID teamId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
@@ -244,7 +232,7 @@ class TeamServiceTest {
         when(teamRepository.existsByName(tenantId, "new-name", teamId)).thenReturn(false);
         when(teamRepository.save(any())).thenReturn(saved);
 
-        teamService.update(tenantId, teamId, "new-name", userId);
+        teamService.update(tenantId, Actor.user(userId), teamId, "new-name");
 
         verify(eventProducer).publishUpdated(any());
     }

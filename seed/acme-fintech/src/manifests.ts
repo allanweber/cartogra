@@ -38,15 +38,39 @@ function labels(s: SeedService, options: ManifestOptions, indent: number): strin
     .join('\n')
 }
 
-function deployment(seed: SeedData, s: SeedService, options: ManifestOptions): string {
+/** What one fake service does at runtime; shared by the kind manifests and the Helm chart's services file. */
+export interface ServiceConfig {
+  name: string
+  team: string
+  calls: Array<{ to: string; enabled: boolean }>
+  produces: string[]
+  consumes: string[]
+  databases: string[]
+}
+
+export function serviceConfig(seed: SeedData, s: SeedService): ServiceConfig {
   const enabled = enabledCallsFrom(seed, s.name)
   const calls = enabled.filter((c) => callKind(c) === 'http').map((c) => ({ to: c.to, enabled: true }))
   for (const dormant of seed.calls.filter((c) => c.from === s.name && !c.enabled && callKind(c) === 'http')) {
     calls.push({ to: dormant.to, enabled: false })
   }
-  const produces = [...new Set(enabled.filter((c) => callKind(c) === 'messaging').map((c) => c.destination!))]
-  const consumes = consumedDestinations(seed, s.name)
-  const databases = enabled.filter((c) => callKind(c) === 'db').map((c) => c.to)
+  return {
+    name: s.name,
+    team: s.team === null ? 'unowned' : s.team.toLowerCase(),
+    calls,
+    produces: [...new Set(enabled.filter((c) => callKind(c) === 'messaging').map((c) => c.destination!))],
+    consumes: consumedDestinations(seed, s.name),
+    databases: enabled.filter((c) => callKind(c) === 'db').map((c) => c.to),
+  }
+}
+
+/** The Helm chart's `files/services.json`: namespace plus one entry per service. */
+export function renderHelmServices(seed: SeedData): string {
+  return `${JSON.stringify({ namespace: seed.namespace, services: seed.services.map((s) => serviceConfig(seed, s)) }, null, 2)}\n`
+}
+
+function deployment(seed: SeedData, s: SeedService, options: ManifestOptions): string {
+  const { calls, produces, consumes, databases } = serviceConfig(seed, s)
   const probe = (name: string, extra: string) => `          ${name}:
             httpGet:
               path: /health

@@ -38,6 +38,7 @@ dependencies {
     implementation("io.fabric8:kubernetes-client")
     runtimeOnly("org.postgresql:postgresql")
     testImplementation(project(":shared:test-support"))
+    testImplementation(testFixtures(project(":shared:web")))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("org.testcontainers:testcontainers-postgresql")

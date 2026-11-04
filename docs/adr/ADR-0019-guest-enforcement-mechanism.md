@@ -1,6 +1,6 @@
 # ADR-0019 — Guest enforcement mechanism
 
-**Status**: Proposed
+**Status**: Accepted 2026-10-28 (amended for Phase 4 roadmap 4.3 — see Amendment)
 **Date**: 2026-05-20
 **Deciders**: Allan Weber
 
@@ -45,6 +45,20 @@ The 5.4 acceptance criteria therefore become:
 - A guest token can read Acme tenant data — proven by a happy-path Playwright test (task 5.20).
 
 ---
+
+### Amendment — 2026-10-28 (Phase 4, roadmap 4.3)
+
+Delivered in Phase 4, not Phase 5. Changes to the shape above:
+
+1. **Gateway deny is the primary guard.** A GUEST token on any method other than GET/HEAD/OPTIONS gets 403 at the gateway, before proxying; allowlist `POST /api/auth/guest` and `/api/auth/logout`. Relying only on per-endpoint `@PreAuthorize` means one missed annotation is a public write; the method gate is fail-closed for endpoints that don't exist yet.
+2. **`@PreAuthorize` sweep stays**, as the fix for VIEWER (topology had no guards on its writes) and as defence in depth. `TEAM_OWNER` guards are replaced with ADMIN-or-member per ADR-0025.
+3. **`sub` is a plain random UUID**, not `guest-<uuid>`: downstream parses `X-User-Id` as a UUID. Guest-ness comes from `roles=["GUEST"]`.
+4. **Token**: 60 min, httpOnly cookie, no refresh token; the frontend re-mints silently on 401 in a guest session. Demo tenant from `app.guest.tenant-id`; minting is off when unset.
+5. **Rate limits**: per IP on `/api/auth/guest`; guest API calls bucketed per guest `sub`, so one noisy visitor doesn't exhaust the shared demo-tenant bucket.
+6. **Entry**: `/demo` mints and lands on the dashboard; write controls render disabled with a "Read-only demo" banner.
+7. Sandbox isolation for authenticated demo users is dropped: self-registration is switched off on the public host (`app.signup.enabled=false`).
+8. **Reads are redacted, not just writes blocked** (2026-11-04). A guest gets 403 on `GET /api/auth/users` (emails, roles) and `GET /api/auth/tenant` (plan, seat count). The audit feed drops `user`, `invitation`, `oidc_config` and `cluster` events for a guest (their payloads carry emails, OIDC client ids, API server URLs) and never falls back to an actor's email for the display name. Admin-only routes (`/admin/**`, SCM connections, clusters) already exclude GUEST. Responses to a guest carry no user identifiers either: `actorId`, `payload.userId`/`payload.email` (audit), `userId` (team members) and `changedBy` (service history) are null or absent. Redaction happens in the backend only; the frontend renders what it receives and never masks, truncates or hides data as a privacy measure, because anything sent to the browser is readable. A new read endpoint that returns personal data or user ids must redact them for GUEST the same way (`GuestRedactionIT` pattern).
+9. **Sandbox tenant holds only fabricated data.** The guest tenant must not contain real people or private credentials: its users are seed-created with addresses on the reserved `.invalid` TLD (no mail is ever delivered), nobody is invited into it, and its SCM token is a fine-grained GitHub token limited to public repositories with no permissions beyond read. Guest mode is enabled only on an install that holds no real tenants (the public demo host).
 
 ## Consequences
 

@@ -1,5 +1,5 @@
 -- Test schema for gateway integration tests.
--- Mirrors the registry Flyway migrations (V001, V002, V003, V008, V009, V010, V011, V012, V013, V014, V015, V016).
+-- Mirrors the registry Flyway migrations (V001, V002, V003, V008, V009, V010, V011, V012, V013, V014, V015, V016, V017).
 -- Used instead of Flyway since the gateway has no migrations of its own.
 
 CREATE TABLE IF NOT EXISTS billing_plans (
@@ -119,4 +119,18 @@ CREATE TABLE IF NOT EXISTS tenant_oidc_configs (
     created_at      TIMESTAMPTZ   NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ   NOT NULL DEFAULT now(),
     deleted_at      TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS audit_events (
+    id          UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+    event_id    UUID        NOT NULL UNIQUE,
+    tenant_id   UUID        NOT NULL,
+    entity_type TEXT        NOT NULL,
+    entity_id   UUID        NOT NULL,
+    action      TEXT        NOT NULL,
+    actor_kind  TEXT        NOT NULL,
+    actor_id    UUID,
+    payload     JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    occurred_at TIMESTAMPTZ NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );

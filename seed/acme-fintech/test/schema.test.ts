@@ -2,7 +2,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   allCycles, callKey, callKind, declaredCalls, declaredCycles, dependentsOf, dormantCalls, externalCalls, findElementaryCycles,
-  loadSeedFile, silentDeclaredCalls, unownedServices, validateSeed, type SeedData,
+  loadSeedFile, silentDeclaredCalls, unownedServices, validateSeed, withRepoProvider, type SeedData,
 } from '../src/schema.ts'
 
 const seed = loadSeedFile(resolve(import.meta.dirname, '../seed-data.json'))
@@ -109,5 +109,13 @@ describe('findElementaryCycles', () => {
 
   it('finds none in a DAG', () => {
     expect(findElementaryCycles([['a', 'b'], ['b', 'c']])).toHaveLength(0)
+  })
+})
+
+describe('withRepoProvider', () => {
+  it('moves every repo to the given provider without touching the original', () => {
+    const mirrored = withRepoProvider(seed, 'github')
+    expect(new Set(mirrored.services.map((s) => s.repo.provider))).toEqual(new Set(['github']))
+    expect(new Set(seed.services.map((s) => s.repo.provider))).toEqual(new Set(['azure']))
   })
 })

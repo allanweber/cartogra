@@ -199,3 +199,8 @@ export function validateSeed(seed: SeedData): void {
   }
   if (errors.length > 0) throw new Error(`Invalid seed data:\n- ${errors.join('\n- ')}`)
 }
+
+/** The same seed with every repo hosted on `provider` (e.g. the public GitHub mirror of the demo). */
+export function withRepoProvider(seed: SeedData, provider: RepoProvider): SeedData {
+  return { ...seed, services: seed.services.map((s) => ({ ...s, repo: { ...s.repo, provider } })) }
+}

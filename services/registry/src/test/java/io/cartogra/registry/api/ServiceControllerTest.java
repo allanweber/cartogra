@@ -1,5 +1,6 @@
 package io.cartogra.registry.api;
 
+import io.cartogra.common.identity.Actor;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.registry.domain.Service;
 import io.cartogra.registry.domain.ServiceHealthStatus;
@@ -24,6 +25,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import static io.cartogra.web.filter.InternalAuthMockMvc.withInternalAuth;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -43,8 +45,8 @@ class ServiceControllerTest {
     void setUp() {
         var validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
-        mockMvc = MockMvcBuilders
-                .standaloneSetup(new ServiceController(serviceService))
+        mockMvc = withInternalAuth(MockMvcBuilders
+                .standaloneSetup(new ServiceController(serviceService)))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setValidator(validator)
                 .build();
@@ -53,7 +55,7 @@ class ServiceControllerTest {
     @Test
     void createReturns201WithEnvelopeAndTraceHeader() throws Exception {
         Service svc = service("payments");
-        when(serviceService.create(eq(TENANT), any(), isNull())).thenReturn(svc);
+        when(serviceService.create(eq(TENANT), eq(Actor.ANONYMOUS), any())).thenReturn(svc);
 
         mockMvc.perform(post("/services")
                         .header("X-Tenant-Id", TENANT)
@@ -69,17 +71,18 @@ class ServiceControllerTest {
     @Test
     void createForwardsXUserIdToService() throws Exception {
         UUID userId = UUID.randomUUID();
-        when(serviceService.create(eq(TENANT), any(), eq(userId))).thenReturn(service("payments"));
+        when(serviceService.create(eq(TENANT), eq(Actor.user(userId)), any())).thenReturn(service("payments"));
 
         mockMvc.perform(post("/services")
                         .header("X-Tenant-Id", TENANT)
                         .header("X-User-Id", userId)
+                        .header("X-User-Roles", "MEMBER")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"payments"}"""))
                 .andExpect(status().isCreated());
 
-        verify(serviceService).create(eq(TENANT), any(), eq(userId));
+        verify(serviceService).create(eq(TENANT), eq(Actor.user(userId)), any());
     }
 
     @Test
@@ -169,7 +172,7 @@ class ServiceControllerTest {
     @Test
     void updateReturns200() throws Exception {
         UUID id = UUID.randomUUID();
-        when(serviceService.update(eq(TENANT), eq(id), any(), isNull())).thenReturn(service("updated-svc"));
+        when(serviceService.update(eq(TENANT), eq(Actor.ANONYMOUS), eq(id), any())).thenReturn(service("updated-svc"));
 
         mockMvc.perform(put("/services/{id}", id)
                         .header("X-Tenant-Id", TENANT)
@@ -189,7 +192,7 @@ class ServiceControllerTest {
                 .andExpect(status().isNoContent())
                 .andExpect(header().exists("X-Trace-Id"));
 
-        verify(serviceService).delete(eq(TENANT), eq(id), isNull());
+        verify(serviceService).delete(eq(TENANT), eq(Actor.ANONYMOUS), eq(id));
     }
 
     @Test
@@ -199,10 +202,11 @@ class ServiceControllerTest {
 
         mockMvc.perform(delete("/services/{id}", id)
                         .header("X-Tenant-Id", TENANT)
-                        .header("X-User-Id", userId))
+                        .header("X-User-Id", userId)
+                        .header("X-User-Roles", "MEMBER"))
                 .andExpect(status().isNoContent());
 
-        verify(serviceService).delete(eq(TENANT), eq(id), eq(userId));
+        verify(serviceService).delete(eq(TENANT), eq(Actor.user(userId)), eq(id));
     }
 
     @Test
@@ -210,11 +214,12 @@ class ServiceControllerTest {
         UUID id = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
         doThrow(new AccessDeniedException("Only ADMIN or a member of the owning team may edit this service"))
-                .when(serviceService).delete(eq(TENANT), eq(id), eq(userId));
+                .when(serviceService).delete(eq(TENANT), eq(Actor.user(userId)), eq(id));
 
         mockMvc.perform(delete("/services/{id}", id)
                         .header("X-Tenant-Id", TENANT)
-                        .header("X-User-Id", userId))
+                        .header("X-User-Id", userId)
+                        .header("X-User-Roles", "MEMBER"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
     }
@@ -223,7 +228,7 @@ class ServiceControllerTest {
     void assignOwnerReturns200() throws Exception {
         UUID id = UUID.randomUUID();
         UUID teamId = UUID.randomUUID();
-        when(serviceService.assignOwner(eq(TENANT), eq(id), eq(teamId), isNull())).thenReturn(service("payments"));
+        when(serviceService.assignOwner(eq(TENANT), eq(Actor.ANONYMOUS), eq(id), eq(teamId))).thenReturn(service("payments"));
 
         mockMvc.perform(patch("/services/{id}/owner", id)
                         .header("X-Tenant-Id", TENANT)
@@ -237,14 +242,14 @@ class ServiceControllerTest {
     @Test
     void removeOwnerReturns200WithNullTeamId() throws Exception {
         UUID id = UUID.randomUUID();
-        when(serviceService.assignOwner(eq(TENANT), eq(id), isNull(), isNull())).thenReturn(service("payments"));
+        when(serviceService.assignOwner(eq(TENANT), eq(Actor.ANONYMOUS), eq(id), isNull())).thenReturn(service("payments"));
 
         mockMvc.perform(delete("/services/{id}/owner", id)
                         .header("X-Tenant-Id", TENANT))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.name").value("payments"));
 
-        verify(serviceService).assignOwner(eq(TENANT), eq(id), isNull(), isNull());
+        verify(serviceService).assignOwner(eq(TENANT), eq(Actor.ANONYMOUS), eq(id), isNull());
     }
 
     @Test
@@ -252,18 +257,19 @@ class ServiceControllerTest {
         UUID id = UUID.randomUUID();
         UUID teamId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
-        when(serviceService.assignOwner(eq(TENANT), eq(id), eq(teamId), eq(userId))).thenReturn(service("payments"));
+        when(serviceService.assignOwner(eq(TENANT), eq(Actor.user(userId)), eq(id), eq(teamId))).thenReturn(service("payments"));
 
         mockMvc.perform(patch("/services/{id}/owner", id)
                         .header("X-Tenant-Id", TENANT)
                         .header("X-User-Id", userId)
+                        .header("X-User-Roles", "MEMBER")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"teamId":"%s"}""".formatted(teamId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.name").value("payments"));
 
-        verify(serviceService).assignOwner(eq(TENANT), eq(id), eq(teamId), eq(userId));
+        verify(serviceService).assignOwner(eq(TENANT), eq(Actor.user(userId)), eq(id), eq(teamId));
     }
 
     @Test
@@ -271,12 +277,13 @@ class ServiceControllerTest {
         UUID id = UUID.randomUUID();
         UUID teamId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
-        when(serviceService.assignOwner(eq(TENANT), eq(id), eq(teamId), eq(userId)))
+        when(serviceService.assignOwner(eq(TENANT), eq(Actor.user(userId)), eq(id), eq(teamId)))
                 .thenThrow(new AccessDeniedException("Only ADMIN or a member of the owning team may edit this service"));
 
         mockMvc.perform(patch("/services/{id}/owner", id)
                         .header("X-Tenant-Id", TENANT)
                         .header("X-User-Id", userId)
+                        .header("X-User-Roles", "MEMBER")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"teamId":"%s"}""".formatted(teamId)))
@@ -363,4 +370,5 @@ class ServiceControllerTest {
     private ServiceSnapshot snapshot(UUID serviceId) {
         return new ServiceSnapshot(UUID.randomUUID(), serviceId, TENANT, "{}", null, Instant.now());
     }
+
 }

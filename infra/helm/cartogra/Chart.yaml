@@ -1,0 +1,18 @@
+apiVersion: v2
+name: cartogra
+description: "Cartogra umbrella chart — app services, collector, and in-cluster Postgres/Kafka/Valkey."
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+# Subcharts are vendored unpacked under charts/ (no repository, no `helm dependency build`).
+dependencies:
+  - { name: common, version: 0.1.0 }
+  - { name: gateway, version: 0.1.0 }
+  - { name: registry, version: 0.1.0 }
+  - { name: topology, version: 0.1.0 }
+  - { name: ingestion, version: 0.1.0 }
+  - { name: frontend, version: 0.1.0 }
+  - { name: collector, version: 0.1.0 }
+  - { name: postgres, version: 0.1.0 }
+  - { name: kafka, version: 0.1.0 }
+  - { name: valkey, version: 0.1.0 }

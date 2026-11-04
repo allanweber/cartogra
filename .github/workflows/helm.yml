@@ -1,0 +1,48 @@
+name: Helm
+
+on:
+  push:
+    branches: [main]
+    paths: ['infra/helm/**', '.github/workflows/helm.yml']
+  pull_request:
+    branches: [main]
+    paths: ['infra/helm/**', '.github/workflows/helm.yml']
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint & render charts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.19.0
+
+      - name: Lint (prod defaults)
+        run: helm lint infra/helm/cartogra --strict --set global.host=cartogra.example --set global.imageTag=ci
+
+      - name: Lint (demo values)
+        run: helm lint infra/helm/cartogra --strict -f infra/helm/cartogra/values-demo.yaml --set global.imageTag=ci
+
+      - name: Lint (acme)
+        run: helm lint infra/helm/acme --strict --set image.tag=ci
+
+      - name: Render (prod defaults)
+        run: helm template cartogra infra/helm/cartogra --set global.host=cartogra.example --set global.imageTag=ci > "$RUNNER_TEMP/prod.yaml"
+
+      - name: Render (demo values)
+        run: helm template cartogra infra/helm/cartogra -f infra/helm/cartogra/values-demo.yaml --set global.imageTag=ci > "$RUNNER_TEMP/demo.yaml"
+
+      - name: Render (acme)
+        run: helm template acme infra/helm/acme -n acme-system --set image.tag=ci > "$RUNNER_TEMP/acme.yaml"
+
+      - name: No `latest` image tags (limits are enforced by the chart templates)
+        run: |
+          for f in "$RUNNER_TEMP/prod.yaml" "$RUNNER_TEMP/demo.yaml" "$RUNNER_TEMP/acme.yaml"; do
+            if grep -nE 'image: .*:latest\b' "$f"; then echo "latest tag in $f"; exit 1; fi
+          done

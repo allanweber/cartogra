@@ -11,6 +11,7 @@ import { ApiError, apiMutate } from '#/lib/api'
 import { cn } from '#/lib/utils'
 
 import type { Drift, DriftAction, DriftType } from '#/lib/topology-types'
+import { ReadOnlyGuard } from '#/components/ReadOnlyGuard'
 
 const TYPE_LABEL: Record<DriftType, string> = { UNDECLARED: 'Undeclared', MISSING: 'Missing' }
 
@@ -166,22 +167,26 @@ export function DriftTab({
                 <span className="mt-1 block text-xs text-muted-foreground">{TYPE_HINT[drift.type]}</span>
               </button>
               <div className="mt-2 flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  aria-label={`${primary.label}: ${pair}`}
-                  onClick={() => setPending({ drift, spec: primary })}
-                >
-                  {primary.label}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  aria-label={`${DISMISS_ACTION.label}: ${pair}`}
-                  onClick={() => setPending({ drift, spec: DISMISS_ACTION })}
-                >
-                  {DISMISS_ACTION.label}
-                </Button>
+                <ReadOnlyGuard>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    aria-label={`${primary.label}: ${pair}`}
+                    onClick={() => setPending({ drift, spec: primary })}
+                  >
+                    {primary.label}
+                  </Button>
+                </ReadOnlyGuard>
+                <ReadOnlyGuard>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`${DISMISS_ACTION.label}: ${pair}`}
+                    onClick={() => setPending({ drift, spec: DISMISS_ACTION })}
+                  >
+                    {DISMISS_ACTION.label}
+                  </Button>
+                </ReadOnlyGuard>
               </div>
             </li>
           )

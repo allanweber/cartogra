@@ -30,6 +30,9 @@ The Gateway is Cartogra's single entry point and the sole issuer of identity tok
 | **Unlimited (limit sentinel)** | A BillingPlan limit column value of `-1`, meaning no cap. Limit columns are `NOT NULL INT` — `-1` is used instead of `NULL` so limits never need null-handling |
 | **Plan-gated feature** | A capability available only from a given BillingPlan tier upward (e.g. SSO/OIDC: business+, K8s cluster sync: business+, free = 0). Distinct from a resource limit, which caps a *count* rather than turning a feature fully on/off |
 | **Invitation** | An ADMIN-initiated request for a new User to join the ADMIN's existing Tenant, with a chosen role (and optionally a Team, see Service Catalog context) set up front. Distinct from self-registration (`POST /api/auth/register`), which always creates a brand-new Tenant. Represented as a User row with no `password_hash`, `email_verified = false`, and an opaque URL-safe invite token (7-day TTL, same generation style as Refresh Tokens — unlike the 6-digit OTP used for email verification); counts toward `max_users` from the moment it's sent, not just on acceptance. Accepting attaches Team membership (if any) by writing directly to Registry's `team_members` table over the existing Phase 0 DB access, not a synchronous HTTP call |
+| **Self-registration** | A stranger creating a brand-new Tenant, by email/password or by first-time OAuth login. Can be switched off per environment; when off, only Invitations and existing Users get in |
+| **Guest** | An anonymous visitor given a short-lived, credential-less, read-only identity bound to the Demo Tenant. A Guest is not a User: no row, no email, cannot write anything |
+| **Demo Tenant** | The single curated Tenant (Acme Fintech) that Guests browse. Its data is a restored snapshot kept alive by simulated traffic, not real customer data |
 
 ---
 
@@ -144,4 +147,4 @@ None. The Gateway neither produces nor consumes Kafka events — it is a synchro
 - ADR-0011 — httpOnly cookie + Bearer dual-auth strategy
 - ADR-0012 — Servlet stack (Spring MVC) chosen over reactive (Spring WebFlux)
 - ADR-0013 — Guest demo access deferred to Phase 5
-- ADR-0019 — Guest enforcement via gateway-issued guest JWT (Phase 5)
+- ADR-0019 — Guest enforcement via gateway-issued guest JWT + gateway method deny (Phase 4, amended 2026-10-28)

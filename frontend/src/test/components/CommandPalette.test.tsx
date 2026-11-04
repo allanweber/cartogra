@@ -95,6 +95,22 @@ describe('CommandPalette', () => {
     expect(await screen.findByText('payments-api')).toBeInTheDocument()
   })
 
+  it('warns about mock data only while mock team results are listed', async () => {
+    const page: PageResult<RegistryService> = { items: [MOCK_SERVICE], total: 1, limit: 200, offset: 0 }
+    vi.mocked(apiFetch).mockResolvedValue(page)
+    renderPalette()
+    const input = screen.getByPlaceholderText(/search pages, services, teams/i)
+
+    expect(screen.queryByText(/this is mock data/i)).not.toBeInTheDocument()
+
+    fireEvent.change(input, { target: { value: 'payments-api' } })
+    expect(await screen.findByText('payments-api')).toBeInTheDocument()
+    expect(screen.queryByText(/this is mock data/i)).not.toBeInTheDocument()
+
+    fireEvent.change(input, { target: { value: 'Sarah' } })
+    expect(await screen.findByText(/this is mock data/i)).toBeInTheDocument()
+  })
+
   it('navigates using the fetched service real id, not a mock id', async () => {
     const page: PageResult<RegistryService> = { items: [MOCK_SERVICE], total: 1, limit: 200, offset: 0 }
     vi.mocked(apiFetch).mockResolvedValue(page)

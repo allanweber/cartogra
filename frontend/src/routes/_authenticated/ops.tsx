@@ -12,6 +12,7 @@ function OperationsPage() {
     <AppLayout
       title="Operations"
       description="The runtime surface for connector health, lag visibility, and platform event triage."
+      underDevelopment="placeholder"
     >
       <PhasePlaceholder
         deliveryPhase="Phase 5"

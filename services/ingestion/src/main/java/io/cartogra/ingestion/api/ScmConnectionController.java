@@ -1,5 +1,6 @@
 package io.cartogra.ingestion.api;
 
+import io.cartogra.common.identity.Actor;
 import io.cartogra.common.api.ApiResponse;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.ingestion.api.dto.ScmConnectionRequest;
@@ -7,6 +8,7 @@ import io.cartogra.ingestion.api.dto.ScmConnectionResponse;
 import io.cartogra.ingestion.domain.ScmConnectionService;
 import io.cartogra.web.api.TracedResponse;
 import jakarta.validation.Valid;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,8 +36,9 @@ public class ScmConnectionController {
     @PostMapping
     public ResponseEntity<ApiResponse<ScmConnectionResponse>> create(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @AuthenticationPrincipal Actor actor,
             @Valid @RequestBody ScmConnectionRequest req) {
-        var result = ScmConnectionResponse.from(service.create(tenantId, req));
+        var result = ScmConnectionResponse.from(service.create(tenantId, actor, req));
         return TracedResponse.created(result);
     }
 
@@ -61,17 +64,19 @@ public class ScmConnectionController {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<ScmConnectionResponse>> update(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @AuthenticationPrincipal Actor actor,
             @PathVariable UUID id,
             @Valid @RequestBody ScmConnectionRequest req) {
-        var result = ScmConnectionResponse.from(service.update(tenantId, id, req));
+        var result = ScmConnectionResponse.from(service.update(tenantId, actor, id, req));
         return TracedResponse.ok(result);
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @AuthenticationPrincipal Actor actor,
             @PathVariable UUID id) {
-        service.delete(tenantId, id);
+        service.delete(tenantId, actor, id);
         return TracedResponse.noContent();
     }
 

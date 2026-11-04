@@ -383,7 +383,7 @@ jobs:
           else
             CHANGED=$(git diff "${{ github.event.before }}" "${{ github.sha }}" --name-only)
           fi
-          if echo "$CHANGED" | grep -q 'seed/acme-fintech/'; then
+          if echo "$CHANGED" | grep -qE 'seed/acme-fintech/|infra/helm/acme/'; then
             echo "changed=true" >> $GITHUB_OUTPUT
           else
             echo "changed=false" >> $GITHUB_OUTPUT

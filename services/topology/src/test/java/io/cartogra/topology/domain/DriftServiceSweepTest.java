@@ -49,7 +49,8 @@ class DriftServiceSweepTest {
         org.mockito.Mockito.lenient().when(transactionManager.getTransaction(any()))
                 .thenReturn(new SimpleTransactionStatus());
         service = new DriftService(driftRepository, dependencyRepository, dependencyService,
-                new DriftProperties(Duration.ofMinutes(5), WINDOW), new SimpleMeterRegistry(), transactionManager);
+                new DriftProperties(Duration.ofMinutes(5), WINDOW), new SimpleMeterRegistry(), transactionManager,
+                new EdgeAuditRecorder(_ -> { }, org.mockito.Mockito.mock(io.cartogra.topology.repository.GraphNodeRepository.class)));
     }
 
     @Test

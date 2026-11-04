@@ -27,6 +27,11 @@ vi.mock('#/lib/api', () => ({
   },
 }))
 
+let mockFeatures: { signupEnabled: boolean; guestEnabled: boolean } | undefined
+vi.mock('#/hooks/useAuthFeatures', () => ({
+  useAuthFeatures: () => ({ data: mockFeatures }),
+}))
+
 function renderPage() {
   const Page = (Route as any).component
   return render(<Page />)
@@ -41,7 +46,19 @@ function fillForm(overrides: { name?: string; email?: string; password?: string;
 }
 
 describe('RegisterPage', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockFeatures = { signupEnabled: true, guestEnabled: false }
+  })
+
+  it('shows sign-up closed with demo and sign-in links when signup is disabled', () => {
+    mockFeatures = { signupEnabled: false, guestEnabled: true }
+    renderPage()
+    expect(screen.getByRole('heading', { name: /sign-up is closed/i })).toBeInTheDocument()
+    expect(screen.queryByLabelText(/organization name/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /try the demo/i })).toHaveAttribute('href', '/demo')
+    expect(screen.getByRole('link', { name: /sign in/i })).toHaveAttribute('href', '/login')
+  })
 
   it('renders heading and all form fields', () => {
     renderPage()

@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, fireEvent } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { render, screen, fireEvent, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AppLayout } from '#/components/AppLayout'
 import { TooltipProvider } from '#/components/ui/tooltip'
+import { useAuthStore } from '#/stores/useAuthStore'
 
 const navigateMock = vi.fn()
 
@@ -104,6 +105,27 @@ describe('AppLayout', () => {
     expect(screen.getByText('Shell content')).toBeInTheDocument()
   })
 
+  it('shows the under-development banner, with no way to close it, only on pages that declare one', () => {
+    const shell = (underDevelopment?: 'mock' | 'placeholder') => (
+      <QueryClientProvider client={new QueryClient()}>
+        <TooltipProvider>
+          <AppLayout title="Contracts" underDevelopment={underDevelopment}>
+            <div>Shell content</div>
+          </AppLayout>
+        </TooltipProvider>
+      </QueryClientProvider>
+    )
+    const { rerender } = render(shell())
+    expect(screen.queryByText(/under development/i)).not.toBeInTheDocument()
+
+    rerender(shell('placeholder'))
+    expect(screen.getByText(/this is a placeholder.*under development and coming live soon/i)).toBeInTheDocument()
+
+    rerender(shell('mock'))
+    const banner = screen.getByText(/this is mock data.*under development and coming live soon/i)
+    expect(within(banner).queryByRole('button')).not.toBeInTheDocument()
+  })
+
   it('clears the React Query cache and switches tenants when a workspace is picked', () => {
     useTenantStore.setState({ currentTenantId: 'ten-1' })
 
@@ -126,5 +148,44 @@ describe('AppLayout', () => {
 
     expect(queryClient.getQueryData(['services'])).toBeUndefined()
     expect(useTenantStore.getState().currentTenantId).toBe('ten-2')
+  })
+
+  describe('guest session', () => {
+    function renderAs(roles: string[]) {
+      useAuthStore.getState().hydrateWith({
+        id: 'u1',
+        email: '',
+        name: 'Demo guest',
+        authProvider: roles.includes('GUEST') ? 'guest' : 'local',
+        tenantId: 'ten-1',
+        roles,
+      })
+      render(
+        <QueryClientProvider client={new QueryClient()}>
+          <TooltipProvider>
+            <AppLayout title="Dashboard">
+              <div>Shell content</div>
+            </AppLayout>
+          </TooltipProvider>
+        </QueryClientProvider>,
+      )
+    }
+
+    afterEach(() => useAuthStore.getState().clearAuth())
+
+    it('shows the read-only banner and hides Settings for a guest', () => {
+      renderAs(['GUEST'])
+      expect(screen.getByRole('status')).toHaveTextContent(/read-only demo/i)
+      expect(screen.queryByRole('link', { name: /^settings$/i })).not.toBeInTheDocument()
+      fireEvent.click(screen.getByText('Demo guest'))
+      expect(screen.queryByRole('link', { name: /profile/i })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /exit demo/i })).toBeInTheDocument()
+    })
+
+    it('shows no banner and keeps Settings for a member', () => {
+      renderAs(['MEMBER'])
+      expect(screen.queryByText(/read-only demo/i)).not.toBeInTheDocument()
+      expect(screen.getByRole('link', { name: /^settings$/i })).toBeInTheDocument()
+    })
   })
 })

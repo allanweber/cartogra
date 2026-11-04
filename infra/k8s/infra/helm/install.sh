@@ -5,7 +5,7 @@ helm repo add grafana https://grafana.github.io/helm-charts
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
 
-kubectl apply -f infra/k8s/infra/namespace.yml
+kubectl create namespace infra --dry-run=client -o yaml | kubectl apply -f -
 
 helm upgrade --install loki grafana/loki \
   --namespace infra \
@@ -26,4 +26,5 @@ helm upgrade --install tempo grafana/tempo \
   --values infra/k8s/infra/helm/tempo-values.yml \
   --wait
 
-kubectl apply -k infra/k8s/infra/otel-collector/
+# The span → Kafka collector ships with the app chart (infra/helm/cartogra). A collector that
+# feeds Tempo/Prometheus/Loki is roadmap 7.6.

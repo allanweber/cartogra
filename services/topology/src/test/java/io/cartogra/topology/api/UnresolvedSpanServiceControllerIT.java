@@ -48,7 +48,8 @@ class UnresolvedSpanServiceControllerIT {
         var builder = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + "/api/v1/topology/unresolved-span-services" + path))
                 .header("X-Tenant-Id", tenantId.toString())
-                .header("X-User-Id", UUID.randomUUID().toString());
+                .header("X-User-Id", UUID.randomUUID().toString())
+                .header("X-User-Roles", "MEMBER");
         HttpRequest request = "POST".equals(method)
                 ? builder.POST(HttpRequest.BodyPublishers.noBody()).build()
                 : builder.GET().build();

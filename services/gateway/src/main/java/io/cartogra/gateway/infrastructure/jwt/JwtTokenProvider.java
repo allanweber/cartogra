@@ -34,11 +34,13 @@ public class JwtTokenProvider {
         var builder = JwtClaimsSet.builder()
             .subject(claims.userId().toString())
             .claim("tid", claims.tenantId().toString())
-            .claim("email", claims.email())
             .claim("auth_provider", claims.authProvider())
             .claim("roles", claims.roles())
             .issuedAt(now)
-            .expiresAt(now.plusSeconds(config.accessTokenExpirySeconds()));
+            .expiresAt(claims.exp() != null ? claims.exp() : now.plusSeconds(config.accessTokenExpirySeconds()));
+        if (claims.email() != null) {
+            builder.claim("email", claims.email());
+        }
         if (claims.name() != null) {
             builder.claim("name", claims.name());
         }

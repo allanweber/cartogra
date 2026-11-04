@@ -1,209 +1,104 @@
 # Runbook: Incident Response
 
-## Severity Levels
+Scope: the public demo, a single-node k3s host (see [deployment.md](deployment.md), ADR-0030). One person on
+call, no paging. All commands assume `KUBECONFIG=~/.kube/cartogra-demo`.
 
-| Level | Definition | Response SLA | Examples |
-|-------|-----------|-------------|---------|
-| **P0** | Complete outage — all tenants affected | Immediate (< 5 min) | Gateway down, DB unreachable |
-| **P1** | Severe degradation — core feature unavailable | 15 min | Registry writes failing, auth broken |
-| **P2** | Partial degradation — non-critical feature affected | 1 hour | Intelligence service unresponsive, Kafka lag |
-| **P3** | Minor — cosmetic issue or edge case | Next business day | UI rendering glitch, slow query |
+## Severity
 
----
+| Level | Definition | Examples |
+|-------|-----------|---------|
+| **P0** | Demo unreachable or leaking data | Ingress/TLS down, gateway down, a guest can write, secrets exposed |
+| **P1** | Demo up but its point is broken | `/demo` fails, graph empty, Acme not discovered, Postgres full |
+| **P2** | Degraded | Observed edges stale, drift flapping, SCM sync failing, backup failed |
+| **P3** | Cosmetic | UI glitch, slow page |
 
-## 1. Incident detection
+Security (P0 data/write cases): turn guest mode off first (section 4), investigate after.
 
-Incidents are typically detected via:
+## 1. Detection
 
-- **Grafana alert** → PagerDuty → on-call engineer
-- **User report** in `#incidents` Slack channel
-- **Health probe failure** (`/actuator/health/live` or `/actuator/health/ready`)
+- External uptime check on `https://cartogra.dev/api/auth/features` (deployment.md section 8).
+- A failed `postgres-backup` Job (`kubectl -n cartogra get jobs`).
+- Someone telling you the demo is broken.
 
----
-
-## 2. Initial triage (all severities)
-
-```bash
-# 1. Check pod status across all namespaces
-kubectl -n prod get pods --sort-by=.metadata.creationTimestamp
-
-# 2. Look for CrashLoopBackOff / OOMKilled / Pending
-kubectl -n prod describe pod <pod-name>
-
-# 3. Check recent events
-kubectl -n prod get events --sort-by=.metadata.creationTimestamp | tail -30
-
-# 4. Check service logs (last 200 lines)
-kubectl -n prod logs deployment/<service-name> --tail=200
-
-# 5. Check HPA — is the service under-scaled?
-kubectl -n prod get hpa
-
-# 6. Check database connectivity
-kubectl -n prod exec deployment/registry -- \
-  curl -sf http://localhost:8081/actuator/health/ready
-```
-
----
-
-## 3. Service-specific diagnostics
-
-### Gateway (auth / rate limiting)
+## 2. Triage
 
 ```bash
-# Redis connectivity
-kubectl -n prod exec deployment/gateway -- \
-  redis-cli -u $REDIS_URL ping
-
-# JWT secret present
-kubectl -n prod exec deployment/gateway -- \
-  printenv JWT_SECRET_LOADED   # should print "true"
-
-# Rate limit counters
-redis-cli -u $REDIS_URL keys "tenant:*:rate_limit*" | head -20
+kubectl get nodes; kubectl top node                       # 8GB node: memory pressure first
+kubectl -n cartogra get pods -o wide                      # CrashLoopBackOff / OOMKilled / Pending
+kubectl -n cartogra get events --sort-by=.lastTimestamp | tail -30
+kubectl -n cartogra describe pod <pod>                    # Last State: OOMKilled? probe failures?
+kubectl -n cartogra logs deploy/<service> --tail=200      # --previous for the crashed container
+kubectl -n acme-fintech get pods                          # 21 fake services
+kubectl -n acme-system get jobs                           # bootstrap Job state after a deploy
 ```
 
-### Registry (service catalog)
+Health from inside the cluster (actuator is not routed through the ingress):
 
 ```bash
-# DB connection pool
-kubectl -n prod logs deployment/registry | grep "HikariPool"
-
-# Flyway migration status
-kubectl -n prod exec deployment/registry -- \
-  curl -sf http://localhost:8081/actuator/flyway
-
-# Check for stuck Kafka consumer
-kubectl -n prod exec deployment/registry -- \
-  curl -sf http://localhost:8081/actuator/health | jq '.components.kafka'
+kubectl -n cartogra exec deploy/gateway -- curl -sf localhost:8080/actuator/health/ready
+kubectl -n cartogra exec deploy/registry -- curl -sf localhost:8081/api/v1/registry/actuator/health/ready
 ```
 
-### Topology (dependency graph)
+## 3. Known failure modes
+
+| Symptom | Likely cause | Action |
+|---|---|---|
+| `OOMKilled` | `values-demo.yaml` limits too tight for real load | Raise that service's memory in `values-demo.yaml`, redeploy; resize to CAX31 only if the node itself is full |
+| Pods `Pending`, PVC unbound | `local-path` disk full | `ssh` in, `df -h /var/lib/rancher`; free space or resize the volume |
+| Certificate not issued | DNS not pointing at the VM, or port 80 closed | `kubectl -n cartogra describe certificate cartogra-tls`, check the HTTP-01 challenge |
+| `ImagePullBackOff` | Images for that SHA not pushed, or GHCR package private | Check `images.yml` run; make the package public |
+| `acme-bootstrap` Job failed | Gateway not ready within the timeout, wrong `ACME_PASSWORD`, discovery slow | `kubectl -n acme-system logs job/acme-bootstrap`; fix, then re-run **Deploy demo** (the Job is idempotent) |
+| Graph has no observed edges | Collector down or Acme pods down | `kubectl -n cartogra logs deploy/collector`; `kubectl -n acme-fintech get pods` |
+| Missing-drift records appear and resolve repeatedly | Acme traffic gaps longer than `TOPOLOGY_DRIFT_MISSING_AFTER` (PT1H) | Find why the fake services stopped (restarts, node pressure); never shorten `missing-after` |
+| Acme services gone from the catalog | Reader token deleted/rotated or cluster disconnected | Settings → Connections → Kubernetes status; re-run **Deploy demo** |
+| Guests get 429 | Per-IP mint or per-guest API bucket exhausted | Expected under abuse; see section 4 if legitimate |
+
+### Kafka consumer lag and DLQs
 
 ```bash
-# Check for long-running recursive CTE queries
-kubectl -n prod exec deployment/topology -- \
-  curl -sf http://localhost:8082/actuator/metrics/db.query.duration
-
-# Kafka consumer lag
-kubectl -n infra exec deployment/kafka-ui -- \
-  curl -sf http://localhost:8080/api/clusters/prod/consumer-groups
+kubectl -n cartogra exec kafka-0 -- /opt/kafka/bin/kafka-consumer-groups.sh \
+  --bootstrap-server localhost:9092 --describe --all-groups
+kubectl -n cartogra exec kafka-0 -- /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list | grep '\.dlq$'
+kubectl -n cartogra exec kafka-0 -- /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
+  --topic <topic>.dlq --from-beginning --max-messages 5
 ```
 
-### Kafka consumer lag (any service)
+Growing lag: read the consumer's logs for deserialization or processing errors before restarting it. A DLQ
+record is a message the consumer gave up on; fix the cause, then let the next sync/load regenerate the data
+(the seed and discovery are idempotent) rather than replaying by hand.
+
+## 4. Remediation
 
 ```bash
-# List all consumer groups with lag
-kubectl -n infra exec deployment/kafka -- \
-  kafka-consumer-groups.sh \
-    --bootstrap-server localhost:9092 \
-    --describe \
-    --all-groups | grep -v "0$"
+kubectl -n cartogra rollout restart deploy/<service>      # restart one service
+helm -n cartogra rollback cartogra <revision> --wait      # bad release (deployment.md section 9)
 ```
 
-If lag is growing:
-
-1. Check the consumer service logs for processing errors.
-2. Verify the DLQ topic is not filling up: `cartogra.dlq.*`
-3. Check for schema/deserialization errors (ClassCastException, JsonParseException).
-4. If safe, restart the consumer pod: `kubectl -n prod rollout restart deployment/<service>`.
-
----
-
-## 4. Escalation path
-
-```
-On-call engineer
-  │
-  ├── Can resolve within SLA?  → Resolve → Post-mortem (P0/P1)
-  │
-  └── No → Escalate to Engineering Lead
-            │
-            └── Data loss / security? → Escalate to VP Engineering + Legal
-```
-
-Communication channels:
-
-- **Active incident:** `#incidents` (Slack) — post updates every 15 min for P0/P1
-- **Customer-facing?** → Notify Customer Success → Update status page
-- **Security incident?** → Do NOT post details in public Slack → Use `#security-incidents` (private)
-
----
-
-## 5. Common remediation actions
-
-### Restart a pod / deployment
+**Turn guest mode off** (suspected guest abuse or a write leak): set `gateway.env.GUEST_TENANT_ID: ""` in
+`values-demo.yaml` and redeploy, or immediately:
 
 ```bash
-kubectl -n prod rollout restart deployment/<service-name>
-kubectl -n prod rollout status deployment/<service-name>
+kubectl -n cartogra patch configmap gateway-config --type merge -p '{"data":{"GUEST_TENANT_ID":""}}'
+kubectl -n cartogra rollout restart deploy/gateway
 ```
 
-### Roll back to previous version
+The next `helm upgrade` restores the chart value, so make the values change too.
+
+**Clear a rate-limit bucket** (only if legitimate traffic is blocked):
 
 ```bash
-kubectl -n prod rollout undo deployment/<service-name>
+kubectl -n cartogra exec valkey-0 -- valkey-cli --scan --pattern 'rate_limit:*' | head
+kubectl -n cartogra exec valkey-0 -- valkey-cli del '<key>'
 ```
 
-See [deployment.md § 4](deployment.md#4-rolling-back-a-deployment) for full rollback procedure.
+**Reset the demo data** (Acme state corrupted): restore last night's backup (deployment.md section 10), or
+for a clean slate, `helm uninstall acme -n acme-system`, delete the Acme tenant's rows, and re-run
+**Deploy demo**; the gateway bootstrap and the Job recreate everything.
 
-### Drain a node under memory pressure
+**Leaked secret**: rotate it (deployment.md section 4); for `JWT_SECRET` this logs everyone out, which is fine.
+A leaked Sealed Secrets key means re-keying the controller and re-sealing every secret.
 
-```bash
-kubectl cordon <node-name>
-kubectl drain <node-name> --ignore-daemonsets --delete-emptydir-data
-# After replacement node is ready:
-kubectl uncordon <node-name>
-```
+## 5. Afterwards
 
-### Force-clear a Redis rate limit key (P0 — auth locked out)
-
-```bash
-# CAUTION: only use when legitimate traffic is being blocked
-redis-cli -u $REDIS_URL DEL "tenant:<tenantId>:rate_limit:<endpoint>"
-```
-
-### Replay DLQ messages
-
-```bash
-# Inspect DLQ
-kubectl -n infra exec deployment/kafka -- \
-  kafka-console-consumer.sh \
-    --bootstrap-server localhost:9092 \
-    --topic cartogra.dlq.registry.service.registered \
-    --from-beginning \
-    --max-messages 10
-
-# Replay: pipe DLQ messages back to the source topic
-# Use the dlq-replay tool in tools/dlq-replay/ — do not use raw console-producer
-./gradlew :tools:dlq-replay:run --args="--topic cartogra.registry.service.registered"
-```
-
----
-
-## 6. Post-mortem
-
-A post-mortem is **required** for every P0 and P1 incident. Template: `docs/runbooks/postmortem-YYYY-MM-DD-<title>.md`
-
-Sections:
-
-1. **Timeline** — when detected, when resolved, key events with timestamps
-2. **Root cause** — technical explanation, no blame
-3. **Impact** — tenants affected, duration, data loss (if any)
-4. **Detection gap** — why the alert didn't fire sooner (if applicable)
-5. **Action items** — numbered, each with owner and due date
-
-Post-mortems are shared in `#engineering-all` within 48 hours of resolution.
-
----
-
-## 7. Key dashboards and links
-
-| Resource | URL |
-|----------|-----|
-| Grafana — service overview | `http://grafana.internal/d/cartogra-overview` |
-| Grafana — Kafka consumer lag | `http://grafana.internal/d/cartogra-kafka` |
-| Grafana — trace search (Tempo) | `http://grafana.internal/explore` |
-| PagerDuty — active incidents | `https://app.pagerduty.com` |
-| AWS CloudWatch — EKS logs | AWS Console → CloudWatch → Log groups → `/aws/eks/cartogra-prod` |
-| Status page | `https://status.cartogra.io` |
+For P0/P1, write a short note in `docs/runbooks/postmortem-YYYY-MM-DD-<title>.md`: timeline, root cause,
+impact, why detection was late (if it was), and follow-ups as issues.

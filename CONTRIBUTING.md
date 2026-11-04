@@ -107,6 +107,12 @@ These settings are not enforced via GitHub Actions — they must be applied manu
 
 ---
 
+## License and sign-off
+
+Contributions are licensed under [Apache 2.0](LICENSE) (inbound = outbound). Sign off every commit with `git commit -s` to certify the [Developer Certificate of Origin](https://developercertificate.org/). There is no CLA. See [ADR-0031](docs/adr/0031-apache-2-core-hosted-first-monetization.md).
+
+---
+
 ## Questions
 
 Open a GitHub Discussion or use the architecture discussion issue template for design questions.

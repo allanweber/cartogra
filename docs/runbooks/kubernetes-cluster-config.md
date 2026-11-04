@@ -162,6 +162,37 @@ not ingest Services from it.
 
 ---
 
+## In-cluster (Cartogra watching the cluster it runs on)
+
+The public demo's case: Cartogra and the monitored workloads (Acme) share one k3s cluster. Same least-privilege
+account as Production, with two differences:
+
+- **API server URL** is the in-cluster address `https://kubernetes.default.svc`, reachable from the ingestion pod
+  without leaving the cluster. Do not use the public `:6443` address.
+- **Token** comes from a long-lived `kubernetes.io/service-account-token` Secret instead of `kubectl create token`,
+  so it survives restarts and can be rotated by deleting the Secret.
+
+The `infra/helm/acme` chart creates all of it (`templates/reader.yaml`): ServiceAccount `cartogra-reader` in
+`acme-system`, a ClusterRole with get/list/watch on `namespaces`, `services`, `endpoints`, its binding, and the
+token Secret `cartogra-reader-token`. The `acme-bootstrap` Job registers it through the API as source `MANUAL`
+(API URL + CA + token, no kubeconfig). By hand:
+
+```bash
+TOKEN=$(kubectl -n acme-system get secret cartogra-reader-token -o jsonpath='{.data.token}' | base64 -d)
+CA=$(kubectl -n acme-system get secret cartogra-reader-token -o jsonpath='{.data.ca\.crt}' | base64 -d)
+curl -s -X POST https://cartogra.dev/api/v1/ingestion/k8s/clusters -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d "$(jq -n --arg t "$TOKEN" --arg ca "$CA" '{name:"demo",source:"MANUAL",apiServerUrl:"https://kubernetes.default.svc",caCertPem:$ca,saToken:$t,skipTlsVerify:false}')"
+```
+
+Never point Cartogra at the ingestion pod's own ServiceAccount: in a multi-tenant install any tenant could then
+register it and read the host cluster.
+
+Rotate: `kubectl -n acme-system delete secret cartogra-reader-token`, re-run the deploy (the chart recreates it),
+then update the cluster's token in Settings → Connections (or delete and re-register).
+
+---
+
 ## Revoking access
 
 ```bash

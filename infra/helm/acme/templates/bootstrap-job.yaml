@@ -1,0 +1,72 @@
+{{- if .Values.bootstrap.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-bootstrap
+  labels:
+    app: {{ .Release.Name }}-bootstrap
+    version: {{ .Values.image.tag | quote }}
+    environment: {{ .Values.global.environment }}
+    team: platform
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: {{ add .Values.bootstrap.timeoutSeconds 300 }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-bootstrap
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "acme.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: bootstrap
+          image: {{ include "acme.image" . }}
+          imagePullPolicy: IfNotPresent
+          command: ["node", "src/cli.ts", "bootstrap"]
+          env:
+            - name: ACME_API_URL
+              value: {{ .Values.bootstrap.apiUrl | quote }}
+            - name: ACME_TENANT_ID
+              value: {{ .Values.tenantId | quote }}
+            - name: ACME_EMAIL
+              value: {{ .Values.bootstrap.adminEmail | quote }}
+            - name: ACME_CLUSTER_NAME
+              value: {{ .Values.bootstrap.clusterName | quote }}
+            - name: ACME_GITHUB_ORG
+              value: {{ .Values.bootstrap.githubOrg | quote }}
+            - name: ACME_BOOTSTRAP_TIMEOUT_MS
+              value: {{ mul .Values.bootstrap.timeoutSeconds 1000 | quote }}
+            - name: ACME_SECRETS_DIR
+              value: /var/run/acme-secrets
+            - name: ACME_K8S_TOKEN_FILE
+              value: /var/run/acme-reader/token
+            - name: ACME_K8S_CA_FILE
+              value: /var/run/acme-reader/ca.crt
+          resources:
+            {{- toYaml .Values.bootstrap.resources | nindent 12 }}
+          securityContext:
+            {{- include "acme.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: secrets
+              mountPath: /var/run/acme-secrets
+              readOnly: true
+            - name: reader
+              mountPath: /var/run/acme-reader
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: secrets
+          secret:
+            secretName: {{ .Values.bootstrap.secretName }}
+        - name: reader
+          secret:
+            secretName: {{ .Values.reader.name }}-token
+        - name: tmp
+          emptyDir: {}
+{{- end }}

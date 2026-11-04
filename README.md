@@ -196,3 +196,5 @@ Pinned versions and the full gate-tooling provenance table live in [`CONTRIBUTIN
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE).
+
+The core stays Apache 2.0. Future enterprise-only features, if any, will live in a separate `ee/` directory under its own license; the core always builds and runs without it. See [ADR-0031](docs/adr/0031-apache-2-core-hosted-first-monetization.md).

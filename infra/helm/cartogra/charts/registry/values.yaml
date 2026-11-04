@@ -1,0 +1,63 @@
+# registry — Service registry: services, teams, ownership, audit trail.
+# Secret keys (files under secret.mountPath): DB_USERNAME, DB_PASSWORD
+
+# Plain (non-secret) env, rendered into a ConfigMap; values go through `tpl`.
+env:
+  DB_URL: jdbc:postgresql://postgres:5432/cartogra?currentSchema=registry
+  SPRING_FLYWAY_TABLE: flyway_schema_history_registry
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://collector:4318
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info
+
+image:
+  # Empty = global.imageRegistry.
+  registry: ""
+  repository: cartogra-registry
+  # Defaults to global.imageTag, then the chart appVersion. Never `latest`.
+  tag: ""
+
+port: 8081
+
+probes:
+  basePath: "/api/v1/registry"
+  livePath: /actuator/health/live
+  readyPath: /actuator/health/ready
+  startupPath: /actuator/health
+  startupFailureThreshold: 36
+
+replicaCount: 3
+
+pdb:
+  enabled: true
+  minAvailable: 2
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Memory limit = request (Guaranteed memory); CPU limit ≈ 2× request.
+resources:
+  requests:
+    cpu: 500m
+    memory: 768Mi
+  limits:
+    cpu: "1"
+    memory: 768Mi
+
+javaOpts: ""
+
+podSecurityContext: {}
+
+# Files from this Secret are mounted read-only; create it from a SealedSecret (never commit a plain Secret).
+secret:
+  enabled: true
+  name: ""
+  mountPath: /etc/cartogra/secrets
+  springConfigTree: true
+
+extraVolumes: []
+extraVolumeMounts: []
+extraServicePorts: []

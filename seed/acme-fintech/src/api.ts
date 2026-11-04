@@ -88,6 +88,32 @@ export interface CartograApi {
   unresolvedSpanServices(): Promise<UnresolvedSpanService[]>
 }
 
+export interface Cluster {
+  id: string
+  name: string
+}
+
+export interface ScmConnection {
+  id: string
+  provider: string
+}
+
+export interface ClusterCredentials {
+  name: string
+  apiServerUrl: string
+  caCertPem: string
+  saToken: string
+}
+
+/** Connecting discovery sources (bootstrap only). */
+export interface ConnectionsApi {
+  listClusters(): Promise<Cluster[]>
+  createCluster(credentials: ClusterCredentials): Promise<Cluster>
+  listScmConnections(): Promise<ScmConnection[]>
+  createGitHubConnection(org: string, token: string): Promise<ScmConnection>
+  syncScmConnection(id: string): Promise<void>
+}
+
 interface Page<T> {
   items: T[]
   total: number
@@ -95,7 +121,7 @@ interface Page<T> {
 
 const PAGE_SIZE = 100
 
-export class HttpCartograApi implements CartograApi {
+export class HttpCartograApi implements CartograApi, ConnectionsApi {
   private readonly baseUrl: string
   private token = ''
 
@@ -179,6 +205,38 @@ export class HttpCartograApi implements CartograApi {
 
   async unresolvedSpanServices(): Promise<UnresolvedSpanService[]> {
     return this.listAll<UnresolvedSpanService>('/api/v1/topology/unresolved-span-services')
+  }
+
+  listClusters(): Promise<Cluster[]> {
+    return this.listAll<Cluster>('/api/v1/ingestion/k8s/clusters')
+  }
+
+  createCluster(c: ClusterCredentials): Promise<Cluster> {
+    return this.request<Cluster>('POST', '/api/v1/ingestion/k8s/clusters', {
+      name: c.name,
+      source: 'MANUAL',
+      apiServerUrl: c.apiServerUrl,
+      caCertPem: c.caCertPem,
+      saToken: c.saToken,
+      skipTlsVerify: false,
+    })
+  }
+
+  listScmConnections(): Promise<ScmConnection[]> {
+    return this.listAll<ScmConnection>('/api/v1/ingestion/scm-connections')
+  }
+
+  createGitHubConnection(org: string, token: string): Promise<ScmConnection> {
+    return this.request<ScmConnection>('POST', '/api/v1/ingestion/scm-connections', {
+      provider: 'github',
+      config: JSON.stringify({ org, token }),
+      syncScheduler: true,
+      pollIntervalMinutes: 60,
+    })
+  }
+
+  async syncScmConnection(id: string): Promise<void> {
+    await this.request('POST', `/api/v1/ingestion/scm-connections/${id}/sync`)
   }
 
   private async listAll<T>(path: string): Promise<T[]> {

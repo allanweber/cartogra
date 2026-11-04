@@ -12,6 +12,7 @@ function IntelligencePage() {
     <AppLayout
       title="Intelligence"
       description="NL queries, anti-pattern findings, and health narratives — grounded in evidence."
+      underDevelopment="placeholder"
     >
       <PhasePlaceholder
         deliveryPhase="Phase 4"

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: collector
+description: "OpenTelemetry collector feeding observed edges (spans → Kafka). Never exposed through ingress."
+type: application
+version: 0.1.0
+appVersion: "0.151.0"

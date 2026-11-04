@@ -2,7 +2,7 @@ import { Outlet, createFileRoute, redirect } from '@tanstack/react-router'
 import { useEffect, useRef } from 'react'
 
 import { OnboardingWizard } from '#/components/OnboardingWizard'
-import { tryRefresh } from '#/lib/api'
+import { renewSession } from '#/lib/api'
 import { fetchSession } from '#/lib/session'
 import { useAuthStore } from '#/stores/useAuthStore'
 
@@ -52,7 +52,7 @@ function useProactiveRefresh() {
 
     async function doRefresh() {
       const baseUrl = import.meta.env.VITE_API_BASE_URL ?? ''
-      const result = await tryRefresh(baseUrl)
+      const result = await renewSession(baseUrl)
       if (!result) {
         clearAuth()
         window.location.href = '/login'

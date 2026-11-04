@@ -1,0 +1,99 @@
+{{- $data := include "acme.data" . | fromJson -}}
+{{- $ns := $data.namespace -}}
+{{- $tenant := required "tenantId is required" .Values.tenantId -}}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    cartogra.io/tenant-id: {{ $tenant | quote }}
+{{- range $data.services }}
+{{- $labels := dict "app" .name "version" $.Values.image.tag "environment" $.Values.global.environment "team" .team }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .name }}
+  namespace: {{ $ns }}
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: {{ .name }}
+  template:
+    metadata:
+      labels:
+        {{- toYaml $labels | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "acme.podSecurityContext" $ | nindent 8 }}
+      containers:
+        - name: {{ .name }}
+          image: {{ include "acme.image" $ }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: SERVICE_NAME
+              value: {{ .name }}
+            - name: ACME_NAMESPACE
+              value: {{ $ns }}
+            - name: ACME_TENANT_ID
+              value: {{ $tenant | quote }}
+            - name: ACME_OTLP_ENDPOINT
+              value: {{ $.Values.otlpEndpoint | quote }}
+            - name: ACME_CALLS
+              value: {{ toJson .calls | quote }}
+            - name: ACME_PRODUCES
+              value: {{ toJson .produces | quote }}
+            - name: ACME_CONSUMES
+              value: {{ toJson .consumes | quote }}
+            - name: ACME_DB_CALLS
+              value: {{ toJson .databases | quote }}
+          resources:
+            {{- toYaml $.Values.resources | nindent 12 }}
+          startupProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 5
+          securityContext:
+            {{- include "acme.containerSecurityContext" $ | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .name }}
+  namespace: {{ $ns }}
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ .name }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+{{- end }}

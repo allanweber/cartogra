@@ -1,0 +1,84 @@
+# Public demo on single-node k3s (ADR-0030): 1 replica, no PDB/HPA, sized for an 8GB ARM VM.
+# Probes, requests+limits, securityContext, secrets-as-volumes and labels still apply.
+
+global:
+  environment: demo
+  host: cartogra.dev
+
+# Fixed Acme tenant UUID, created by the step-6 bootstrap Job. Referenced below for guest
+# mode (gateway) and span stamping (collector); keep the three in sync.
+x-acmeTenantId: &acmeTenantId "a0000000-0000-4000-8000-00000000ac3e"
+
+x-jvm: &jvm
+  replicaCount: 1
+  pdb: { enabled: false }
+  autoscaling: { enabled: false }
+  javaOpts: "-XX:+UseSerialGC -Xss512k"
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+  probes:
+    # SerialGC + 0.5 CPU starts slowly: allow up to 5 minutes.
+    startupFailureThreshold: 60
+
+gateway:
+  <<: *jvm
+  env:
+    GUEST_TENANT_ID: *acmeTenantId
+    SIGNUP_ENABLED: "false"
+    # Acme Fintech, the simulated customer (infra/helm/acme). Signup is off, so the gateway creates it.
+    BOOTSTRAP_TENANT_ID: *acmeTenantId
+    BOOTSTRAP_TENANT_NAME: Acme Fintech
+    BOOTSTRAP_TENANT_PLAN: business
+    BOOTSTRAP_ADMIN_EMAIL: admin@acme-fintech.invalid
+
+registry:
+  <<: *jvm
+
+topology:
+  <<: *jvm
+  env:
+    # Default P7D would hide seeded "missing" drift for a week. Safe only with continuous
+    # in-cluster Acme traffic (step 6); bursty traffic + a short window makes drift flap.
+    TOPOLOGY_DRIFT_MISSING_AFTER: PT1H
+
+ingestion:
+  <<: *jvm
+
+frontend:
+  replicaCount: 1
+  pdb: { enabled: false }
+  autoscaling: { enabled: false }
+  resources:
+    requests: { cpu: 50m, memory: 192Mi }
+    limits: { cpu: 100m, memory: 192Mi }
+
+collector:
+  replicaCount: 1
+  pdb: { enabled: false }
+  env:
+    CARTOGRA_TENANT_ID: *acmeTenantId
+  resources:
+    requests: { cpu: 50m, memory: 256Mi }
+    limits: { cpu: 100m, memory: 256Mi }
+
+postgres:
+  config:
+    max_connections: "100"
+    shared_buffers: 128MB
+  resources:
+    requests: { cpu: 100m, memory: 384Mi }
+    limits: { cpu: 200m, memory: 384Mi }
+
+kafka:
+  heapOpts: "-Xms384m -Xmx384m"
+  resources:
+    requests: { cpu: 250m, memory: 640Mi }
+    limits: { cpu: 500m, memory: 640Mi }
+
+backup:
+  enabled: true
+  s3:
+    endpoint: https://fsn1.your-objectstorage.com
+    region: fsn1
+    bucket: cartogra-demo-backups

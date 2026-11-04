@@ -23,7 +23,7 @@ public class JdbcTenantRepository implements TenantRepository {
 
     @Override
     public Tenant save(Tenant tenant) {
-        UUID id = UUID.randomUUID();
+        UUID id = tenant.id() != null ? tenant.id() : UUID.randomUUID();
         Instant now = Instant.now();
         String slug = slugify(tenant.name()) + "-" + id.toString().substring(0, 8);
         String sql = """

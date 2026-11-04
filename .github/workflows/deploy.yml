@@ -1,0 +1,61 @@
+name: Deploy demo
+
+# Manual: installs one commit's images (built by images.yml) on the demo k3s host (ADR-0030).
+# Needs the `demo` environment: secret KUBECONFIG (CI-scoped kubeconfig), variable ACME_GITHUB_ORG.
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Commit SHA whose images to deploy (default: this run's commit)"
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-demo
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: helm upgrade
+    runs-on: ubuntu-latest
+    environment: demo
+    env:
+      SHA: ${{ inputs.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.19.0
+
+      - name: Kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          printf '%s' "${{ secrets.KUBECONFIG }}" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Images exist for this commit
+        run: |
+          for image in gateway registry topology ingestion frontend acme; do
+            docker manifest inspect "ghcr.io/${{ github.repository_owner }}/cartogra-$image:$SHA" > /dev/null \
+              || { echo "missing cartogra-$image:$SHA (did images.yml finish?)"; exit 1; }
+          done
+
+      - name: Cartogra
+        run: |
+          helm upgrade --install cartogra infra/helm/cartogra -n cartogra --create-namespace \
+            -f infra/helm/cartogra/values-demo.yaml \
+            --set global.imageTag="$SHA" \
+            --wait --timeout 15m
+
+      - name: Acme (runs the bootstrap Job)
+        run: |
+          helm upgrade --install acme infra/helm/acme -n acme-system --create-namespace \
+            --set image.tag="$SHA" \
+            --set bootstrap.githubOrg="${{ vars.ACME_GITHUB_ORG }}" \
+            --wait --timeout 20m

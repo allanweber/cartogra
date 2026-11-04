@@ -1,7 +1,12 @@
 package io.cartogra.registry.domain;
 
+import io.cartogra.common.identity.Roles;
+import org.springframework.security.access.prepost.PreAuthorize;
 import io.cartogra.common.api.PageResult;
-import io.cartogra.common.identity.SystemActors;
+import io.cartogra.common.audit.AuditEvent;
+import io.cartogra.common.audit.AuditEventPort;
+import io.cartogra.common.audit.AuditPayload;
+import io.cartogra.common.identity.Actor;
 import io.cartogra.registry.api.dto.CreateServiceRequest;
 import io.cartogra.registry.api.dto.UpdateServiceRequest;
 import io.cartogra.registry.repository.ServiceDiscoveryCommand;
@@ -21,7 +26,6 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
@@ -45,6 +49,13 @@ public class ServiceService {
 
     private static final Logger log = LoggerFactory.getLogger(ServiceService.class);
 
+    private static final String AUDIT_ENTITY = "service";
+    private static final Set<String> AUDIT_KEY_FIELDS = Set.of("name", "teamId", "source", "tier");
+    private static final Set<String> AUDIT_FIELDS = Set.of(
+            "name", "description", "teamId", "repositoryUrl", "techStack", "tier", "tags", "slaTarget",
+            "documentationUrl", "runbookUrl", "healthEndpoint", "source", "k8sCluster", "k8sNamespace",
+            "k8sDeployment");
+
     private final ServiceRepository serviceRepository;
     private final ServiceHistoryRepository historyRepository;
     private final TeamRepository teamRepository;
@@ -53,6 +64,7 @@ public class ServiceService {
     private final HealthEndpointValidator healthEndpointValidator;
     private final PlanLimitService planLimitService;
     private final AdvisoryLockRepository advisoryLockRepository;
+    private final AuditEventPort auditEventPort;
 
     public ServiceService(ServiceRepository serviceRepository,
                           ServiceHistoryRepository historyRepository,
@@ -61,7 +73,8 @@ public class ServiceService {
                           ServiceLifecycleEventProducer eventProducer,
                           HealthEndpointValidator healthEndpointValidator,
                           PlanLimitService planLimitService,
-                          AdvisoryLockRepository advisoryLockRepository) {
+                          AdvisoryLockRepository advisoryLockRepository,
+                          AuditEventPort auditEventPort) {
         this.serviceRepository = serviceRepository;
         this.historyRepository = historyRepository;
         this.teamRepository = teamRepository;
@@ -70,10 +83,12 @@ public class ServiceService {
         this.healthEndpointValidator = healthEndpointValidator;
         this.planLimitService = planLimitService;
         this.advisoryLockRepository = advisoryLockRepository;
+        this.auditEventPort = auditEventPort;
     }
 
+    @PreAuthorize(Roles.CAN_WRITE)
     @Transactional
-    public Service create(UUID tenantId, CreateServiceRequest req, @Nullable UUID requestedBy) {
+    public Service create(UUID tenantId, Actor actor, CreateServiceRequest req) {
         if (serviceRepository.existsByName(tenantId, req.name(), null)) {
             throw new DuplicateServiceNameException(req.name());
         }
@@ -105,7 +120,8 @@ public class ServiceService {
             );
 
             Service saved = serviceRepository.save(service);
-            historyRepository.save(snapshot(saved, requestedBy));
+            historyRepository.save(snapshot(saved, actor));
+            auditFields(saved, "created", actor);
             eventProducer.publishRegistered(saved);
             return saved;
         } finally {
@@ -113,11 +129,12 @@ public class ServiceService {
         }
     }
 
+    @PreAuthorize(Roles.CAN_WRITE)
     @Transactional
-    public Service update(UUID tenantId, UUID serviceId, UpdateServiceRequest req, @Nullable UUID requestedBy) {
+    public Service update(UUID tenantId, Actor actor, UUID serviceId, UpdateServiceRequest req) {
         Service existing = serviceRepository.findById(tenantId, serviceId)
                 .orElseThrow(() -> new ServiceNotFoundException(serviceId));
-        requireAdminOrOwningTeamMember(tenantId, existing.teamId(), requestedBy);
+        requireAdminOrOwningTeamMember(tenantId, existing.teamId(), actor);
 
         if (!existing.name().equalsIgnoreCase(req.name())
                 && serviceRepository.existsByName(tenantId, req.name(), serviceId)) {
@@ -180,16 +197,18 @@ public class ServiceService {
         );
 
         Service saved = serviceRepository.save(updated);
-        historyRepository.save(snapshot(saved, requestedBy));
+        historyRepository.save(snapshot(saved, actor));
+        auditChanges(existing, saved, "updated", actor);
         eventProducer.publishUpdated(saved);
         return saved;
     }
 
+    @PreAuthorize(Roles.CAN_WRITE)
     @Transactional
-    public void delete(UUID tenantId, UUID serviceId, @Nullable UUID requestedBy) {
+    public void delete(UUID tenantId, Actor actor, UUID serviceId) {
         Service existing = serviceRepository.findById(tenantId, serviceId)
                 .orElseThrow(() -> new ServiceNotFoundException(serviceId));
-        requireAdminOrOwningTeamMember(tenantId, existing.teamId(), requestedBy);
+        requireAdminOrOwningTeamMember(tenantId, existing.teamId(), actor);
 
         serviceRepository.softDelete(tenantId, serviceId);
 
@@ -206,7 +225,8 @@ public class ServiceService {
                 existing.tier(), existing.tags(), existing.slaTarget(),
                 existing.documentationUrl(), existing.runbookUrl()
         );
-        historyRepository.save(snapshot(deleted, requestedBy));
+        historyRepository.save(snapshot(deleted, actor));
+        auditFields(existing, "deleted", actor);
         eventProducer.publishDeleted(existing, deletedAt);
     }
 
@@ -246,13 +266,12 @@ public class ServiceService {
         return PageResult.of(orphans, orphans.size(), limit, offset);
     }
 
+    @PreAuthorize(Roles.CAN_WRITE)
     @Transactional
-    public Service assignOwner(UUID tenantId, UUID serviceId, @Nullable UUID teamId, @Nullable UUID requestedBy) {
+    public Service assignOwner(UUID tenantId, Actor actor, UUID serviceId, @Nullable UUID teamId) {
         Service existing = serviceRepository.findById(tenantId, serviceId)
                 .orElseThrow(() -> new ServiceNotFoundException(serviceId));
-        if (!SystemActors.SYSTEM.equals(requestedBy)) {
-            requireAdminOrOwningTeamMember(tenantId, existing.teamId(), requestedBy);
-        }
+        requireAdminOrOwningTeamMember(tenantId, existing.teamId(), actor);
 
         if (teamId != null) {
             teamRepository.findById(tenantId, teamId)
@@ -278,7 +297,8 @@ public class ServiceService {
         );
 
         Service saved = serviceRepository.save(updated);
-        historyRepository.save(snapshot(saved, requestedBy));
+        historyRepository.save(snapshot(saved, actor));
+        auditChanges(existing, saved, "owner_changed", actor);
         eventProducer.publishUpdated(saved);
         return saved;
     }
@@ -409,7 +429,8 @@ public class ServiceService {
                     current.documentationUrl(), current.runbookUrl()
             );
             Service saved = serviceRepository.save(updated);
-            historyRepository.save(snapshot(saved, SystemActors.SYSTEM));
+            historyRepository.save(snapshot(saved, Actor.SYSTEM));
+            auditChanges(current, saved, "discovery_merged", Actor.SYSTEM);
             eventProducer.publishUpdated(saved);
         } else {
             // K8s never creates a row with externalId or connectionId.
@@ -429,7 +450,8 @@ public class ServiceService {
                     null, null, null, null, null, null
             );
             Service saved = serviceRepository.save(created);
-            historyRepository.save(snapshot(saved, SystemActors.SYSTEM));
+            historyRepository.save(snapshot(saved, Actor.SYSTEM));
+            auditFields(saved, "discovered", Actor.SYSTEM);
             eventProducer.publishRegistered(saved);
         }
     }
@@ -478,14 +500,29 @@ public class ServiceService {
         }
 
         UUID teamId = matchedTeamIds.iterator().next();
-        assignOwner(payload.tenantId(), service.id(), teamId, SystemActors.SYSTEM);
+        assignOwner(payload.tenantId(), Actor.SYSTEM, service.id(), teamId);
         log.info("ownership.resolved: assigned team={} to service={} via CODEOWNERS", teamId, service.id());
     }
 
-    private ServiceSnapshot snapshot(Service service, @Nullable UUID changedBy) {
+    private void auditFields(Service service, String action, Actor actor) {
+        auditEventPort.record(AuditEvent.of(service.tenantId(), AUDIT_ENTITY, service.id(), action, actor,
+                AuditPayload.fields(objectMapper, service, AUDIT_KEY_FIELDS)));
+    }
+
+    /** Health, commit and timestamp bumps are not on the allowlist, so a merge that only moves those is not audited. */
+    private void auditChanges(Service before, Service after, String action, Actor actor) {
+        var changes = AuditPayload.changes(objectMapper, before, after, AUDIT_FIELDS);
+        if (changes.isEmpty()) {
+            return;
+        }
+        auditEventPort.record(AuditEvent.of(after.tenantId(), AUDIT_ENTITY, after.id(), action, actor,
+                AuditPayload.with(changes, "name", after.name())));
+    }
+
+    private ServiceSnapshot snapshot(Service service, Actor changedBy) {
         try {
             String json = objectMapper.writeValueAsString(service);
-            return new ServiceSnapshot(UUID.randomUUID(), service.id(), service.tenantId(), json, changedBy, Instant.now());
+            return new ServiceSnapshot(UUID.randomUUID(), service.id(), service.tenantId(), json, changedBy.userId(), Instant.now());
         } catch (JacksonException e) {
             throw new IllegalStateException("Failed to serialize service snapshot", e);
         }
@@ -495,14 +532,11 @@ public class ServiceService {
      * ADMIN always passes. Otherwise the caller must be a member of the service's owning team.
      * An orphan service (teamId == null) has no team to be a member of, so only ADMIN may edit it.
      */
-    private void requireAdminOrOwningTeamMember(UUID tenantId, @Nullable UUID teamId, @Nullable UUID requestedBy) {
-        boolean isAdmin = SecurityContextHolder.getContext().getAuthentication() != null
-                && SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
-                        .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
-        if (isAdmin) {
+    private void requireAdminOrOwningTeamMember(UUID tenantId, @Nullable UUID teamId, Actor actor) {
+        if (actor.admin()) {
             return;
         }
-        if (teamId == null || requestedBy == null || !teamRepository.isMember(tenantId, teamId, requestedBy)) {
+        if (teamId == null || actor.userId() == null || !teamRepository.isMember(tenantId, teamId, actor.userId())) {
             throw new AccessDeniedException("Only ADMIN or a member of the owning team may edit this service");
         }
     }

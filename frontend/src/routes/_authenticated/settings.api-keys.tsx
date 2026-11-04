@@ -9,7 +9,7 @@ export const Route = createFileRoute('/_authenticated/settings/api-keys')({
 
 function ApiKeysPage() {
   return (
-    <SettingsTabsLayout>
+    <SettingsTabsLayout underDevelopment="placeholder">
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">API Keys</CardTitle>

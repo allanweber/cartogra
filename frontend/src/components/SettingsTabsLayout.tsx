@@ -2,6 +2,7 @@ import { Link, useRouterState } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 
 import { AppLayout } from '#/components/AppLayout'
+import type { UnderDevelopmentKind } from '#/components/UnderDevelopmentBanner'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { cn } from '#/lib/utils'
 import { useAuthStore } from '#/stores/useAuthStore'
@@ -15,17 +16,18 @@ const TABS = [
 ] as const
 
 interface Props {
+  underDevelopment?: UnderDevelopmentKind
   children: ReactNode
 }
 
-export function SettingsTabsLayout({ children }: Props) {
+export function SettingsTabsLayout({ underDevelopment, children }: Props) {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const user = useAuthStore((s) => s.user)
   const isHydrated = useAuthStore((s) => s.isHydrated)
   const isAdmin = user?.roles.some((r) => r.toLowerCase() === 'admin') ?? false
 
   return (
-    <AppLayout title="Settings" description="Manage integrations, notifications, and tenant configuration">
+    <AppLayout title="Settings" description="Manage integrations, notifications, and tenant configuration" underDevelopment={underDevelopment}>
       {isHydrated && !isAdmin ? (
         <Alert variant="destructive" className="max-w-2xl">
           <AlertDescription>You need the Admin role to access settings.</AlertDescription>

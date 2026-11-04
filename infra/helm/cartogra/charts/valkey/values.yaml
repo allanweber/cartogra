@@ -1,0 +1,24 @@
+# valkey — single instance; clients use valkey:6379.
+
+image:
+  registry: docker.io
+  repository: valkey/valkey
+  tag: "8-alpine"
+
+persistence:
+  size: 1Gi
+  storageClass: ""
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+
+# The alpine image's valkey user is uid 999.
+podSecurityContext:
+  runAsUser: 999
+  runAsGroup: 1000
+  fsGroup: 1000

@@ -1,5 +1,7 @@
 package io.cartogra.gateway.domain;
 
+import io.cartogra.common.audit.AuditEvent;
+import io.cartogra.common.audit.AuditEventPort;
 import io.cartogra.gateway.api.dto.AcceptInviteRequest;
 import io.cartogra.gateway.api.dto.InviteUserRequest;
 import io.cartogra.gateway.api.dto.InviteUserResponse;
@@ -8,6 +10,8 @@ import io.cartogra.gateway.api.dto.RegisterResponse;
 import io.cartogra.gateway.api.dto.TokenResponse;
 import io.cartogra.gateway.api.dto.UserInfoResponse;
 import io.cartogra.gateway.config.JwtConfig;
+import io.cartogra.gateway.config.SignupProperties;
+import io.cartogra.gateway.domain.exception.SignupDisabledException;
 import io.cartogra.gateway.domain.exception.ConflictException;
 import io.cartogra.gateway.domain.exception.InvalidOtpException;
 import io.cartogra.gateway.domain.exception.NotFoundException;
@@ -22,10 +26,12 @@ import io.cartogra.gateway.repository.TenantRepository;
 import io.cartogra.gateway.repository.UserRepository;
 import io.cartogra.gateway.infrastructure.jwt.JwtClaims;
 import io.cartogra.gateway.infrastructure.jwt.JwtTokenProvider;
+import io.cartogra.common.identity.Actor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -35,7 +41,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -63,6 +71,8 @@ public class AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final JwtConfig jwtConfig;
     private final BillingPlanService billingPlanService;
+    private final AuditEventPort auditEventPort;
+    private final SignupProperties signup;
 
     public AuthService(UserRepository userRepository,
                        TenantRepository tenantRepository,
@@ -73,7 +83,9 @@ public class AuthService {
                        PasswordEncoder passwordEncoder,
                        JwtTokenProvider jwtTokenProvider,
                        JwtConfig jwtConfig,
-                       BillingPlanService billingPlanService) {
+                       BillingPlanService billingPlanService,
+                       AuditEventPort auditEventPort,
+                       SignupProperties signup) {
         this.userRepository = userRepository;
         this.tenantRepository = tenantRepository;
         this.refreshTokenRepository = refreshTokenRepository;
@@ -84,9 +96,14 @@ public class AuthService {
         this.jwtTokenProvider = jwtTokenProvider;
         this.jwtConfig = jwtConfig;
         this.billingPlanService = billingPlanService;
+        this.auditEventPort = auditEventPort;
+        this.signup = signup;
     }
 
     public RegisterResponse register(RegisterRequest request) {
+        if (!signup.enabled()) {
+            throw new SignupDisabledException();
+        }
         userRepository.findByEmail(request.email()).ifPresent(existing -> {
             if (!"local".equals(existing.authProvider())) {
                 throw new ConflictException(
@@ -255,7 +272,8 @@ public class AuthService {
         return userRepository.findByIds(tenantId, ids);
     }
 
-    public User updateUserRole(UUID tenantId, UUID targetUserId, String role) {
+    @Transactional
+    public User updateUserRole(UUID tenantId, Actor actor, UUID targetUserId, String role) {
         User user = userRepository.findById(targetUserId)
             .filter(u -> u.tenantId().equals(tenantId))
             .orElseThrow(() -> new NotFoundException("User not found: " + targetUserId));
@@ -269,11 +287,18 @@ public class AuthService {
             List.of(role), user.emailVerificationToken(), user.emailVerificationTokenExp(),
             user.passwordResetToken(), user.passwordResetTokenExp(),
             user.createdAt(), user.updatedAt(), user.deletedAt(), user.disabledAt());
-        return userRepository.save(updated);
+        User saved = userRepository.save(updated);
+        if (!user.roles().equals(saved.roles())) {
+            Map<String, Object> payload = userPayload(user);
+            payload.put("changes", Map.of("roles", Map.of("from", user.roles(), "to", saved.roles())));
+            auditUser(tenantId, actor, user.id(), "role_changed", payload);
+        }
+        return saved;
     }
 
-    public void removeUser(UUID tenantId, UUID requestingUserId, UUID targetUserId) {
-        if (requestingUserId.equals(targetUserId)) {
+    @Transactional
+    public void removeUser(UUID tenantId, Actor actor, UUID targetUserId) {
+        if (targetUserId.equals(actor.userId())) {
             throw new IllegalArgumentException("Cannot remove your own account.");
         }
         User user = userRepository.findById(targetUserId)
@@ -285,10 +310,12 @@ public class AuthService {
         }
 
         userRepository.softDelete(tenantId, targetUserId);
+        auditUser(tenantId, actor, targetUserId, "removed", userPayload(user));
     }
 
-    public User setUserDisabled(UUID tenantId, UUID requestingUserId, UUID targetUserId, boolean disabled) {
-        if (disabled && requestingUserId.equals(targetUserId)) {
+    @Transactional
+    public User setUserDisabled(UUID tenantId, Actor actor, UUID targetUserId, boolean disabled) {
+        if (disabled && targetUserId.equals(actor.userId())) {
             throw new IllegalArgumentException("Cannot disable your own account.");
         }
         User user = userRepository.findById(targetUserId)
@@ -305,7 +332,24 @@ public class AuthService {
             user.passwordResetToken(), user.passwordResetTokenExp(),
             user.createdAt(), user.updatedAt(), user.deletedAt(),
             disabled ? Instant.now() : null);
-        return userRepository.save(updated);
+        User saved = userRepository.save(updated);
+        if ((user.disabledAt() != null) != disabled) {
+            auditUser(tenantId, actor, targetUserId, disabled ? "disabled" : "enabled", userPayload(user));
+        }
+        return saved;
+    }
+
+    private static Map<String, Object> userPayload(User user) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("email", user.email());
+        if (user.name() != null) {
+            payload.put("name", user.name());
+        }
+        return payload;
+    }
+
+    private void auditUser(UUID tenantId, Actor actor, UUID userId, String action, Map<String, Object> payload) {
+        auditEventPort.record(AuditEvent.of(tenantId, "user", userId, action, actor, payload));
     }
 
     private long countAdmins(UUID tenantId) {
@@ -314,7 +358,8 @@ public class AuthService {
             .count();
     }
 
-    public InviteUserResponse inviteUser(UUID tenantId, UUID invitedBy, InviteUserRequest request) {
+    @Transactional
+    public InviteUserResponse inviteUser(UUID tenantId, Actor actor, InviteUserRequest request) {
         userRepository.findByTenantAndEmail(tenantId, request.email()).ifPresent(_ -> {
             throw new ConflictException("An account with this email already exists in this tenant.");
         });
@@ -334,8 +379,15 @@ public class AuthService {
         Instant inviteExp = Instant.now().plusSeconds(INVITE_TOKEN_TTL_SECONDS);
 
         Invitation invitation = new Invitation(null, tenantId, request.email(), request.role(),
-            invitedBy, request.teamId(), inviteToken, inviteExp, "PENDING", null, null);
+            actor.userId(), request.teamId(), inviteToken, inviteExp, "PENDING", null, null);
         Invitation saved = invitationRepository.save(invitation);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("email", request.email());
+        payload.put("role", request.role());
+        if (request.teamId() != null) {
+            payload.put("teamId", request.teamId());
+        }
+        auditEventPort.record(AuditEvent.of(tenantId, "invitation", saved.id(), "invited", actor, payload));
 
         EMAIL_EXECUTOR.submit(() -> emailSender.sendInvite(request.email(), tenant.name(), inviteToken));
 

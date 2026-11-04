@@ -1,5 +1,6 @@
 package io.cartogra.registry.api;
 
+import io.cartogra.common.identity.Actor;
 import io.cartogra.registry.api.dto.AssignOwnerRequest;
 import io.cartogra.registry.api.dto.CreateServiceRequest;
 import io.cartogra.registry.api.dto.ServiceResponse;
@@ -12,7 +13,9 @@ import io.cartogra.registry.repository.ServiceFilter;
 import io.cartogra.registry.domain.ServiceService;
 import io.cartogra.registry.domain.exception.ServiceNotFoundException;
 import jakarta.validation.Valid;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import io.cartogra.registry.api.dto.ConnectionServiceCountsResponse;
@@ -35,9 +38,9 @@ public class ServiceController {
     @PostMapping
     public ResponseEntity<ApiResponse<ServiceResponse>> create(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
-            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
+            @AuthenticationPrincipal Actor actor,
             @Valid @RequestBody CreateServiceRequest req) {
-        var result = ServiceResponse.from(service.create(tenantId, req, userId));
+        var result = ServiceResponse.from(service.create(tenantId, actor, req));
         return TracedResponse.created(result);
     }
 
@@ -93,38 +96,38 @@ public class ServiceController {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<ServiceResponse>> update(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
-            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
+            @AuthenticationPrincipal Actor actor,
             @PathVariable UUID id,
             @Valid @RequestBody UpdateServiceRequest req) {
-        var result = ServiceResponse.from(service.update(tenantId, id, req, userId));
+        var result = ServiceResponse.from(service.update(tenantId, actor, id, req));
         return TracedResponse.ok(result);
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
-            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
+            @AuthenticationPrincipal Actor actor,
             @PathVariable UUID id) {
-        service.delete(tenantId, id, userId);
+        service.delete(tenantId, actor, id);
         return TracedResponse.noContent();
     }
 
     @PatchMapping("/{id}/owner")
     public ResponseEntity<ApiResponse<ServiceResponse>> assignOwner(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
-            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
+            @AuthenticationPrincipal Actor actor,
             @PathVariable UUID id,
             @RequestBody AssignOwnerRequest req) {
-        var result = ServiceResponse.from(service.assignOwner(tenantId, id, req.teamId(), userId));
+        var result = ServiceResponse.from(service.assignOwner(tenantId, actor, id, req.teamId()));
         return TracedResponse.ok(result);
     }
 
     @DeleteMapping("/{id}/owner")
     public ResponseEntity<ApiResponse<ServiceResponse>> removeOwner(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
-            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
+            @AuthenticationPrincipal Actor actor,
             @PathVariable UUID id) {
-        var result = ServiceResponse.from(service.assignOwner(tenantId, id, null, userId));
+        var result = ServiceResponse.from(service.assignOwner(tenantId, actor, id, null));
         return TracedResponse.ok(result);
     }
 
@@ -134,15 +137,21 @@ public class ServiceController {
             @PathVariable UUID id,
             @RequestParam(required = false) Instant at,
             @RequestParam(defaultValue = "20") int limit,
-            @RequestParam(defaultValue = "0") int offset) {
+            @RequestParam(defaultValue = "0") int offset,
+            Authentication authentication) {
+        boolean guest = GuestCaller.is(authentication);
         if (at != null) {
             var snap = service.historyAt(tenantId, id, at)
                     .map(ServiceSnapshotResponse::from)
+                    .map(r -> guest ? r.withoutAuthor() : r)
                     .orElseThrow(() -> new ServiceNotFoundException(id));
             return TracedResponse.ok(PageResult.of(List.of(snap), 1L, 1, 0));
         }
         var page = service.history(tenantId, id, limit, offset);
-        var mapped = PageResult.of(page.items().stream().map(ServiceSnapshotResponse::from).toList(),
+        var mapped = PageResult.of(page.items().stream()
+                        .map(ServiceSnapshotResponse::from)
+                        .map(r -> guest ? r.withoutAuthor() : r)
+                        .toList(),
                 page.total(), page.limit(), page.offset());
         return TracedResponse.ok(mapped);
     }
