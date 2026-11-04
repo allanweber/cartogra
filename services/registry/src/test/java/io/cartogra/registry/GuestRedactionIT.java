@@ -1,6 +1,7 @@
 package io.cartogra.registry;
 
 import io.cartogra.registry.infrastructure.kafka.ServiceLifecycleEventProducer;
+import io.cartogra.registry.infrastructure.kafka.TeamLifecycleEventProducer;
 import io.cartogra.test.PostgresTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,9 @@ class GuestRedactionIT {
 
     @MockitoBean
     ServiceLifecycleEventProducer eventProducer;
+
+    @MockitoBean
+    TeamLifecycleEventProducer teamEventProducer;
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
