@@ -138,7 +138,7 @@ The Acme tenant is publicly readable, so it holds only fabricated data (ADR-0019
 
 ## 7. Install / upgrade
 
-To test chart changes before deploying, run them on a local cluster first: see [Test on a local cluster](../../infra/helm/cartogra/README.md#test-on-a-local-cluster).
+To test chart changes before deploying, run them on a local cluster first: see [Test on a local cluster](../../infra/helm/README.md).
 
 Normally **Actions → Deploy demo → Run workflow** (optionally with a SHA). By hand, the same commands:
 
