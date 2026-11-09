@@ -2,7 +2,9 @@
 
 ## Before you start
 
-Read [AGENTS.md](AGENTS.md) for the full project rules, slash commands, and architecture constraints. It is the authoritative reference for anyone (human or AI) working in this repo.
+Read [CLAUDE.md](CLAUDE.md) and the files under [.claude/rules/](.claude/rules/) for the full project rules and architecture constraints. They are the authoritative reference for anyone (human or AI) working in this repo.
+
+New here? Pick an issue labelled [`good first issue`](https://github.com/allanweber/cartogra/labels/good%20first%20issue) and comment on it so nobody duplicates the work. For anything bigger, open a [Discussion](https://github.com/allanweber/cartogra/discussions) or a feature request first.
 
 ---
 
@@ -46,9 +48,9 @@ test(topology): add blast radius CTE integration test
 
 ## Opening a pull request
 
-Use the PR template (`.github/PULL_REQUEST_TEMPLATE.md`). Make sure you:
+Make sure you:
 
-- Link the relevant user story (`USx.y`) and BIP item (`BIPx.z`) if applicable
+- Link the issue the PR closes (`Closes #123`)
 - Link the ADR if your change involves an architectural decision
 - Confirm CI is green before requesting review
 - Include a short "how to test" section for non-trivial changes
@@ -64,8 +66,6 @@ All rules are enforced via [CLAUDE.md](CLAUDE.md) and the files under [.claude/r
 - **Infra:** Multi-stage Dockerfiles, non-root user, K8s probes + resource limits, Terraform `for_each`
 - **Database:** Flyway migrations only, `tenant_id` on every domain table, soft deletes via `deleted_at`
 
-When in doubt, run `/check-constraints` against the file you're editing.
-
 ---
 
 ## Gate tooling
@@ -75,7 +75,7 @@ Every story's definition of done and every phase gate (`docs/roadmap.md` §2) ca
 | Skill | Where it comes from | Pinned install |
 | --- | --- | --- |
 | `/code-review`, `/security-review` | Ship with Claude Code | nothing to install |
-| `/improve` | Committed at [`.claude/skills/improve/`](.claude/skills/improve/), sourced from `shadcn/improve` | `npx skills add shadcn/improve -a claude-code -y` — integrity pinned by `computedHash` in [`skills-lock.json`](skills-lock.json) |
+| `/improve` | Committed at [`.agents/skills/improve/`](.agents/skills/improve/), sourced from `shadcn/improve` | `npx skills add shadcn/improve -a claude-code -y` — integrity pinned by `computedHash` in [`skills-lock.json`](skills-lock.json) |
 | `/impeccable`, `/shape` | External CLI: [`impeccable`](https://www.npmjs.com/package/impeccable) on npm | `npx impeccable@3.6.0 install` |
 | `/improve-codebase-architecture` | External: `mattpocock/skills`, tag `v1.2.3`, not committed — run before use | `npx skills add https://github.com/mattpocock/skills/tree/v1.2.3 --skill improve-codebase-architecture -a claude-code -y` |
 
@@ -91,19 +91,15 @@ See [docs/runbooks/local-development.md](docs/runbooks/local-development.md).
 
 ## Branch Protection
 
-`main` branch protection must be configured in **GitHub → Settings → Branches** before the first external collaborator joins:
+`main` is guarded by the **main protection** repository ruleset (GitHub → Settings → Rules):
 
-| Setting | Required value |
-| ------- | -------------- |
-| Require a pull request before merging | Enabled |
-| Required approving reviews | 1 |
-| Dismiss stale reviews on new push | Enabled |
-| Required status checks | `build-and-test`, `trivy`, `frontend-ci` |
-| Require branches to be up to date | Enabled |
-| Restrict force pushes | Disabled for everyone |
-| Allow deletions | Disabled |
+| Rule | Value |
+| ---- | ----- |
+| Pull request required | Yes (0 approvals while there is a single maintainer) |
+| Force pushes / deletion | Blocked |
+| Required status checks | `Gitleaks`, `Backend — Build & Test`, `Frontend — Lint & Test`, `E2E — Playwright`, `Acme seed — Typecheck & Test`, `Container — Build checks` |
 
-These settings are not enforced via GitHub Actions — they must be applied manually or via Terraform/`gh` CLI by a repo admin.
+Renaming any of those CI jobs breaks the ruleset — update it in the same PR.
 
 ---
 
@@ -115,4 +111,4 @@ Contributions are licensed under [Apache 2.0](LICENSE) (inbound = outbound). Sig
 
 ## Questions
 
-Open a GitHub Discussion or use the architecture discussion issue template for design questions.
+Open a [GitHub Discussion](https://github.com/allanweber/cartogra/discussions). Bugs and feature requests go through the [issue templates](https://github.com/allanweber/cartogra/issues/new/choose).
