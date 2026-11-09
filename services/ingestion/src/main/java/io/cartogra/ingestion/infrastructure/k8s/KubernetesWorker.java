@@ -32,16 +32,19 @@ public class KubernetesWorker {
     private final KubernetesClient kubernetesClient;
     private final ServiceDiscoveredProducer serviceDiscoveredProducer;
     private final String clusterName;
+    private final UUID tenantId;
     private Closeable serviceWatch;
     private Closeable endpointsWatch;
     private Closeable namespaceWatch;
 
     public KubernetesWorker(KubernetesClient kubernetesClient,
                              ServiceDiscoveredProducer serviceDiscoveredProducer,
-                             String clusterName) {
+                             String clusterName,
+                             UUID tenantId) {
         this.kubernetesClient = kubernetesClient;
         this.serviceDiscoveredProducer = serviceDiscoveredProducer;
         this.clusterName = clusterName;
+        this.tenantId = tenantId;
     }
 
     public void start() {
@@ -73,8 +76,7 @@ public class KubernetesWorker {
             @Override
             public void eventReceived(Action action, Namespace namespace) {
                 if (action != Action.MODIFIED) return;
-                Map<String, String> labels = namespace.getMetadata().getLabels();
-                if (labels == null || !labels.containsKey(TENANT_LABEL)) return;
+                if (!belongsToTenant(namespace)) return;
                 String ns = namespace.getMetadata().getName();
                 kubernetesClient.services().inNamespace(ns).list().getItems()
                         .forEach(svc -> {
@@ -124,10 +126,7 @@ public class KubernetesWorker {
     public void resync() {
         log.debug("K8s resync starting for cluster '{}'", clusterName);
         kubernetesClient.namespaces().list().getItems().stream()
-                .filter(ns -> {
-                    var labels = ns.getMetadata().getLabels();
-                    return labels != null && labels.containsKey(TENANT_LABEL);
-                })
+                .filter(this::belongsToTenant)
                 .forEach(ns -> {
                     String namespace = ns.getMetadata().getName();
                     kubernetesClient.services().inNamespace(namespace).list().getItems()
@@ -155,18 +154,7 @@ public class KubernetesWorker {
                                     @Nullable Service knownSvc,
                                     @Nullable Endpoints knownEndpoints) {
         Namespace ns = kubernetesClient.namespaces().withName(namespace).get();
-        if (ns == null) return;
-
-        Map<String, String> labels = ns.getMetadata().getLabels();
-        if (labels == null || !labels.containsKey(TENANT_LABEL)) return;
-
-        UUID tenantId;
-        try {
-            tenantId = UUID.fromString(labels.get(TENANT_LABEL));
-        } catch (IllegalArgumentException ex) {
-            log.warn("Invalid tenant UUID in namespace label ns={}: {}", namespace, labels.get(TENANT_LABEL));
-            return;
-        }
+        if (ns == null || !belongsToTenant(ns)) return;
 
         Service svc = knownSvc != null
                 ? knownSvc
@@ -201,6 +189,26 @@ public class KubernetesWorker {
         serviceDiscoveredProducer.publish(payload);
         log.info("Published service.discovered ns={} name={} cluster={} deployment={} health={} tenant={}",
                 namespace, name, clusterName, deployment, healthStatus, tenantId);
+    }
+
+    /**
+     * The label only opts a namespace in; the tenant always comes from the cluster's owner. A label naming
+     * another tenant is rejected, so a cluster owner cannot write services into someone else's catalog.
+     */
+    private boolean belongsToTenant(Namespace namespace) {
+        Map<String, String> labels = namespace.getMetadata().getLabels();
+        if (labels == null || !labels.containsKey(TENANT_LABEL)) return false;
+        String value = labels.get(TENANT_LABEL);
+        try {
+            if (tenantId.equals(UUID.fromString(value))) return true;
+        } catch (IllegalArgumentException _) {
+            log.warn("Invalid tenant UUID in namespace label ns={} cluster={}: {}",
+                    namespace.getMetadata().getName(), clusterName, value);
+            return false;
+        }
+        log.warn("Skipping namespace ns={} cluster={}: label tenant {} is not the cluster's tenant",
+                namespace.getMetadata().getName(), clusterName, value);
+        return false;
     }
 
     private String computeHealthStatus(String namespace, String name) {

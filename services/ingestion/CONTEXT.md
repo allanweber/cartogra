@@ -31,7 +31,7 @@ Ingestion is Cartogra's bridge between the external world (SCM providers, Kubern
 ## Core Responsibilities
 
 1. **SCM sync** — on receiving a Sync Command, start a Sync Job, list repositories via the appropriate Provider, detect tech stack, emit `service.discovered` per repo, emit `ownership.resolved` per CODEOWNERS result
-2. **Kubernetes watch** — continuously watch namespaces labeled `cartogra.io/tenant-id=<UUID>`; emit `service.discovered` on Service ADD/MODIFY; derive health from Endpoints
+2. **Kubernetes watch** — continuously watch namespaces labeled `cartogra.io/tenant-id=<UUID>`; the label only opts in, and must equal the tenant that owns the cluster (mismatch → skipped). The tenant written is always the cluster's; emit `service.discovered` on Service ADD/MODIFY; derive health from Endpoints
 3. **Sync Job tracking** — persist lifecycle state; idempotency guard (drop command if a RUNNING job exists for the same connection)
 4. **Stale job reaper** — periodic task that marks RUNNING jobs older than 30 min as FAILED
 5. **Result notification** — emit `sync.completed` after every job (success or failure)

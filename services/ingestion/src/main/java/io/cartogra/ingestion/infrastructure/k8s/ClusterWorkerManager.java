@@ -110,7 +110,7 @@ public class ClusterWorkerManager {
             KubernetesClient client = new KubernetesClientBuilder().withConfig(config).build();
             client.getKubernetesVersion();
 
-            KubernetesWorker worker = new KubernetesWorker(client, producer, cluster.name());
+            KubernetesWorker worker = new KubernetesWorker(client, producer, cluster.name(), cluster.tenantId());
             try {
                 log.info("Running initial resync for K8s cluster '{}' ({})", cluster.name(), cluster.id());
                 worker.resync();
