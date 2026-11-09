@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/allanweber/cartogra/discussions
+    about: Ask how something works, share feedback, or float an idea before filing an issue.

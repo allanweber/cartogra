@@ -7,6 +7,10 @@
 
 It tracks your services, their owners, dependencies, API contracts, and health — and surfaces actionable intelligence about blast radius, breaking changes, and architectural anti-patterns.
 
+> **Status: early — feedback welcome.** Auth, the service catalog, SCM/Kubernetes discovery and ownership work today; the dependency graph is in progress; contracts and intelligence are planned. Expect breaking changes before `v1.0`. Questions and ideas go to [Discussions](https://github.com/allanweber/cartogra/discussions); bugs to [Issues](https://github.com/allanweber/cartogra/issues/new/choose).
+
+![Cartogra dashboard](portfolio/images/02-dashboard.png)
+
 ---
 
 ## Why Cartogra
@@ -178,7 +182,7 @@ Milestones map to development phases: Phase 0 (Foundation) through Phase 5 (Inge
 | [docs/api/](docs/api/) | OpenAPI specs per service |
 | [docs/adr/](docs/adr/) | Architecture Decision Records |
 | [docs/runbooks/](docs/runbooks/) | Operational runbooks |
-| [AGENTS.md](AGENTS.md) | AI agent and slash command reference |
+| [CLAUDE.md](CLAUDE.md) + [.claude/rules/](.claude/rules/) | Project rules for humans and AI agents |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
 
 ---
