@@ -1,0 +1,12 @@
+# Default gitleaks rules, plus the two commits reviewed in the 2026-11-06 history scan.
+# Allowlisting by commit keeps these files scanned, so a new secret in them still fails.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Test-only values: local k3d JWT secret and an integration test AES key"
+commits = [
+  "b556da783d264bfab22f8d348927899a7ff81eb5",
+  "c5527946a9e1f563761e606bebc3048b9ed55452",
+]
