@@ -104,7 +104,7 @@ Each service logs `Started <Name>Application` when ready.
 ```bash
 cd frontend
 pnpm install
-pnpm dev          # http://localhost:3000
+pnpm dev          # http://localhost:3006
 ```
 
 The TanStack Start dev server proxies `/api/*` to `http://localhost:8080`.
@@ -131,7 +131,7 @@ This creates:
 
 | URL | Purpose |
 |-----|---------|
-| `http://localhost:3000` | Frontend |
+| `http://localhost:3006` | Frontend |
 | `http://localhost:3001` | Grafana (traces + logs + metrics) |
 | `http://localhost:8080/actuator/health` | Gateway health |
 | `http://localhost:8081/actuator/health` | Registry health |
