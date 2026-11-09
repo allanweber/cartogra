@@ -115,7 +115,7 @@ class KubernetesWorkerIT {
         doReturn(svcResource).when(svcNsOps).withName(SVC_NAME);
         doReturn(svc).when(svcResource).get();
 
-        KubernetesWorker worker = new KubernetesWorker(kubernetesClient, serviceDiscoveredProducer, "test-cluster");
+        KubernetesWorker worker = new KubernetesWorker(kubernetesClient, serviceDiscoveredProducer, "test-cluster", TENANT_ID);
         worker.handleServiceEvent(NS, SVC_NAME);
 
         // K8s key is cluster/namespace/name (externalId is null for K8s sources).

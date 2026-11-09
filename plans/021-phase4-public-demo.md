@@ -94,7 +94,16 @@ Done when: chart + bootstrap Job run on local k3d and Acme is discovered; Acme f
 
 ## 7. Ops — public host (#129)
 
-Human steps, following the rewritten `deployment.md` (doubles as its test):
+**7a. NetworkPolicy (code, before the first `helm install`).** Layer 1 of #151, pulled forward: backend services trust `X-Tenant-Id` / `X-User-*` headers, so on a shared cluster any pod could call them directly and forge tenant or admin. The signed gateway token (layer 2) stays in #151 / Phase 7.
+
+- `common.app` (`infra/helm/cartogra/charts/common/templates/_app.tpl`): optional `NetworkPolicy` per app, rendered when `networkPolicy.allowFrom` is set. Ingress only on the app port, only from pods with `app: <name>` in the list.
+- Allow lists: `registry` ← gateway, ingestion, topology (both call it via `REGISTRY_URI`); `topology` ← gateway; `ingestion` ← gateway. Gateway and frontend stay open (Ingress controller reaches them).
+- Kubelet probes are not subject to NetworkPolicy; OTel export is outbound — no rules needed.
+- k3s enforces NetworkPolicy out of the box (kube-router); note in `deployment.md` that a CNI without enforcement silently ignores it.
+- Verify on the host: `kubectl run curl --rm -it --image=curlimages/curl -- curl -m 3 http://ingestion:8085/actuator/health` from a non-gateway pod times out; the app (login, `/demo`, discovery, Acme bootstrap) still works end to end.
+- Out of scope: Postgres/Valkey/Kafka policies (password-protected; revisit in #151).
+
+**7b. Host setup.** Human steps, following the rewritten `deployment.md` (doubles as its test):
 
 - Hetzner **CAX21 (ARM, 4 vCPU, 8GB)**, resize to CAX31 only on measured pressure; single-node k3s, Traefik (bundled) + cert-manager Let's Encrypt on `cartogra.dev`.
 - Sealed Secrets controller; encrypted `SealedSecret`s committed.

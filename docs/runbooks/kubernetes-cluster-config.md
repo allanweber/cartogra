@@ -160,6 +160,9 @@ kubectl label namespace <target-namespace> cartogra.io/tenant-id=<your-tenant-uu
 Without this label, `cartogra-reader` can technically list the namespace but Cartogra will
 not ingest Services from it.
 
+The UUID must be the tenant that registered the cluster. Services are always written to the
+cluster owner's tenant; a namespace labelled with any other UUID is skipped and logged as a warning.
+
 ---
 
 ## In-cluster (Cartogra watching the cluster it runs on)

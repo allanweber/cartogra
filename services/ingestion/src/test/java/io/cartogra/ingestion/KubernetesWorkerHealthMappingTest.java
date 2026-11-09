@@ -47,7 +47,7 @@ class KubernetesWorkerHealthMappingTest {
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
-        worker = new KubernetesWorker(kubernetesClient, producer, "test-cluster");
+        worker = new KubernetesWorker(kubernetesClient, producer, "test-cluster", TENANT_ID);
 
         Namespace ns = new NamespaceBuilder()
                 .withMetadata(new ObjectMetaBuilder()

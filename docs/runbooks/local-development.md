@@ -387,6 +387,8 @@ Set this label on any namespace you want Cartogra to monitor:
 kubectl label namespace my-app cartogra.io/tenant-id=<your-tenant-uuid>
 ```
 
+The UUID must be the tenant that registered the cluster; any other value is skipped.
+
 The KubernetesWorker must be enabled (`ingestion.workers.k8s.enabled=true`) and a synthetic
 connection UUID must be configured (`ingestion.workers.k8s.connection-id=<UUID>`).
 

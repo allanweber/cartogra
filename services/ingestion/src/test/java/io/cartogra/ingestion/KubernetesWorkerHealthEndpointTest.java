@@ -46,7 +46,7 @@ class KubernetesWorkerHealthEndpointTest {
     @BeforeEach
     void setUp() {
         producer = mock(ServiceDiscoveredProducer.class);
-        worker = new KubernetesWorker(client, producer, "test-cluster");
+        worker = new KubernetesWorker(client, producer, "test-cluster", TENANT_ID);
 
         client.namespaces().resource(new NamespaceBuilder()
                 .withMetadata(new ObjectMetaBuilder()

@@ -92,32 +92,64 @@ class ClusterWorkerManagerTest {
     }
 
     @Test
-    void start_bootstrapsPreExistingServicesInLabeledNamespaces() throws Exception {
-        String tenantId = UUID.randomUUID().toString();
+    void start_bootstrapsPreExistingServicesInLabeledNamespacesUnderClusterTenant() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        createNamespaceWithService("my-ns", tenantId.toString(), "my-svc");
 
-        client.namespaces().resource(new NamespaceBuilder()
-                .withNewMetadata().withName("my-ns").withLabels(Map.of("cartogra.io/tenant-id", tenantId)).endMetadata()
-                .build()).create();
-        client.services().inNamespace("my-ns").resource(new ServiceBuilder()
-                .withNewMetadata().withName("my-svc").withNamespace("my-ns").endMetadata()
-                .build()).create();
-
-        Cluster cluster = clusterPointingAt(mockServer.url("/"));
+        Cluster cluster = clusterPointingAt(mockServer.url("/"), tenantId);
         ClusterWorkerManager manager = new ClusterWorkerManager(repository, encryptor, producer, 2000);
         manager.init();
         manager.start(cluster);
 
         await().atMost(5, TimeUnit.SECONDS).untilAsserted(() ->
                 verify(producer, atLeastOnce()).publish(argThat(p ->
-                        "my-svc".equals(p.name()) && "my-ns".equals(p.k8sNamespace())))
+                        "my-svc".equals(p.name()) && "my-ns".equals(p.k8sNamespace())
+                                && tenantId.equals(p.tenantId())))
         );
 
         manager.stopAll();
     }
 
+    @Test
+    void start_skipsNamespacesLabelledWithAnotherTenant() throws Exception {
+        UUID ownerTenant = UUID.randomUUID();
+        UUID victimTenant = UUID.randomUUID();
+        createNamespaceWithService("own-ns", ownerTenant.toString(), "own-svc");
+        createNamespaceWithService("foreign-ns", victimTenant.toString(), "foreign-svc");
+        createNamespaceWithService("garbage-ns", "not-a-uuid", "garbage-svc");
+
+        Cluster cluster = clusterPointingAt(mockServer.url("/"), ownerTenant);
+        ClusterWorkerManager manager = new ClusterWorkerManager(repository, encryptor, producer, 2000);
+        manager.init();
+        manager.start(cluster);
+
+        await().atMost(5, TimeUnit.SECONDS).untilAsserted(() ->
+                verify(repository).updateStatus(eq(cluster.id()), eq(ClusterStatus.ACTIVE), isNull())
+        );
+        verify(producer, atLeastOnce()).publish(argThat(p -> "own-svc".equals(p.name())));
+        verify(producer, never()).publish(argThat(p -> !ownerTenant.equals(p.tenantId())));
+        verify(producer, never()).publish(argThat(p ->
+                "foreign-ns".equals(p.k8sNamespace()) || "garbage-ns".equals(p.k8sNamespace())));
+
+        manager.stopAll();
+    }
+
+    private void createNamespaceWithService(String namespace, String tenantLabel, String service) {
+        client.namespaces().resource(new NamespaceBuilder()
+                .withNewMetadata().withName(namespace).withLabels(Map.of("cartogra.io/tenant-id", tenantLabel)).endMetadata()
+                .build()).create();
+        client.services().inNamespace(namespace).resource(new ServiceBuilder()
+                .withNewMetadata().withName(service).withNamespace(namespace).endMetadata()
+                .build()).create();
+    }
+
     private static Cluster clusterPointingAt(String url) {
+        return clusterPointingAt(url, UUID.randomUUID());
+    }
+
+    private static Cluster clusterPointingAt(String url, UUID tenantId) {
         Instant now = Instant.now();
-        return new Cluster(UUID.randomUUID(), UUID.randomUUID(), "test", ClusterSource.MANUAL,
+        return new Cluster(UUID.randomUUID(), tenantId, "test", ClusterSource.MANUAL,
                 url, null, null, true,
                 ClusterStatus.CONNECTING, null, now, now, null, null);
     }
