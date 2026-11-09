@@ -1,5 +1,6 @@
 {{/*
-Stateless app: ConfigMap (env) + Deployment + Service, optional PDB and HPA.
+Stateless app: ConfigMap (env) + Deployment + Service, optional NetworkPolicy, PDB and HPA.
+`networkPolicy.allowFrom` lists the `app` labels allowed in on the app port; unset = open (gateway, frontend).
 Secrets are mounted as files from an existing Secret (created from a SealedSecret) and, for
 Spring services, read through `spring.config.import=configtree:` so `${DB_PASSWORD}` etc. resolve.
 */}}
@@ -141,6 +142,30 @@ spec:
     {{- with .Values.extraServicePorts }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
+{{- with (.Values.networkPolicy | default dict).allowFrom }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "common.labels" $ | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "common.selectorLabels" $ | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        {{- range . }}
+        - podSelector:
+            matchLabels:
+              app: {{ . }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ $.Values.port }}
+{{- end }}
 {{- if .Values.pdb.enabled }}
 ---
 apiVersion: policy/v1

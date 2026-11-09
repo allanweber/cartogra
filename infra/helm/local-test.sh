@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installs both charts on a local k3d cluster, seeds Acme, checks guest mode and the ownership flow.
+# Installs both charts on a local k3d cluster, seeds Acme, checks NetworkPolicy, guest mode and the ownership flow.
 #
 #   sh infra/helm/local-test.sh              fresh cluster: deletes CLUSTER first, tests bootstrap and seed from nothing
 #   sh infra/helm/local-test.sh --reuse      keeps the cluster and its data, rolls out the new images
@@ -147,6 +147,19 @@ kubectl -n cartogra get pods
 running=$(kubectl -n acme-fintech get pods --no-headers | grep -c Running || true)
 [ "$running" -eq 21 ] || fail "expected 21 Acme pods Running, got $running"
 pass "21 Acme pods Running"
+
+step "Check NetworkPolicy"
+# One pod: the open gateway must answer (proves the pod runs), the backends must not.
+out=$(kubectl -n cartogra run np-check --rm -i --restart=Never --quiet --image=curlimages/curl:8.10.1 -- sh -c '
+  curl -fsm 5 -o /dev/null http://gateway:8080/actuator/health/live && echo gateway-open
+  for target in registry:8081 topology:8082 ingestion:8085; do
+    curl -sm 3 -o /dev/null "http://$target/" && echo "$target-open"
+  done
+  true' 2>&1) || true
+echo "$out" | grep -q gateway-open || fail "probe pod could not reach the gateway: $out"
+leaked=$(echo "$out" | grep -- '-open' | grep -v gateway-open || true)
+[ -z "$leaked" ] || fail "backends reachable from a non-gateway pod: $leaked"
+pass "backends reachable only from allowed pods"
 
 step "Check guest mode"
 tries=0

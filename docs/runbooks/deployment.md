@@ -123,7 +123,11 @@ export KUBECONFIG=~/.kube/cartogra-demo
 kubectl get nodes   # Ready
 ```
 
-k3s ships Traefik (ingress class `traefik`) and the `local-path` storage class the StatefulSets use.
+k3s ships Traefik (ingress class `traefik`) and the `local-path` storage class the StatefulSets use. It also enforces
+NetworkPolicy (kube-router), which keeps the backends' trusted tenant headers away from arbitrary pods (allow lists in
+the chart README's Exposure section).
+Don't install it with `--disable-network-policy`, and don't swap in a CNI that doesn't enforce NetworkPolicy: the
+policies would be ignored without any error.
 
 ## 3. Cluster add-ons
 
@@ -347,6 +351,14 @@ kubectl -n acme-fintech get pods --no-headers | grep -c Running   # 21
 kubectl -n acme-system get jobs                      # empty: the bootstrap Job is deleted on success
 kubectl -n cartogra get certificate cartogra-tls     # READY True, within a few minutes
 curl -s https://cartogra.dev/api/auth/features | jq .data   # signupEnabled false, guestEnabled true
+```
+
+NetworkPolicy (expect `gateway 200`, then `ingestion blocked` after a 3s timeout):
+
+```bash
+kubectl -n cartogra run np-check --rm -i --restart=Never --image=curlimages/curl:8.10.1 -- \
+  sh -c 'curl -sm3 -o /dev/null -w "gateway %{http_code}\n" http://gateway:8080/actuator/health/live;
+         curl -sm3 -o /dev/null -w "ingestion %{http_code}\n" http://ingestion:8085/ || echo "ingestion blocked"'
 ```
 
 In a browser, `https://cartogra.dev/demo` lands on the dashboard, the graph shows Acme with observed edges

@@ -106,6 +106,7 @@ Done when: chart + bootstrap Job run on local k3d and Acme is discovered; Acme f
 - k3s enforces NetworkPolicy out of the box (kube-router); note in `deployment.md` that a CNI without enforcement silently ignores it.
 - Verify on the host: `kubectl run curl --rm -it --image=curlimages/curl -- curl -m 3 http://ingestion:8085/actuator/health` from a non-gateway pod times out; the app (login, `/demo`, discovery, Acme bootstrap) still works end to end.
 - Out of scope: Postgres/Valkey/Kafka policies (password-protected; revisit in #151).
+- **Done (code):** template + allow lists, chart README, `deployment.md` (k3s note + verify command), `local-test.sh` step "Check NetworkPolicy". k3d run green; removing the ingestion policy makes the probe pod reach ingestion (check is not vacuous). Host verify left for 7b.
 
 **7b. Host setup.** Human steps, following the rewritten `deployment.md` (doubles as its test):
 
