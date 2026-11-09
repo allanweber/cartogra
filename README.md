@@ -32,7 +32,7 @@ Service catalogs go stale because they're updated manually. Cartogra solves this
 | `contract` | 8083 | Contract validation, breaking-change detection |
 | `intelligence` | 8084 | NL queries, health score, anti-pattern analysis |
 | `ingestion` | 8085 | SCM/K8s sync workers, webhook receivers |
-| `frontend` | 3000 | TanStack Start web app |
+| `frontend` | 3006 | TanStack Start web app |
 
 ---
 
@@ -42,16 +42,22 @@ Service catalogs go stale because they're updated manually. Cartogra solves this
 
 ```bash
 # 1. Start the local dev stack
-cd infra/docker-compose && docker compose -f docker-compose.dev.yml up -d
+docker compose -f infra/docker-compose/docker-compose.dev.yml up -d
 
-# 2. Run all services (from repo root)
+# 2. Create local settings and load them into this shell
+cp .env.example .env
+set -a; . ./.env; set +a
+
+# 3. Run all services
 ./gradlew bootRun
 
-# 3. Start the frontend
+# 4. In a second terminal, start the frontend
 cd frontend && pnpm install && pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3006](http://localhost:3006).
+
+Locally, sign-up emails are not sent: the verification code appears in the `./gradlew bootRun` output as `[TEST MODE] Verification OTP`.
 
 See [docs/runbooks/local-development.md](docs/runbooks/local-development.md) for full environment setup, env vars, and troubleshooting.
 
