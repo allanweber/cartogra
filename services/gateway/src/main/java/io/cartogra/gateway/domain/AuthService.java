@@ -2,6 +2,7 @@ package io.cartogra.gateway.domain;
 
 import io.cartogra.common.audit.AuditEvent;
 import io.cartogra.common.audit.AuditEventPort;
+import io.cartogra.common.audit.AuditKind;
 import io.cartogra.gateway.api.dto.AcceptInviteRequest;
 import io.cartogra.gateway.api.dto.InviteUserRequest;
 import io.cartogra.gateway.api.dto.InviteUserResponse;
@@ -349,7 +350,7 @@ public class AuthService {
     }
 
     private void auditUser(UUID tenantId, Actor actor, UUID userId, String action, Map<String, Object> payload) {
-        auditEventPort.record(AuditEvent.of(tenantId, "user", userId, action, actor, payload));
+        auditEventPort.record(AuditEvent.of(tenantId, AuditKind.USER, userId, action, actor, payload));
     }
 
     private long countAdmins(UUID tenantId) {
@@ -387,7 +388,7 @@ public class AuthService {
         if (request.teamId() != null) {
             payload.put("teamId", request.teamId());
         }
-        auditEventPort.record(AuditEvent.of(tenantId, "invitation", saved.id(), "invited", actor, payload));
+        auditEventPort.record(AuditEvent.of(tenantId, AuditKind.INVITATION, saved.id(), "invited", actor, payload));
 
         EMAIL_EXECUTOR.submit(() -> emailSender.sendInvite(request.email(), tenant.name(), inviteToken));
 

@@ -45,6 +45,6 @@ public class AuditEventController {
         var filter = new AuditEventFilter(entityType, entityId,
                 actorKind != null ? ActorKind.fromDbValue(actorKind) : null, from, to);
         return TracedResponse.ok(service.list(tenantId, filter, guest, limit, offset)
-                .map(e -> guest ? AuditEventResponse.from(e).withoutPersonalData() : AuditEventResponse.from(e)));
+                .map(e -> guest ? AuditEventResponse.from(e).forGuest() : AuditEventResponse.from(e)));
     }
 }

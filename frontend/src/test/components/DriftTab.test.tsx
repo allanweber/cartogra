@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DriftTab } from '#/components/DriftTab'
 import { apiFetch, apiMutate } from '#/lib/api'
 
+import { useAuthStore } from '#/stores/useAuthStore'
 import type { Drift } from '#/lib/topology-types'
 
 vi.mock('#/lib/api', () => ({
@@ -63,6 +64,9 @@ function mockDrifts(items: Drift[]) {
 describe('DriftTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    useAuthStore.getState().hydrateWith({
+      id: 'u1', email: '', name: null, authProvider: 'local', tenantId: 't1', roles: ['MEMBER'],
+    })
   })
 
   it('shows an empty state when nothing drifts', async () => {

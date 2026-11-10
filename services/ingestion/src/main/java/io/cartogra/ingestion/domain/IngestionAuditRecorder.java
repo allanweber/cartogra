@@ -2,6 +2,7 @@ package io.cartogra.ingestion.domain;
 
 import io.cartogra.common.audit.AuditEvent;
 import io.cartogra.common.audit.AuditEventPort;
+import io.cartogra.common.audit.AuditKind;
 import io.cartogra.common.audit.AuditPayload;
 import io.cartogra.common.identity.Actor;
 import org.springframework.stereotype.Component;
@@ -32,7 +33,7 @@ public class IngestionAuditRecorder {
     }
 
     public void scmConnectionCreated(Actor actor, ScmConnection connection) {
-        record(actor, connection.tenantId(), "scm_connection", connection.id(), "created",
+        record(actor, connection.tenantId(), AuditKind.SCM_CONNECTION, connection.id(), "created",
                 AuditPayload.fields(objectMapper, connection, SCM_CONNECTION_FIELDS));
     }
 
@@ -42,13 +43,13 @@ public class IngestionAuditRecorder {
             payload = AuditPayload.with(payload, "configChanged", true);
         }
         if (!payload.isEmpty()) {
-            record(actor, after.tenantId(), "scm_connection", after.id(), "updated",
+            record(actor, after.tenantId(), AuditKind.SCM_CONNECTION, after.id(), "updated",
                     AuditPayload.with(payload, "provider", after.provider()));
         }
     }
 
     public void scmConnectionDeleted(Actor actor, ScmConnection connection) {
-        record(actor, connection.tenantId(), "scm_connection", connection.id(), "deleted",
+        record(actor, connection.tenantId(), AuditKind.SCM_CONNECTION, connection.id(), "deleted",
                 AuditPayload.fields(objectMapper, connection, SCM_CONNECTION_FIELDS));
     }
 
@@ -57,12 +58,12 @@ public class IngestionAuditRecorder {
         Map<String, Object> payload = AuditPayload.with(Map.of("provider", provider),
                 succeeded ? "repositoriesSynced" : "error",
                 succeeded ? repositoriesSynced : truncate(error));
-        auditEventPort.record(AuditEvent.of(tenantId, "scm_connection", connectionId,
+        auditEventPort.record(AuditEvent.of(tenantId, AuditKind.SCM_CONNECTION, connectionId,
                 succeeded ? "sync_completed" : "sync_failed", Actor.SYSTEM, payload));
     }
 
     public void clusterCreated(Actor actor, Cluster cluster) {
-        record(actor, cluster.tenantId(), "cluster", cluster.id(), "created",
+        record(actor, cluster.tenantId(), AuditKind.CLUSTER, cluster.id(), "created",
                 AuditPayload.fields(objectMapper, cluster, CLUSTER_FIELDS));
     }
 
@@ -75,19 +76,19 @@ public class IngestionAuditRecorder {
             payload = AuditPayload.with(payload, "credentialsChanged", true);
         }
         if (!payload.isEmpty()) {
-            record(actor, after.tenantId(), "cluster", after.id(), "updated",
+            record(actor, after.tenantId(), AuditKind.CLUSTER, after.id(), "updated",
                     AuditPayload.with(payload, "name", after.name()));
         }
     }
 
     public void clusterDeleted(Actor actor, Cluster cluster) {
-        record(actor, cluster.tenantId(), "cluster", cluster.id(), "deleted",
+        record(actor, cluster.tenantId(), AuditKind.CLUSTER, cluster.id(), "deleted",
                 AuditPayload.fields(objectMapper, cluster, CLUSTER_FIELDS));
     }
 
-    private void record(Actor actor, UUID tenantId, String entityType, UUID entityId, String action,
+    private void record(Actor actor, UUID tenantId, AuditKind kind, UUID entityId, String action,
                         Map<String, Object> payload) {
-        auditEventPort.record(AuditEvent.of(tenantId, entityType, entityId, action, actor, payload));
+        auditEventPort.record(AuditEvent.of(tenantId, kind, entityId, action, actor, payload));
     }
 
     private static String truncate(String error) {

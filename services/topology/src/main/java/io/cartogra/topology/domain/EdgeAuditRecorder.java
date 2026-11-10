@@ -1,5 +1,6 @@
 package io.cartogra.topology.domain;
 
+import io.cartogra.common.audit.AuditKind;
 import io.cartogra.common.identity.Actor;
 import io.cartogra.common.audit.AuditEvent;
 import io.cartogra.common.audit.AuditEventPort;
@@ -23,7 +24,7 @@ public class EdgeAuditRecorder {
         this.graphNodeRepository = graphNodeRepository;
     }
 
-    public void record(UUID tenantId, String entityType, UUID entityId, String action, Actor actor,
+    public void record(UUID tenantId, AuditKind kind, UUID entityId, String action, Actor actor,
                        UUID sourceServiceId, UUID targetServiceId, Map<String, Object> extra) {
         Map<UUID, String> names = new LinkedHashMap<>();
         graphNodeRepository.findByServiceIds(tenantId, List.of(sourceServiceId, targetServiceId), 2)
@@ -34,6 +35,6 @@ public class EdgeAuditRecorder {
         if (names.containsKey(sourceServiceId)) payload.put("sourceName", names.get(sourceServiceId));
         if (names.containsKey(targetServiceId)) payload.put("targetName", names.get(targetServiceId));
         payload.putAll(extra);
-        auditEventPort.record(AuditEvent.of(tenantId, entityType, entityId, action, actor, payload));
+        auditEventPort.record(AuditEvent.of(tenantId, kind, entityId, action, actor, payload));
     }
 }

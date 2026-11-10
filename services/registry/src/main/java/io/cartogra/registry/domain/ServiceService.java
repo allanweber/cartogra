@@ -1,5 +1,6 @@
 package io.cartogra.registry.domain;
 
+import io.cartogra.common.audit.AuditKind;
 import io.cartogra.common.identity.Roles;
 import org.springframework.security.access.prepost.PreAuthorize;
 import io.cartogra.common.api.PageResult;
@@ -49,7 +50,6 @@ public class ServiceService {
 
     private static final Logger log = LoggerFactory.getLogger(ServiceService.class);
 
-    private static final String AUDIT_ENTITY = "service";
     private static final Set<String> AUDIT_KEY_FIELDS = Set.of("name", "teamId", "source", "tier");
     private static final Set<String> AUDIT_FIELDS = Set.of(
             "name", "description", "teamId", "repositoryUrl", "techStack", "tier", "tags", "slaTarget",
@@ -505,7 +505,7 @@ public class ServiceService {
     }
 
     private void auditFields(Service service, String action, Actor actor) {
-        auditEventPort.record(AuditEvent.of(service.tenantId(), AUDIT_ENTITY, service.id(), action, actor,
+        auditEventPort.record(AuditEvent.of(service.tenantId(), AuditKind.SERVICE, service.id(), action, actor,
                 AuditPayload.fields(objectMapper, service, AUDIT_KEY_FIELDS)));
     }
 
@@ -515,7 +515,7 @@ public class ServiceService {
         if (changes.isEmpty()) {
             return;
         }
-        auditEventPort.record(AuditEvent.of(after.tenantId(), AUDIT_ENTITY, after.id(), action, actor,
+        auditEventPort.record(AuditEvent.of(after.tenantId(), AuditKind.SERVICE, after.id(), action, actor,
                 AuditPayload.with(changes, "name", after.name())));
     }
 

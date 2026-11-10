@@ -30,10 +30,10 @@ public record AuditEvent(
     }
 
     /** {@link Actor#SYSTEM}, or an actor with no user id, records a system change; anything else a user change. */
-    public static AuditEvent of(UUID tenantId, String entityType, UUID entityId, String action,
+    public static AuditEvent of(UUID tenantId, AuditKind kind, UUID entityId, String action,
                                 Actor actor, Map<String, Object> payload) {
         boolean system = actor.userId() == null || SystemActors.SYSTEM.equals(actor.userId());
-        return new AuditEvent(UUID.randomUUID(), tenantId, entityType, entityId, action,
+        return new AuditEvent(UUID.randomUUID(), tenantId, kind.entityType(), entityId, action,
                 system ? ActorKind.SYSTEM : ActorKind.USER, actor.userId(), payload, Instant.now());
     }
 }

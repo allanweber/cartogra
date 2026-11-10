@@ -1,5 +1,6 @@
 package io.cartogra.topology.domain;
 
+import io.cartogra.common.audit.AuditKind;
 import io.cartogra.common.identity.Roles;
 import org.springframework.security.access.prepost.PreAuthorize;
 import io.cartogra.common.api.PageResult;
@@ -171,7 +172,7 @@ public class DriftService {
             DependencyDrift fresh = new DependencyDrift(UUID.randomUUID(), tenantId, key.pair().source(),
                     key.pair().target(), key.type(), now, null, null, null);
             if (driftRepository.insertIfAbsent(fresh)) {
-                auditRecorder.record(tenantId, "drift", fresh.id(), "detected", Actor.SYSTEM,
+                auditRecorder.record(tenantId, AuditKind.DRIFT, fresh.id(), "detected", Actor.SYSTEM,
                         fresh.sourceServiceId(), fresh.targetServiceId(), Map.of("type", fresh.type().toDbValue()));
                 meterRegistry.counter("cartogra.drift.detected", "type", key.type().toDbValue()).increment();
             }
@@ -179,7 +180,7 @@ public class DriftService {
     }
 
     private void audit(DependencyDrift drift, String action, Actor actor, DriftResolution resolution) {
-        auditRecorder.record(drift.tenantId(), "drift", drift.id(), action, actor,
+        auditRecorder.record(drift.tenantId(), AuditKind.DRIFT, drift.id(), action, actor,
                 drift.sourceServiceId(), drift.targetServiceId(),
                 Map.of("type", drift.type().toDbValue(), "resolution", resolution.toDbValue()));
     }

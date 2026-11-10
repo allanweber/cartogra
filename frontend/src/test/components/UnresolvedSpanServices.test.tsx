@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { UnresolvedSpanServices } from '#/components/UnresolvedSpanServices'
 import { ApiError, apiFetch, apiMutate } from '#/lib/api'
 
+import { useAuthStore } from '#/stores/useAuthStore'
 import type { UnresolvedSpanService } from '#/lib/topology-types'
 
 vi.mock('#/lib/api', () => ({
@@ -68,7 +69,12 @@ function renderList() {
 }
 
 describe('UnresolvedSpanServices', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    useAuthStore.getState().hydrateWith({
+      id: 'u1', email: '', name: null, authProvider: 'local', tenantId: 't1', roles: ['MEMBER'],
+    })
+  })
 
   it('lists names with seen count and last seen', async () => {
     mockList([item({}), item({ id: 'u2', name: 'legacy-ldap', seenCount: 37 })])

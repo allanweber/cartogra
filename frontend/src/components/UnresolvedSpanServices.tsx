@@ -10,7 +10,7 @@ import { UNRESOLVED_SPAN_SERVICES_KEY, useUnresolvedSpanServices } from '#/hooks
 import { ApiError, apiMutate } from '#/lib/api'
 
 import type { UnresolvedSpanService, UnresolvedSpanServicesPage } from '#/lib/topology-types'
-import { ReadOnlyGuard } from '#/components/ReadOnlyGuard'
+import { PermissionGuard } from '#/components/PermissionGuard'
 
 export const UNRESOLVED_PAGE_SIZE = 20
 const MAX_LIMIT = 200
@@ -94,7 +94,7 @@ export function UnresolvedSpanServices() {
                 </span>
               </div>
               <div className="mt-2 flex gap-2">
-                <ReadOnlyGuard>
+                <PermissionGuard action="service.create">
                   <Button
                     size="sm"
                     variant="outline"
@@ -103,8 +103,8 @@ export function UnresolvedSpanServices() {
                   >
                     Create service
                   </Button>
-                </ReadOnlyGuard>
-                <ReadOnlyGuard>
+                </PermissionGuard>
+                <PermissionGuard action="unresolved.dismiss">
                   <Button
                     size="sm"
                     variant="ghost"
@@ -113,7 +113,7 @@ export function UnresolvedSpanServices() {
                   >
                     Dismiss
                   </Button>
-                </ReadOnlyGuard>
+                </PermissionGuard>
               </div>
             </li>
           ))}

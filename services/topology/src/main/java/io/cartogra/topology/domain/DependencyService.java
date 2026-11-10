@@ -1,5 +1,6 @@
 package io.cartogra.topology.domain;
 
+import io.cartogra.common.audit.AuditKind;
 import io.cartogra.common.identity.Roles;
 import org.springframework.security.access.prepost.PreAuthorize;
 import io.cartogra.topology.api.dto.DeclareDependencyRequest;
@@ -203,7 +204,7 @@ public class DependencyService {
     }
 
     private void audit(Dependency dependency, String action, Actor actor, Map<String, Object> extra) {
-        auditRecorder.record(dependency.tenantId(), "dependency", dependency.id(), action, actor,
+        auditRecorder.record(dependency.tenantId(), AuditKind.DEPENDENCY, dependency.id(), action, actor,
                 dependency.sourceServiceId(), dependency.targetServiceId(), extra);
     }
 
