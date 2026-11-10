@@ -10,3 +10,8 @@ commits = [
   "b556da783d264bfab22f8d348927899a7ff81eb5",
   "c5527946a9e1f563761e606bebc3048b9ed55452",
 ]
+
+[[allowlists]]
+description = "Sealed Secrets ciphertext (encryptedData, decryptable only by the in-cluster controller): a YAML key with an Ag-prefixed base64 value of 500+ chars. Matched on the value shape, not the path, so a plaintext Secret in infra/k8s/sealed still fails (gitleaks 8.28 treats paths + regexes as OR)."
+regexTarget = "line"
+regexes = ['''^\s+[A-Z0-9_]+: Ag[A-Za-z0-9+/=]{500,}$''']
