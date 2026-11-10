@@ -13,20 +13,20 @@ public record AuditEventFilter(
         @Nullable ActorKind actorKind,
         @Nullable Instant from,
         @Nullable Instant to,
-        List<String> excludedEntityTypes,
+        @Nullable List<String> guestVisibleEntityTypes,
         boolean redactActorEmails
 ) {
     public AuditEventFilter(@Nullable List<String> entityTypes, @Nullable UUID entityId,
             @Nullable ActorKind actorKind, @Nullable Instant from, @Nullable Instant to) {
-        this(entityTypes, entityId, actorKind, from, to, List.of(), false);
+        this(entityTypes, entityId, actorKind, from, to, null, false);
     }
 
     public static AuditEventFilter empty() {
         return new AuditEventFilter(null, null, null, null, null);
     }
 
-    /** Drops the given entity types and never falls back to an actor's email for their display name. */
-    public AuditEventFilter redacted(List<String> hiddenEntityTypes) {
-        return new AuditEventFilter(entityTypes, entityId, actorKind, from, to, List.copyOf(hiddenEntityTypes), true);
+    /** Keeps only the given entity types and never falls back to an actor's email for their display name. */
+    public AuditEventFilter forGuest(List<String> visibleEntityTypes) {
+        return new AuditEventFilter(entityTypes, entityId, actorKind, from, to, List.copyOf(visibleEntityTypes), true);
     }
 }

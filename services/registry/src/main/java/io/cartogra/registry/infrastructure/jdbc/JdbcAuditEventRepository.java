@@ -54,8 +54,8 @@ public class JdbcAuditEventRepository implements AuditEventRepository {
         if (filter.entityTypes() != null && !filter.entityTypes().isEmpty()) {
             sql.append(" AND ").append(alias).append("entity_type IN (:entityTypes)");
         }
-        if (!filter.excludedEntityTypes().isEmpty()) {
-            sql.append(" AND ").append(alias).append("entity_type NOT IN (:excludedEntityTypes)");
+        if (filter.guestVisibleEntityTypes() != null) {
+            sql.append(" AND ").append(alias).append("entity_type IN (:guestVisibleEntityTypes)");
         }
         if (filter.entityId() != null) sql.append(" AND ").append(alias).append("entity_id = :entityId");
         if (filter.actorKind() != null) sql.append(" AND ").append(alias).append("actor_kind = :actorKind");
@@ -68,7 +68,7 @@ public class JdbcAuditEventRepository implements AuditEventRepository {
         return new MapSqlParameterSource()
                 .addValue("tenantId", tenantId)
                 .addValue("entityTypes", filter.entityTypes())
-                .addValue("excludedEntityTypes", filter.excludedEntityTypes())
+                .addValue("guestVisibleEntityTypes", filter.guestVisibleEntityTypes())
                 .addValue("entityId", filter.entityId())
                 .addValue("actorKind", filter.actorKind() != null ? filter.actorKind().toDbValue() : null)
                 .addValue("from", filter.from() != null ? Timestamp.from(filter.from()) : null)

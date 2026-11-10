@@ -14,7 +14,7 @@ import { cn } from '#/lib/utils'
 
 import type { ServiceHealth } from '#/lib/registry-types'
 import type { DependencyDirectionEntry, ServiceDependencies } from '#/lib/topology-types'
-import { ReadOnlyGuard } from '#/components/ReadOnlyGuard'
+import { PermissionGuard } from '#/components/PermissionGuard'
 
 type Direction = 'upstream' | 'downstream'
 
@@ -27,13 +27,13 @@ function healthDotClass(health: ServiceHealth): string {
 function DependencyRow({
   entry,
   direction,
-  canManage,
+  ownerTeamId,
   onEdit,
   onRemove,
 }: {
   entry: DependencyDirectionEntry
   direction: Direction
-  canManage: boolean
+  ownerTeamId: string | null
   onEdit: (entry: DependencyDirectionEntry, direction: Direction) => void
   onRemove: (entry: DependencyDirectionEntry) => void
 }) {
@@ -54,22 +54,18 @@ function DependencyRow({
         <span className="rounded-md border border-border bg-background px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {entry.protocol}
         </span>
-        {canManage && (
-          <>
-            <ReadOnlyGuard>
-              <Button variant="ghost" size="icon-sm" onClick={() => onEdit(entry, direction)}>
-                <Pencil className="size-3.5" />
-                <span className="sr-only">Edit dependency on {entry.name}</span>
-              </Button>
-            </ReadOnlyGuard>
-            <ReadOnlyGuard>
-              <Button variant="ghost" size="icon-sm" onClick={() => onRemove(entry)}>
-                <Trash2 className="size-3.5" />
-                <span className="sr-only">Remove dependency on {entry.name}</span>
-              </Button>
-            </ReadOnlyGuard>
-          </>
-        )}
+        <PermissionGuard action="service.edit" context={{ teamId: ownerTeamId }}>
+          <Button variant="ghost" size="icon-sm" onClick={() => onEdit(entry, direction)}>
+            <Pencil className="size-3.5" />
+            <span className="sr-only">Edit dependency on {entry.name}</span>
+          </Button>
+        </PermissionGuard>
+        <PermissionGuard action="service.edit" context={{ teamId: ownerTeamId }}>
+          <Button variant="ghost" size="icon-sm" onClick={() => onRemove(entry)}>
+            <Trash2 className="size-3.5" />
+            <span className="sr-only">Remove dependency on {entry.name}</span>
+          </Button>
+        </PermissionGuard>
       </div>
     </li>
   )
@@ -79,7 +75,7 @@ function DependencyGroup({
   title,
   entries,
   direction,
-  canManage,
+  ownerTeamId,
   emptyMessage,
   onEdit,
   onRemove,
@@ -87,7 +83,7 @@ function DependencyGroup({
   title: string
   entries: DependencyDirectionEntry[]
   direction: Direction
-  canManage: boolean
+  ownerTeamId: string | null
   emptyMessage: string
   onEdit: (entry: DependencyDirectionEntry, direction: Direction) => void
   onRemove: (entry: DependencyDirectionEntry) => void
@@ -106,7 +102,7 @@ function DependencyGroup({
               key={entry.id}
               entry={entry}
               direction={direction}
-              canManage={canManage}
+              ownerTeamId={ownerTeamId}
               onEdit={onEdit}
               onRemove={onRemove}
             />
@@ -117,7 +113,7 @@ function DependencyGroup({
   )
 }
 
-export function DependenciesList({ serviceId, canManage }: { serviceId: string; canManage: boolean }) {
+export function DependenciesList({ serviceId, ownerTeamId }: { serviceId: string; ownerTeamId: string | null }) {
   const queryClient = useQueryClient()
   const [dialogState, setDialogState] = useState<
     { mode: 'add' } | { mode: 'edit'; entry: DependencyDirectionEntry; direction: Direction }
@@ -147,21 +143,19 @@ export function DependenciesList({ serviceId, canManage }: { serviceId: string; 
             View in graph
           </Link>
         </Button>
-        {canManage && (
-          <ReadOnlyGuard>
-            <Button
-              size="sm"
-              onClick={() => {
-                setDialogState({ mode: 'add' })
-                setDialogOpen(true)
-              }}
-              className="gap-1.5"
-            >
-              <Plus className="size-3.5" />
-              Add dependency
-            </Button>
-          </ReadOnlyGuard>
-        )}
+        <PermissionGuard action="service.edit" context={{ teamId: ownerTeamId }}>
+          <Button
+            size="sm"
+            onClick={() => {
+              setDialogState({ mode: 'add' })
+              setDialogOpen(true)
+            }}
+            className="gap-1.5"
+          >
+            <Plus className="size-3.5" />
+            Add dependency
+          </Button>
+        </PermissionGuard>
       </div>
 
       {isLoading && (
@@ -193,7 +187,7 @@ export function DependenciesList({ serviceId, canManage }: { serviceId: string; 
             title="Downstream — this service depends on"
             entries={data.downstream}
             direction="downstream"
-            canManage={canManage}
+            ownerTeamId={ownerTeamId}
             emptyMessage="This service doesn't declare any downstream dependencies."
             onEdit={(entry, direction) => {
               setDialogState({ mode: 'edit', entry, direction })
@@ -205,7 +199,7 @@ export function DependenciesList({ serviceId, canManage }: { serviceId: string; 
             title="Upstream — depends on this service"
             entries={data.upstream}
             direction="upstream"
-            canManage={canManage}
+            ownerTeamId={ownerTeamId}
             emptyMessage="No other service declares a dependency on this one."
             onEdit={(entry, direction) => {
               setDialogState({ mode: 'edit', entry, direction })

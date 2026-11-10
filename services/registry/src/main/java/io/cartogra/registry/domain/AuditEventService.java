@@ -3,11 +3,11 @@ package io.cartogra.registry.domain;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.common.audit.AuditEvent;
 import io.cartogra.common.audit.AuditEventPort;
+import io.cartogra.common.audit.AuditKind;
 import io.cartogra.registry.repository.AuditEventFilter;
 import io.cartogra.registry.repository.AuditEventRepository;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -23,12 +23,9 @@ public class AuditEventService {
         this.auditEventPort = auditEventPort;
     }
 
-    /** Settings events whose payloads carry emails, OIDC client ids or cluster endpoints. */
-    static final List<String> GUEST_HIDDEN_ENTITY_TYPES = List.of("user", "invitation", "oidc_config", "cluster");
-
     /** A guest gets the tenant's activity without settings events and without anyone's email address. */
     public PageResult<AuditEntry> list(UUID tenantId, AuditEventFilter requested, boolean guest, int limit, int offset) {
-        AuditEventFilter filter = guest ? requested.redacted(GUEST_HIDDEN_ENTITY_TYPES) : requested;
+        AuditEventFilter filter = guest ? requested.forGuest(AuditKind.guestVisibleEntityTypes()) : requested;
         int boundedLimit = Math.clamp(limit, 1, MAX_LIMIT);
         int boundedOffset = Math.max(offset, 0);
         return PageResult.of(repository.findAll(tenantId, filter, boundedLimit, boundedOffset),

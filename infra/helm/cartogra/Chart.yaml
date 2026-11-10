@@ -16,3 +16,4 @@ dependencies:
   - { name: postgres, version: 0.1.0 }
   - { name: kafka, version: 0.1.0 }
   - { name: valkey, version: 0.1.0 }
+  - { name: alerting, version: 0.1.0, condition: alerting.enabled }

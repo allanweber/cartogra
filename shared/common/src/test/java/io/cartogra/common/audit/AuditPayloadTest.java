@@ -44,7 +44,7 @@ class AuditPayloadTest {
 
     @Test
     void systemActorClearsActorId() {
-        var event = AuditEvent.of(java.util.UUID.randomUUID(), "service", java.util.UUID.randomUUID(),
+        var event = AuditEvent.of(java.util.UUID.randomUUID(), AuditKind.SERVICE, java.util.UUID.randomUUID(),
                 "created", io.cartogra.common.identity.Actor.SYSTEM, Map.of());
 
         assertThat(event.actorKind()).isEqualTo(ActorKind.SYSTEM);

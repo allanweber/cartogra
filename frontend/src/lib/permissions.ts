@@ -8,7 +8,15 @@ import type { AuthUser } from '#/stores/useAuthStore'
 /** `readOnly`: render the control, disabled (guest demo). `deny`: don't render it. */
 export type Permission = 'allow' | 'readOnly' | 'deny'
 
-export type Action = 'service.edit' | 'team.create' | 'team.manage' | 'settings.view'
+/** Mirrors the backend: every write needs `Roles.CAN_WRITE`; the `.edit`/`.manage` ones also need team membership. */
+export type Action =
+  | 'service.create'
+  | 'service.edit'
+  | 'team.create'
+  | 'team.manage'
+  | 'drift.resolve'
+  | 'unresolved.dismiss'
+  | 'settings.view'
 
 export const READ_ONLY_MESSAGE = 'Read-only demo — changes are disabled'
 
@@ -34,11 +42,13 @@ export function resolvePermission(subject: Subject, action: Action, ctx: Permiss
     case 'settings.view':
       return 'allow'
     case 'service.edit':
-      return allowIf(isMemberOf)
-    case 'team.create':
-      return allowIf(canWrite)
     case 'team.manage':
       return allowIf(canWrite && isMemberOf)
+    case 'service.create':
+    case 'team.create':
+    case 'drift.resolve':
+    case 'unresolved.dismiss':
+      return allowIf(canWrite)
   }
 }
 
@@ -63,7 +73,7 @@ export function canUser(user: AuthUser | null | undefined, action: Action, ctx?:
   return resolvePermission({ roles: user?.roles ?? [], myTeamIds: [] }, action, ctx)
 }
 
-/** True when the session may look but not change anything (guest demo). */
+/** True for the guest demo session: drives the session-wide banner, not individual controls (use `PermissionGuard`). */
 export function useIsReadOnly(): boolean {
   return useAuthStore((s) => isGuestUser(s.user))
 }

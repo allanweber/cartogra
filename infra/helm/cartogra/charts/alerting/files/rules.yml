@@ -1,0 +1,75 @@
+groups:
+  - name: guest-demo
+    rules:
+      # The per-IP limit allows 5 mints a minute, so this needs many addresses or a very busy demo.
+      - alert: GuestMintSpike
+        expr: sum(increase(cartogra_guest_mints_total{outcome="issued"}[15m])) > 100
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 100 guest sessions created in 15 minutes
+          runbook: docs/runbooks/incident-response.md, section 4 (turn guest mode off)
+      - alert: GuestMintsRateLimited
+        expr: sum(increase(cartogra_guest_mints_total{outcome="rate_limited"}[10m])) > 50
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 50 guest mints rate limited in 10 minutes
+          runbook: docs/runbooks/incident-response.md, section 4 (turn guest mode off)
+      # Without this, a broken metrics path looks the same as a quiet demo.
+      - alert: GuestMintsMetricMissing
+        expr: absent(cartogra_guest_mints_total)
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Prometheus has no guest mint metric, so the other guest alerts cannot fire
+          runbook: Check the gateway and collector pods, then the alerting pod's Prometheus logs
+  # Resize signals (docs/runbooks/deployment.md section 2). Series come from the kubelet job.
+  - name: capacity
+    rules:
+      - alert: NodeMemoryHigh
+        expr: max(container_memory_working_set_bytes{id="/"}) / max(machine_memory_bytes) > 0.85
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Node memory working set above 85% for 15 minutes
+          runbook: docs/runbooks/deployment.md, section 2 (resize the VM)
+      - alert: NodeCpuHigh
+        expr: sum(rate(container_cpu_usage_seconds_total{id="/"}[5m])) / max(machine_cpu_cores) > 0.8
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: Node CPU above 80% of all cores for 30 minutes
+          runbook: docs/runbooks/deployment.md, section 2 (resize the VM)
+      - alert: ContainerMemoryNearLimit
+        expr: |
+          max by (namespace, pod, container) (container_memory_working_set_bytes{container!=""})
+            / max by (namespace, pod, container) (container_spec_memory_limit_bytes{container!=""} > 0)
+            > 0.9
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.namespace }}/{{ $labels.pod }} {{ $labels.container }} above 90% of its memory limit for 15 minutes"
+          runbook: Raise that container's memory limit in the chart values; resize the VM if the node has no room
+      # cAdvisor's OOM counter stays 0 on k3s (checked on the demo host), so restarts are the signal: a restart
+      # gives the container a new start time. Covers OOM kills and crash loops; a rollout makes new pods instead.
+      - alert: ContainerRestarted
+        expr: changes(max by (namespace, pod, container) (container_start_time_seconds{container!=""})[30m:1m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.namespace }}/{{ $labels.pod }} {{ $labels.container }} restarted in the last 30 minutes"
+          runbook: "kubectl -n <namespace> describe pod <pod>: OOMKilled means raise its memory limit, or resize the VM if the node has no room"
+      # Without this, a missing ClusterRole looks the same as a node with headroom.
+      - alert: NodeMetricsMissing
+        expr: absent(machine_memory_bytes)
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Prometheus has no kubelet metrics, so the capacity alerts cannot fire
+          runbook: Apply infra/k8s/cluster-setup.yaml (ClusterRole cartogra-node-metrics), then check the kubelet target in the Prometheus UI

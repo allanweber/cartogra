@@ -417,7 +417,7 @@ function ReadOnlyBanner() {
       className="flex shrink-0 items-center justify-center gap-2 border-b border-warning/30 bg-warning-subtle px-4 py-1.5 text-xs font-medium text-foreground"
     >
       <span>{READ_ONLY_MESSAGE}.</span>
-      <Link to="/login" className="text-primary underline-offset-3 hover:underline">
+      <Link to="/login" className="font-semibold underline decoration-foreground/40 underline-offset-3 hover:decoration-foreground">
         Sign in
       </Link>
     </div>
@@ -443,7 +443,7 @@ function UserMenu({ collapsed }: { collapsed: boolean }) {
     } catch {
       // proceed even if the server call fails
     }
-    queryClient.removeQueries({ queryKey: ['session'] })
+    queryClient.clear()
     clearSessionCookie()
     clearAuth()
     navigate({ to: '/login' })

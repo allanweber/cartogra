@@ -2,8 +2,8 @@
 
 The only running environment is the **public demo**: one Hetzner ARM VM with single-node k3s
 ([ADR-0030](../adr/0030-demo-on-single-node-k3s.md)). This runbook builds it from nothing and doubles as the
-rebuild procedure. Charts: `infra/helm/cartogra` (the product) and `infra/helm/acme` (Acme Fintech, the
-simulated customer the demo shows).
+rebuild procedure (section 11). Charts: `infra/helm/cartogra` (the product) and `infra/helm/acme` (Acme Fintech,
+the simulated customer the demo shows).
 
 ```
 push to main ─▶ images.yml: ghcr.io/<owner>/cartogra-<image>:<sha> (amd64 + arm64)
@@ -15,52 +15,180 @@ manual       ─▶ deploy.yml: helm upgrade cartogra + acme at <sha> ─▶ acm
 | VM | Hetzner CAX21 (4 vCPU ARM, 8GB), Ubuntu 24.04. Resize to CAX31 only on measured memory pressure. |
 | Ingress / TLS | Traefik (bundled with k3s) + cert-manager Let's Encrypt, host `cartogra.dev` |
 | Secrets | Sealed Secrets; encrypted `SealedSecret`s committed under `infra/k8s/sealed/` |
-| Namespaces | `cartogra` (product), `acme-system` (Acme release: reader ServiceAccount, bootstrap Job), `acme-fintech` (21 fake services, tenant-labelled) |
+| Namespaces | `cartogra` (product), `acme-system` (Acme release: reader ServiceAccount, bootstrap Job), `acme-fintech` (21 fake services, tenant-labelled), `ci-deploy` (CI identity) |
+| CI access | `deployer` ServiceAccount (`infra/k8s/cluster-setup.yaml`), admin of the three app namespaces only |
+| Alerts | `alerting` pod (Prometheus + Alertmanager), email through Resend: guest abuse, plus node/container capacity from the kubelet |
 | Backups | `postgres-backup` CronJob, nightly `pg_dump -Fc` to Hetzner Object Storage |
 
-## 1. Prerequisites
+**What has been run.** Sections 1–8 on the real host (first build 2026-11-10, through the wizard below), including
+Let's Encrypt, GHCR, `deploy.yml`, the S3 backup and alert email delivery. On a local k3d cluster only: the database
+restore (section 10), restoring the Sealed Secrets key, and the CI identity's denials. **Never run on the host:**
+rollback (section 9), restore (section 10) and rebuild (section 11).
 
-`hcloud`, `kubectl`, `helm` >= 3.14, `kubeseal`, `gh`, Node >= 24 + pnpm (GitHub mirror), and DNS for
-`cartogra.dev`.
+**Wizard.** `bash infra/k8s/demo-host-wizard.sh` walks sections 1–8 interactively: it opens each console page, saves
+values to `~/.config/cartogra-demo/demo.env` (outside the repo), and skips finished stages on a re-run. It retries
+CAX21 creation across fsn1, nbg1 and hel1 every 5 minutes while the type is out of stock.
+
+## 1. Before you start
+
+### Tools
+
+`hcloud`, `kubectl`, `helm` >= 3.14, [`kubeseal`](https://github.com/bitnami/sealed-secrets#kubeseal), `gh`, `aws`,
+`git`, `jq`, `openssl`, `dig`, Node >= 24 + pnpm. `kubeseal` ships as a release tarball (pick your OS and arch):
+
+```bash
+V=0.41.2   # same as the controller: sealed-secrets chart 2.22.0 ships 0.41.2
+curl -fsSLO https://github.com/bitnami-labs/sealed-secrets/releases/download/v$V/kubeseal-$V-linux-amd64.tar.gz
+tar -xzf kubeseal-$V-linux-amd64.tar.gz kubeseal && sudo install -m 755 kubeseal /usr/local/bin/kubeseal
+```
+
+### Code on `main`
+
+`images.yml` and `deploy.yml` must exist on the default branch to be dispatchable. Both can then run on any branch
+with `--ref <branch>`: images are tagged with that commit's SHA and `deploy.yml` installs the charts from it. The first
+build ran from the unmerged phase branch this way; after the merge, use `main`.
+
+```bash
+gh workflow list --repo allanweber/cartogra | grep -E 'Images|Deploy demo'   # both listed
+```
+
+### Accounts and values
+
+Do these first; section 4 seals the results. Keep every value in your password manager.
+
+**Hetzner Cloud.** Console → your project → Security → API tokens → generate a read/write token, then:
+
+```bash
+hcloud context create cartogra
+hcloud ssh-key create --name cartogra-demo --public-key-from-file ~/.ssh/id_ed25519.pub
+```
+
+**Hetzner Object Storage.** Console → Security → S3 credentials → generate; note the access and secret keys. Then
+create the bucket with a 7-day expiry. Bucket names are global: if this one is taken, change `backup.s3.bucket` in
+`values-demo.yaml` and section 10.
+
+```bash
+export AWS_ACCESS_KEY_ID=<access key> AWS_SECRET_ACCESS_KEY=<secret key> AWS_DEFAULT_REGION=fsn1
+S3=https://fsn1.your-objectstorage.com
+aws s3 mb s3://cartogra-demo-backups --endpoint-url $S3
+aws s3api put-bucket-lifecycle-configuration --bucket cartogra-demo-backups --endpoint-url $S3 \
+  --lifecycle-configuration '{"Rules":[{"ID":"expire","Status":"Enabled","Filter":{"Prefix":"postgres/"},"Expiration":{"Days":7}}]}'
+```
+
+**Resend.** [resend.com/domains](https://resend.com/domains) → add `cartogra.dev`, create the DNS records it lists in
+the domain's DNS zone (Cloudflare for `cartogra.dev`), wait for **Verified**. Then API Keys → create one with **Sending access**, limited to that domain. This is
+`RESEND_API_KEY`; alerts come from `alerts@cartogra.dev`.
+
+**GitHub mirror.** The demo scans a public GitHub copy of Acme's 21 repos (the seed keeps Azure DevOps for local
+runs).
+
+1. Create a public organization at [github.com/organizations/new](https://github.com/organizations/new).
+2. Push the repos:
+
+   ```bash
+   gh auth login && gh auth setup-git
+   cd seed/acme-fintech && pnpm install
+   ACME_GITHUB_ORG=<org> pnpm acme repos --provider github
+   cd ../..
+   ```
+
+3. Create a [fine-grained token](https://github.com/settings/personal-access-tokens/new): resource owner = that
+   org, repository access **Public repositories (read-only)**, no other permissions. This is `ACME_GITHUB_TOKEN`.
+   Never reuse a personal token here: the demo tenant is publicly readable.
+
+The Acme tenant holds only fabricated data (ADR-0019 §9): the bootstrap admin is `admin@acme-fintech.invalid`
+(reserved TLD, no mail delivered; recover a lost password by re-sealing `BOOTSTRAP_ADMIN_PASSWORD` and resetting the
+hash in the database), and nobody is invited into the tenant.
 
 ## 2. VM and k3s
 
 ```bash
-hcloud server create --name cartogra-demo --type cax21 --image ubuntu-24.04 --location fsn1 --ssh-key <key>
 hcloud firewall create --name cartogra-demo
 hcloud firewall add-rule cartogra-demo --direction in --protocol tcp --port 22   --source-ips <your-ip>/32
 hcloud firewall add-rule cartogra-demo --direction in --protocol tcp --port 80   --source-ips 0.0.0.0/0 --source-ips ::/0
 hcloud firewall add-rule cartogra-demo --direction in --protocol tcp --port 443  --source-ips 0.0.0.0/0 --source-ips ::/0
 hcloud firewall add-rule cartogra-demo --direction in --protocol tcp --port 6443 --source-ips 0.0.0.0/0 --source-ips ::/0
-hcloud firewall apply-to-resource cartogra-demo --type server --server cartogra-demo
+hcloud server create --name cartogra-demo --type cax21 --image ubuntu-24.04 --location fsn1 \
+  --ssh-key cartogra-demo --firewall cartogra-demo
+IP=$(hcloud server ip cartogra-demo); echo "$IP"
 ```
 
-6443 is open to the world because GitHub-hosted runners have no fixed IPs; the API server still requires
-client credentials. Close it (self-hosted runner or a tunnel) if that ever matters.
+CAX (ARM) is often out of stock ("Limited availability" in the console). Try `nbg1` and `hel1` too, or let the wizard
+retry every 5 minutes. Don't fall back to Regular Performance (CPX) without a decision: it costs about 3× as much.
+The images are multi-arch, so an x86 type works if one is ever chosen.
 
-Point `cartogra.dev` (A/AAAA) at the server, then:
+6443 is open to the world because GitHub-hosted runners have no fixed IPs; the API server still requires
+credentials. Close it (self-hosted runner or a tunnel) if that ever matters.
+
+At your DNS provider, point the `cartogra.dev` A record at `$IP`. On Cloudflare (registrar and DNS for
+`cartogra.dev`): DNS → Records → A, name `@`, **Proxy status: DNS only** (grey cloud). Proxied, the name resolves to
+Cloudflare's IPs, the check below never passes, and port 6443 can't go through the proxy. Let's Encrypt needs it, so wait until this prints
+the IP:
 
 ```bash
-ssh root@<ip> 'curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--tls-san <ip> --tls-san cartogra.dev" sh -'
-scp root@<ip>:/etc/rancher/k3s/k3s.yaml ~/.kube/cartogra-demo && sed -i "s/127.0.0.1/<ip>/" ~/.kube/cartogra-demo
+dig +short cartogra.dev
+```
+
+Install k3s and fetch the admin kubeconfig. It stays on your machine, never in CI:
+
+```bash
+ssh -o StrictHostKeyChecking=accept-new root@$IP \
+  "curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC='--tls-san $IP --tls-san cartogra.dev' sh -"
+mkdir -p ~/.kube
+scp root@$IP:/etc/rancher/k3s/k3s.yaml ~/.kube/cartogra-demo
+sed -i "s/127.0.0.1/$IP/" ~/.kube/cartogra-demo && chmod 600 ~/.kube/cartogra-demo
 export KUBECONFIG=~/.kube/cartogra-demo
 kubectl get nodes   # Ready
 ```
 
-k3s ships Traefik (ingress class `traefik`) and the `local-path` storage class the StatefulSets use.
+k3s ships Traefik (ingress class `traefik`) and the `local-path` storage class the StatefulSets use. It also enforces
+NetworkPolicy (kube-router), which keeps the backends' trusted tenant headers away from arbitrary pods (allow lists in
+the chart README's Exposure section).
+Don't install it with `--disable-network-policy`, and don't swap in a CNI that doesn't enforce NetworkPolicy: the
+policies would be ignored without any error.
+
+**Resize.** Resize to CAX31 only when an alert asks for it: `NodeMemoryHigh` (> 85% for 15 minutes), `NodeCpuHigh`
+(> 80% of all cores for 30 minutes), or repeated `ContainerRestarted` with `OOMKilled` in `kubectl describe pod` and no room left to raise limits. A Hetzner resize
+needs the server powered off, so expect a few minutes of downtime. Keep the disk size, so you can resize back down.
+
+```bash
+hcloud server shutdown cartogra-demo
+hcloud server change-type --keep-disk cartogra-demo cax31
+hcloud server poweron cartogra-demo
+```
 
 ## 3. Cluster add-ons
 
+Namespaces and the CI identity. Pod Security `baseline` is enforced on the app namespaces, so nothing there can run
+privileged or mount the host:
+
 ```bash
-helm repo add jetstack https://charts.jetstack.io
-helm repo add sealed-secrets https://bitnami-labs.github.io/sealed-secrets
-helm upgrade --install cert-manager jetstack/cert-manager -n cert-manager --create-namespace --set crds.enabled=true
-helm upgrade --install sealed-secrets sealed-secrets/sealed-secrets -n kube-system --set fullnameOverride=sealed-secrets-controller
+kubectl apply -f infra/k8s/cluster-setup.yaml
 ```
 
-ClusterIssuer (`kubectl apply -f` this):
+**Rebuilding only:** restore the Sealed Secrets key now, *before* installing the controller, so it adopts the key
+instead of generating a new one:
 
-```yaml
+```bash
+kubectl apply -f sealed-secrets-key.yaml
+```
+
+Add-ons:
+
+```bash
+helm repo add jetstack https://charts.jetstack.io
+helm repo add sealed-secrets https://bitnami.github.io/sealed-secrets
+helm repo update
+helm upgrade --install cert-manager jetstack/cert-manager --version v1.21.3 -n cert-manager --create-namespace \
+  --set crds.enabled=true --wait --timeout 5m
+helm upgrade --install sealed-secrets sealed-secrets/sealed-secrets --version 2.22.0 -n kube-system \
+  --set fullnameOverride=sealed-secrets-controller --wait --timeout 5m
+```
+
+ClusterIssuer (put your own email in):
+
+```bash
+kubectl apply -f - <<'YAML'
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
@@ -75,78 +203,170 @@ spec:
       - http01:
           ingress:
             ingressClassName: traefik
+YAML
 ```
 
-### Sealed Secrets key
+**First build only:** back up the Sealed Secrets private key, put it in your password manager and delete the file.
+It decrypts every committed `SealedSecret`; never commit it, and never paste it into a chat, ticket or log. If it leaks
+before section 4, replacing it is free: delete it and restart the controller, which generates a new one, then back that
+up. After section 4, every secret would have to be resealed and rotated.
 
-The controller's private key decrypts every committed `SealedSecret`; keep a copy in your password manager,
-never in git.
+```bash
+kubectl -n kube-system delete secret -l sealedsecrets.bitnami.com/sealed-secrets-key
+kubectl -n kube-system rollout restart deploy/sealed-secrets-controller
+```
 
-- **First build**: back it up right away:
-  `kubectl -n kube-system get secret -l sealedsecrets.bitnami.com/sealed-secrets-key -o yaml > sealed-secrets-key.yaml`
-- **Rebuild**: restore it *before* applying any SealedSecret, then restart the controller:
-  `kubectl apply -f sealed-secrets-key.yaml && kubectl -n kube-system delete pod -l app.kubernetes.io/name=sealed-secrets`
+Backup:
+
+```bash
+kubectl -n kube-system get secret -l sealedsecrets.bitnami.com/sealed-secrets-key -o yaml > sealed-secrets-key.yaml
+```
 
 ## 4. Secrets
 
-The charts create no Secrets; each is mounted as files. Seal them (never commit the plain YAML):
+The charts create no Secrets; each is mounted as files. `kubeseal` encrypts them for this cluster's controller, and
+only the encrypted files are committed.
 
 | Namespace | Secret | Keys |
 |---|---|---|
 | `cartogra` | `gateway-secrets` | `DB_USERNAME` `DB_PASSWORD` `JWT_SECRET` `RESEND_API_KEY` `GOOGLE_CLIENT_SECRET` `GITHUB_CLIENT_SECRET` `BOOTSTRAP_ADMIN_PASSWORD` |
 | `cartogra` | `registry-secrets`, `topology-secrets` | `DB_USERNAME` `DB_PASSWORD` |
-| `cartogra` | `ingestion-secrets` | `DB_USERNAME` `DB_PASSWORD` `CLUSTER_CREDENTIALS_KEY` (`openssl rand -base64 32`) |
+| `cartogra` | `ingestion-secrets` | `DB_USERNAME` `DB_PASSWORD` `CLUSTER_CREDENTIALS_KEY` |
 | `cartogra` | `postgres-secrets` | `DB_USERNAME` `DB_PASSWORD` (same values) |
-| `cartogra` | `backup-secrets` | `S3_ACCESS_KEY` `S3_SECRET_KEY` (Hetzner Object Storage) |
-| `acme-system` | `acme-bootstrap` | `ACME_PASSWORD` (= `BOOTSTRAP_ADMIN_PASSWORD`), `ACME_GITHUB_TOKEN` (read-only, public repos) |
+| `cartogra` | `backup-secrets` | `S3_ACCESS_KEY` `S3_SECRET_KEY` |
+| `acme-system` | `acme-bootstrap` | `ACME_PASSWORD` (= `BOOTSTRAP_ADMIN_PASSWORD`), `ACME_GITHUB_TOKEN` |
+
+Generate the values. Save all of them in your password manager; only the ciphertext is recoverable from git.
+`CLUSTER_CREDENTIALS_KEY` must stay the same for as long as the database lives, because it decrypts stored credentials.
 
 ```bash
-kubectl create namespace cartogra --dry-run=client -o yaml | kubectl apply -f -
-kubectl create namespace acme-system --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n cartogra create secret generic registry-secrets --dry-run=client -o yaml \
-  --from-literal=DB_USERNAME=cartogra --from-literal=DB_PASSWORD=<pw> \
-  | kubeseal --format yaml > infra/k8s/sealed/registry-secrets.yaml
-# same pattern for every row above, then:
+DB_PASSWORD=$(openssl rand -hex 24)
+JWT_SECRET=$(openssl rand -base64 48)
+ADMIN_PASSWORD=$(openssl rand -hex 16)
+CLUSTER_CREDENTIALS_KEY=$(openssl rand -base64 32)
+read -rsp 'RESEND_API_KEY: ' RESEND_API_KEY; echo
+read -rsp 'ACME_GITHUB_TOKEN: ' ACME_GITHUB_TOKEN; echo
+read -rsp 'S3_ACCESS_KEY: ' S3_ACCESS_KEY; echo
+read -rsp 'S3_SECRET_KEY: ' S3_SECRET_KEY; echo
+```
+
+Seal and apply. OAuth login is off in the demo, so its two secrets only need a placeholder:
+
+```bash
+mkdir -p infra/k8s/sealed
+seal() {
+  ns=$1; name=$2; shift 2
+  kubectl -n "$ns" create secret generic "$name" --dry-run=client -o yaml "$@" \
+    | kubeseal --format yaml > "infra/k8s/sealed/$name.yaml"
+}
+DB=(--from-literal=DB_USERNAME=cartogra --from-literal=DB_PASSWORD="$DB_PASSWORD")
+seal cartogra gateway-secrets "${DB[@]}" \
+  --from-literal=JWT_SECRET="$JWT_SECRET" \
+  --from-literal=RESEND_API_KEY="$RESEND_API_KEY" \
+  --from-literal=GOOGLE_CLIENT_SECRET=unset \
+  --from-literal=GITHUB_CLIENT_SECRET=unset \
+  --from-literal=BOOTSTRAP_ADMIN_PASSWORD="$ADMIN_PASSWORD"
+seal cartogra registry-secrets "${DB[@]}"
+seal cartogra topology-secrets "${DB[@]}"
+seal cartogra postgres-secrets "${DB[@]}"
+seal cartogra ingestion-secrets "${DB[@]}" --from-literal=CLUSTER_CREDENTIALS_KEY="$CLUSTER_CREDENTIALS_KEY"
+seal cartogra backup-secrets --from-literal=S3_ACCESS_KEY="$S3_ACCESS_KEY" --from-literal=S3_SECRET_KEY="$S3_SECRET_KEY"
+seal acme-system acme-bootstrap --from-literal=ACME_PASSWORD="$ADMIN_PASSWORD" --from-literal=ACME_GITHUB_TOKEN="$ACME_GITHUB_TOKEN"
+
 kubectl apply -f infra/k8s/sealed/
+kubectl -n cartogra get secrets      # 6 secrets, created by the controller
+kubectl -n acme-system get secrets   # acme-bootstrap
 ```
 
-Rotating a value: re-seal, commit, apply, then `kubectl -n cartogra rollout restart deploy/<service>`.
-`BOOTSTRAP_ADMIN_PASSWORD` is only used when the admin is first created; rotate it in the UI as well.
-
-## 5. Images and CI access
-
-- `images.yml` pushes all six images on every push to `main`, tagged with the commit SHA. Make the
-  `cartogra-*` packages **public** (GitHub → Packages → settings) so k3s pulls without credentials.
-- GitHub environment **`demo`**: secret `KUBECONFIG` (contents of `~/.kube/cartogra-demo`), variable
-  `ACME_GITHUB_ORG` (section 6). Add yourself as required reviewer.
-
-## 6. Acme GitHub mirror
-
-The demo scans a public GitHub copy of Acme's 21 repos (the seed keeps Azure DevOps for local runs):
+Commit the encrypted files. On an open phase branch (the first build), commit them there. Otherwise `main` is
+protected, so through a PR:
 
 ```bash
-gh auth login && gh auth setup-git
-cd seed/acme-fintech && ACME_GITHUB_ORG=<org> pnpm acme repos --provider github
+git switch -c chore/demo-sealed-secrets
+git add infra/k8s/sealed/ && git commit -m "chore(infra): sealed secrets for the demo host"
+git push -u origin HEAD && gh pr create --fill && gh pr merge --squash --auto
 ```
 
-`ACME_GITHUB_TOKEN` is a fine-grained token, resource owner = that org, repository access **Public repositories
-(read-only)**, no other permissions. Never reuse a personal token here: the demo tenant is publicly readable.
+Rotating one value: seal it into the existing file, commit, apply, restart what reads it.
 
-The Acme tenant is publicly readable, so it holds only fabricated data (ADR-0019 §9): the bootstrap admin is
-`admin@acme-fintech.invalid` (reserved TLD, no mail delivered; recover a lost password by re-sealing
-`BOOTSTRAP_ADMIN_PASSWORD` and resetting the hash in the database), and nobody is invited into the tenant.
+```bash
+printf '%s' '<new value>' | kubectl -n cartogra create secret generic gateway-secrets --dry-run=client -o yaml \
+    --from-file=JWT_SECRET=/dev/stdin \
+  | kubeseal --format yaml --merge-into infra/k8s/sealed/gateway-secrets.yaml
+kubectl apply -f infra/k8s/sealed/gateway-secrets.yaml
+kubectl -n cartogra rollout restart deploy/gateway
+```
+
+`RESEND_API_KEY` is also read by `deploy/alerting`. `BOOTSTRAP_ADMIN_PASSWORD` is only used when the admin is first
+created; rotate it in the UI as well.
+
+## 5. Images
+
+`images.yml` pushes all six images on every push to `main`, tagged with the commit SHA. Find the latest:
+
+```bash
+SHA=$(gh run list --repo allanweber/cartogra --workflow images.yml --branch main --status success --limit 1 \
+  --json headSha --jq '.[0].headSha'); echo "$SHA"
+```
+
+k3s pulls without credentials, so the packages must be public. Packages only appear after the first push, and
+visibility can only be changed in the UI: for each of `gateway`, `registry`, `topology`, `ingestion`, `frontend` and
+`acme`, open `https://github.com/users/allanweber/packages/container/cartogra-<image>/settings` → **Change
+visibility** → Public. Check without credentials:
+
+```bash
+docker logout ghcr.io
+docker manifest inspect ghcr.io/allanweber/cartogra-gateway:$SHA > /dev/null && echo public
+```
+
+## 6. CI access
+
+`deploy.yml` uses a kubeconfig for the `deployer` ServiceAccount, not the k3s admin one. If this GitHub secret leaks,
+the holder controls the app namespaces and can read their Secrets, but cannot reach `kube-system` (the Sealed Secrets
+key), other namespaces or the node.
+
+```bash
+TOKEN=$(kubectl -n ci-deploy get secret deployer-token -o jsonpath='{.data.token}' | base64 -d)
+kubectl -n ci-deploy get secret deployer-token -o jsonpath='{.data.ca\.crt}' | base64 -d > /tmp/demo-ca.crt
+CI=$(mktemp)
+kubectl --kubeconfig "$CI" config set-cluster demo --server="https://$IP:6443" \
+  --certificate-authority=/tmp/demo-ca.crt --embed-certs=true
+kubectl --kubeconfig "$CI" config set-credentials deployer --token="$TOKEN"
+kubectl --kubeconfig "$CI" config set-context demo --cluster=demo --user=deployer --namespace=cartogra
+kubectl --kubeconfig "$CI" config use-context demo
+kubectl --kubeconfig "$CI" auth can-i list pods -n cartogra        # yes
+kubectl --kubeconfig "$CI" auth can-i get secrets -n kube-system   # no
+
+gh api -X PUT repos/allanweber/cartogra/environments/demo --input - <<JSON
+{"reviewers":[{"type":"User","id":$(gh api user --jq .id)}]}
+JSON
+gh secret set KUBECONFIG --repo allanweber/cartogra --env demo < "$CI"
+gh variable set ACME_GITHUB_ORG --repo allanweber/cartogra --env demo --body <org>
+gh variable set ALERT_EMAIL --repo allanweber/cartogra --env demo --body <who receives alerts>
+rm -f "$CI" /tmp/demo-ca.crt
+```
+
+To rotate the token: `kubectl -n ci-deploy delete secret deployer-token`, re-apply `cluster-setup.yaml`, repeat the
+commands above.
 
 ## 7. Install / upgrade
 
 To test chart changes before deploying, run them on a local cluster first: see [Test on a local cluster](../../infra/helm/README.md).
 
-Normally **Actions → Deploy demo → Run workflow** (optionally with a SHA). By hand, the same commands:
+Through CI, then approve the run as the `demo` reviewer:
 
 ```bash
-SHA=<commit sha whose images were pushed>
-helm upgrade --install cartogra infra/helm/cartogra -n cartogra --create-namespace \
-  -f infra/helm/cartogra/values-demo.yaml --set global.imageTag=$SHA --wait --timeout 15m
-helm upgrade --install acme infra/helm/acme -n acme-system --create-namespace \
+gh workflow run deploy.yml --repo allanweber/cartogra --ref main -f sha=$SHA
+gh run watch --repo allanweber/cartogra "$(gh run list --repo allanweber/cartogra --workflow deploy.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
+```
+
+By hand, the same commands:
+
+```bash
+helm upgrade --install cartogra infra/helm/cartogra -n cartogra \
+  -f infra/helm/cartogra/values-demo.yaml --set global.imageTag=$SHA \
+  --set alerting.email.to=<alert email> --wait --timeout 15m
+helm upgrade --install acme infra/helm/acme -n acme-system \
   --set image.tag=$SHA --set bootstrap.githubOrg=<org> --wait --timeout 20m
 ```
 
@@ -154,9 +374,9 @@ What happens on a fresh install:
 
 1. Registry runs Flyway; the gateway's tenant bootstrap (`BOOTSTRAP_*` in `values-demo.yaml`) creates the Acme
    tenant (fixed UUID, business plan) and its verified admin once the tables exist (`tenant_bootstrap.created`
-   in the gateway log).
-2. The `acme` release creates the `acme-fintech` namespace (labelled `cartogra.io/tenant-id`), the 21 fake
-   services, and the read-only `cartogra-reader` ServiceAccount with its token.
+   in the gateway log). Registry, topology and ingestion may restart once while Postgres comes up.
+2. The `acme` release adopts the `acme-fintech` namespace and creates the 21 fake services and the read-only
+   `cartogra-reader` ServiceAccount with its token.
 3. The `acme-bootstrap` hook Job logs in, registers this cluster (`https://kubernetes.default.svc` + reader
    token), connects the GitHub mirror and triggers a sync, then runs `acme load` (teams, owners, tiers, declared
    edges) once discovery has produced all 21 services. It re-runs idempotently on every upgrade.
@@ -164,15 +384,48 @@ What happens on a fresh install:
 ## 8. Verify
 
 ```bash
-kubectl -n cartogra get pods           # all 1/1
-kubectl -n acme-fintech get pods       # 21 Running
-kubectl -n acme-system get jobs        # acme-bootstrap Complete (deleted on success; check events if gone)
+kubectl -n cartogra get pods                         # all Ready (alerting is 2/2)
+kubectl -n acme-fintech get pods --no-headers | grep -c Running   # 21
+kubectl -n acme-system get jobs                      # empty: the bootstrap Job is deleted on success
+kubectl -n cartogra get certificate cartogra-tls     # READY True, within a few minutes
 curl -s https://cartogra.dev/api/auth/features | jq .data   # signupEnabled false, guestEnabled true
 ```
 
+NetworkPolicy (expect `gateway 200`, then `ingestion blocked` after a 3s timeout):
+
+```bash
+kubectl -n cartogra run np-check --rm -i --restart=Never --image=curlimages/curl:8.10.1 -- \
+  sh -c 'curl -sm3 -o /dev/null -w "gateway %{http_code}\n" http://gateway:8080/actuator/health/live;
+         curl -sm3 -o /dev/null -w "ingestion %{http_code}\n" http://ingestion:8085/ || echo "ingestion blocked"'
+```
+
 In a browser, `https://cartogra.dev/demo` lands on the dashboard, the graph shows Acme with observed edges
-within about a minute, and write buttons are disabled. Uptime check: `https://cartogra.dev/api/auth/features`
-(actuator endpoints are not routed through the ingress).
+within about a minute, and write buttons are disabled.
+
+Alert email (once per host; the only check that delivery through Resend works):
+
+```bash
+kubectl -n cartogra port-forward deploy/alerting 9093 &
+curl -s -XPOST localhost:9093/api/v2/alerts -H 'Content-Type: application/json' \
+  -d '[{"labels":{"alertname":"DeliveryTest"},"annotations":{"summary":"Alert email test"}}]'
+kill %1
+```
+
+The email arrives within a minute. If not: `kubectl -n cartogra logs deploy/alerting -c alertmanager`.
+
+Capacity metrics (the resize alerts need them; `NodeMetricsMissing` fires after 15 minutes without them):
+
+```bash
+kubectl -n cartogra exec deploy/alerting -c prometheus -- \
+  wget -qO- 'http://localhost:9090/api/v1/query?query=machine_memory_bytes' | grep -q '"value"' && echo kubelet ok
+```
+
+Backup (once per host): run section 10's manual job and confirm the file with `aws s3 ls`.
+
+Uptime check: in any external monitor (for example UptimeRobot's free tier), add an HTTPS keyword monitor on
+`https://cartogra.dev/api/auth/features`, keyword `guestEnabled`, 5-minute interval, alerting to your email. Actuator
+endpoints are not routed through the ingress. Use the keyword: while the gateway is down, `/api` paths can fall through
+to the frontend and return HTML with status 200.
 
 ## 9. Rollback
 
@@ -181,40 +434,69 @@ helm -n cartogra history cartogra
 helm -n cartogra rollback cartogra <revision> --wait
 ```
 
-Or re-run **Deploy demo** with an older SHA. Flyway migrations are forward-only and additive, so older pods
-run against a newer schema; never roll the schema back by hand.
+Prefer re-running **Deploy demo** with the older SHA: it moves `cartogra` and `acme` together. A `helm rollback`
+of `cartogra` alone leaves `acme` on the newer SHA; roll back `acme` (`-n acme-system`) too, and note its
+bootstrap Job is a `post-upgrade` hook that runs again (it is idempotent). Flyway migrations are forward-only and
+additive, so older pods run against a newer schema; never roll the schema back by hand.
+
+**Stuck release.** A cancelled or timed-out deploy can leave a release in `pending-upgrade`, and every later
+deploy then fails with `another operation (install/upgrade/rollback) is in progress`:
+
+```bash
+helm -n cartogra status cartogra | grep STATUS      # pending-upgrade / pending-rollback
+helm -n cartogra history cartogra                   # last `deployed` revision
+helm -n cartogra rollback cartogra <that revision> --wait
+```
+
+Same for `acme` in `acme-system`. Then re-run **Deploy demo**.
 
 ## 10. Backups and restore
 
 `postgres-backup` (`values-demo.yaml` → `backup`) dumps the database nightly at 02:00 UTC to
-`s3://cartogra-demo-backups/postgres/cartogra-<timestamp>.dump`. Retention is a bucket lifecycle rule (expire
-after 7 days), set once in the Hetzner console. Run one now:
+`s3://cartogra-demo-backups/postgres/cartogra-<timestamp>.dump`. The bucket's lifecycle rule (section 1) expires files
+after 7 days. Run one now:
 
 ```bash
 kubectl -n cartogra create job --from=cronjob/postgres-backup backup-manual
 kubectl -n cartogra logs -f job/backup-manual -c upload
+aws s3 ls s3://cartogra-demo-backups/postgres/ --endpoint-url https://fsn1.your-objectstorage.com
+kubectl -n cartogra delete job backup-manual
 ```
 
-Restore (services scaled down):
+Restore (needs the `AWS_*` variables from section 1). Scaling down also stops the alerting pod until the last step:
 
 ```bash
 kubectl -n cartogra scale deploy --all --replicas=0
-aws s3 cp s3://cartogra-demo-backups/postgres/<file>.dump . --endpoint-url https://fsn1.your-objectstorage.com
-kubectl -n cartogra cp <file>.dump postgres-0:/tmp/restore.dump
+aws s3 cp s3://cartogra-demo-backups/postgres/<file>.dump restore.dump --endpoint-url https://fsn1.your-objectstorage.com
+kubectl -n cartogra cp restore.dump postgres-0:/tmp/restore.dump
 kubectl -n cartogra exec postgres-0 -- sh -c 'pg_restore --clean --if-exists -U "$(cat /etc/cartogra/secrets/DB_USERNAME)" -d cartogra /tmp/restore.dump'
+kubectl -n cartogra exec postgres-0 -- rm /tmp/restore.dump
+rm restore.dump
 kubectl -n cartogra scale deploy --all --replicas=1
 ```
 
+The restored database only works with the same `CLUSTER_CREDENTIALS_KEY` it was written with.
+
 ## 11. Rebuild from scratch
 
-Section 2 → 3 (restore the Sealed Secrets key) → `kubectl apply -f infra/k8s/sealed/` → 7 → 8. Restore data
-(section 10) only if the database must survive; otherwise the bootstrap recreates Acme.
+You need `sealed-secrets-key.yaml` from your password manager. The accounts in section 1 still exist, so skip them.
+
+1. Section 2: new VM and k3s. Update the DNS record if the IP changed.
+2. Section 3, including the "rebuilding only" key restore. Skip the first-build backup.
+3. `kubectl apply -f infra/k8s/sealed/` instead of section 4. Check the Secrets exist.
+4. Section 6: the cluster and its token are new, so the `KUBECONFIG` GitHub secret must be replaced. The variables are
+   unchanged.
+5. Section 7, then section 8.
+6. Restore data (section 10) only if the database must survive; otherwise the bootstrap recreates Acme.
+
+If the key is lost: run section 4 again with new values (restore then needs the old `CLUSTER_CREDENTIALS_KEY`, so
+keep that one).
 
 ---
 
 ## 12. SCM provider credential setup
 
-SCM provider credentials are stored in the `ingestion.scm_connections` table as JSONB (`config` column). They are **never** stored in environment variables on the ingestion service. SCM connection management lives in the **ingestion** service (gateway route `/api/v1/scm-connections`), not registry.
+SCM provider credentials are stored in the `ingestion.scm_connections` table as JSONB (`config` column). They are **never** stored in environment variables on the ingestion service. SCM connection management lives in the **ingestion** service (gateway route `/api/v1/ingestion/scm-connections`), not registry.
 
 ### GitHub — Personal Access Token
 
@@ -222,7 +504,7 @@ SCM provider credentials are stored in the `ingestion.scm_connections` table as 
 2. Insert a connection record via the Ingestion API (gateway-authenticated):
 
 ```http
-POST /api/v1/scm-connections
+POST /api/v1/ingestion/scm-connections
 Authorization: Bearer <token>
 X-Tenant-Id: <tenantId>
 Content-Type: application/json
@@ -236,7 +518,7 @@ Content-Type: application/json
 }
 ```
 
-**Security:** The PAT is stored encrypted-at-rest via Postgres RLS + column encryption policy. It is never logged by the ingestion service.
+**Security:** Ingestion encrypts the token with AES-GCM using `CLUSTER_CREDENTIALS_KEY` before storing it, and never logs it.
 
 ### Azure DevOps — Personal Access Token
 
@@ -244,7 +526,7 @@ Content-Type: application/json
 2. Insert a connection record:
 
 ```http
-POST /api/v1/scm-connections
+POST /api/v1/ingestion/scm-connections
 Authorization: Bearer <token>
 X-Tenant-Id: <tenantId>
 Content-Type: application/json
@@ -258,27 +540,7 @@ Content-Type: application/json
 ### Triggering a manual sync (smoke test)
 
 ```bash
-# Publish a sync command directly to Kafka (requires kafkacat / kcat)
-kcat -b localhost:9092 -t cartogra.registry.sync.command -P << 'EOF'
-{
-  "event_id": "00000000-0000-0000-0000-000000000001",
-  "event_type": "sync.command",
-  "entity_id": "<connectionId>",
-  "tenant_id": "<tenantId>",
-  "timestamp": "2026-05-18T00:00:00Z",
-  "version": 1,
-  "correlation_id": "00000000-0000-0000-0000-000000000002",
-  "payload": {
-    "connectionId": "<connectionId>",
-    "tenantId": "<tenantId>",
-    "providerType": "github",
-    "connectionConfig": {
-      "token": "<PAT>",
-      "org": "your-github-org"
-    }
-  }
-}
-EOF
+curl -s -X POST https://cartogra.dev/api/v1/ingestion/scm-connections/<connectionId>/sync -H "Authorization: Bearer $TOKEN" | jq .
 ```
 
 Monitor the `sync_jobs` table to observe the PENDING → RUNNING → COMPLETED transition:
@@ -316,7 +578,7 @@ WHERE sync_scheduler = true AND deleted_at IS NULL
   AND (next_sync_at IS NULL OR next_sync_at <= now());
 ```
 
-To pause scheduling for a connection: `PUT /api/v1/scm-connections/{id}` with `{"syncScheduler": false}` (clears `next_sync_at`).
+To pause scheduling for a connection: `PUT /api/v1/ingestion/scm-connections/{id}` with `{"syncScheduler": false}` (clears `next_sync_at`).
 
 ## 14. Webhook setup
 
@@ -359,7 +621,7 @@ Observed dependency edges ([ADR-0029](../adr/0029-observed-edges-from-otel-spans
 | Environment | Collector | Spans → Kafka | Observed edges |
 |-------------|-----------|---------------|----------------|
 | Local (`docker-compose.dev.yml`) | yes, single tenant via `CARTOGRA_TENANT_ID` | yes | works |
-| `docker-compose.yml` (deployable) | yes, `infra/helm/cartogra/charts/collector/files/otel-collector.yml` (spans only, no Tempo/Loki/Prometheus), OTLP/HTTP on `127.0.0.1:4318` | yes | works, single tenant via `CARTOGRA_TENANT_ID` |
+| `docker-compose.yml` (deployable) | yes, `infra/helm/cartogra/charts/collector/files/otel-collector.yml` (spans plus a metrics port, no Tempo/Loki), OTLP/HTTP on `127.0.0.1:4318` | yes | works, single tenant via `CARTOGRA_TENANT_ID` |
 | Kubernetes (Helm `collector` subchart) | yes, same config file; ClusterIP only, never behind ingress | yes | works, single tenant via `collector.env.CARTOGRA_TENANT_ID` |
 
 Topology is safe to deploy anyway: the `OtelSpanWorker` simply idles when `cartogra.observability.spans` receives nothing.
@@ -371,39 +633,11 @@ Topology is safe to deploy anyway: the `OtelSpanWorker` simply idles when `carto
 - **Rollback:** rolling Topology back is safe. The new tables and column are ignored by old code. Do not drop them on rollback; the `OtelSpanWorker` simply stops.
 - **Metrics to watch after enabling:** `cartogra_spans_quarantined_total` (must stay ~0 once the tenant stamp is correct), `cartogra_spans_edges_total`, consumer lag on `cartogra.observability.spans`.
 
-### Enabling the span feed (before 4.4 / 5.9 land)
+### Span feed security
 
-Do this only on a private network. The tenant attribute is unauthenticated: anyone who can reach the collector (4317/4318) or the topic can attribute spans to **any tenant UUID that has live nodes**. Never expose those ports through an Ingress or LoadBalancer, and restrict the topic with Kafka ACLs to the collector (write) and Topology (read).
+The tenant attribute is unauthenticated until roadmap 5.9: anyone who can reach the collector (4317/4318) or the topic can attribute spans to **any tenant UUID that has live nodes**. Keep those ports off the ingress. The collector serves exactly one tenant (`collector.env.CARTOGRA_TENANT_ID`), so this only suits a single-tenant environment. Check it with `kubectl -n cartogra logs deploy/collector`.
 
-The config is the same as `infra/docker-compose/otel-collector.yml`. For the Kubernetes collector, add to `configmap.yml`:
-
-```yaml
-processors:
-  resource/tenant:
-    attributes:
-      - { action: insert, key: cartogra.tenant.id, value: "${env:CARTOGRA_TENANT_ID}" }
-  filter/no-self:
-    error_mode: ignore
-    traces:
-      span:
-        - 'resource.attributes["service.name"] == "topology"'
-exporters:
-  kafka/spans:
-    brokers: [<kafka-bootstrap>:9092]
-    traces:
-      topic: cartogra.observability.spans
-      encoding: otlp_json
-service:
-  pipelines:
-    traces/spans:
-      receivers: [otlp]
-      processors: [memory_limiter, resource, resource/tenant, filter/no-self, batch]
-      exporters: [kafka/spans]
-```
-
-and set `CARTOGRA_TENANT_ID` (a non-secret UUID) on the collector Deployment. Keep the existing `traces` pipeline for Tempo. The collector serves exactly one tenant, so this only suits a single-tenant environment. After applying, `kubectl -n infra rollout restart deployment/otel-collector` and check `kubectl -n infra logs deployment/otel-collector` for startup errors.
-
-### Verification after enabling
+### Verification
 
 1. Collector logs show no Kafka exporter errors.
 2. Message count on `cartogra.observability.spans` grows (Kafka UI or `kafka-console-consumer`).

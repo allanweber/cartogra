@@ -1,9 +1,10 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 
 import { AuthFormShell } from '#/components/AuthFormShell'
+import { Alert, AlertDescription } from '#/components/ui/alert'
 import { ApiError, startGuestSession } from '#/lib/api'
 
 export const Route = createFileRoute('/demo')({
@@ -23,26 +24,34 @@ function demoErrorMessage(err: unknown): string {
 function DemoPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [error, setError] = useState<{ message: string; traceId: string | null } | null>(null)
+  const guestSession = useMutation({
+    mutationFn: startGuestSession,
+    onSuccess: () => {
+      queryClient.clear()
+      navigate({ to: '/dashboard' })
+    },
+  })
+  const { mutate } = guestSession
 
   useEffect(() => {
-    startGuestSession()
-      .then(() => {
-        queryClient.clear()
-        navigate({ to: '/dashboard' })
-      })
-      .catch((err: unknown) => {
-        setError({ message: demoErrorMessage(err), traceId: err instanceof ApiError ? err.traceId : null })
-      })
-  }, [])
+    mutate()
+  }, [mutate])
+
+  const error = guestSession.error
 
   return (
     <AuthFormShell>
       <div className="text-center">
         {error ? (
           <>
-            <p className="text-sm font-medium text-destructive">{error.message}</p>
-            {error.traceId && <p className="mt-1 font-mono text-xs text-muted-foreground">(trace: {error.traceId})</p>}
+            <Alert variant="destructive">
+              <AlertDescription>
+                {demoErrorMessage(error)}
+                {error instanceof ApiError && error.traceId && (
+                  <span className="mt-1 block font-mono text-xs">(trace: {error.traceId})</span>
+                )}
+              </AlertDescription>
+            </Alert>
             <Link to="/login" className="mt-4 inline-block text-sm font-medium text-primary underline-offset-3 hover:underline">
               Back to sign in
             </Link>

@@ -40,10 +40,10 @@ vi.mock('#/hooks/useAuthFeatures', () => ({
   useAuthFeatures: () => ({ data: mockFeatures }),
 }))
 
-function renderPage() {
+function renderPage(client = new QueryClient()) {
   const Page = (Route as any).component
   return render(
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={client}>
       <Page />
     </QueryClientProvider>,
   )
@@ -137,6 +137,18 @@ describe('LoginPage', () => {
     fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: 'secret123' } })
     fireEvent.submit(screen.getByRole('button', { name: /^sign in$/i }).closest('form')!)
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith({ to: '/dashboard' }))
+  })
+
+  it('drops every cached query from the previous session (e.g. the demo tenant) on login', async () => {
+    vi.mocked(apiMutate).mockResolvedValue({ accessToken: MOCK_TOKEN, expiresIn: 3600, refreshToken: 'rt' })
+    const client = new QueryClient()
+    client.setQueryData(['services', 'all'], { items: [{ name: 'demo-tenant-service' }] })
+    renderPage(client)
+    fireEvent.change(screen.getByLabelText(/^email$/i), { target: { value: 'a@b.com' } })
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: 'secret123' } })
+    fireEvent.submit(screen.getByRole('button', { name: /^sign in$/i }).closest('form')!)
+    await waitFor(() => expect(navigateMock).toHaveBeenCalled())
+    expect(client.getQueryData(['services', 'all'])).toBeUndefined()
   })
 
   it('shows OAuth error banner when ?error=oauth_failed', () => {

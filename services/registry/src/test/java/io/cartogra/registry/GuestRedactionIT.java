@@ -90,6 +90,36 @@ class GuestRedactionIT {
         assertThat(send("GET", audit, null, "GUEST")).contains("Sandbox Admin").contains("member_added");
     }
 
+    @Test
+    void guestAuditFeedIsAnAllowlistNotADenylist() throws Exception {
+        insertAudit("future_kind", "created", "{\"name\":\"x\"}");
+        insertAudit("scm_connection", "sync_failed",
+                "{\"provider\":\"github\",\"error\":\"401 from https://ghe.internal.invalid/api\"}");
+        insertAudit("team", "updated",
+                "{\"name\":\"payments\",\"invitedEmail\":\"x@sandbox.invalid\","
+                        + "\"changes\":{\"name\":{\"from\":\"a\",\"to\":\"payments\"},"
+                        + "\"ownerEmail\":{\"from\":\"a@sandbox.invalid\",\"to\":\"b@sandbox.invalid\"}}}");
+
+        String guest = send("GET", "/audit-events?limit=200", null, "GUEST");
+
+        assertThat(guest).doesNotContain("future_kind")
+                .doesNotContain("ghe.internal.invalid")
+                .doesNotContain("@sandbox.invalid")
+                .contains("sync_failed").contains("\"provider\":\"github\"")
+                .contains("\"to\":\"payments\"");
+        assertThat(send("GET", "/audit-events?limit=200", null, "VIEWER"))
+                .contains("future_kind").contains("ghe.internal.invalid").contains("ownerEmail");
+    }
+
+    private void insertAudit(String entityType, String action, String payload) {
+        jdbc.update("""
+                INSERT INTO audit_events (event_id, tenant_id, entity_type, entity_id, action, actor_kind, payload, occurred_at)
+                VALUES (gen_random_uuid(), :tenantId, :entityType, gen_random_uuid(), :action, 'system',
+                        CAST(:payload AS jsonb), now())
+                """, new MapSqlParameterSource("tenantId", tenantId).addValue("entityType", entityType)
+                .addValue("action", action).addValue("payload", payload));
+    }
+
     private String send(String method, String path, String body, String roles) throws Exception {
         var builder = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + "/api/v1/registry" + path))

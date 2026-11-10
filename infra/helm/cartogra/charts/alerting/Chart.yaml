@@ -1,0 +1,6 @@
+apiVersion: v2
+name: alerting
+description: "Prometheus and Alertmanager in one pod: alert rules on Cartogra's own counters, delivered by email."
+type: application
+version: 0.1.0
+appVersion: "3.15.1"

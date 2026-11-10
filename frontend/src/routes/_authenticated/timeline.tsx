@@ -54,7 +54,8 @@ function TimelinePage() {
     filter === 'all' ? null : AUDIT_CATEGORY_ENTITY_TYPES[filter],
   )
 
-  const events = data?.pages.flatMap((page) => page.items) ?? []
+  // Offset paging over a log that grows between pages can return an event twice.
+  const events = [...new Map((data?.pages.flatMap((page) => page.items) ?? []).map((e) => [e.eventId, e])).values()]
   const total = data?.pages[0]?.total ?? 0
   const normalizedQuery = query.trim().toLowerCase()
   const visible = normalizedQuery
@@ -118,7 +119,7 @@ function TimelinePage() {
           </Alert>
         )}
 
-        {!isLoading && !error && (
+        {!isLoading && (!error || events.length > 0) && (
           <div className="relative ml-3 space-y-0">
             {visible.map((event, idx) => {
               const category = auditCategory(event.entityType) ?? 'service'
@@ -165,7 +166,11 @@ function TimelinePage() {
             {visible.length === 0 && (
               <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16 text-center">
                 <p className="text-sm text-muted-foreground">
-                  {events.length === 0 ? 'No activity recorded yet.' : 'No events match this search.'}
+                  {events.length === 0
+                    ? 'No activity recorded yet.'
+                    : hasNextPage
+                      ? `No match in the ${events.length} loaded of ${total} events. Load more to search further.`
+                      : 'No events match this search.'}
                 </p>
               </div>
             )}

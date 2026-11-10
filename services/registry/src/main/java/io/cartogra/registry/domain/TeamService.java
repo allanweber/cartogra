@@ -1,5 +1,6 @@
 package io.cartogra.registry.domain;
 
+import io.cartogra.common.audit.AuditKind;
 import io.cartogra.common.identity.Roles;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.common.audit.AuditEvent;
@@ -161,7 +162,7 @@ public class TeamService {
     }
 
     private void audit(Team team, String action, Actor actor, Map<String, Object> payload) {
-        auditEventPort.record(AuditEvent.of(team.tenantId(), "team", team.id(), action, actor, payload));
+        auditEventPort.record(AuditEvent.of(team.tenantId(), AuditKind.TEAM, team.id(), action, actor, payload));
     }
 
     private void requireAdminOrTeamMember(UUID tenantId, UUID teamId, Actor actor) {

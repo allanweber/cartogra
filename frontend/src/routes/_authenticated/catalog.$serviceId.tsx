@@ -24,8 +24,7 @@ import { cn } from '#/lib/utils'
 
 import type { PageResult, RegistryService, RegistryTeam, ServiceHealth } from '#/lib/registry-types'
 import type { Cycles, Spofs } from '#/lib/topology-types'
-import { ReadOnlyGuard } from '#/components/ReadOnlyGuard'
-import { useCan } from '#/lib/permissions'
+import { PermissionGuard } from '#/components/PermissionGuard'
 
 type TabId = 'overview' | 'dependencies' | 'contracts' | 'activity'
 
@@ -121,7 +120,6 @@ function ServiceDetailPage() {
     activity: null,
   })
   const [editOpen, setEditOpen] = useState(false)
-  const can = useCan()
 
   const { data: service, isLoading, error } = useQuery({
     queryKey: ['service', serviceId],
@@ -191,21 +189,18 @@ function ServiceDetailPage() {
   const riskScore = computeRiskScore(service)
   const insights = buildInsights(service, riskScore)
   const lastDeploy = service.lastDeployedAt ? relativeTime(service.lastDeployedAt) : null
-  const canEdit = can('service.edit', { teamId: service.teamId }) !== 'deny'
 
   return (
     <AppLayout
       title={service.name}
       eyebrow="Service Catalog"
       actions={
-        canEdit && (
-          <ReadOnlyGuard>
-            <Button size="sm" onClick={() => setEditOpen(true)} className="gap-1.5">
-              <Pencil className="size-3.5" />
-              Edit
-            </Button>
-          </ReadOnlyGuard>
-        )
+        <PermissionGuard action="service.edit" context={{ teamId: service.teamId }}>
+          <Button size="sm" onClick={() => setEditOpen(true)} className="gap-1.5">
+            <Pencil className="size-3.5" />
+            Edit
+          </Button>
+        </PermissionGuard>
       }
     >
       <div className="space-y-4">
@@ -486,7 +481,7 @@ function ServiceDetailPage() {
             {/* Dependencies */}
             {tab === 'dependencies' && (
               <div id="panel-dependencies" role="tabpanel" aria-labelledby="tab-dependencies">
-                <DependenciesList serviceId={serviceId} canManage={canEdit} />
+                <DependenciesList serviceId={serviceId} ownerTeamId={service.teamId} />
               </div>
             )}
 

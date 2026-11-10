@@ -17,7 +17,7 @@ import { normalizeHealth } from '#/lib/registry-types'
 import { cn } from '#/lib/utils'
 
 import type { PageResult, RegistryService, RegistryTeam, ServiceHealth } from '#/lib/registry-types'
-import { ReadOnlyGuard } from '#/components/ReadOnlyGuard'
+import { PermissionGuard } from '#/components/PermissionGuard'
 import { useCan } from '#/lib/permissions'
 
 export const Route = createFileRoute('/_authenticated/teams')({
@@ -133,12 +133,12 @@ function TeamsPage() {
       description="Team ownership, health summary, and risk exposure"
       actions={
         canCreateTeam && (
-          <ReadOnlyGuard>
+          <PermissionGuard action="team.create">
             <Button onClick={() => setCreateOpen(true)} size="sm" className="gap-1.5">
               <Plus className="size-3.5" aria-hidden="true" />
               Add team
             </Button>
-          </ReadOnlyGuard>
+          </PermissionGuard>
         )
       }
     >
@@ -192,12 +192,12 @@ function TeamsPage() {
             <p className="text-sm font-medium">No teams yet</p>
             <p className="mt-1 text-xs text-muted-foreground">Create a team to start assigning service ownership</p>
             {canCreateTeam && (
-              <ReadOnlyGuard>
+              <PermissionGuard action="team.create">
                 <Button onClick={() => setCreateOpen(true)} size="sm" className="mt-4 gap-1.5">
                   <Plus className="size-3.5" aria-hidden="true" />
                   Add team
                 </Button>
-              </ReadOnlyGuard>
+              </PermissionGuard>
             )}
           </div>
         ) : visibleTeams.length === 0 ? (
@@ -520,11 +520,11 @@ function TeamDetailPanel({
 
         <div className="mt-4 flex gap-2">
           {canManage && (
-            <ReadOnlyGuard>
+            <PermissionGuard action="team.manage" context={{ teamId: team.id }}>
               <Button onClick={onManage} size="sm" className="flex-1">
                 Manage team
               </Button>
-            </ReadOnlyGuard>
+            </PermissionGuard>
           )}
           <Button asChild variant="outline" size="sm" className={canManage ? undefined : 'flex-1'}>
             <Link to="/graph">View graph</Link>

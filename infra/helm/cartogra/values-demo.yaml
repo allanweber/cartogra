@@ -31,6 +31,7 @@ gateway:
     BOOTSTRAP_TENANT_NAME: Acme Fintech
     BOOTSTRAP_TENANT_PLAN: business
     BOOTSTRAP_ADMIN_EMAIL: admin@acme-fintech.invalid
+    BOOTSTRAP_TENANT_PUBLIC_SANDBOX: "true"
 
 registry:
   <<: *jvm
@@ -71,10 +72,16 @@ postgres:
     limits: { cpu: 200m, memory: 384Mi }
 
 kafka:
-  heapOpts: "-Xms384m -Xmx384m"
+  heapOpts: "-XX:InitialRAMPercentage=60 -XX:MaxRAMPercentage=60"  # ≈384m of 640Mi
   resources:
     requests: { cpu: 250m, memory: 640Mi }
     limits: { cpu: 500m, memory: 640Mi }
+
+alerting:
+  enabled: true
+  email:
+    from: alerts@cartogra.dev
+    # to: set at deploy time (GitHub environment variable ALERT_EMAIL).
 
 backup:
   enabled: true

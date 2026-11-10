@@ -11,7 +11,7 @@ import { ApiError, apiMutate } from '#/lib/api'
 import { cn } from '#/lib/utils'
 
 import type { Drift, DriftAction, DriftType } from '#/lib/topology-types'
-import { ReadOnlyGuard } from '#/components/ReadOnlyGuard'
+import { PermissionGuard } from '#/components/PermissionGuard'
 
 const TYPE_LABEL: Record<DriftType, string> = { UNDECLARED: 'Undeclared', MISSING: 'Missing' }
 
@@ -167,7 +167,7 @@ export function DriftTab({
                 <span className="mt-1 block text-xs text-muted-foreground">{TYPE_HINT[drift.type]}</span>
               </button>
               <div className="mt-2 flex gap-2">
-                <ReadOnlyGuard>
+                <PermissionGuard action="drift.resolve">
                   <Button
                     size="sm"
                     variant="outline"
@@ -176,8 +176,8 @@ export function DriftTab({
                   >
                     {primary.label}
                   </Button>
-                </ReadOnlyGuard>
-                <ReadOnlyGuard>
+                </PermissionGuard>
+                <PermissionGuard action="drift.resolve">
                   <Button
                     size="sm"
                     variant="ghost"
@@ -186,7 +186,7 @@ export function DriftTab({
                   >
                     {DISMISS_ACTION.label}
                   </Button>
-                </ReadOnlyGuard>
+                </PermissionGuard>
               </div>
             </li>
           )

@@ -17,6 +17,10 @@ ingress:
   clusterIssuer: letsencrypt-prod
   annotations: {}
 
+# Prometheus + Alertmanager on the guest counters, emailed through SMTP (charts/alerting).
+alerting:
+  enabled: false
+
 # Nightly pg_dump to S3-compatible object storage (Hetzner Object Storage in the demo).
 # Secret `backup.secretName` keys: S3_ACCESS_KEY, S3_SECRET_KEY. Retention = a bucket lifecycle rule.
 backup:

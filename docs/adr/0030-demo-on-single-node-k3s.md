@@ -27,6 +27,7 @@ Phase 4 puts Acme Fintech behind a public URL. The roadmap said "compose on one 
   | Kafka (KRaft) | `KAFKA_HEAP_OPTS=-Xmx384m`, ~0.6GB |
   | Postgres | `shared_buffers=128MB`, ~0.3GB |
   | Valkey + collector + frontend | ~0.3GB |
+  | Prometheus + Alertmanager (guest abuse alerts, email through Resend SMTP) | 256Mi limit, ~40Mi used on k3d |
   | 21 Acme Node pods | ~50MB each, ~1GB |
 
   SerialGC is a demo-only choice for low traffic; Phase 7 values keep the default collector.

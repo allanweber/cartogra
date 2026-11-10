@@ -250,25 +250,25 @@ No user-facing value. It exists because the next phases are unverifiable without
 - [x] **4.4 — Collector in the deployable compose.** Add `otel-collector` (same `otel-collector.yml`) to `docker-compose.yml`, wire every service's `OTEL_EXPORTER_OTLP_ENDPOINT` to it, and add a `kafka` dependency, so observed edges work in the public environment. The `demo-flow` observed-edge step runs unconditionally (CI included). Plus a demo collector config without Tempo/Loki for the Helm chart.
   *Acme test:* ✅ run `pnpm acme verify` against the compose stack with the collector (observed-edge check).
 - [x] **7.1 — Helm charts (pulled forward from Phase 7).** Per-service charts + umbrella with infra.md probes, resources and security contexts; single-replica Postgres/Kafka/Valkey StatefulSets; `values-demo.yaml` with 1 replica, no PDB/HPA and 8GB sizing (ADR-0030); multi-arch images (amd64 + arm64); secrets via Sealed Secrets.
-- [ ] **4.5 — One public environment.** Single-node k3s on a Hetzner ARM VM (CAX21, 8GB; multi-arch images, memory-sized `values-demo.yaml`), Traefik + cert-manager TLS on `cartogra.dev` (ADR-0030). CI pushes SHA-tagged images to GHCR; manual `helm upgrade` workflow. Acme runs live in-cluster; a bootstrap Job creates the demo tenant, registers the cluster read-only, connects a public GitHub mirror of the Acme repos, and runs `acme load`. Self-registration off (`app.signup.enabled=false`). Nightly `pg_dump`, external uptime check. `docs/runbooks/deployment.md` rewritten. Depends on 4.4 and 7.1.
+- [x] **4.5 — One public environment.** Single-node k3s on a Hetzner ARM VM (CAX21, 8GB; multi-arch images, memory-sized `values-demo.yaml`), Traefik + cert-manager TLS on `cartogra.dev` (ADR-0030). CI pushes SHA-tagged images to GHCR; manual `helm upgrade` workflow. Acme runs live in-cluster; a bootstrap Job creates the demo tenant, registers the cluster read-only, connects a public GitHub mirror of the Acme repos, and runs `acme load`. Self-registration off (`app.signup.enabled=false`). Nightly `pg_dump`, external uptime check. `docs/runbooks/deployment.md` rewritten. Depends on 4.4 and 7.1. Also delivered: NetworkPolicy on the backends, in-cluster Prometheus + Alertmanager for guest-mint spikes and capacity (plan 021 steps 7a/7c), and `infra/k8s/demo-host-wizard.sh` for the host build.
 
 **Demo:** send someone a link. They browse Acme Fintech, run a blast radius, and cannot change anything.
 
 **Gate**
 
-- [ ] A public URL serves the Acme tenant over TLS, and the runbook rebuilds that host from scratch (VM → k3s → helm → bootstrap Job).
-- [ ] `/demo` gets a stranger in with no credentials; the public host has no self-registration path.
-- [ ] Guest token reads succeed and every mutating endpoint returns 403 — the IT enumerates the routes rather than sampling them.
-- [ ] Dashboard and Timeline mocks deleted; `mock-data.ts` retains only fixtures for unshipped screens.
-- [ ] Audit events are written by registry, topology, ingestion and gateway mutations; the list is paginated and readable by guests.
+- [x] A public URL serves the Acme tenant over TLS, and the runbook rebuilds that host from scratch (VM → k3s → helm → bootstrap Job).
+- [x] `/demo` gets a stranger in with no credentials; the public host has no self-registration path.
+- [x] Guest token reads succeed and every mutating endpoint returns 403 — the IT enumerates the routes rather than sampling them.
+- [x] Dashboard and Timeline mocks deleted; `mock-data.ts` retains only fixtures for unshipped screens.
+- [x] Audit events are written by registry, topology, ingestion and gateway mutations; the list is paginated and readable by guests (filtered: guests see only `AuditKind` kinds and fields declared guest-safe, ADR-0019 §8).
 
 *Standing checks (§2 — Definition of done):*
 
-- [ ] Every story in this phase passed `/code-review` and `/security-review` before merge.
-- [ ] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
-- [ ] `/impeccable critique` run over every screen this phase touched; findings fixed or recorded.
-- [ ] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
-- [ ] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
+- [x] Every story in this phase passed `/code-review` and `/security-review` before merge.
+- [x] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
+- [x] `/impeccable critique` run over every screen this phase touched; findings fixed or recorded.
+- [x] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
+- [x] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
 
 **Worth writing about**
 

@@ -1,12 +1,12 @@
 #!/bin/sh
-# Installs both charts on a local k3d cluster, seeds Acme, checks guest mode and the ownership flow.
+# Installs both charts on a local k3d cluster, seeds Acme, checks NetworkPolicy, guest mode, the ownership flow and alerting.
 #
 #   sh infra/helm/local-test.sh              fresh cluster: deletes CLUSTER first, tests bootstrap and seed from nothing
 #   sh infra/helm/local-test.sh --reuse      keeps the cluster and its data, rolls out the new images
 #   sh infra/helm/local-test.sh --no-build   skips docker build, uses the images already built (combines with --reuse)
 #   sh infra/helm/local-test.sh --down       deletes the cluster and its data, leaves the docker images
 #
-# Not covered: GHCR push, deploy.yml, sealed secrets, TLS, S3 upload, GitHub mirror scan, sizing on the 8GB VM.
+# Not covered: GHCR push, deploy.yml, sealed secrets, TLS, S3 upload, GitHub mirror scan, alert email delivery, sizing on the 8GB VM.
 set -eu
 
 CLUSTER="${CLUSTER:-cartogra-local}"
@@ -94,9 +94,8 @@ for s in $SERVICES; do images="$images cartogra-$s:k3d"; done
 # shellcheck disable=SC2086
 k3d image import -c "$CLUSTER" $images
 
-step "Namespaces and secrets"
-kubectl create namespace cartogra --dry-run=client -o yaml | kubectl apply -f -
-kubectl create namespace acme-system --dry-run=client -o yaml | kubectl apply -f -
+step "Namespaces, RBAC and secrets"
+kubectl apply -f infra/k8s/cluster-setup.yaml
 if ! kubectl -n cartogra get secret gateway-secrets >/dev/null 2>&1; then
   key=$(head -c32 /dev/urandom | base64)
   for s in gateway registry topology ingestion postgres; do
@@ -122,6 +121,7 @@ helm upgrade --install cartogra infra/helm/cartogra -n cartogra \
   --set global.host=localhost \
   --set ingress.clusterIssuer= \
   --set backup.enabled=false \
+  --set alerting.email.to=alerts@k3d.invalid \
   --wait --timeout 10m
 
 if [ "$REUSE" = true ]; then
@@ -146,6 +146,19 @@ kubectl -n cartogra get pods
 running=$(kubectl -n acme-fintech get pods --no-headers | grep -c Running || true)
 [ "$running" -eq 21 ] || fail "expected 21 Acme pods Running, got $running"
 pass "21 Acme pods Running"
+
+step "Check NetworkPolicy"
+# One pod: the open gateway must answer (proves the pod runs), the backends must not.
+out=$(kubectl -n cartogra run np-check --rm -i --restart=Never --quiet --image=curlimages/curl:8.10.1 -- sh -c '
+  curl -fsm 5 -o /dev/null http://gateway:8080/actuator/health/live && echo gateway-open
+  for target in registry:8081 topology:8082 ingestion:8085; do
+    curl -sm 3 -o /dev/null "http://$target/" && echo "$target-open"
+  done
+  true' 2>&1) || true
+echo "$out" | grep -q gateway-open || fail "probe pod could not reach the gateway: $out"
+leaked=$(echo "$out" | grep -- '-open' | grep -v gateway-open || true)
+[ -z "$leaked" ] || fail "backends reachable from a non-gateway pod: $leaked"
+pass "backends reachable only from allowed pods"
 
 step "Check guest mode"
 tries=0
@@ -266,5 +279,48 @@ wait_for "unowned service back in risks" "$RISK_TIMEOUT" has_orphan_risk
 
 remove_check_service
 wait_for "check service removed from catalog" "$REGISTRY_TIMEOUT" absent in_orphan_list
+
+step "Check alerting (the gateway exports its metrics once a minute)"
+query='http://localhost:9090/api/v1/query?query=cartogra_guest_mints_total%7Boutcome%3D%22issued%22%7D'
+tries=0
+until kubectl -n cartogra exec deploy/alerting -c prometheus -- wget -qO- "$query" | grep -q '"outcome":"issued"'; do
+  tries=$((tries + 1))
+  [ "$tries" -lt 30 ] || fail "guest mint counter never reached Prometheus"
+  sleep 5
+done
+pass "guest mint counter reached Prometheus"
+
+step "Check capacity metrics (kubelet scrape, restart detection)"
+prom() { kubectl -n cartogra exec deploy/alerting -c prometheus -- wget -qO- "http://localhost:9090/api/v1/query?query=$1"; }
+tries=0
+until prom 'machine_memory_bytes' | grep -q '"value"'; do
+  tries=$((tries + 1))
+  [ "$tries" -lt 30 ] || fail "kubelet metrics never reached Prometheus (ClusterRole cartogra-node-metrics?)"
+  sleep 5
+done
+pass "kubelet metrics reached Prometheus"
+kubectl -n cartogra delete pod oom-check --ignore-not-found --wait >/dev/null
+kubectl -n cartogra apply -f - >/dev/null <<'YAML'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: oom-check
+spec:
+  containers:
+    - name: oom
+      image: busybox:1.36
+      command: [sh, -c, "sleep 45; head -c 128m /dev/zero | tail"]
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits: { cpu: 50m, memory: 16Mi }
+YAML
+tries=0
+until prom 'ALERTS%7Balertname%3D%22ContainerRestarted%22%2Cpod%3D%22oom-check%22%7D' | grep -q '"oom-check"'; do
+  tries=$((tries + 1))
+  [ "$tries" -lt 72 ] || fail "ContainerRestarted never fired for the OOM-killed oom-check pod"
+  sleep 5
+done
+kubectl -n cartogra delete pod oom-check --wait=false >/dev/null
+pass "ContainerRestarted fired for an OOM-killed pod"
 
 printf '\nAll checks passed. Open %s/demo\nkubectl: export KUBECONFIG=%s\n' "$URL" "$KUBECONFIG"

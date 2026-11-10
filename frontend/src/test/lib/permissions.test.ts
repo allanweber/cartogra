@@ -27,6 +27,10 @@ describe('resolvePermission', () => {
     expect(resolvePermission(subject(['MEMBER'], [TEAM]), 'service.edit', { teamId: null })).toBe('deny')
   })
 
+  it('service.edit is denied to a VIEWER even inside the owning team (backend CAN_WRITE)', () => {
+    expect(resolvePermission(subject(['VIEWER'], [TEAM]), 'service.edit', { teamId: TEAM })).toBe('deny')
+  })
+
   it('team.create is open to every writer (MEMBER, TEAM_OWNER), matching the backend', () => {
     expect(resolvePermission(subject(['TEAM_OWNER']), 'team.create')).toBe('allow')
     expect(resolvePermission(subject(['MEMBER']), 'team.create')).toBe('allow')
@@ -46,5 +50,17 @@ describe('settings.view', () => {
     expect(resolvePermission(subject(['GUEST']), 'settings.view')).toBe('deny')
     expect(resolvePermission(subject(['VIEWER']), 'settings.view')).toBe('allow')
     expect(resolvePermission(subject(['ADMIN']), 'settings.view')).toBe('allow')
+  })
+})
+
+describe('tenant-wide writes (service.create, drift.resolve, unresolved.dismiss)', () => {
+  const actions = ['service.create', 'drift.resolve', 'unresolved.dismiss'] as const
+
+  it.each(actions)('%s mirrors the backend CAN_WRITE tier', (action) => {
+    expect(resolvePermission(subject(['ADMIN']), action)).toBe('allow')
+    expect(resolvePermission(subject(['MEMBER']), action)).toBe('allow')
+    expect(resolvePermission(subject(['TEAM_OWNER']), action)).toBe('allow')
+    expect(resolvePermission(subject(['VIEWER']), action)).toBe('deny')
+    expect(resolvePermission(subject(['GUEST']), action)).toBe('readOnly')
   })
 })

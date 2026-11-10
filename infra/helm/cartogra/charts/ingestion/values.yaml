@@ -26,6 +26,12 @@ probes:
   startupPath: /actuator/health
   startupFailureThreshold: 36
 
+# Backends trust X-Tenant-Id / X-User-* headers, so only callers listed here may reach the app port: only the gateway proxies to it (webhooks included).
+# Needs a CNI that enforces NetworkPolicy (k3s does); others ignore it silently.
+networkPolicy:
+  allowFrom:
+    - gateway
+
 replicaCount: 3
 
 pdb:

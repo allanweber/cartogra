@@ -23,6 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
     "app.bootstrap.tenant.plan=business",
     "app.bootstrap.tenant.admin-email=" + TenantBootstrapIT.EMAIL,
     "app.bootstrap.tenant.admin-password=" + TenantBootstrapIT.PASSWORD,
+    "app.bootstrap.tenant.public-sandbox=true",
     "app.signup.enabled=false",
     "app.rate-limit.auth-burst-capacity=1000"
 })
@@ -48,6 +49,7 @@ class TenantBootstrapIT extends AbstractGatewayIT {
         Tenant tenant = tenantRepository.findByTenantId(UUID.fromString(TENANT)).orElseThrow();
         assertThat(tenant.name()).isEqualTo("Bootstrap Org");
         assertThat(tenant.plan()).isEqualTo("business");
+        assertThat(tenant.publicSandbox()).isTrue();
 
         User admin = userRepository.findByTenantAndEmail(UUID.fromString(TENANT), EMAIL).orElseThrow();
         assertThat(admin.emailVerified()).isTrue();

@@ -1,6 +1,7 @@
 package io.cartogra.registry;
 
 import io.cartogra.common.audit.ActorKind;
+import io.cartogra.common.audit.AuditKind;
 import io.cartogra.common.identity.Actor;
 import io.cartogra.common.audit.AuditEvent;
 import io.cartogra.common.audit.AuditEventPort;
@@ -92,7 +93,7 @@ class AuditEventIT {
         Instant at = Instant.now().truncatedTo(ChronoUnit.MILLIS);
         auditEventPort.record(new AuditEvent(UUID.randomUUID(), tenantId, "team", entityId, "created",
                 ActorKind.SYSTEM, null, Map.of("name", "platform"), at));
-        auditEventPort.record(AuditEvent.of(tenantId, "service", UUID.randomUUID(), "created", Actor.SYSTEM, Map.of()));
+        auditEventPort.record(AuditEvent.of(tenantId, AuditKind.SERVICE, UUID.randomUUID(), "created", Actor.SYSTEM, Map.of()));
 
         JsonNode page = list("?entityType=team&entityId=" + entityId + "&actorKind=system");
 
@@ -115,8 +116,8 @@ class AuditEventIT {
                 VALUES (:tenantId, :email, 'local', true, '{ADMIN}', now(), now()) RETURNING id
                 """, new MapSqlParameterSource("tenantId", tenantId).addValue("email", "real.person@corp.test"), UUID.class);
         Actor admin = Actor.admin(userId);
-        auditEventPort.record(AuditEvent.of(tenantId, "service", UUID.randomUUID(), "created", admin, Map.of()));
-        for (String hidden : new String[] {"user", "invitation", "oidc_config", "cluster"}) {
+        auditEventPort.record(AuditEvent.of(tenantId, AuditKind.SERVICE, UUID.randomUUID(), "created", admin, Map.of()));
+        for (AuditKind hidden : new AuditKind[] {AuditKind.USER, AuditKind.INVITATION, AuditKind.OIDC_CONFIG, AuditKind.CLUSTER}) {
             auditEventPort.record(AuditEvent.of(tenantId, hidden, UUID.randomUUID(), "created", admin,
                     Map.of("email", "real.person@corp.test")));
         }
@@ -135,7 +136,7 @@ class AuditEventIT {
 
     @Test
     void sameEventIdConsumedTwiceStoresOneRow() throws Exception {
-        AuditEvent event = AuditEvent.of(tenantId, "dependency", UUID.randomUUID(), "declared",
+        AuditEvent event = AuditEvent.of(tenantId, AuditKind.DEPENDENCY, UUID.randomUUID(), "declared",
                 Actor.user(UUID.randomUUID()), Map.of("protocol", "http"));
         String json = objectMapper.writeValueAsString(
                 EventEnvelope.of(KafkaAuditEventAdapter.EVENT_TYPE, event.entityId(), tenantId, 1, event));
@@ -147,7 +148,7 @@ class AuditEventIT {
         template.send(new ProducerRecord<>(KafkaAuditEventAdapter.TOPIC, event.entityId().toString(), json)).get();
         template.send(new ProducerRecord<>(KafkaAuditEventAdapter.TOPIC, event.entityId().toString(), json)).get();
         UUID marker = UUID.randomUUID();
-        AuditEvent after = AuditEvent.of(tenantId, "dependency", marker, "declared", Actor.SYSTEM, Map.of());
+        AuditEvent after = AuditEvent.of(tenantId, AuditKind.DEPENDENCY, marker, "declared", Actor.SYSTEM, Map.of());
         template.send(new ProducerRecord<>(KafkaAuditEventAdapter.TOPIC, marker.toString(),
                 objectMapper.writeValueAsString(
                         EventEnvelope.of(KafkaAuditEventAdapter.EVENT_TYPE, marker, tenantId, 1, after)))).get();

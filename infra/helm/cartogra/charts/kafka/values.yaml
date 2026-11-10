@@ -8,7 +8,8 @@ image:
 # Fixed so a restart with the same PVC keeps its log dirs valid.
 clusterId: MkU3OEVBNTcwNTJENDM2Qk
 
-heapOpts: "-Xms512m -Xmx512m"
+# Percent of the container limit (infra.md: never hard-set -Xmx); 50% of 1Gi = the old 512m.
+heapOpts: "-XX:InitialRAMPercentage=50 -XX:MaxRAMPercentage=50"
 
 persistence:
   size: 10Gi

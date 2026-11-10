@@ -11,4 +11,4 @@ sh infra/helm/local-test.sh --down       # delete the cluster and its data, keep
 
 Requires `k3d`, `helm`, `kubectl`, `docker` and `curl`. It leaves `~/.kube/config` alone and prints the `KUBECONFIG` export when it finishes. Override the cluster name or port with `CLUSTER` and `PORT`.
 
-Not covered: GHCR push, `deploy.yml`, sealed secrets, TLS, S3 upload, the GitHub mirror scan, and sizing on the 8GB VM.
+Not covered: GHCR push, `deploy.yml`, sealed secrets, TLS, S3 upload, the GitHub mirror scan, alert email delivery, and sizing on the 8GB VM.

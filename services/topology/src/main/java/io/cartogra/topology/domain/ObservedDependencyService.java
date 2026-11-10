@@ -1,5 +1,6 @@
 package io.cartogra.topology.domain;
 
+import io.cartogra.common.audit.AuditKind;
 import io.cartogra.common.identity.Actor;
 import io.cartogra.common.event.UuidV5;
 import io.cartogra.topology.config.SpanLinkProperties;
@@ -303,7 +304,7 @@ public class ObservedDependencyService {
             UpsertOutcome outcome = dependencyRepository.upsertObserved(
                     tenantId, edge.source(), edge.target(), edge.protocol(), now);
             if (outcome == UpsertOutcome.INSERTED) {
-                auditRecorder.record(tenantId, "dependency",
+                auditRecorder.record(tenantId, AuditKind.DEPENDENCY,
                         UuidV5.fromNames(tenantId.toString(), edge.source().toString(), edge.target().toString(),
                                 edge.protocol().toDbValue()),
                         "observed", Actor.SYSTEM, edge.source(), edge.target(),

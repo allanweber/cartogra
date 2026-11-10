@@ -2,6 +2,7 @@ package io.cartogra.gateway.domain;
 
 import io.cartogra.common.audit.AuditEvent;
 import io.cartogra.common.audit.AuditEventPort;
+import io.cartogra.common.audit.AuditKind;
 import io.cartogra.gateway.api.dto.TenantOidcConfigRequest;
 import io.cartogra.gateway.repository.TenantOidcConfigRepository;
 import io.cartogra.common.identity.Actor;
@@ -69,6 +70,6 @@ public class TenantOidcConfigService {
 
     /** Never the client secret: only whether it changed. */
     private void audit(TenantOidcConfig config, Actor actor, String action, Map<String, Object> payload) {
-        auditEventPort.record(AuditEvent.of(config.tenantId(), "oidc_config", config.id(), action, actor, payload));
+        auditEventPort.record(AuditEvent.of(config.tenantId(), AuditKind.OIDC_CONFIG, config.id(), action, actor, payload));
     }
 }

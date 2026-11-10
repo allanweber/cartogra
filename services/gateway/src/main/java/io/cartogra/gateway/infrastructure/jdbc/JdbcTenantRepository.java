@@ -27,8 +27,8 @@ public class JdbcTenantRepository implements TenantRepository {
         Instant now = Instant.now();
         String slug = slugify(tenant.name()) + "-" + id.toString().substring(0, 8);
         String sql = """
-            INSERT INTO tenants (id, tenant_id, name, slug, plan_id, created_at, updated_at)
-            VALUES (:id, :tenantId, :name, :slug, (SELECT id FROM billing_plans WHERE slug = :planSlug), :createdAt, :updatedAt)
+            INSERT INTO tenants (id, tenant_id, name, slug, plan_id, public_sandbox, created_at, updated_at)
+            VALUES (:id, :tenantId, :name, :slug, (SELECT id FROM billing_plans WHERE slug = :planSlug), :publicSandbox, :createdAt, :updatedAt)
             """;
         var params = new MapSqlParameterSource()
             .addValue("id", id)
@@ -36,16 +36,17 @@ public class JdbcTenantRepository implements TenantRepository {
             .addValue("name", tenant.name())
             .addValue("slug", slug)
             .addValue("planSlug", tenant.plan())
+            .addValue("publicSandbox", tenant.publicSandbox())
             .addValue("createdAt", Timestamp.from(now))
             .addValue("updatedAt", Timestamp.from(now));
         jdbc.update(sql, params);
-        return new Tenant(id, id, tenant.name(), slug, tenant.plan(), now, now, null);
+        return new Tenant(id, id, tenant.name(), slug, tenant.plan(), now, now, null, tenant.publicSandbox());
     }
 
     @Override
     public Optional<Tenant> findByTenantId(UUID tenantId) {
         String sql = """
-            SELECT t.id, t.tenant_id, t.name, t.slug, bp.slug AS plan_slug, t.created_at, t.updated_at
+            SELECT t.id, t.tenant_id, t.name, t.slug, bp.slug AS plan_slug, t.public_sandbox, t.created_at, t.updated_at
             FROM tenants t
             JOIN billing_plans bp ON bp.id = t.plan_id
             WHERE t.tenant_id = :tenantId AND t.deleted_at IS NULL
@@ -59,7 +60,8 @@ public class JdbcTenantRepository implements TenantRepository {
             rs.getString("plan_slug"),
             rs.getTimestamp("created_at").toInstant(),
             rs.getTimestamp("updated_at").toInstant(),
-            null
+            null,
+            rs.getBoolean("public_sandbox")
         )).stream().findFirst();
     }
 
