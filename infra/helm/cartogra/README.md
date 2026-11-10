@@ -34,6 +34,8 @@ The ingress routes `/api` to the gateway and everything else to the frontend. Th
 
 `charts/alerting` runs Prometheus and Alertmanager in one pod with no Service or ingress. Prometheus scrapes `cartogra_*` metrics from the collector and evaluates `files/rules.yml`; Alertmanager emails through Resend SMTP using `RESEND_API_KEY` from `gateway-secrets`. Data is an `emptyDir`, so replacing the pod only resets rule windows and silences. Nothing alerts if this pod itself dies; the external uptime check doesn't cover it either.
 
+It also scrapes the kubelet's cAdvisor endpoint (`nodeMetrics`) for the `capacity` rules: node memory > 85% and CPU > 80% (resize signals), a container > 90% of its memory limit, any container restart (OOM kills included), and `NodeMetricsMissing` when the scrape fails. That needs ClusterRole `cartogra-node-metrics` bound to ServiceAccount `alerting`, created by `infra/k8s/cluster-setup.yaml` (admin-applied, so CI can't grant it). On a cluster without it, set `alerting.nodeMetrics.enabled=false`.
+
 ```bash
 kubectl -n cartogra port-forward deploy/alerting 9090 9093   # Prometheus and Alertmanager UIs
 ```

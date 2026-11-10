@@ -17,7 +17,7 @@ manual       ─▶ deploy.yml: helm upgrade cartogra + acme at <sha> ─▶ acm
 | Secrets | Sealed Secrets; encrypted `SealedSecret`s committed under `infra/k8s/sealed/` |
 | Namespaces | `cartogra` (product), `acme-system` (Acme release: reader ServiceAccount, bootstrap Job), `acme-fintech` (21 fake services, tenant-labelled), `ci-deploy` (CI identity) |
 | CI access | `deployer` ServiceAccount (`infra/k8s/cluster-setup.yaml`), admin of the three app namespaces only |
-| Alerts | `alerting` pod (Prometheus + Alertmanager), email through Resend |
+| Alerts | `alerting` pod (Prometheus + Alertmanager), email through Resend: guest abuse, plus node/container capacity from the kubelet |
 | Backups | `postgres-backup` CronJob, nightly `pg_dump -Fc` to Hetzner Object Storage |
 
 **What has been run.** On a local k3d cluster: `cluster-setup.yaml`, both add-on charts, the CI identity installing
@@ -132,6 +132,16 @@ NetworkPolicy (kube-router), which keeps the backends' trusted tenant headers aw
 the chart README's Exposure section).
 Don't install it with `--disable-network-policy`, and don't swap in a CNI that doesn't enforce NetworkPolicy: the
 policies would be ignored without any error.
+
+**Resize.** Resize to CAX31 only when an alert asks for it: `NodeMemoryHigh` (> 85% for 15 minutes), `NodeCpuHigh`
+(> 80% of all cores for 30 minutes), or repeated `ContainerRestarted` with `OOMKilled` in `kubectl describe pod` and no room left to raise limits. A Hetzner resize
+needs the server powered off, so expect a few minutes of downtime. Keep the disk size, so you can resize back down.
+
+```bash
+hcloud server shutdown cartogra-demo
+hcloud server change-type --keep-disk cartogra-demo cax31
+hcloud server poweron cartogra-demo
+```
 
 ## 3. Cluster add-ons
 
@@ -378,6 +388,13 @@ kill %1
 ```
 
 The email arrives within a minute. If not: `kubectl -n cartogra logs deploy/alerting -c alertmanager`.
+
+Capacity metrics (the resize alerts need them; `NodeMetricsMissing` fires after 15 minutes without them):
+
+```bash
+kubectl -n cartogra exec deploy/alerting -c prometheus -- \
+  wget -qO- 'http://localhost:9090/api/v1/query?query=machine_memory_bytes' | grep -q '"value"' && echo kubelet ok
+```
 
 Backup (once per host): run section 10's manual job and confirm the file with `aws s3 ls`.
 

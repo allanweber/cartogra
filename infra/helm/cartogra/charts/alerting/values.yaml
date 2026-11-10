@@ -13,6 +13,14 @@ scrape:
   target: collector:8889
   interval: 30s
 
+# Kubelet cAdvisor scrape for the capacity rules (files/rules.yml, group capacity).
+# Needs ClusterRole cartogra-node-metrics bound to ServiceAccount alerting (infra/k8s/cluster-setup.yaml).
+nodeMetrics:
+  enabled: true
+  interval: 30s
+  # k3s signs kubelet serving certs with the cluster CA, so verification works there; set true for other distros.
+  insecureSkipVerify: false
+
 resources:
   requests:
     cpu: 50m

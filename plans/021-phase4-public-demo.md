@@ -116,6 +116,20 @@ Done when: chart + bootstrap Job run on local k3d and Acme is discovered; Acme f
 - `infra/k8s/cluster-setup.yaml` (namespaces, CI `deployer` ServiceAccount; admin kubeconfig never in CI), `KUBECONFIG` CI secret, `ALERT_EMAIL` variable; first `helm install`; send the test alert (`deployment.md` section 8).
 - External uptime check on `/api/auth/features` through ingress (actuator is not routed).
 
+**7c. Resize alerts.** "Resize on measured pressure" had nothing measuring it: the alerting pod only saw `cartogra_*` app metrics.
+
+- The alerting pod's Prometheus also scrapes the kubelet's cAdvisor endpoint (`/metrics/cadvisor`), keeping only the memory, CPU and OOM series.
+- Read-only ClusterRole `cartogra-node-metrics` (`nodes` list/watch, `nodes/metrics` get) bound to the `alerting` ServiceAccount, in `cluster-setup.yaml`, which the admin applies, so CI is never granted it. Kubelet TLS verifies against the ServiceAccount CA on k3s. No `nodes/proxy`, because it allows exec through the kubelet. No node-exporter, because Pod Security `baseline` blocks its host access.
+- Rules (`files/rules.yml`, group `capacity`):
+  - `NodeMemoryHigh`: node memory working set > 85% for 15m. This is the resize signal.
+  - `NodeCpuHigh`: > 80% of all cores for 30m.
+  - `ContainerMemoryNearLimit`: > 90% of the limit for 15m.
+  - `ContainerRestarted`: any container restart in 30m, OOM kills included. cAdvisor's `container_oom_events_total` stays 0 on k3s (OOM-killed a test pod on the demo host to check), so a changed `container_start_time_seconds` is the signal.
+  - `NodeMetricsMissing`: the scrape is down for 15m, so a missing ClusterRole can't fail silently.
+- `local-test.sh` applies `cluster-setup.yaml` (instead of creating the namespaces itself) and checks that the cAdvisor series reach Prometheus and that `ContainerRestarted` fires for a pod OOM-killed after 45s. A pod killed within milliseconds is never seen by cAdvisor, but a real JVM runs for minutes first.
+- Docs: chart README (Alerting section), `deployment.md` (a §2 resize note and the §8 verify step).
+- Host: re-apply `cluster-setup.yaml` with the admin kubeconfig, then deploy.
+
 ## 8. Gate (#130)
 
 Roadmap Phase 4 gate + additions below; open PR from `docs/phase-4-plan`.

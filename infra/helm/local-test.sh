@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installs both charts on a local k3d cluster, seeds Acme, checks NetworkPolicy, guest mode and the ownership flow.
+# Installs both charts on a local k3d cluster, seeds Acme, checks NetworkPolicy, guest mode, the ownership flow and alerting.
 #
 #   sh infra/helm/local-test.sh              fresh cluster: deletes CLUSTER first, tests bootstrap and seed from nothing
 #   sh infra/helm/local-test.sh --reuse      keeps the cluster and its data, rolls out the new images
@@ -94,9 +94,8 @@ for s in $SERVICES; do images="$images cartogra-$s:k3d"; done
 # shellcheck disable=SC2086
 k3d image import -c "$CLUSTER" $images
 
-step "Namespaces and secrets"
-kubectl create namespace cartogra --dry-run=client -o yaml | kubectl apply -f -
-kubectl create namespace acme-system --dry-run=client -o yaml | kubectl apply -f -
+step "Namespaces, RBAC and secrets"
+kubectl apply -f infra/k8s/cluster-setup.yaml
 if ! kubectl -n cartogra get secret gateway-secrets >/dev/null 2>&1; then
   key=$(head -c32 /dev/urandom | base64)
   for s in gateway registry topology ingestion postgres; do
@@ -290,5 +289,38 @@ until kubectl -n cartogra exec deploy/alerting -c prometheus -- wget -qO- "$quer
   sleep 5
 done
 pass "guest mint counter reached Prometheus"
+
+step "Check capacity metrics (kubelet scrape, restart detection)"
+prom() { kubectl -n cartogra exec deploy/alerting -c prometheus -- wget -qO- "http://localhost:9090/api/v1/query?query=$1"; }
+tries=0
+until prom 'machine_memory_bytes' | grep -q '"value"'; do
+  tries=$((tries + 1))
+  [ "$tries" -lt 30 ] || fail "kubelet metrics never reached Prometheus (ClusterRole cartogra-node-metrics?)"
+  sleep 5
+done
+pass "kubelet metrics reached Prometheus"
+kubectl -n cartogra delete pod oom-check --ignore-not-found --wait >/dev/null
+kubectl -n cartogra apply -f - >/dev/null <<'YAML'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: oom-check
+spec:
+  containers:
+    - name: oom
+      image: busybox:1.36
+      command: [sh, -c, "sleep 45; head -c 128m /dev/zero | tail"]
+      resources:
+        requests: { cpu: 10m, memory: 16Mi }
+        limits: { cpu: 50m, memory: 16Mi }
+YAML
+tries=0
+until prom 'ALERTS%7Balertname%3D%22ContainerRestarted%22%2Cpod%3D%22oom-check%22%7D' | grep -q '"oom-check"'; do
+  tries=$((tries + 1))
+  [ "$tries" -lt 72 ] || fail "ContainerRestarted never fired for the OOM-killed oom-check pod"
+  sleep 5
+done
+kubectl -n cartogra delete pod oom-check --wait=false >/dev/null
+pass "ContainerRestarted fired for an OOM-killed pod"
 
 printf '\nAll checks passed. Open %s/demo\nkubectl: export KUBECONFIG=%s\n' "$URL" "$KUBECONFIG"

@@ -1,4 +1,14 @@
 {{- $name := include "common.name" . -}}
+{{- if .Values.nodeMetrics.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "common.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -24,6 +34,29 @@ data:
           - source_labels: [__name__]
             regex: cartogra_.*
             action: keep
+    {{- if .Values.nodeMetrics.enabled }}
+      # Container memory/CPU/OOM from the kubelet for the capacity rules. Needs ClusterRole cartogra-node-metrics
+      # (infra/k8s/cluster-setup.yaml); NodeMetricsMissing fires without it.
+      - job_name: kubelet
+        scheme: https
+        metrics_path: /metrics/cadvisor
+        scrape_interval: {{ .Values.nodeMetrics.interval }}
+        kubernetes_sd_configs:
+          - role: node
+        authorization:
+          credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          insecure_skip_verify: {{ .Values.nodeMetrics.insecureSkipVerify }}
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: container_memory_working_set_bytes|container_spec_memory_limit_bytes|container_cpu_usage_seconds_total|container_start_time_seconds|machine_memory_bytes|machine_cpu_cores
+            action: keep
+          # Per-container series plus the node root cgroup (id="/"); pod-level cgroups dropped.
+          - source_labels: [container, id]
+            regex: ;/.+
+            action: drop
+    {{- end }}
   rules.yml: |
     {{- .Files.Get "files/rules.yml" | nindent 4 }}
   alertmanager.yml: |
@@ -69,7 +102,12 @@ spec:
       annotations:
         checksum/config: {{ (print (toJson .Values) (.Files.Get "files/rules.yml")) | sha256sum | trunc 16 }}
     spec:
+      {{- if .Values.nodeMetrics.enabled }}
+      serviceAccountName: {{ $name }}
+      automountServiceAccountToken: true
+      {{- else }}
       automountServiceAccountToken: false
+      {{- end }}
       securityContext:
         {{- include "common.podSecurityContext" . | nindent 8 }}
       containers:
