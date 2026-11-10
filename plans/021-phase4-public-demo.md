@@ -14,7 +14,7 @@ Order: app code first (testable on compose) → charts → deploy → ops → ga
 - [x] 4. Guest mode + signup off (#128, signup part of #129)
 - [x] 5. Helm charts (#148)
 - [x] 6. Deploy pipeline + in-cluster Acme (#129, code)
-- [ ] 7. Ops — public host (#129)
+- [x] 7. Ops — public host (#129)
 - [ ] 8. Gate (#130)
 
 ## 1. Collector in compose (#192)
@@ -115,10 +115,17 @@ Done when: chart + bootstrap Job run on local k3d and Acme is discovered; Acme f
 - GitHub mirror: `pnpm acme repos --provider github` pushes the 21 repos to a public org; demo syncs with a read-only public-repos token.
 - `infra/k8s/cluster-setup.yaml` (namespaces, CI `deployer` ServiceAccount; admin kubeconfig never in CI), `KUBECONFIG` CI secret, `ALERT_EMAIL` variable; first `helm install`; send the test alert (`deployment.md` section 8).
 - External uptime check on `/api/auth/features` through ingress (actuator is not routed).
+- **Done (2026-11-10):** sections 1–8 of `deployment.md` run through `infra/k8s/demo-host-wizard.sh`, from `docs/phase-4-plan` (`--ref`, before the step 8 merge). `cartogra.dev` serves `/demo`, TLS Ready, 21 Acme pods, test alert email, S3 backup and green UptimeRobot keyword monitor confirmed at the wizard's gates. NetworkPolicy probe on the host: gateway 200, ingestion blocked. Deviations folded back into the runbook:
+  - CAX21 out of stock, so the wizard retries across fsn1/nbg1/hel1.
+  - Cloudflare DNS must be "DNS only".
+  - Branch deploys via `--ref`.
+  - Sealed files committed on the phase branch.
+  - The Sealed Secrets key was pasted into a chat before sealing, then rotated; the runbook now covers that case.
+  - Add-on chart versions pinned (cert-manager v1.21.3, sealed-secrets 2.22.0).
 
 **7c. Resize alerts.** "Resize on measured pressure" had nothing measuring it: the alerting pod only saw `cartogra_*` app metrics.
 
-- The alerting pod's Prometheus also scrapes the kubelet's cAdvisor endpoint (`/metrics/cadvisor`), keeping only the memory, CPU and OOM series.
+- The alerting pod's Prometheus also scrapes the kubelet's cAdvisor endpoint (`/metrics/cadvisor`), keeping only the memory, CPU and container start-time series.
 - Read-only ClusterRole `cartogra-node-metrics` (`nodes` list/watch, `nodes/metrics` get) bound to the `alerting` ServiceAccount, in `cluster-setup.yaml`, which the admin applies, so CI is never granted it. Kubelet TLS verifies against the ServiceAccount CA on k3s. No `nodes/proxy`, because it allows exec through the kubelet. No node-exporter, because Pod Security `baseline` blocks its host access.
 - Rules (`files/rules.yml`, group `capacity`):
   - `NodeMemoryHigh`: node memory working set > 85% for 15m. This is the resize signal.
@@ -129,6 +136,7 @@ Done when: chart + bootstrap Job run on local k3d and Acme is discovered; Acme f
 - `local-test.sh` applies `cluster-setup.yaml` (instead of creating the namespaces itself) and checks that the cAdvisor series reach Prometheus and that `ContainerRestarted` fires for a pod OOM-killed after 45s. A pod killed within milliseconds is never seen by cAdvisor, but a real JVM runs for minutes first.
 - Docs: chart README (Alerting section), `deployment.md` (a §2 resize note and the §8 verify step).
 - Host: re-apply `cluster-setup.yaml` with the admin kubeconfig, then deploy.
+- **Done (2026-11-10):** `dca3522`, deployed. Kubelet target up, no alerts firing; node memory 62%, Kafka 80% of its limit (the closest to the 90% rule).
 
 ## 8. Gate (#130)
 

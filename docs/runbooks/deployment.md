@@ -20,10 +20,10 @@ manual       ─▶ deploy.yml: helm upgrade cartogra + acme at <sha> ─▶ acm
 | Alerts | `alerting` pod (Prometheus + Alertmanager), email through Resend: guest abuse, plus node/container capacity from the kubelet |
 | Backups | `postgres-backup` CronJob, nightly `pg_dump -Fc` to Hetzner Object Storage |
 
-**What has been run.** On a local k3d cluster: `cluster-setup.yaml`, both add-on charts, the CI identity installing
-and upgrading both charts (with plain Secrets instead of sealed ones), its denials, the database restore, and
-restoring the Sealed Secrets key. **Never run yet:** sections 1 and 2, `kubeseal`, Let's Encrypt, GHCR, `deploy.yml`,
-S3 and alert email delivery. Expect to correct this runbook on the first real build.
+**What has been run.** Sections 1–8 on the real host (first build 2026-11-10, through the wizard below), including
+Let's Encrypt, GHCR, `deploy.yml`, the S3 backup and alert email delivery. On a local k3d cluster only: the database
+restore (section 10), restoring the Sealed Secrets key, and the CI identity's denials. **Never run on the host:**
+rollback (section 9), restore (section 10) and rebuild (section 11).
 
 **Wizard.** `bash infra/k8s/demo-host-wizard.sh` walks sections 1–8 interactively: it opens each console page, saves
 values to `~/.config/cartogra-demo/demo.env` (outside the repo), and skips finished stages on a re-run. It retries
@@ -34,11 +34,19 @@ CAX21 creation across fsn1, nbg1 and hel1 every 5 minutes while the type is out 
 ### Tools
 
 `hcloud`, `kubectl`, `helm` >= 3.14, [`kubeseal`](https://github.com/bitnami/sealed-secrets#kubeseal), `gh`, `aws`,
-`git`, `jq`, `openssl`, `dig`, Node >= 24 + pnpm.
+`git`, `jq`, `openssl`, `dig`, Node >= 24 + pnpm. `kubeseal` ships as a release tarball (pick your OS and arch):
+
+```bash
+V=0.41.2   # same as the controller: sealed-secrets chart 2.22.0 ships 0.41.2
+curl -fsSLO https://github.com/bitnami-labs/sealed-secrets/releases/download/v$V/kubeseal-$V-linux-amd64.tar.gz
+tar -xzf kubeseal-$V-linux-amd64.tar.gz kubeseal && sudo install -m 755 kubeseal /usr/local/bin/kubeseal
+```
 
 ### Code on `main`
 
-`images.yml` and `deploy.yml` only run from the default branch, so this code must be merged first.
+`images.yml` and `deploy.yml` must exist on the default branch to be dispatchable. Both can then run on any branch
+with `--ref <branch>`: images are tagged with that commit's SHA and `deploy.yml` installs the charts from it. The first
+build ran from the unmerged phase branch this way; after the merge, use `main`.
 
 ```bash
 gh workflow list --repo allanweber/cartogra | grep -E 'Images|Deploy demo'   # both listed
@@ -67,8 +75,8 @@ aws s3api put-bucket-lifecycle-configuration --bucket cartogra-demo-backups --en
   --lifecycle-configuration '{"Rules":[{"ID":"expire","Status":"Enabled","Filter":{"Prefix":"postgres/"},"Expiration":{"Days":7}}]}'
 ```
 
-**Resend.** [resend.com/domains](https://resend.com/domains) → add `cartogra.dev`, create the DNS records it lists,
-wait for **Verified**. Then API Keys → create one with **Sending access**, limited to that domain. This is
+**Resend.** [resend.com/domains](https://resend.com/domains) → add `cartogra.dev`, create the DNS records it lists in
+the domain's DNS zone (Cloudflare for `cartogra.dev`), wait for **Verified**. Then API Keys → create one with **Sending access**, limited to that domain. This is
 `RESEND_API_KEY`; alerts come from `alerts@cartogra.dev`.
 
 **GitHub mirror.** The demo scans a public GitHub copy of Acme's 21 repos (the seed keeps Azure DevOps for local
@@ -105,10 +113,16 @@ hcloud server create --name cartogra-demo --type cax21 --image ubuntu-24.04 --lo
 IP=$(hcloud server ip cartogra-demo); echo "$IP"
 ```
 
+CAX (ARM) is often out of stock ("Limited availability" in the console). Try `nbg1` and `hel1` too, or let the wizard
+retry every 5 minutes. Don't fall back to Regular Performance (CPX) without a decision: it costs about 3× as much.
+The images are multi-arch, so an x86 type works if one is ever chosen.
+
 6443 is open to the world because GitHub-hosted runners have no fixed IPs; the API server still requires
 credentials. Close it (self-hosted runner or a tunnel) if that ever matters.
 
-At your DNS provider, point the `cartogra.dev` A record at `$IP`. Let's Encrypt needs it, so wait until this prints
+At your DNS provider, point the `cartogra.dev` A record at `$IP`. On Cloudflare (registrar and DNS for
+`cartogra.dev`): DNS → Records → A, name `@`, **Proxy status: DNS only** (grey cloud). Proxied, the name resolves to
+Cloudflare's IPs, the check below never passes, and port 6443 can't go through the proxy. Let's Encrypt needs it, so wait until this prints
 the IP:
 
 ```bash
@@ -165,9 +179,9 @@ Add-ons:
 helm repo add jetstack https://charts.jetstack.io
 helm repo add sealed-secrets https://bitnami.github.io/sealed-secrets
 helm repo update
-helm upgrade --install cert-manager jetstack/cert-manager -n cert-manager --create-namespace \
+helm upgrade --install cert-manager jetstack/cert-manager --version v1.21.3 -n cert-manager --create-namespace \
   --set crds.enabled=true --wait --timeout 5m
-helm upgrade --install sealed-secrets sealed-secrets/sealed-secrets -n kube-system \
+helm upgrade --install sealed-secrets sealed-secrets/sealed-secrets --version 2.22.0 -n kube-system \
   --set fullnameOverride=sealed-secrets-controller --wait --timeout 5m
 ```
 
@@ -193,7 +207,16 @@ YAML
 ```
 
 **First build only:** back up the Sealed Secrets private key, put it in your password manager and delete the file.
-It decrypts every committed `SealedSecret`; never commit it.
+It decrypts every committed `SealedSecret`; never commit it, and never paste it into a chat, ticket or log. If it leaks
+before section 4, replacing it is free: delete it and restart the controller, which generates a new one, then back that
+up. After section 4, every secret would have to be resealed and rotated.
+
+```bash
+kubectl -n kube-system delete secret -l sealedsecrets.bitnami.com/sealed-secrets-key
+kubectl -n kube-system rollout restart deploy/sealed-secrets-controller
+```
+
+Backup:
 
 ```bash
 kubectl -n kube-system get secret -l sealedsecrets.bitnami.com/sealed-secrets-key -o yaml > sealed-secrets-key.yaml
@@ -255,7 +278,8 @@ kubectl -n cartogra get secrets      # 6 secrets, created by the controller
 kubectl -n acme-system get secrets   # acme-bootstrap
 ```
 
-Commit the encrypted files. `main` is protected, so through a PR:
+Commit the encrypted files. On an open phase branch (the first build), commit them there. Otherwise `main` is
+protected, so through a PR:
 
 ```bash
 git switch -c chore/demo-sealed-secrets

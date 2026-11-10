@@ -422,9 +422,9 @@ if begin addons; then
   run helm repo add jetstack https://charts.jetstack.io --force-update
   run helm repo add sealed-secrets https://bitnami.github.io/sealed-secrets --force-update
   run helm repo update
-  run helm upgrade --install cert-manager jetstack/cert-manager -n cert-manager --create-namespace \
+  run helm upgrade --install cert-manager jetstack/cert-manager --version v1.21.3 -n cert-manager --create-namespace \
     --set crds.enabled=true --wait --timeout 5m
-  run helm upgrade --install sealed-secrets sealed-secrets/sealed-secrets -n kube-system \
+  run helm upgrade --install sealed-secrets sealed-secrets/sealed-secrets --version 2.22.0 -n kube-system \
     --set fullnameOverride=sealed-secrets-controller --wait --timeout 5m
   ask LE_EMAIL "Email for Let's Encrypt expiry notices:"
   write_env LE_EMAIL "$LE_EMAIL"
