@@ -15,7 +15,7 @@ Order: app code first (testable on compose) → charts → deploy → ops → ga
 - [x] 5. Helm charts (#148)
 - [x] 6. Deploy pipeline + in-cluster Acme (#129, code)
 - [x] 7. Ops — public host (#129)
-- [ ] 8. Gate (#130)
+- [x] 8. Gate (#130)
 
 ## 1. Collector in compose (#192)
 
@@ -141,6 +141,8 @@ Done when: chart + bootstrap Job run on local k3d and Acme is discovered; Acme f
 ## 8. Gate (#130)
 
 Roadmap Phase 4 gate + additions below; open PR from `docs/phase-4-plan`.
+
+- **Done (2026-11-10):** gate record and triage in `plans/023-phase4-gate.md`. E2E runs in CI on the PR.
 
 ## E2E
 
