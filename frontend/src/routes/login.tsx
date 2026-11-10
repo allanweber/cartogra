@@ -78,7 +78,7 @@ function LoginPage() {
       const { user, exp } = sessionFromAccessToken(result.accessToken)
       writeSessionCookie(user, result.expiresIn)
       hydrateWith(user, exp)
-      queryClient.removeQueries({ queryKey: ['session'] })
+      queryClient.clear()
       setLoading(false)
       setRedirecting(true)
       navigate({ to: redirectTo ?? '/dashboard' })

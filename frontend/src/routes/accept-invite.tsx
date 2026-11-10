@@ -76,7 +76,7 @@ function AcceptInvitePage() {
       const user = { id: claims.sub, email: claims.email, name: claims.name ?? null, authProvider: claims.auth_provider, tenantId: claims.tid, roles: claims.roles }
       writeSessionCookie(user, result.expiresIn)
       hydrateWith(user, claims.exp)
-      queryClient.removeQueries({ queryKey: ['session'] })
+      queryClient.clear()
       navigate({ to: '/dashboard' })
     } catch (err) {
       if (err instanceof ApiError) {

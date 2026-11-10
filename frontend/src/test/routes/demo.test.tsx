@@ -52,6 +52,7 @@ describe('DemoPage', () => {
     vi.mocked(startGuestSession).mockRejectedValue(new ApiError('RATE_LIMITED', 'Too many requests', 'trace-9'))
     renderPage()
     expect(await screen.findByText(/too many demo sessions/i)).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent(/too many demo sessions/i)
     expect(screen.getByText(/trace-9/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /back to sign in/i })).toHaveAttribute('href', '/login')
     expect(navigateMock).not.toHaveBeenCalled()

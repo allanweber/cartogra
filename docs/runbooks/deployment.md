@@ -434,8 +434,21 @@ helm -n cartogra history cartogra
 helm -n cartogra rollback cartogra <revision> --wait
 ```
 
-Or re-run **Deploy demo** with an older SHA. Flyway migrations are forward-only and additive, so older pods
-run against a newer schema; never roll the schema back by hand.
+Prefer re-running **Deploy demo** with the older SHA: it moves `cartogra` and `acme` together. A `helm rollback`
+of `cartogra` alone leaves `acme` on the newer SHA; roll back `acme` (`-n acme-system`) too, and note its
+bootstrap Job is a `post-upgrade` hook that runs again (it is idempotent). Flyway migrations are forward-only and
+additive, so older pods run against a newer schema; never roll the schema back by hand.
+
+**Stuck release.** A cancelled or timed-out deploy can leave a release in `pending-upgrade`, and every later
+deploy then fails with `another operation (install/upgrade/rollback) is in progress`:
+
+```bash
+helm -n cartogra status cartogra | grep STATUS      # pending-upgrade / pending-rollback
+helm -n cartogra history cartogra                   # last `deployed` revision
+helm -n cartogra rollback cartogra <that revision> --wait
+```
+
+Same for `acme` in `acme-system`. Then re-run **Deploy demo**.
 
 ## 10. Backups and restore
 

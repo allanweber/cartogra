@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { CommandPalette } from '#/components/CommandPalette'
 import { apiFetch } from '#/lib/api'
 
-import type { PageResult, RegistryService } from '#/lib/registry-types'
+import type { PageResult, RegistryService, RegistryTeam } from '#/lib/registry-types'
 
 const navigateMock = vi.fn()
 
@@ -61,6 +61,13 @@ const MOCK_SERVICE: RegistryService = {
   runbookUrl: null,
 }
 
+function mockServices(page: PageResult<RegistryService>) {
+  const noTeams: PageResult<RegistryTeam> = { items: [], total: 0, limit: 200, offset: 0 }
+  vi.mocked(apiFetch).mockImplementation((path: string) =>
+    Promise.resolve(path.includes('/v1/registry/teams') ? noTeams : page),
+  )
+}
+
 function renderPalette(open = true) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const onOpenChange = vi.fn()
@@ -85,7 +92,7 @@ describe('CommandPalette', () => {
 
   it('renders fetched services in the Services group when searched', async () => {
     const page: PageResult<RegistryService> = { items: [MOCK_SERVICE], total: 1, limit: 200, offset: 0 }
-    vi.mocked(apiFetch).mockResolvedValue(page)
+    mockServices(page)
     renderPalette()
 
     fireEvent.change(screen.getByPlaceholderText(/search pages, services, teams/i), {
@@ -95,25 +102,33 @@ describe('CommandPalette', () => {
     expect(await screen.findByText('payments-api')).toBeInTheDocument()
   })
 
-  it('warns about mock data only while mock team results are listed', async () => {
-    const page: PageResult<RegistryService> = { items: [MOCK_SERVICE], total: 1, limit: 200, offset: 0 }
-    vi.mocked(apiFetch).mockResolvedValue(page)
+  it('lists real teams from the registry with their owned-service count, never mock teams', async () => {
+    const team: RegistryTeam = { id: 'team-real-id', tenantId: 't1', name: 'Ledger', createdAt: '', updatedAt: '' }
+    const services: PageResult<RegistryService> = {
+      items: [{ ...MOCK_SERVICE, teamId: 'team-real-id' }],
+      total: 1,
+      limit: 200,
+      offset: 0,
+    }
+    const teams: PageResult<RegistryTeam> = { items: [team], total: 1, limit: 200, offset: 0 }
+    vi.mocked(apiFetch).mockImplementation((path: string) =>
+      Promise.resolve(path.includes('/v1/registry/teams') ? teams : services),
+    )
     renderPalette()
     const input = screen.getByPlaceholderText(/search pages, services, teams/i)
 
-    expect(screen.queryByText(/this is mock data/i)).not.toBeInTheDocument()
-
-    fireEvent.change(input, { target: { value: 'payments-api' } })
-    expect(await screen.findByText('payments-api')).toBeInTheDocument()
+    fireEvent.change(input, { target: { value: 'Ledger' } })
+    expect(await screen.findByText('Ledger')).toBeInTheDocument()
+    expect(screen.getByText('1 service')).toBeInTheDocument()
     expect(screen.queryByText(/this is mock data/i)).not.toBeInTheDocument()
 
     fireEvent.change(input, { target: { value: 'Sarah' } })
-    expect(await screen.findByText(/this is mock data/i)).toBeInTheDocument()
+    expect(screen.queryByText(/Sarah K\./)).not.toBeInTheDocument()
   })
 
   it('navigates using the fetched service real id, not a mock id', async () => {
     const page: PageResult<RegistryService> = { items: [MOCK_SERVICE], total: 1, limit: 200, offset: 0 }
-    vi.mocked(apiFetch).mockResolvedValue(page)
+    mockServices(page)
     renderPalette()
 
     fireEvent.change(screen.getByPlaceholderText(/search pages, services, teams/i), {

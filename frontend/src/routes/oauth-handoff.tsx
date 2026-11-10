@@ -33,7 +33,7 @@ function OAuthHandoffPage() {
 
     apiFetch<unknown>(`/auth/oauth/callback?code=${encodeURIComponent(code)}`)
       .then(() => {
-        queryClient.removeQueries({ queryKey: ['session'] })
+        queryClient.clear()
         const destination = sessionStorage.getItem('pendingRedirect')
         sessionStorage.removeItem('pendingRedirect')
         navigate({ to: destination ?? '/dashboard' })

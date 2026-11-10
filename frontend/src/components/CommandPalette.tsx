@@ -20,12 +20,10 @@ import { Button } from '#/components/ui/button'
 
 import { Input } from '#/components/ui/input'
 import { apiFetch } from '#/lib/api'
-import { UnderDevelopmentBanner } from '#/components/UnderDevelopmentBanner'
-import { MOCK_TEAMS } from '#/lib/mock-data'
 import { normalizeHealth } from '#/lib/registry-types'
 import { cn } from '#/lib/utils'
 
-import type { PageResult, RegistryService } from '#/lib/registry-types'
+import type { PageResult, RegistryService, RegistryTeam } from '#/lib/registry-types'
 
 interface CommandItem {
   id: string
@@ -71,6 +69,11 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     queryFn: () => apiFetch<PageResult<RegistryService>>('/v1/registry/services?limit=200'),
   })
 
+  const { data: teamsPage } = useQuery({
+    queryKey: ['teams'],
+    queryFn: () => apiFetch<PageResult<RegistryTeam>>('/v1/registry/teams?limit=200'),
+  })
+
   const allItems = useMemo<CommandItem[]>(() => {
     const pages: CommandItem[] = PAGE_ITEMS.map((p) => ({
       id: `page-${p.to}`,
@@ -94,17 +97,24 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       group: 'Services',
     }))
 
-    const teams: CommandItem[] = MOCK_TEAMS.map((t) => ({
-      id: `team-${t.id}`,
-      label: t.name,
-      subtitle: `${t.members} members · ${t.lead}`,
-      icon: <Users className="size-4" />,
-      action: () => { navigate({ to: '/teams' }); close() },
-      group: 'Teams',
-    }))
+    const ownedCount = new Map<string, number>()
+    for (const s of servicesPage?.items ?? []) {
+      if (s.teamId) ownedCount.set(s.teamId, (ownedCount.get(s.teamId) ?? 0) + 1)
+    }
+    const teams: CommandItem[] = (teamsPage?.items ?? []).map((t) => {
+      const owned = ownedCount.get(t.id) ?? 0
+      return {
+        id: `team-${t.id}`,
+        label: t.name,
+        subtitle: `${owned} ${owned === 1 ? 'service' : 'services'}`,
+        icon: <Users className="size-4" />,
+        action: () => { navigate({ to: '/teams' }); close() },
+        group: 'Teams',
+      }
+    })
 
     return [...pages, ...services, ...teams]
-  }, [servicesPage])
+  }, [servicesPage, teamsPage])
 
   const filtered = query.trim()
     ? allItems.filter(
@@ -168,7 +178,6 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             </kbd>
           </div>
 
-          {filtered.some((item) => item.group === 'Teams') && <UnderDevelopmentBanner kind="mock" />}
 
           {/* Results */}
           <div className="max-h-130 overflow-y-auto py-2">

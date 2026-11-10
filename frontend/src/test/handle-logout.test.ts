@@ -15,7 +15,7 @@ async function handleLogout() {
   } catch {
     // proceed even if the server call fails
   }
-  removeQueriesMock({ queryKey: ['session'] })
+  removeQueriesMock()
   clearSessionCookieMock()
   clearAuthMock()
   navigateMock({ to: '/login' })
@@ -31,7 +31,7 @@ describe('handleLogout — happy path', () => {
 
     await handleLogout()
 
-    expect(removeQueriesMock).toHaveBeenCalledWith({ queryKey: ['session'] })
+    expect(removeQueriesMock).toHaveBeenCalled()
     expect(clearSessionCookieMock).toHaveBeenCalledOnce()
     expect(clearAuthMock).toHaveBeenCalledOnce()
     expect(navigateMock).toHaveBeenCalledWith({ to: '/login' })
@@ -57,7 +57,7 @@ describe('handleLogout — error path', () => {
 
     await handleLogout()
 
-    expect(removeQueriesMock).toHaveBeenCalledWith({ queryKey: ['session'] })
+    expect(removeQueriesMock).toHaveBeenCalled()
     expect(clearSessionCookieMock).toHaveBeenCalledOnce()
     expect(clearAuthMock).toHaveBeenCalledOnce()
     expect(navigateMock).toHaveBeenCalledWith({ to: '/login' })

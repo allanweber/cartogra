@@ -72,7 +72,7 @@ postgres:
     limits: { cpu: 200m, memory: 384Mi }
 
 kafka:
-  heapOpts: "-Xms384m -Xmx384m"
+  heapOpts: "-XX:InitialRAMPercentage=60 -XX:MaxRAMPercentage=60"  # ≈384m of 640Mi
   resources:
     requests: { cpu: 250m, memory: 640Mi }
     limits: { cpu: 500m, memory: 640Mi }
