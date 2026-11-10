@@ -25,6 +25,10 @@ and upgrading both charts (with plain Secrets instead of sealed ones), its denia
 restoring the Sealed Secrets key. **Never run yet:** sections 1 and 2, `kubeseal`, Let's Encrypt, GHCR, `deploy.yml`,
 S3 and alert email delivery. Expect to correct this runbook on the first real build.
 
+**Wizard.** `bash infra/k8s/demo-host-wizard.sh` walks sections 1–8 interactively: it opens each console page, saves
+values to `~/.config/cartogra-demo/demo.env` (outside the repo), and skips finished stages on a re-run. It retries
+CAX21 creation across fsn1, nbg1 and hel1 every 5 minutes while the type is out of stock.
+
 ## 1. Before you start
 
 ### Tools
