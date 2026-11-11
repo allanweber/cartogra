@@ -47,10 +47,10 @@ kubectl -n cartogra exec deploy/registry -- curl -sf localhost:8081/api/v1/regis
 | Pods `Pending`, PVC unbound | `local-path` disk full | `ssh` in, `df -h /var/lib/rancher`; free space or resize the volume |
 | Certificate not issued | DNS not pointing at the VM, or port 80 closed | `kubectl -n cartogra describe certificate cartogra-tls`, check the HTTP-01 challenge |
 | `ImagePullBackOff` | Images for that SHA not pushed, or GHCR package private | Check `images.yml` run; make the package public |
-| `acme-bootstrap` Job failed | Gateway not ready within the timeout, wrong `ACME_PASSWORD`, discovery slow | `kubectl -n acme-system logs job/acme-bootstrap`; fix, then re-run **Deploy demo** (the Job is idempotent) |
+| `acme-bootstrap` Job failed | Gateway not ready within the timeout, wrong `ACME_PASSWORD`, discovery slow | `kubectl -n acme-system logs job/acme-bootstrap`; fix, then re-run **Deploy** (the Job is idempotent) |
 | Graph has no observed edges | Collector down or Acme pods down | `kubectl -n cartogra logs deploy/collector`; `kubectl -n acme-fintech get pods` |
 | Missing-drift records appear and resolve repeatedly | Acme traffic gaps longer than `TOPOLOGY_DRIFT_MISSING_AFTER` (PT1H) | Find why the fake services stopped (restarts, node pressure); never shorten `missing-after` |
-| Acme services gone from the catalog | Reader token deleted/rotated or cluster disconnected | Settings → Connections → Kubernetes status; re-run **Deploy demo** |
+| Acme services gone from the catalog | Reader token deleted/rotated or cluster disconnected | Settings → Connections → Kubernetes status; re-run **Deploy** |
 | Guests get 429 | Per-IP mint or per-guest API bucket exhausted | Expected under abuse; see section 4 if legitimate |
 | Email `GuestMintSpike` or `GuestMintsRateLimited` | Someone scripting guest mints, or a real traffic spike | Check gateway logs and `kubectl top pods`; if abuse, turn guest mode off (section 4) |
 | Email `GuestMintsMetricMissing` | Gateway, collector or scrape broken; the other guest alerts are blind | Check those pods, then `kubectl -n cartogra logs deploy/alerting -c prometheus` |
@@ -95,7 +95,7 @@ kubectl -n cartogra exec valkey-0 -- valkey-cli del '<key>'
 
 **Reset the demo data** (Acme state corrupted): restore last night's backup (deployment.md section 10), or
 for a clean slate, `helm uninstall acme -n acme-system`, delete the Acme tenant's rows, and re-run
-**Deploy demo**; the gateway bootstrap and the Job recreate everything.
+**Deploy**; the gateway bootstrap and the Job recreate everything.
 
 **Leaked secret**: rotate it (deployment.md section 4); for `JWT_SECRET` this logs everyone out, which is fine.
 A leaked Sealed Secrets key means re-keying the controller and re-sealing every secret.

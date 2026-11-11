@@ -7,7 +7,8 @@ the simulated customer the demo shows).
 
 ```
 push to main ─▶ images.yml: ghcr.io/<owner>/cartogra-<image>:<sha> (amd64 + arm64)
-manual       ─▶ deploy.yml: helm upgrade cartogra + acme at <sha> ─▶ acme bootstrap Job
+images done  ─▶ deploy.yml: helm upgrade cartogra + acme at <sha> ─▶ acme bootstrap Job
+               (automatic for main, waits for the `production` reviewer; manual dispatch with a sha for rollbacks)
 ```
 
 | Piece | Where |
@@ -49,7 +50,7 @@ with `--ref <branch>`: images are tagged with that commit's SHA and `deploy.yml`
 build ran from the unmerged phase branch this way; after the merge, use `main`.
 
 ```bash
-gh workflow list --repo allanweber/cartogra | grep -E 'Images|Deploy demo'   # both listed
+gh workflow list --repo allanweber/cartogra | grep -E 'Images|Deploy'   # both listed
 ```
 
 ### Accounts and values
@@ -337,12 +338,13 @@ kubectl --kubeconfig "$CI" config use-context demo
 kubectl --kubeconfig "$CI" auth can-i list pods -n cartogra        # yes
 kubectl --kubeconfig "$CI" auth can-i get secrets -n kube-system   # no
 
-gh api -X PUT repos/allanweber/cartogra/environments/demo --input - <<JSON
-{"reviewers":[{"type":"User","id":$(gh api user --jq .id)}]}
+gh api -X PUT repos/allanweber/cartogra/environments/production --input - <<JSON
+{"reviewers":[{"type":"User","id":$(gh api user --jq .id)}],"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}
 JSON
-gh secret set KUBECONFIG --repo allanweber/cartogra --env demo < "$CI"
-gh variable set ACME_GITHUB_ORG --repo allanweber/cartogra --env demo --body <org>
-gh variable set ALERT_EMAIL --repo allanweber/cartogra --env demo --body <who receives alerts>
+gh api -X POST repos/allanweber/cartogra/environments/production/deployment-branch-policies -f name=main -f type=branch
+gh secret set KUBECONFIG --repo allanweber/cartogra --env production < "$CI"
+gh variable set ACME_GITHUB_ORG --repo allanweber/cartogra --env production --body <org>
+gh variable set ALERT_EMAIL --repo allanweber/cartogra --env production --body <who receives alerts>
 rm -f "$CI" /tmp/demo-ca.crt
 ```
 
@@ -353,7 +355,8 @@ commands above.
 
 To test chart changes before deploying, run them on a local cluster first: see [Test on a local cluster](../../infra/helm/README.md).
 
-Through CI, then approve the run as the `demo` reviewer:
+Through CI: every merge to `main` builds images, then starts **Deploy** for that commit, which waits for the
+`production` reviewer to approve. To deploy a specific commit (first build, rollback), dispatch it and approve:
 
 ```bash
 gh workflow run deploy.yml --repo allanweber/cartogra --ref main -f sha=$SHA
@@ -434,7 +437,7 @@ helm -n cartogra history cartogra
 helm -n cartogra rollback cartogra <revision> --wait
 ```
 
-Prefer re-running **Deploy demo** with the older SHA: it moves `cartogra` and `acme` together. A `helm rollback`
+Prefer re-running **Deploy** with the older SHA: it moves `cartogra` and `acme` together. A `helm rollback`
 of `cartogra` alone leaves `acme` on the newer SHA; roll back `acme` (`-n acme-system`) too, and note its
 bootstrap Job is a `post-upgrade` hook that runs again (it is idempotent). Flyway migrations are forward-only and
 additive, so older pods run against a newer schema; never roll the schema back by hand.
@@ -448,7 +451,7 @@ helm -n cartogra history cartogra                   # last `deployed` revision
 helm -n cartogra rollback cartogra <that revision> --wait
 ```
 
-Same for `acme` in `acme-system`. Then re-run **Deploy demo**.
+Same for `acme` in `acme-system`. Then re-run **Deploy**.
 
 ## 10. Backups and restore
 
