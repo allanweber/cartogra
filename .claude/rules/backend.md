@@ -185,7 +185,7 @@ Every message payload MUST match this envelope:
 - Message key: primary entity UUID (ensures partition ordering per entity)
 - Kafka message headers: include `traceparent` (W3C format) on every send
 - Introduce new topic ONLY when first real producer/consumer exists — no speculative topics
-- Topic naming: `cartogra.{domain}.{entity}.{event}` (e.g., `cartogra.registry.service.registered`)
+- Topic naming: ONE topic per entity for lifecycle events — `cartogra.{domain}.{entity}.changed` (e.g., `cartogra.registry.service.changed`), keyed by entity id, the event in the envelope's `event_type` (`service.registered`, `service.deleted`, …). NEVER one topic per lifecycle event: Kafka orders only within a topic, so `deleted` could be read before `updated`. A topic carrying a single kind of event keeps `cartogra.{domain}.{entity}.{event}` (e.g., `cartogra.ingestion.service.discovered`)
 
 ## Internal Service Communication (Gateway → Services)
 

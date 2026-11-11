@@ -22,7 +22,6 @@ Measured, not claimed:
 | CI | **Topology enabled** | Topology now builds and tests in CI (story 0.1, commit `40fff29`). Contract and intelligence steps stay commented out until those services exist |
 
 **Velocity:** 64 commits since 2026-06-04. June 24 · July 38 · August 2. Last feature commit 2026-08-05.
-Phases 0+1 (gateway + registry + ingestion + auth/catalog UI) cost roughly 10 weeks at that pace. Every estimate below is calibrated against that, assuming one developer.
 
 **Product position:** the catalog half of the product works. The differentiator — dependency intelligence — has schema and nothing else. Everything in this roadmap is ordered to close that gap first, because a catalog without a graph is a spreadsheet with OAuth.
 
@@ -65,7 +64,7 @@ The old checklist broke each of these; that is why it stopped being usable.
 
 ---
 
-## ✅ Phase 0 — Make the repo honest (≈1 week) DONE
+## ✅ Phase 0 — Make the repo honest DONE
 
 No user-facing value. It exists because the next phases are unverifiable without it.
 
@@ -104,7 +103,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 ---
 
-## ✅ Phase 1 — See the map (≈4 weeks) DONE
+## ✅ Phase 1 — See the map DONE
 
 **Goal:** a user can express and see how their services connect. This is the first time Cartogra does something a catalog cannot.
 
@@ -148,7 +147,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 ---
 
-## ✅ Phase 2 — Answer impact questions (≈4 weeks) DONE
+## ✅ Phase 2 — Answer impact questions DONE
 
 **Goal:** the graph stops being a picture and starts making decisions. This is the "seconds, not hours" promise in `PRODUCT.md`.
 
@@ -192,7 +191,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 ---
 
-## ✅ Phase 3 — The map maintains itself (≈5 weeks) DOING
+## ✅ Phase 3 — The map maintains itself DONE
 
 **Goal:** remove manual upkeep — the reason internal service catalogs die.
 
@@ -204,7 +203,7 @@ No user-facing value. It exists because the next phases are unverifiable without
   *Acme test:* ✅ `verify --with-drift`: `drift on` enables 3 dormant undeclared calls (`reporting-service` → `payments-service`, `webhook-relay` → `fraud-service`, `legacy-batch` → `notification-service`) and the declared-but-silent `loyalty-service` → `fx-service` is reported as missing; accept / remove / dismiss each get their own drift. Needs `TOPOLOGY_DRIFT_SWEEP_INTERVAL` / `TOPOLOGY_DRIFT_MISSING_AFTER` set short (e.g. `PT15S` / `PT2M`) for a quick demo.
 - [x] **3.4 — CODEOWNERS team mapping (orphan risk from ownership events).** No Topology consumer: ownership already reaches `graph_nodes.team_id` through `service.{registered,updated}` and feeds the 2.5 risk list (ADR-0028, superseding ADR-0027). The gap was the mapping itself — CODEOWNERS never assigned a team. Ingestion providers now reduce handles to bare team names (GitHub `@org/team`; Azure DevOps `@team`, `[Project]\Team`, `[Team]`); Registry finds the service by SCM external id (falling back to the repo-URL suffix) and matches handles to teams by slug, assigning when exactly one distinct team matches. Already-owned services are still never overridden. Plan: `plans/015-codeowners-team-mapping.md`.
   *Acme test:* 🔎 `AcmeCodeownersMappingIT` asserts 17 owned / 3 orphans from the seed's CODEOWNERS handles; the live check (`pnpm acme load --skip-owners` + SCM sync) is manual, see `seed/acme-fintech/README.md`. Orphans in `/risks` already asserted by `verify`.
-- [x] **3.5 — Topology events *(only if a consumer exists)*.** `dependency.declared/observed/removed` and `drift.detected` are **deferred to Phase 6**, where Intelligence consumes them. Rule 4. Closed by deferral: no consumer exists, so no topic or producer was introduced in Phase 3; work moves to 6.7. Unused topology JSON `KafkaTemplate` removed. Plan: `plans/016-topology-events-deferral.md`.
+- [x] **3.5 — Topology events *(only if a consumer exists)*.** `dependency.declared/observed/removed` and `drift.detected` are **deferred to Phase 6**, where Intelligence consumes them. Rule 4. Closed by deferral: no consumer exists, so no topic or producer was introduced in Phase 3; work moves to 6.7. `dependency.*` later pulled into 5.4, where contract consumes them. Unused topology JSON `KafkaTemplate` removed. Plan: `plans/016-topology-events-deferral.md`.
   *Acme test:* n/a: deferred.
 - [x] **3.6 — Unresolved span services.** `GET /v1/unresolved-span-services` (paginated, sorted by `seen_count`) + `POST …/{id}/dismiss` (soft delete). A list in the UI next to drift, with a "create service" shortcut that pre-fills the registry form. Reads the table 3.1 fills. Dismiss is sticky (a dismissed name is never re-recorded); registering a service with that name clears its row (`resolution='registered'`), so it can resurface if the service is later deleted. Plan: `plans/017-unresolved-span-services.md`.
   *Acme test:* ✅ `verify`: `payments-service -> stripe-gateway` (`"external": true`) is listed in `/unresolved-span-services`.
@@ -237,9 +236,9 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 ---
 
-## ✅ Phase 4 — A product a stranger can try (≈6 weeks)
+## ✅ Phase 4 — A product a stranger can try DONE
 
-**Goal:** the first public artifact. Moved forward from the old plan's Phase 5 — nothing is validated until someone outside can click it. Grown from ≈4 weeks: it now runs on k3s with 7.1's Helm charts pulled in (ADR-0030). Plan: `plans/021-phase4-public-demo.md`.
+**Goal:** the first public artifact. Moved forward from the old plan's Phase 5 — nothing is validated until someone outside can click it. It runs on k3s with 7.1's Helm charts pulled in (ADR-0030). Plan: `plans/021-phase4-public-demo.md`.
 
 - [x] **4.1 — Audit trail.** `audit_events` migration in registry (`entity_type`, `entity_id`, `action`, `actor_kind` user|system, `actor_id`, `payload` JSONB of changed fields before → after, RLS, GIN); `AuditEventPort` in `shared:common`; registry and gateway (same schema) write directly; topology and ingestion publish `cartogra.platform.audit.recorded` for registry to consume (ADR-0017, accepted). State changes only — no logins or per-span bumps. `GET /api/v1/registry/audit-events` paginated + filterable, readable by every role incl. guest. `timeline.tsx` drops `MOCK_TIMELINE`.
   *Acme test:* 🔎 loader owner/tier/edge writes produce audit events; `demo-flow` e2e asserts they reach the Timeline.
@@ -279,25 +278,31 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 ---
 
-## ⬜ Phase 5 — Change safety: contracts (≈7 weeks)
+## ⬜ Phase 5 — Change safety: contracts
 
-**Goal:** the second product pillar — catch breaking API changes before merge. Start with the smallest loop that a CI pipeline can block on.
+**Goal:** the second product pillar — catch breaking API changes before merge. Start with the smallest loop that a CI pipeline can block on. OpenAPI 3.x only; AsyncAPI is a candidate story once a user brings an AsyncAPI spec.
 
-- [ ] **5.1 — Contract store.** Contract service skeleton + `api_contracts`, `contract_versions`, `contract_consumers`, `contract_checks`. `POST /v1/contracts` and `/versions` parse and validate OpenAPI 3 / AsyncAPI 2, canonicalize, store `spec_hash`. Invalid specs return envelope errors.
+Stories are listed in execution order; numbers are kept stable for their issues, so 5.10 runs first and 5.8 runs after 5.3.
+
+- [ ] **5.10 — One topic per entity.** Lifecycle events of one entity share one topic, keyed by entity id, with the event in the envelope's `event_type` — Kafka orders only within a topic, so an `updated` can no longer be read after its `deleted`. Registry's `service.{registered,updated,deleted}` become `cartogra.registry.service.changed`, and `team.{created,updated,deleted}` become `cartogra.registry.team.changed`; topology's `GraphNodeEventConsumer` and its DLQ move with them. Cut over in one deploy, old topics deleted. The naming rule becomes `cartogra.{domain}.{entity}.changed` for lifecycle events (`backend.md`, `patterns.md`, `kafka-topics.md`); single-event topics (`ingestion.service.discovered`, `audit.recorded`, …) keep their names. Runs before 5.1 so contract's consumer is written once, against the new topic.
+  *Acme test:* ✅ `verify` unchanged: graph nodes still appear after `load`, now through the new topic.
+- [ ] **5.1 — Contract store.** Contract service skeleton + `api_contracts` (one per service), `contract_versions`, `contract_checks`. `POST /v1/contracts` and `/versions` parse and validate OpenAPI 3.x, canonicalize, store `spec_hash`. Invalid specs return envelope errors. New-service plumbing in the same story: gateway `contract` route + same-named circuit breaker, Helm subchart + umbrella entry, compose service, contract steps enabled in `ci.yml`/`ci-full.yml`. Writes are `@PreAuthorize`-guarded and added to the 4.3 guest-403 IT; every contract write publishes `cartogra.platform.audit.recorded` (ADR-0017). Consumes `cartogra.registry.service.changed` (5.10) and, on `event_type = service.deleted`, soft-deletes that service's contract and versions, idempotently.
   *Acme test:* ❌ repos hold one `openapi.yaml` each; needs a second version of one spec (`repos` push of v2).
-- [ ] **5.2 — Diff + timeline.** `GET /v1/contracts` (paginated) and `/versions/{v}/diff` returning a structured diff. Contract list + side-by-side diff + version timeline in the UI; `contracts.tsx` drops `MOCK_CONTRACTS`.
+- [ ] **5.2 — Diff + timeline.** `GET /v1/contracts` (paginated) and `/versions/{v}/diff` returning a structured diff against the previous version. Contract list + side-by-side diff + version timeline in the UI, no compatibility status yet (5.3 adds it); `contracts.tsx` drops `MOCK_CONTRACTS`.
   *Acme test:* ❌ same as 5.1: a v1 → v2 pair for the diff and timeline.
-- [ ] **5.3 — Breaking-change engine.** Removed fields, type changes, newly-required fields, enum removals → `is_breaking` + `changes[]`. Golden tests over compatible and breaking pairs for both spec types.
+- [ ] **5.3 — Breaking-change engine.** Own rule engine, direction-aware: removed path or operation; removed response field; field or parameter type change; new required request field or parameter; enum value removed from a request or added to a response. Result is binary — `breaking` | `compatible` — as `is_breaking` + `changes[]`. Adds the status badge and filter to the contract list. Golden tests over compatible and breaking pairs, including request-vs-response cases of the same change.
   *Acme test:* ❌ add a `--breaking` toggle that rewrites one `openapi.yaml` (removed path / new required field).
-- [ ] **5.4 — Consumers, manually first.** `POST/DELETE /v1/contracts/{id}/consumers` with `evidence_type='manual'`, surfaced in contract detail and feeding `affected_consumers`. Observed consumers derived from spans are a **Phase 6 story**, after the manual path proves the model.
-  *Acme test:* 🔎 declared edges give the consumers to attach manually.
-- [ ] **5.5 — CI check.** Tenant API keys (hashed, scoped; the migration lands in the **registry** schema — the gateway has no Flyway setup today, contrary to the old plan) + `POST /ci/check` authenticated by `X-Cartogra-Api-Key` with scope `ci:check`. API key management page replaces the "coming soon" stub.
-- [ ] **5.6 — GitHub Action.** One CI integration, published under `ci-extensions/`, blocking on breaking changes. Azure Pipelines only when a user asks for it.
-- [ ] **5.7 — Slack notification on breaking checks.** One channel end to end (Resend email already exists as the second). `notification_rules` + `notification_log` + the settings drawer replacing the stub. Teams on demand.
-- [ ] **5.8 — Spec discovery.** Ingestion publishes `cartogra.ingestion.spec.discovered` after each sync; contract consumes idempotently on `(tenant_id, file_path, content_sha256)` into 5.1. Last, because it is worthless until the pipeline it feeds works.
+- [ ] **5.8 — Spec discovery.** Ingestion publishes `cartogra.ingestion.spec.discovered` after each sync, carrying the `service_id` it resolved from the repository (ADR-0021 keying); contract consumes idempotently on `(tenant_id, repository_full_name, file_path, content_sha256)` into 5.1, upserting the contract by `service_id`. Runs before 5.5 so a merged change becomes the next baseline without a manual `POST /versions`. ADR-0018's key (`tenant_id, file_path, content_sha256`) collides across repos with the same path and needs amending.
   *Acme test:* 🔎 the 20 `openapi.yaml` files are discovered after an SCM sync; assert contracts exist when 5.8 lands.
-
-- [ ] **5.9 — Trusted OTLP intake.** A gateway OTLP/HTTP endpoint `POST /v1/otlp/traces`, authenticated by `X-Cartogra-Api-Key` with a new scope `spans:write`. The gateway overwrites `cartogra.tenant.id` from the key and forwards to the collector; once it exists the collector stops accepting unauthenticated external traffic. Settings → Connections → OpenTelemetry card (currently an inactive placeholder, `settings.connections.tsx`): create/revoke a `spans:write` key (hashed, shown once), show the endpoint URL and a copy-paste snippet (`OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS=X-Cartogra-Api-Key=<key>`), and status (last span received, edges created, quarantined count from the `cartogra.spans.*` counters). With 4.4 the collector becomes one shared internal component and the per-tenant `CARTOGRA_TENANT_ID` env var is dropped. Depends on 5.5. Appended so 5.6–5.8 keep their numbers.
+- [ ] **5.4 — Consumers from the graph.** No manual consumer table: affected consumers are the services with inbound declared or observed edges to the contract's service. Topology publishes `dependency.{declared,observed,removed}` on one topic, `cartogra.topology.dependency.changed`, keyed by edge id (5.10's rule; pulled forward from 6.7; contract is the consumer, so rule 4 holds); contract projects them into a local inbound-edge table, idempotent on event id. Surfaced in contract detail and feeding `affected_consumers`. Endpoint-level matching (which consumer calls which path) is 6.6.
+  *Acme test:* 🔎 the 43 declared edges give each contract its consumers (`ledger-service` has 12).
+- [ ] **5.5 — CI check.** Tenant API keys (hashed, scoped, create/revoke audited; the migration lands in the **registry** schema — the gateway has no Flyway setup today, contrary to the old plan) + `POST /v1/contracts/check` authenticated by `X-Cartogra-Api-Key` with scope `ci:check`. Body `{service, spec}` (service id or slug); diffs the candidate against the latest stored version and returns `{is_breaking, changes[], affected_consumers[]}`; records a `contract_checks` row, never creates a version; 404 when the service has no baseline. API key management page replaces the "coming soon" stub.
+  *Acme test:* ✅ `verify` posts the `--breaking` spec to `/v1/contracts/check` and asserts `is_breaking` and the consumers named.
+- [ ] **5.6 — GitHub Action.** One CI integration, published under `ci-extensions/`, blocking on breaking changes. Azure Pipelines only when a user asks for it.
+  *Acme test:* 🔎 a PR on the Acme GitHub mirror deleting a required field fails the Action.
+- [ ] **5.7 — Slack notification on breaking checks.** Contract owns `notification_rules` + `notification_log` and a Slack webhook sender with retry and backoff, called in-process when a check is breaking — no topic, no email channel. Rule changes are audited. The settings drawer replaces the notifications stub. Teams and email on demand.
+  *Acme test:* n/a: needs a real Slack webhook; an IT covers delivery against a stub server.
+- [ ] **5.9 — Trusted OTLP intake.** A gateway OTLP/HTTP endpoint `POST /v1/otlp/traces`, authenticated by `X-Cartogra-Api-Key` with a new scope `spans:write`. The gateway overwrites `cartogra.tenant.id` from the key and forwards to the collector; once it exists the collector stops accepting unauthenticated external traffic. This story drops the per-tenant `CARTOGRA_TENANT_ID` collector env var (still set in `values-demo.yaml`), and the in-cluster Acme pods send through the gateway too. Settings → Connections → OpenTelemetry card (currently an inactive placeholder, `settings.connections.tsx`): create/revoke a `spans:write` key (hashed, shown once), show the endpoint URL and a copy-paste snippet (`OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS=X-Cartogra-Api-Key=<key>`), and status — last span received, edges created, quarantined count — read from a per-tenant stats row topology persists (the `cartogra.spans.*` counters carry no tenant). Depends on 5.5.
   *Acme test:* ❌ add an `ACME_OTLP_HEADERS` option so pods send through the gateway with an API key.
 
 **Demo:** open a PR that deletes a required field; CI fails with the affected consumers named; Slack shows it.
@@ -306,10 +311,14 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 - [ ] A PR deleting a required field fails the GitHub Action; a compatible change passes.
 - [ ] API key scopes enforced (missing `ci:check` → 403); keys hashed at rest; revocation takes effect immediately.
-- [ ] Golden diff tests cover OpenAPI and AsyncAPI, compatible and breaking pairs.
+- [ ] Golden diff tests cover OpenAPI compatible and breaking pairs, including request-vs-response direction cases.
+- [ ] The CI check names affected consumers from topology edges; a `dependency.removed` drops that consumer.
 - [ ] Slack delivery logged with retry and backoff; the failure path is recorded, not silent.
-- [ ] Spec discovery is idempotent on `(tenant_id, file_path, content_sha256)`.
+- [ ] Spec discovery is idempotent on `(tenant_id, repository_full_name, file_path, content_sha256)`.
+- [ ] Deleting a service soft-deletes its contract.
+- [ ] OTLP intake: no key → 401, key without `spans:write` → 403, `cartogra.tenant.id` overwritten from the key.
 - [ ] `MOCK_CONTRACTS` is deleted.
+- [ ] Lifecycle events use one topic per entity (`registry.service.changed`, `registry.team.changed`, `topology.dependency.changed`); the per-event registry topics no longer exist.
 
 *Standing checks (§2 — Definition of done):*
 
@@ -321,7 +330,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 **Worth writing about**
 
-- Structured diffs over JSON specs: canonicalization, `spec_hash`, and why text diff fails. (deep dive)
+- Structured diffs over OpenAPI specs: canonicalization, `spec_hash`, and why text diff fails. (deep dive)
 - The breaking-change rule set, in full, with the cases we chose not to flag. (article)
 - Hashing and scoping tenant API keys. (short post)
 - Shipping a GitHub Action that blocks a merge on your own API. (article)
@@ -329,7 +338,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 ---
 
-## ⬜ Phase 6 — Intelligence (≈5 weeks)
+## ⬜ Phase 6 — Intelligence
 
 **Goal:** explanation on top of evidence. Deliberately after Phases 1–5, because an LLM narrating an empty graph is a demo, not a product.
 
@@ -343,9 +352,9 @@ No user-facing value. It exists because the next phases are unverifiable without
   *Acme test:* 🔎 manual queries over the Acme tenant ("which services have no owner?" → 3).
 - [ ] **6.5 — Health score + weekly digest**, persisted as trends, surfaced in the same panel.
   *Acme test:* 🔎 a score over the Acme tenant; trends need repeated runs.
-- [ ] **6.6 — Observed consumers** (deferred from 5.4): match span peer URLs against contract servers/base paths to populate `contract_consumers` with `evidence_type='observed'`.
+- [ ] **6.6 — Endpoint-level consumers** (refines 5.4): match span `url.full` against each contract's servers and paths, so a breaking change names only the consumers that call the changed operation, not every service with an edge.
   *Acme test:* ❌ spans carry no `url.full`; add it (paths match each repo's `openapi.yaml`).
-- [ ] **6.7 — Topology events published** (deferred from 3.5), now that Intelligence consumes them.
+- [ ] **6.7 — `drift.detected` published** (deferred from 3.5), now that Intelligence consumes it. `dependency.{declared,observed,removed}` already ship in 5.4.
   *Acme test:* n/a: deferred.
 
 **Cut from the old plan, with reasons:** *AI ownership suggestions* assumed `ScmProvider.getCommitHistory` — the interface has `getLastCommit` only, so the prerequisite is a new SCM API and 90 days of commit aggregation; it is not a story until someone builds that. *Anomaly detection* assumed `services.last_deploy_at` history — no such column, no deploy-event ingestion, no history table. Both return as candidates once their data sources exist.
@@ -377,7 +386,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 ---
 
-## ⬜ Phase 7 — Production hardening (≈5 weeks)
+## ⬜ Phase 7 — Production hardening
 
 Triggered by real users, not by a calendar. Before this, Phase 4's single-node k3s host is enough.
 
@@ -485,7 +494,7 @@ P0 repo truth  →  P1 see the map  →  P2 answer impact  →  P3 self-maintain
                                     P7 production   →   P8 commercial
 ```
 
-Cumulative: **P0–P4 ≈ 18 weeks** to a public, self-maintaining dependency map with an audit trail — the smallest thing that is recognisably Cartogra rather than a catalog. P5 adds the contract pillar, P6 the intelligence pillar.
+**P0–P4** deliver a public, self-maintaining dependency map with an audit trail — the smallest thing that is recognisably Cartogra rather than a catalog. P5 adds the contract pillar, P6 the intelligence pillar.
 
-Estimates assume one developer at the June–July pace (~30 commits/month). At August's pace they are meaningless — if the gap persists, cut Phase 3 to 3.1+3.3 and Phase 5 to 5.1–5.3 rather than stretching every phase.
+No time estimates: the work is executed by AI agents, so human-pace weeks mean nothing. If scope must shrink, cut Phase 5 to 5.10, 5.1, 5.3, 5.8, 5.5, 5.6 (topics, store, engine, discovery, check, Action) rather than thinning every story.
 

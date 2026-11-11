@@ -1,12 +1,12 @@
 # Contract Context
 
-**Service**: `services/contract` · Port `8083` · Phase 3 · **Planned**
+**Service**: `services/contract` · Port `8083` · Phase 5 · **Planned**
 
 ---
 
 ## Purpose
 
-The Contract context is Cartogra's API compatibility guardian. It stores OpenAPI and AsyncAPI specifications for every Service, runs backward-compatibility checks when a new spec version is published, tracks which Services consume which contracts, and notifies teams of breaking changes before they reach production.
+The Contract context is Cartogra's API compatibility guardian. It stores the OpenAPI specification of every Service, checks a candidate spec against the stored baseline before merge, names the Services that consume the changed contract, and notifies teams of breaking changes before they reach production.
 
 ---
 
@@ -14,49 +14,50 @@ The Contract context is Cartogra's API compatibility guardian. It stores OpenAPI
 
 | Term | Meaning in this context |
 |---|---|
-| **API Contract** | The formal interface specification for a Service; owned by the producing Service |
-| **Contract Version** | A specific immutable revision of an API Contract (semver or commit SHA); stored as raw YAML/JSON with a content hash |
-| **Spec Type** | Format of the contract: `openapi` (REST) or `asyncapi` (event-driven) |
-| **Consumer** | A Service that depends on another Service's API Contract |
+| **API Contract** | The formal interface specification for a Service; owned by the producing Service; one per Service |
+| **Contract Version** | A specific immutable revision of an API Contract; stored canonicalized with a `spec_hash` |
+| **Spec Type** | Format of the contract: `openapi` (OpenAPI 3.x) only. AsyncAPI is a candidate once a user brings an AsyncAPI spec |
+| **Baseline** | The latest stored Contract Version of a Service; what a candidate spec is checked against |
+| **Consumer** | A Service with an inbound declared or observed dependency edge to the contract's Service; derived from the Topology graph, never registered by hand |
 | **Producer** | The Service that owns and publishes the API Contract |
-| **Contract Check** | A compatibility analysis comparing a candidate version against a baseline; result: `compatible`, `breaking`, or `warning` |
-| **Breaking Change** | A contract mutation that would break a registered Consumer (removed endpoint, changed field type, etc.) |
-| **Finding** | A specific breaking change or warning detected during a Contract Check |
-| **Outbox Event** | A durably persisted event awaiting Kafka publication (transactional outbox pattern) |
-| **Consumer Matrix** | The cross-reference view of which Services consume which contracts; drives blast-radius-aware change alerting |
+| **Contract Check** | A compatibility analysis comparing a candidate spec against the Baseline; result: `breaking` or `compatible` |
+| **Breaking Change** | A direction-aware contract mutation that would break a Consumer (removed path or operation, removed response field, type change, new required request field or parameter, enum value removed from a request or added to a response) |
+| **Change** | One classified difference found during a Contract Check |
+| **Affected Consumers** | The Consumers named by a breaking Contract Check |
 
 ---
 
 ## Core Responsibilities
 
-1. **Contract + version storage** — ingest spec content from Ingestion events; deduplicate by hash
-2. **Compatibility checks** — compare candidate vs. baseline version; classify changes
-3. **Consumer tracking** — register consumer relationships; clean up on service deletion
-4. **Outbox relay** — publish `check.passed`, `check.failed`, `version.published` events via transactional outbox
-5. **Breaking-change alerting** — `check.failed` events flow to Intelligence and Notification
+1. **Contract + version storage** — ingest spec content from manual `POST /versions` and Ingestion `spec.discovered` events; deduplicate by hash
+2. **Compatibility checks** — compare candidate vs. Baseline; classify each change as breaking or compatible
+3. **Consumer projection** — project Topology `dependency.*` events into a local inbound-edge table to name Affected Consumers
+4. **Service cleanup** — soft-delete a Service's contract and versions on `service.deleted`
+5. **Breaking-change alerting** — send Slack notifications in-process when a check is breaking, per tenant notification rules
 
 ---
 
 ## Domain Model
 
 ```
-Service (ID ref) ──< ApiContract ──< ContractVersion
+Service (ID ref) ──1 ApiContract ──< ContractVersion
 ApiContract ──< ContractCheck
-ApiContract ──< ContractConsumer ──> Service (ID ref, consumer)
-ApiContract ──< OutboxEvent
+Service (ID ref) ──< InboundEdge ──> Service (ID ref, consumer)   (projection of Topology edges)
+Tenant ──< NotificationRule ──< NotificationLog
 ```
 
 All cross-context Service references stored as UUIDs only.
 
-**Tables** (Phase 3 schema):
+**Tables** (Phase 5 schema):
 
 | Table | Purpose |
 |---|---|
-| `api_contracts` | One per service; spec_type: openapi/asyncapi |
+| `api_contracts` | One per service; spec_type `openapi` |
 | `contract_versions` | Immutable revisions; deduped by `spec_hash` |
-| `contract_consumers` | Producer–consumer relationships |
-| `contract_checks` | Check result per (baseline, candidate) pair; `findings` JSONB |
-| `outbox_events` | Transactional outbox; `published_at NULL` = pending |
+| `contract_checks` | Check result per candidate vs. baseline; `is_breaking` + `changes` JSONB |
+| inbound-edge projection | Consumer edges projected from Topology `dependency.*` events, idempotent on event id |
+| `notification_rules` | Per-tenant Slack delivery rules |
+| `notification_log` | Every delivery attempt, with retry/backoff outcome |
 
 ---
 
@@ -65,12 +66,11 @@ All cross-context Service references stored as UUIDs only.
 | Method | Path | Description |
 |---|---|---|
 | POST | `/api/v1/contracts` | Create contract for a service |
-| GET | `/api/v1/contracts` | List contracts for tenant |
-| GET | `/api/v1/contracts/{id}` | Get contract with versions |
-| POST | `/api/v1/contracts/{id}/versions` | Publish new version; triggers check |
-| GET | `/api/v1/contracts/{id}/checks` | List check results |
-| POST | `/api/v1/contracts/{id}/consumers` | Register consumer service |
-| DELETE | `/api/v1/contracts/{id}/consumers/{consumerId}` | Remove consumer |
+| GET | `/api/v1/contracts` | List contracts for tenant (paginated) |
+| GET | `/api/v1/contracts/{id}` | Get contract with versions and consumers |
+| POST | `/api/v1/contracts/{id}/versions` | Publish a new version |
+| GET | `/api/v1/contracts/{id}/versions/{v}/diff` | Structured diff against the previous version |
+| POST | `/api/v1/contracts/check` | CI check: `{service, spec}` → `{is_breaking, changes[], affected_consumers[]}`; API key scope `ci:check`; never creates a version |
 
 ---
 
@@ -80,16 +80,17 @@ All cross-context Service references stored as UUIDs only.
 
 | Topic | Source | Action |
 |---|---|---|
-| `cartogra.ingestion.spec.updated` | Ingestion | Ingest new spec version; trigger compatibility check |
-| `cartogra.registry.service.deleted` | Registry | Soft-delete contracts + consumer registrations for that service |
+| `cartogra.ingestion.spec.discovered` | Ingestion | Store a new version, idempotent on `(tenant_id, repository_full_name, file_path, content_sha256)` |
+| `cartogra.topology.dependency.changed` (`event_type` `dependency.{declared,observed,removed}`) | Topology | Maintain the inbound-edge projection that names Consumers |
+| `cartogra.registry.service.changed` (on `event_type` `service.deleted`) | Registry | Soft-delete the service's contract and versions |
 
-**Produced (via Outbox):**
+**Produced:**
 
 | Topic | Trigger |
 |---|---|
-| `cartogra.contract.check.passed` | Compatibility check returned compatible |
-| `cartogra.contract.check.failed` | Breaking change detected |
-| `cartogra.contract.version.published` | New spec version accepted and stored |
+| `cartogra.platform.audit.recorded` | Every contract write, notification-rule change (ADR-0017) |
+
+No `check.*` or `version.published` topics: no consumer exists for them (roadmap rule 4).
 
 ---
 
@@ -97,10 +98,10 @@ All cross-context Service references stored as UUIDs only.
 
 | Neighbour | Relationship | Notes |
 |---|---|---|
-| Ingestion | Downstream (Conformist) | Consumes `spec.updated` events to receive spec content |
-| Service Catalog (Registry) | Downstream (Conformist) | Consumes `service.deleted` to cascade cleanup |
-| Intelligence | Upstream (Customer/Supplier) | Produces `check.failed` and `version.published` events |
-| Identity & Access (Gateway) | Conformist | Receives proxied requests with `X-Tenant-Id` |
+| Ingestion | Downstream (Conformist) | Consumes `spec.discovered` to receive spec content |
+| Topology | Downstream (Conformist) | Consumes `dependency.*` to derive Consumers |
+| Service Catalog (Registry) | Downstream (Conformist) | Consumes `service.changed` (`service.deleted`) to cascade cleanup; receives audit events |
+| Identity & Access (Gateway) | Conformist | Receives proxied requests with `X-Tenant-Id`; gateway validates `X-Cartogra-Api-Key` for the CI check |
 | Shared Kernel | Shared Kernel | `EventEnvelope`, `ApiResponse`, `ErrorCodes` |
 
 ---

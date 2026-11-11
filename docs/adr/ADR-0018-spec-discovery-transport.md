@@ -31,6 +31,7 @@ Payload:
 {
   "tenant_id": "<UUID>",
   "connection_id": "<UUID>",
+  "service_id": "<UUID>",
   "repository_full_name": "<owner/repo>",
   "file_path": "openapi.yaml",
   "content_sha256": "<hex>",
@@ -40,7 +41,11 @@ Payload:
 
 Wrapped in the shared `EventEnvelope` with `eventType = "spec.discovered"`, `entityId` = a UUIDv5 derived from `(tenant_id, repository_full_name, file_path)` so the same file location across re-syncs produces the same `entityId` (deterministic per-file identity), `traceparent` carried on the Kafka header.
 
-**Idempotency** in contract: skip processing if a `contract_versions` row already exists for `(tenant_id, file_path, content_sha256)`. The hash is the only thing that needs to change to trigger a new version.
+`service_id` is the catalog service ingestion resolved from the repository (ADR-0021 keying); contract upserts the service's API contract by it.
+
+**Idempotency** in contract: skip processing if a `contract_versions` row already exists for `(tenant_id, repository_full_name, file_path, content_sha256)`. The hash is the only thing that needs to change to trigger a new version.
+
+> **Amended 2026-11-11.** The original key `(tenant_id, file_path, content_sha256)` collided across repositories that keep the spec at the same path (every Acme repo has `openapi.yaml`), and the payload carried no way to map a file to a service. Added `repository_full_name` to the key and `service_id` to the payload (roadmap 5.8).
 
 Rationale:
 
@@ -84,6 +89,6 @@ Document the topic in [docs/architecture/kafka-topics.md](../architecture/kafka-
 
 ## References
 
-- Task 3.29a (this ADR), 3.30 (the implementation it unblocks)
+- Task 3.29a (this ADR), 3.30 (the implementation it unblocks) — now roadmap 5.8
 - ADR-0017 — Audit events transport (same Kafka-over-REST reasoning)
 - [docs/architecture/kafka-topics.md](../architecture/kafka-topics.md)

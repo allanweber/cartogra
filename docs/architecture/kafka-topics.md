@@ -4,6 +4,8 @@
 
 `cartogra.{domain}.{entity}.{event}`
 
+**Lifecycle events: one topic per entity** — `cartogra.{domain}.{entity}.changed`, keyed by entity id, the event in the envelope's `event_type`. Kafka orders only within a topic, so per-event topics let a `deleted` be read before an `updated`. Roadmap 5.10 migrates `registry.service.*` and `registry.team.*` to `registry.service.changed` / `registry.team.changed`; the catalog below reflects code *before* 5.10 lands.
+
 All topics are created explicitly. No speculative topics — a topic is created only when its first real producer/consumer exists.
 
 This document was last reconciled against code on 2026-08-20 (Phase 0, story 0.4). Ground truth was the
@@ -93,10 +95,10 @@ table, as authoritative on exact timing, and re-check the wording there before r
 | `cartogra.ingestion.spec.discovered` | Ingestion → Contract | 5.8 | Named `spec.discovered`, not `spec.updated` as an earlier version of this document had it |
 | `cartogra.platform.dead-letter` | platform-wide DLQ replay | 7.5 | Distinct from the per-service `.dlq` topics above |
 
-Topology's own future producer topics (3.5, deferred to Phase 6 per the roadmap's "no topic without a
-consumer" rule — Intelligence is the consumer and doesn't exist yet): `dependency.declared`,
-`dependency.observed`, `dependency.removed`, `drift.detected`. Exact `cartogra.topology.*` names are not yet
-committed in the roadmap text, so none are asserted here.
+Topology's own future producer topics (3.5, deferred per the roadmap's "no topic without a consumer" rule):
+`dependency.declared`, `dependency.observed`, `dependency.removed` ship in 5.4 on one topic,
+`cartogra.topology.dependency.changed` keyed by edge id, consumed by Contract to name affected consumers;
+`drift.detected` stays in 6.7 until Intelligence consumes it.
 
 No Kafka topic names are committed anywhere in `docs/roadmap.md` for Contract (beyond `spec.discovered`
 above) or for Intelligence. An earlier version of this document speculated `check.passed`/`check.failed`/
