@@ -1,9 +1,14 @@
-name: Deploy demo
+name: Deploy
 
-# Manual: installs one commit's images (built by images.yml) on the demo k3s host (ADR-0030).
-# Needs the `demo` environment: secret KUBECONFIG (the deployer ServiceAccount from infra/k8s/cluster-setup.yaml, which creates the namespaces), variables ACME_GITHUB_ORG and ALERT_EMAIL.
+# Installs one commit's images (built by images.yml) on the production k3s host, cartogra.dev (ADR-0030).
+# Automatic after images.yml succeeds for a push to main; manual dispatch with `sha` for rollbacks.
+# Needs the `production` environment: secret KUBECONFIG (the deployer ServiceAccount from infra/k8s/cluster-setup.yaml, which creates the namespaces), variables ACME_GITHUB_ORG and ALERT_EMAIL.
 
 on:
+  workflow_run:
+    workflows: [Images]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       sha:
@@ -14,20 +19,23 @@ permissions:
   contents: read
 
 concurrency:
-  group: deploy-demo
+  group: deploy-production
   cancel-in-progress: false
 
 jobs:
   deploy:
     name: helm upgrade
     runs-on: ubuntu-latest
-    environment: demo
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    environment: production
     env:
-      SHA: ${{ inputs.sha || github.sha }}
+      SHA: ${{ inputs.sha || github.event.workflow_run.head_sha || github.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
-          ref: ${{ inputs.sha || github.sha }}
+          ref: ${{ env.SHA }}
 
       - uses: azure/setup-helm@v4
         with:

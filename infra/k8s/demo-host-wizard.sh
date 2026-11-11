@@ -202,10 +202,10 @@ finish() {
 # Cartogra demo host: walks docs/runbooks/deployment.md §1–8 interactively.
 # Run with bash (not sh): bash infra/k8s/demo-host-wizard.sh
 # Values persist in ~/.config/cartogra-demo/demo.env (0600); re-runs skip finished stages.
-# BRANCH: the ref images.yml/deploy.yml run on. docs/phase-4-plan until plan 021 step 8 merges it, then main.
+# BRANCH: the ref images.yml/deploy.yml run on.
 
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")" && git rev-parse --show-toplevel)
-BRANCH=docs/phase-4-plan
+BRANCH=main
 GH_REPO=allanweber/cartogra
 DOMAIN=cartogra.dev
 CONF_DIR="$HOME/.config/cartogra-demo"
@@ -564,13 +564,13 @@ if begin ci; then
   say "can-i list pods -n cartogra:        $(kubectl --kubeconfig "$CI" auth can-i list pods -n cartogra || true)   (expect yes)"
   say "can-i get secrets -n kube-system:   $(kubectl --kubeconfig "$CI" auth can-i get secrets -n kube-system || true)   (expect no)"
   pause
-  gh api -X PUT "repos/$GH_REPO/environments/demo" --input - >/dev/null <<JSON
+  gh api -X PUT "repos/$GH_REPO/environments/production" --input - >/dev/null <<JSON
 {"reviewers":[{"type":"User","id":$(gh api user --jq .id)}]}
 JSON
-  printf '  %s✓ set%s environment demo (you approve each deploy)\n' "$GREEN" "$RESET"
-  gh secret set KUBECONFIG --repo "$GH_REPO" --env demo < "$CI" && WRITTEN_SECRET+=("demo/KUBECONFIG")
-  gh variable set ACME_GITHUB_ORG --repo "$GH_REPO" --env demo --body "$ACME_GITHUB_ORG"
-  gh variable set ALERT_EMAIL --repo "$GH_REPO" --env demo --body "$ALERT_EMAIL"
+  printf '  %s✓ set%s environment production (you approve each deploy)\n' "$GREEN" "$RESET"
+  gh secret set KUBECONFIG --repo "$GH_REPO" --env production < "$CI" && WRITTEN_SECRET+=("production/KUBECONFIG")
+  gh variable set ACME_GITHUB_ORG --repo "$GH_REPO" --env production --body "$ACME_GITHUB_ORG"
+  gh variable set ALERT_EMAIL --repo "$GH_REPO" --env production --body "$ALERT_EMAIL"
   rm -rf "$tmpd"
   say "Set demo secret KUBECONFIG, variables ACME_GITHUB_ORG and ALERT_EMAIL."
   finished ci
