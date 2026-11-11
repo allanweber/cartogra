@@ -18,10 +18,8 @@ import java.util.concurrent.TimeoutException;
 @Component
 public class ServiceLifecycleEventProducer {
 
-    private static final String TOPIC_REGISTERED = "cartogra.registry.service.registered";
-    private static final String TOPIC_UPDATED    = "cartogra.registry.service.updated";
-    private static final String TOPIC_DELETED    = "cartogra.registry.service.deleted";
-    private static final Duration SEND_TIMEOUT   = Duration.ofSeconds(10);
+    private static final String TOPIC = "cartogra.registry.service.changed";
+    private static final Duration SEND_TIMEOUT = Duration.ofSeconds(10);
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
@@ -30,11 +28,11 @@ public class ServiceLifecycleEventProducer {
     }
 
     public void publishRegistered(Service service) {
-        publish(TOPIC_REGISTERED, "service.registered", service);
+        publish("service.registered", service);
     }
 
     public void publishUpdated(Service service) {
-        publish(TOPIC_UPDATED, "service.updated", service);
+        publish("service.updated", service);
     }
 
     public void publishDeleted(Service service, Instant deletedAt) {
@@ -49,12 +47,12 @@ public class ServiceLifecycleEventProducer {
                 service.healthCheckedAt(),
                 service.tier(), service.tags(), service.slaTarget(),
                 service.documentationUrl(), service.runbookUrl());
-        publish(TOPIC_DELETED, "service.deleted", deleted);
+        publish("service.deleted", deleted);
     }
 
-    private void publish(String topic, String eventType, Service service) {
+    private void publish(String eventType, Service service) {
         var envelope = EventEnvelope.of(eventType, service.id(), service.tenantId(), 1, service);
-        var record = new ProducerRecord<String, Object>(topic, service.id().toString(), envelope);
+        var record = new ProducerRecord<String, Object>(TOPIC, service.id().toString(), envelope);
         W3CTraceContextPropagator.getInstance().inject(Context.current(), record.headers(),
                 (h, k, v) -> h.add(k, v.getBytes(StandardCharsets.UTF_8)));
         try {

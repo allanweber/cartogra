@@ -131,12 +131,8 @@ There is no `/scm-connections` endpoint in this service — see the SCM Connecti
 
 | Topic | Trigger |
 |---|---|
-| `cartogra.registry.service.registered` | Service created (manual or discovered) |
-| `cartogra.registry.service.updated` | Service mutated |
-| `cartogra.registry.service.deleted` | Service soft-deleted |
-| `cartogra.registry.team.created` | Team created |
-| `cartogra.registry.team.updated` | Team renamed |
-| `cartogra.registry.team.deleted` | Team deleted |
+| `cartogra.registry.service.changed` | Every service lifecycle event, keyed by service id; `event_type` `service.registered` (created, manual or discovered), `service.updated` (mutated), `service.deleted` (soft-deleted) |
+| `cartogra.registry.team.changed` | Every team lifecycle event, keyed by team id; `event_type` `team.created`, `team.updated` (renamed), `team.deleted` |
 
 `cartogra.registry.sync.command` is **not** produced here despite the `registry.` prefix — it is produced and
 consumed entirely within `services/ingestion` (`SyncCommandProducer` → `SyncCommandConsumer`), triggered by an

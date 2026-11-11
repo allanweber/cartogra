@@ -83,10 +83,7 @@ class ServiceCrudIT {
         consumer = new KafkaConsumer<>(props,
                 new org.apache.kafka.common.serialization.StringDeserializer(),
                 new org.apache.kafka.common.serialization.StringDeserializer());
-        consumer.subscribe(List.of(
-                "cartogra.registry.service.registered",
-                "cartogra.registry.service.updated",
-                "cartogra.registry.service.deleted"));
+        consumer.subscribe(List.of("cartogra.registry.service.changed"));
     }
 
     @AfterEach
@@ -108,7 +105,7 @@ class ServiceCrudIT {
         assertThat(data.get("name").asString()).isEqualTo("payments-svc");
         assertThat(created.headers().firstValue("X-Trace-Id")).isPresent();
 
-        ConsumerRecord<String, String> registeredRecord = pollForRecord("cartogra.registry.service.registered", serviceId);
+        ConsumerRecord<String, String> registeredRecord = pollForRecord("service.registered", serviceId);
         assertThat(registeredRecord).isNotNull();
         assertTraceparent(registeredRecord);
         EventEnvelope<Service> registeredEnvelope = objectMapper.readValue(
@@ -135,7 +132,7 @@ class ServiceCrudIT {
         assertThat(updated.statusCode()).isEqualTo(200);
         assertThat(objectMapper.readTree(updated.body()).get("data").get("name").asString()).isEqualTo("payments-service");
 
-        ConsumerRecord<String, String> updatedRecord = pollForRecord("cartogra.registry.service.updated", serviceId);
+        ConsumerRecord<String, String> updatedRecord = pollForRecord("service.updated", serviceId);
         assertThat(updatedRecord).isNotNull();
         assertTraceparent(updatedRecord);
         EventEnvelope<Service> updatedEnvelope = objectMapper.readValue(
@@ -150,7 +147,7 @@ class ServiceCrudIT {
                 delete("/api/v1/registry/services/" + serviceId), HttpResponse.BodyHandlers.ofString());
         assertThat(deleted.statusCode()).isEqualTo(204);
 
-        ConsumerRecord<String, String> deletedRecord = pollForRecord("cartogra.registry.service.deleted", serviceId);
+        ConsumerRecord<String, String> deletedRecord = pollForRecord("service.deleted", serviceId);
         assertThat(deletedRecord).isNotNull();
         assertTraceparent(deletedRecord);
         EventEnvelope<Service> deletedEnvelope = objectMapper.readValue(
@@ -216,12 +213,13 @@ class ServiceCrudIT {
     }
 
 
-    private ConsumerRecord<String, String> pollForRecord(String topic, String key) {
+    private ConsumerRecord<String, String> pollForRecord(String eventType, String key) {
         long deadline = System.currentTimeMillis() + Duration.ofSeconds(10).toMillis();
         while (System.currentTimeMillis() < deadline) {
             var records = consumer.poll(Duration.ofMillis(500));
             for (ConsumerRecord<String, String> record : records) {
-                if (record.topic().equals(topic) && key.equals(record.key())) {
+                if (key.equals(record.key())
+                        && eventType.equals(objectMapper.readValue(record.value(), EventEnvelope.class).eventType())) {
                     return record;
                 }
             }

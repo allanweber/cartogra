@@ -84,10 +84,7 @@ class TeamCrudIT {
         consumer = new KafkaConsumer<>(props,
                 new org.apache.kafka.common.serialization.StringDeserializer(),
                 new org.apache.kafka.common.serialization.StringDeserializer());
-        consumer.subscribe(List.of(
-                "cartogra.registry.team.created",
-                "cartogra.registry.team.updated",
-                "cartogra.registry.team.deleted"));
+        consumer.subscribe(List.of("cartogra.registry.team.changed"));
     }
 
     @AfterEach
@@ -106,7 +103,7 @@ class TeamCrudIT {
         assertThat(data.get("name").asString()).isEqualTo("platform-team");
         assertThat(created.headers().firstValue("X-Trace-Id")).isPresent();
 
-        ConsumerRecord<String, String> createdRecord = pollForRecord("cartogra.registry.team.created", teamId);
+        ConsumerRecord<String, String> createdRecord = pollForRecord("team.created", teamId);
         assertThat(createdRecord).isNotNull();
         assertTraceparent(createdRecord);
         EventEnvelope<Team> createdEnvelope = objectMapper.readValue(
@@ -128,7 +125,7 @@ class TeamCrudIT {
         assertThat(updated.statusCode()).isEqualTo(200);
         assertThat(objectMapper.readTree(updated.body()).get("data").get("name").asString()).isEqualTo("platform-engineering");
 
-        ConsumerRecord<String, String> updatedRecord = pollForRecord("cartogra.registry.team.updated", teamId);
+        ConsumerRecord<String, String> updatedRecord = pollForRecord("team.updated", teamId);
         assertThat(updatedRecord).isNotNull();
         assertTraceparent(updatedRecord);
         EventEnvelope<Team> updatedEnvelope = objectMapper.readValue(
@@ -141,7 +138,7 @@ class TeamCrudIT {
                 delete("/api/v1/registry/teams/" + teamId), HttpResponse.BodyHandlers.ofString());
         assertThat(deleted.statusCode()).isEqualTo(204);
 
-        ConsumerRecord<String, String> deletedRecord = pollForRecord("cartogra.registry.team.deleted", teamId);
+        ConsumerRecord<String, String> deletedRecord = pollForRecord("team.deleted", teamId);
         assertThat(deletedRecord).isNotNull();
         assertTraceparent(deletedRecord);
         EventEnvelope<Team> deletedEnvelope = objectMapper.readValue(
@@ -232,12 +229,13 @@ class TeamCrudIT {
         assertThat(objectMapper.readTree(resp.body()).get("error").get("code").asString()).isEqualTo("VALIDATION_ERROR");
     }
 
-    private ConsumerRecord<String, String> pollForRecord(String topic, String key) {
+    private ConsumerRecord<String, String> pollForRecord(String eventType, String key) {
         long deadline = System.currentTimeMillis() + Duration.ofSeconds(10).toMillis();
         while (System.currentTimeMillis() < deadline) {
             var records = consumer.poll(Duration.ofMillis(500));
             for (ConsumerRecord<String, String> record : records) {
-                if (record.topic().equals(topic) && key.equals(record.key())) {
+                if (key.equals(record.key())
+                        && eventType.equals(objectMapper.readValue(record.value(), EventEnvelope.class).eventType())) {
                     return record;
                 }
             }
