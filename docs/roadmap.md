@@ -192,7 +192,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 ---
 
-## ⬜ Phase 3 — The map maintains itself (≈5 weeks) DOING
+## ✅ Phase 3 — The map maintains itself (≈5 weeks) DOING
 
 **Goal:** remove manual upkeep — the reason internal service catalogs die.
 
@@ -237,7 +237,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 ---
 
-## ⬜ Phase 4 — A product a stranger can try (≈6 weeks)
+## ✅ Phase 4 — A product a stranger can try (≈6 weeks)
 
 **Goal:** the first public artifact. Moved forward from the old plan's Phase 5 — nothing is validated until someone outside can click it. Grown from ≈4 weeks: it now runs on k3s with 7.1's Helm charts pulled in (ADR-0030). Plan: `plans/021-phase4-public-demo.md`.
 

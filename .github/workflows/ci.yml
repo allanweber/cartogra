@@ -7,6 +7,39 @@ on:
     branches: [main]
 
 jobs:
+  # Docs-only changes skip E2E via a job-level `if`; GitHub reports a condition-skipped job as
+  # success, so the required check still passes. Never use a workflow-level `paths` filter here:
+  # it skips the whole workflow and leaves required checks pending forever.
+  changes:
+    name: Detect docs-only change
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.detect.outputs.code }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect non-docs changes
+        id: detect
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            CHANGED=$(git diff "origin/${{ github.base_ref }}" --name-only)
+          elif [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            CHANGED=$(git diff --name-only $(git hash-object -t tree /dev/null))
+          else
+            CHANGED=$(git diff "${{ github.event.before }}" "${{ github.sha }}" --name-only)
+          fi
+          CODE=$(echo "$CHANGED" | grep -vE '^(docs|plans)/|\.md$' | grep -v '^$' || true)
+          if [ -n "$CODE" ]; then
+            echo "code=true" >> $GITHUB_OUTPUT
+            echo "✅ Non-docs changes detected:"
+            echo "$CODE"
+          else
+            echo "code=false" >> $GITHUB_OUTPUT
+            echo "⏭️  Docs-only change — E2E skipped"
+          fi
+
   backend:
     name: Backend — Build & Test
     runs-on: ubuntu-latest
@@ -295,6 +328,8 @@ jobs:
 
   e2e:
     name: E2E — Playwright
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
