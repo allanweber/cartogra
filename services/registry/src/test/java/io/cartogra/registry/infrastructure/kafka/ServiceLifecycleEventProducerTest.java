@@ -41,7 +41,7 @@ class ServiceLifecycleEventProducerTest {
         producer.publishRegistered(svc);
 
         ProducerRecord<String, Object> record = captureRecord();
-        assertThat(record.topic()).isEqualTo("cartogra.registry.service.registered");
+        assertThat(record.topic()).isEqualTo("cartogra.registry.service.changed");
         assertThat(record.key()).isEqualTo(svc.id().toString());
         EventEnvelope<?> envelope = (EventEnvelope<?>) record.value();
         assertThat(envelope.eventType()).isEqualTo("service.registered");
@@ -58,7 +58,7 @@ class ServiceLifecycleEventProducerTest {
         producer.publishUpdated(svc);
 
         ProducerRecord<String, Object> record = captureRecord();
-        assertThat(record.topic()).isEqualTo("cartogra.registry.service.updated");
+        assertThat(record.topic()).isEqualTo("cartogra.registry.service.changed");
         EventEnvelope<?> envelope = (EventEnvelope<?>) record.value();
         assertThat(envelope.eventType()).isEqualTo("service.updated");
     }
@@ -72,7 +72,7 @@ class ServiceLifecycleEventProducerTest {
         producer.publishDeleted(svc, deletedAt);
 
         ProducerRecord<String, Object> record = captureRecord();
-        assertThat(record.topic()).isEqualTo("cartogra.registry.service.deleted");
+        assertThat(record.topic()).isEqualTo("cartogra.registry.service.changed");
         EventEnvelope<?> envelope = (EventEnvelope<?>) record.value();
         assertThat(envelope.eventType()).isEqualTo("service.deleted");
         assertThat(((Service) envelope.payload()).deletedAt()).isEqualTo(deletedAt);

@@ -66,9 +66,7 @@ User (ID ref from Registry)    ──< NlQueryLog
 
 | Topic | Source | Action |
 |---|---|---|
-| `cartogra.registry.service.registered` | Registry | Seed initial health score |
-| `cartogra.registry.service.updated` | Registry | Recompute health score |
-| `cartogra.registry.service.deleted` | Registry | Mark health score inactive |
+| `cartogra.registry.service.changed` | Registry | By `event_type`: `service.registered` seeds the health score, `service.updated` recomputes it, `service.deleted` marks it inactive |
 | `cartogra.topology.graph.updated` | Topology | Refresh dependency-health factor |
 | `cartogra.topology.drift.detected` | Topology | Penalise drift factor; raise alert if severe |
 | `cartogra.topology.cycle.detected` | Topology | Raise alert |

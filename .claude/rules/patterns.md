@@ -142,7 +142,7 @@ public class ServiceEventProducer {
     public ServiceEventProducer(KafkaTemplate<String, ServiceRegisteredEvent> kafkaTemplate) {
         this.kafkaTemplate = kafkaTemplate;
     }
-    private static final String TOPIC = "cartogra.registry.service.registered";
+    private static final String TOPIC = "cartogra.registry.service.changed";
 
     public void publish(ServiceRegisteredEvent event) {
         ProducerRecord<String, ServiceRegisteredEvent> record =
@@ -161,7 +161,7 @@ public class ServiceEventProducer {
 @Component
 public class ServiceEventConsumer {
 
-    @KafkaListener(topics = "cartogra.registry.service.registered", groupId = "${spring.kafka.consumer.group-id}")
+    @KafkaListener(topics = "cartogra.registry.service.changed", groupId = "${spring.kafka.consumer.group-id}")
     public void consume(ConsumerRecord<String, ServiceRegisteredEvent> record) {
         // Extract W3C traceparent to restore trace context
         Context ctx = W3CTraceContextPropagator.getInstance().extract(Context.current(), record.headers(),

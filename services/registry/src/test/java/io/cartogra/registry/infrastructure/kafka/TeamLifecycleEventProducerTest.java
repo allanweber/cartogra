@@ -30,7 +30,7 @@ class TeamLifecycleEventProducerTest {
         producer.publishCreated(team);
 
         ProducerRecord<String, Object> record = captureRecord();
-        assertThat(record.topic()).isEqualTo("cartogra.registry.team.created");
+        assertThat(record.topic()).isEqualTo("cartogra.registry.team.changed");
         assertThat(record.key()).isEqualTo(team.id().toString());
         EventEnvelope<?> envelope = (EventEnvelope<?>) record.value();
         assertThat(envelope.eventType()).isEqualTo("team.created");
@@ -46,7 +46,7 @@ class TeamLifecycleEventProducerTest {
         producer.publishUpdated(team(null));
 
         ProducerRecord<String, Object> record = captureRecord();
-        assertThat(record.topic()).isEqualTo("cartogra.registry.team.updated");
+        assertThat(record.topic()).isEqualTo("cartogra.registry.team.changed");
         EventEnvelope<?> envelope = (EventEnvelope<?>) record.value();
         assertThat(envelope.eventType()).isEqualTo("team.updated");
     }
@@ -60,7 +60,7 @@ class TeamLifecycleEventProducerTest {
         producer.publishDeleted(deleted);
 
         ProducerRecord<String, Object> record = captureRecord();
-        assertThat(record.topic()).isEqualTo("cartogra.registry.team.deleted");
+        assertThat(record.topic()).isEqualTo("cartogra.registry.team.changed");
         EventEnvelope<?> envelope = (EventEnvelope<?>) record.value();
         assertThat(envelope.eventType()).isEqualTo("team.deleted");
         assertThat(((Team) envelope.payload()).deletedAt()).isEqualTo(deletedAt);

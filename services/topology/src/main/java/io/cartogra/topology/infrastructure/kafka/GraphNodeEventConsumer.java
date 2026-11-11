@@ -23,10 +23,9 @@ import java.util.stream.StreamSupport;
 
 /**
  * Projects Registry's service lifecycle into {@code graph_nodes} (CONTEXT.md "Graph nodes
- * projected from the registry"). One listener across all three topics — the same payload
- * shape (the full Registry {@code Service} record) arrives on each; {@code eventType}
- * decides upsert vs. soft-delete. Registry keys every record by service ID, so per-service
- * ordering (registered before updated before deleted) is guaranteed by partitioning.
+ * projected from the registry"). Registry publishes every service lifecycle event on one
+ * topic keyed by service ID, so per-service order (registered before updated before deleted)
+ * holds; {@code eventType} decides upsert vs. soft-delete.
  */
 @Component
 public class GraphNodeEventConsumer {
@@ -58,11 +57,7 @@ public class GraphNodeEventConsumer {
 
     @KafkaListener(
             id = "graphNodeEventConsumer",
-            topics = {
-                    "cartogra.registry.service.registered",
-                    "cartogra.registry.service.updated",
-                    "cartogra.registry.service.deleted"
-            },
+            topics = "cartogra.registry.service.changed",
             groupId = "${spring.kafka.consumer.group-id}"
     )
     public void consume(ConsumerRecord<String, String> record, Acknowledgment ack) {

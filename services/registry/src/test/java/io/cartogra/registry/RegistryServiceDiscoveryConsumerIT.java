@@ -158,7 +158,7 @@ class RegistryServiceDiscoveryConsumerIT {
         var envelope = EventEnvelope.of("service.discovered", connectionId, tenantId, 1, payload);
         String json = objectMapper.writeValueAsString(envelope);
 
-        try (KafkaConsumer<String, String> registered = newRawConsumer("cartogra.registry.service.registered")) {
+        try (KafkaConsumer<String, String> registered = newRawConsumer("cartogra.registry.service.changed")) {
             var producerFactory = new DefaultKafkaProducerFactory<String, String>(Map.of(
                     ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers,
                     ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
@@ -192,9 +192,11 @@ class RegistryServiceDiscoveryConsumerIT {
             ConsumerRecord<String, String> registeredRecord = pollForRecord(
                     registered, savedService.get().id().toString(), Duration.ofSeconds(15));
             assertThat(registeredRecord)
-                    .as("upsertDiscovered should publish cartogra.registry.service.registered so downstream " +
-                            "projections (e.g. Topology's graph_nodes) pick up discovered services")
+                    .as("upsertDiscovered should publish service.registered on cartogra.registry.service.changed " +
+                            "so downstream projections (e.g. Topology's graph_nodes) pick up discovered services")
                     .isNotNull();
+            assertThat(objectMapper.readValue(registeredRecord.value(), EventEnvelope.class).eventType())
+                    .isEqualTo("service.registered");
         }
     }
 

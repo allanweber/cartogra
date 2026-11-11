@@ -4,9 +4,11 @@
 
 `cartogra.{domain}.{entity}.{event}`
 
+**Lifecycle events: one topic per entity** — `cartogra.{domain}.{entity}.changed`, keyed by entity id, the event in the envelope's `event_type`. Kafka orders only within a topic, so per-event topics let a `deleted` be read before an `updated`. Registry's service and team lifecycle moved to `registry.service.changed` / `registry.team.changed` in roadmap 5.10.
+
 All topics are created explicitly. No speculative topics — a topic is created only when its first real producer/consumer exists.
 
-This document was last reconciled against code on 2026-08-20 (Phase 0, story 0.4). Ground truth was the
+This document was last reconciled against code on 2026-11-11 (roadmap 5.10). Ground truth was the
 producer/consumer code itself (`grep` for `@KafkaListener` and topic constants across `services/*/src/main`),
 not the domain descriptions below, which can drift again — re-run that grep before trusting this file blindly.
 
@@ -16,7 +18,7 @@ not the domain descriptions below, which can drift again — re-run that grep be
 
 | Domain | Real topics today | Notes |
 | ------ | ------------------ | ----- |
-| Registry | 6 (service ×3, team ×3) | All produced; none consumed yet — Topology/Intelligence, the planned consumers, don't exist |
+| Registry | 2 (`service.changed`, `team.changed`) | `service.changed` consumed by Topology; `team.changed` has no consumer |
 | Ingestion | 4 (`service.discovered`, `ownership.resolved`, `sync.completed`, `sync.command`) | `service.discovered` and `ownership.resolved` are consumed by Registry; `sync.completed` has no consumer; `sync.command` is produced *and* consumed inside Ingestion itself despite its `registry.` prefix — see below |
 | Topology | 0 | Service has schema + CI + IT harness only (Phase 0); no service class, controller, producer, or consumer exists |
 | Contract, Intelligence | 0 | Empty directories — no code at all |
@@ -33,12 +35,8 @@ removed — "No producer, no consumer, no module. Violates the project's own no-
 
 | Topic | Producer | Consumers today | Description |
 | ----- | -------- | ---------------- | ----------- |
-| `cartogra.registry.service.registered` | Registry (`ServiceLifecycleEventProducer`) | Topology (`GraphNodeEventConsumer`) | New service created |
-| `cartogra.registry.service.updated` | Registry (`ServiceLifecycleEventProducer`) | Topology (`GraphNodeEventConsumer`) | Service metadata changed |
-| `cartogra.registry.service.deleted` | Registry (`ServiceLifecycleEventProducer`) | Topology (`GraphNodeEventConsumer`) | Service soft-deleted |
-| `cartogra.registry.team.created` | Registry (`TeamLifecycleEventProducer`) | none | New team added |
-| `cartogra.registry.team.updated` | Registry (`TeamLifecycleEventProducer`) | none | Team renamed |
-| `cartogra.registry.team.deleted` | Registry (`TeamLifecycleEventProducer`) | none | Team deleted |
+| `cartogra.registry.service.changed` | Registry (`ServiceLifecycleEventProducer`) | Topology (`GraphNodeEventConsumer`) | Service lifecycle, keyed by service id; `event_type` `service.registered` / `service.updated` / `service.deleted` (soft delete) |
+| `cartogra.registry.team.changed` | Registry (`TeamLifecycleEventProducer`) | none | Team lifecycle, keyed by team id; `event_type` `team.created` / `team.updated` (rename) / `team.deleted` |
 
 ### Ingestion domain
 
@@ -64,9 +62,7 @@ pattern this document used to describe:
 
 - `cartogra.ingestion.service.discovered.dlq`
 - `cartogra.ingestion.ownership.resolved.dlq`
-- `cartogra.registry.service.registered.dlq`
-- `cartogra.registry.service.updated.dlq`
-- `cartogra.registry.service.deleted.dlq`
+- `cartogra.registry.service.changed.dlq`
 
 Ingestion's own consumer (`SyncCommandConsumer`) has no error handler configured at all — no retry, no DLQ.
 A poison `cartogra.registry.sync.command` message currently blocks that consumer's partition rather than
@@ -93,10 +89,10 @@ table, as authoritative on exact timing, and re-check the wording there before r
 | `cartogra.ingestion.spec.discovered` | Ingestion → Contract | 5.8 | Named `spec.discovered`, not `spec.updated` as an earlier version of this document had it |
 | `cartogra.platform.dead-letter` | platform-wide DLQ replay | 7.5 | Distinct from the per-service `.dlq` topics above |
 
-Topology's own future producer topics (3.5, deferred to Phase 6 per the roadmap's "no topic without a
-consumer" rule — Intelligence is the consumer and doesn't exist yet): `dependency.declared`,
-`dependency.observed`, `dependency.removed`, `drift.detected`. Exact `cartogra.topology.*` names are not yet
-committed in the roadmap text, so none are asserted here.
+Topology's own future producer topics (3.5, deferred per the roadmap's "no topic without a consumer" rule):
+`dependency.declared`, `dependency.observed`, `dependency.removed` ship in 5.4 on one topic,
+`cartogra.topology.dependency.changed` keyed by edge id, consumed by Contract to name affected consumers;
+`drift.detected` stays in 6.7 until Intelligence consumes it.
 
 No Kafka topic names are committed anywhere in `docs/roadmap.md` for Contract (beyond `spec.discovered`
 above) or for Intelligence. An earlier version of this document speculated `check.passed`/`check.failed`/

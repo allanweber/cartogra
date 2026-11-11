@@ -82,8 +82,8 @@
 | Identity & Access | Topology | Open Host Service / Conformist | Declarative reverse proxy (`gateway/application.yml`, `Path=/api/v1/topology/**`); backfill, dependency CRUD, graph read, blast radius, cycles, SPOFs, and risks are all live behind it — [1.1]–[1.6], [2.1]–[2.5] |
 | Identity & Access | Contract | Open Host Service / Conformist | Declarative reverse proxy (Phase 5 — route not yet created) |
 | Identity & Access | Intelligence | Open Host Service / Conformist | Declarative reverse proxy (Phase 6 — route not yet created) |
-| Service Catalog (U) | Topology (D) | **Customer / Supplier** | Live: Kafka `cartogra.registry.service.{registered,updated,deleted}`, consumed by `GraphNodeEventConsumer` to project `graph_nodes` (including `team_id`/`tier`, used for orphan risk and SPOF scoring — ADR-0028). No separate `ownership-changed` topic exists or is needed (ADR-0028 supersedes ADR-0027's plan to add one) |
-| Service Catalog (U) | Contract (D) | Customer / Supplier | Planned, Phase 5: Kafka `cartogra.registry.service.deleted` |
+| Service Catalog (U) | Topology (D) | **Customer / Supplier** | Live: Kafka `cartogra.registry.service.changed` (`event_type` `service.{registered,updated,deleted}`), consumed by `GraphNodeEventConsumer` to project `graph_nodes` (including `team_id`/`tier`, used for orphan risk and SPOF scoring — ADR-0028). No separate `ownership-changed` topic exists or is needed (ADR-0028 supersedes ADR-0027's plan to add one) |
+| Service Catalog (U) | Contract (D) | Customer / Supplier | Planned, Phase 5: Kafka `cartogra.registry.service.changed` (on `service.deleted`) |
 | Service Catalog (U) | Intelligence (D) | Customer / Supplier | Planned, Phase 6: Kafka registry events |
 | Ingestion (U) | Service Catalog (D) | **Published Language** | Live today: Kafka `cartogra.ingestion.service.discovered`, `ownership.resolved` |
 | Ingestion (U) | Contract (D) | Published Language | Planned, Phase 5 (5.8): Kafka `cartogra.ingestion.spec.discovered` |

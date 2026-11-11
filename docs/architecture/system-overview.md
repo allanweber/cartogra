@@ -141,7 +141,7 @@ No service calls another service's database — all cross-service data access go
 ```
 POST /registry/services (via Gateway)
   → Registry validates + persists
-  → Publishes cartogra.registry.service.registered
+  → Publishes service.registered on cartogra.registry.service.changed
   → Topology consumer updates graph
   → Intelligence consumer updates health baseline
 ```

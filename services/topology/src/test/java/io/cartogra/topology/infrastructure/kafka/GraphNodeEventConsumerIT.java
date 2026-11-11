@@ -29,8 +29,12 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import tools.jackson.databind.ObjectMapper;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 
 import java.time.Duration;
@@ -57,9 +61,9 @@ class GraphNodeEventConsumerIT {
         // A unique group id isolates this context's consumer from every other topology
         // @SpringBootTest context (AbstractTopologyIT's shared context,
         // BackfillInternalControllerIT's own) — all boot the same GraphNodeEventConsumer
-        // bean; sharing the hardcoded "topology-consumer" group id would split the three
-        // single-partition topics' partitions across whichever contexts are alive at once,
-        // and this class's own container could end up with none of them.
+        // bean; sharing the hardcoded "topology-consumer" group id would split the topic's
+        // partition across whichever contexts are alive at once, and this class's own
+        // container could end up with none of it.
         registry.add("spring.kafka.consumer.group-id", () -> "graph-node-consumer-it-" + UUID.randomUUID());
     }
 
@@ -87,10 +91,8 @@ class GraphNodeEventConsumerIT {
     @MockitoSpyBean
     GraphNodeRepository graphNodeRepositorySpy;
 
-    // 3 — one partition per subscribed topic (registered/updated/deleted), all on the one
-    // listener container. ContainerTestUtils.waitForAssignment requires an exact match, not
-    // "at least" — passing 1 here throws once all 3 partitions land ("Expected 1 but got 3").
-    private static final int SUBSCRIBED_PARTITIONS = 3;
+    private static final String TOPIC = "cartogra.registry.service.changed";
+    private static final int SUBSCRIBED_PARTITIONS = 1;
 
     @BeforeEach
     void waitForConsumerAssignment() {
@@ -117,7 +119,7 @@ class GraphNodeEventConsumerIT {
         UUID tenantId = UUID.randomUUID();
         UUID serviceId = UUID.randomUUID();
         var payload = new ServiceLifecyclePayload(serviceId, tenantId, "payments", null, "STANDARD", "HEALTHY", null);
-        send("cartogra.registry.service.registered", EventEnvelope.of("service.registered", serviceId, tenantId, 1, payload));
+        send(TOPIC, EventEnvelope.of("service.registered", serviceId, tenantId, 1, payload));
 
         Awaitility.await()
                 .atMost(Duration.ofSeconds(15))
@@ -136,14 +138,14 @@ class GraphNodeEventConsumerIT {
         UUID tenantId = UUID.randomUUID();
         UUID serviceId = UUID.randomUUID();
         var registered = new ServiceLifecyclePayload(serviceId, tenantId, "payments", null, "STANDARD", "HEALTHY", null);
-        send("cartogra.registry.service.registered", EventEnvelope.of("service.registered", serviceId, tenantId, 1, registered));
+        send(TOPIC, EventEnvelope.of("service.registered", serviceId, tenantId, 1, registered));
 
         Awaitility.await().atMost(Duration.ofSeconds(15)).pollInterval(Duration.ofMillis(300))
                 .until(() -> graphNodeRepository.findByServiceId(tenantId, serviceId).isPresent());
 
         UUID team = UUID.randomUUID();
         var updated = new ServiceLifecyclePayload(serviceId, tenantId, "payments-v2", team, "CRITICAL", "DEGRADED", null);
-        send("cartogra.registry.service.updated", EventEnvelope.of("service.updated", serviceId, tenantId, 1, updated));
+        send(TOPIC, EventEnvelope.of("service.updated", serviceId, tenantId, 1, updated));
 
         Awaitility.await()
                 .atMost(Duration.ofSeconds(15))
@@ -164,7 +166,7 @@ class GraphNodeEventConsumerIT {
         UUID serviceId = UUID.randomUUID();
         UUID team = UUID.randomUUID();
         var owned = new ServiceLifecyclePayload(serviceId, tenantId, "payments", team, "STANDARD", "HEALTHY", null);
-        send("cartogra.registry.service.registered", EventEnvelope.of("service.registered", serviceId, tenantId, 1, owned));
+        send(TOPIC, EventEnvelope.of("service.registered", serviceId, tenantId, 1, owned));
 
         Awaitility.await().atMost(Duration.ofSeconds(15)).pollInterval(Duration.ofMillis(300))
                 .until(() -> graphNodeRepository.findByServiceId(tenantId, serviceId)
@@ -172,7 +174,7 @@ class GraphNodeEventConsumerIT {
         assertThat(orphanRiskServices(tenantId)).doesNotContain(serviceId);
 
         var unowned = new ServiceLifecyclePayload(serviceId, tenantId, "payments", null, "STANDARD", "HEALTHY", null);
-        send("cartogra.registry.service.updated", EventEnvelope.of("service.updated", serviceId, tenantId, 1, unowned));
+        send(TOPIC, EventEnvelope.of("service.updated", serviceId, tenantId, 1, unowned));
 
         Awaitility.await()
                 .atMost(Duration.ofSeconds(15))
@@ -196,14 +198,14 @@ class GraphNodeEventConsumerIT {
         UUID tenantId = UUID.randomUUID();
         UUID serviceId = UUID.randomUUID();
         var registered = new ServiceLifecyclePayload(serviceId, tenantId, "payments", null, "STANDARD", "HEALTHY", null);
-        send("cartogra.registry.service.registered", EventEnvelope.of("service.registered", serviceId, tenantId, 1, registered));
+        send(TOPIC, EventEnvelope.of("service.registered", serviceId, tenantId, 1, registered));
 
         Awaitility.await().atMost(Duration.ofSeconds(15)).pollInterval(Duration.ofMillis(300))
                 .until(() -> graphNodeRepository.findByServiceId(tenantId, serviceId).isPresent());
 
         Instant deletedAt = Instant.parse("2026-08-01T00:00:00Z");
         var deleted = new ServiceLifecyclePayload(serviceId, tenantId, "payments", null, "STANDARD", "HEALTHY", deletedAt);
-        send("cartogra.registry.service.deleted", EventEnvelope.of("service.deleted", serviceId, tenantId, 1, deleted));
+        send(TOPIC, EventEnvelope.of("service.deleted", serviceId, tenantId, 1, deleted));
 
         Awaitility.await()
                 .atMost(Duration.ofSeconds(15))
@@ -222,9 +224,9 @@ class GraphNodeEventConsumerIT {
         UUID serviceId = UUID.randomUUID();
         UUID counterpartId = UUID.randomUUID();
         var registered = new ServiceLifecyclePayload(serviceId, tenantId, "payments", null, "STANDARD", "HEALTHY", null);
-        send("cartogra.registry.service.registered", EventEnvelope.of("service.registered", serviceId, tenantId, 1, registered));
+        send(TOPIC, EventEnvelope.of("service.registered", serviceId, tenantId, 1, registered));
         var counterpartRegistered = new ServiceLifecyclePayload(counterpartId, tenantId, "billing", null, "STANDARD", "HEALTHY", null);
-        send("cartogra.registry.service.registered",
+        send(TOPIC,
                 EventEnvelope.of("service.registered", counterpartId, tenantId, 1, counterpartRegistered));
 
         Awaitility.await().atMost(Duration.ofSeconds(15)).pollInterval(Duration.ofMillis(300))
@@ -237,7 +239,7 @@ class GraphNodeEventConsumerIT {
 
         Instant deletedAt = Instant.parse("2026-08-01T00:00:00Z");
         var deleted = new ServiceLifecyclePayload(serviceId, tenantId, "payments", null, "STANDARD", "HEALTHY", deletedAt);
-        send("cartogra.registry.service.deleted", EventEnvelope.of("service.deleted", serviceId, tenantId, 1, deleted));
+        send(TOPIC, EventEnvelope.of("service.deleted", serviceId, tenantId, 1, deleted));
 
         // findById/findByService only ever surface non-deleted rows — their emptiness
         // after the deleted event is exactly the caller-visible proof the edge is gone.
@@ -259,8 +261,8 @@ class GraphNodeEventConsumerIT {
 
         // Send the exact same serialized envelope twice — same eventId both times.
         var template = stringKafkaTemplate();
-        template.send(new ProducerRecord<>("cartogra.registry.service.registered", serviceId.toString(), json));
-        template.send(new ProducerRecord<>("cartogra.registry.service.registered", serviceId.toString(), json));
+        template.send(new ProducerRecord<>(TOPIC, serviceId.toString(), json));
+        template.send(new ProducerRecord<>(TOPIC, serviceId.toString(), json));
         template.flush();
 
         Awaitility.await()
@@ -275,5 +277,64 @@ class GraphNodeEventConsumerIT {
         Optional<GraphNode> found = graphNodeRepository.findByServiceId(tenantId, serviceId);
         assertThat(found).isPresent();
         assertThat(found.get().name()).isEqualTo("payments");
+    }
+
+    @Test
+    void lifecycleEventsOnOneTopicApplyInSendOrder() {
+        UUID tenantId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+        Instant deletedAt = Instant.parse("2026-08-01T00:00:00Z");
+        var registered = new ServiceLifecyclePayload(serviceId, tenantId, "payments", null, "STANDARD", "HEALTHY", null);
+        var updated = new ServiceLifecyclePayload(serviceId, tenantId, "payments-v2", null, "CRITICAL", "HEALTHY", null);
+        var deleted = new ServiceLifecyclePayload(serviceId, tenantId, "payments-v2", null, "CRITICAL", "HEALTHY", deletedAt);
+
+        var template = stringKafkaTemplate();
+        for (var envelope : List.of(
+                EventEnvelope.of("service.registered", serviceId, tenantId, 1, registered),
+                EventEnvelope.of("service.updated", serviceId, tenantId, 1, updated),
+                EventEnvelope.of("service.deleted", serviceId, tenantId, 1, deleted))) {
+            template.send(new ProducerRecord<>(TOPIC, serviceId.toString(), objectMapper.writeValueAsString(envelope)));
+        }
+        template.flush();
+
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(15))
+                .pollInterval(Duration.ofMillis(300))
+                .untilAsserted(() -> {
+                    Optional<GraphNode> found = graphNodeRepository.findByServiceId(tenantId, serviceId);
+                    assertThat(found).isPresent();
+                    assertThat(found.get().name()).isEqualTo("payments-v2");
+                    assertThat(found.get().isDeleted()).isTrue();
+                    assertThat(found.get().deletedAt()).isEqualTo(deletedAt);
+                });
+    }
+
+    @Test
+    void malformedRecordIsDeadLettered() {
+        String key = UUID.randomUUID().toString();
+        String malformedJson = "{\"not\":\"an envelope\"";
+
+        try (var dlq = new KafkaConsumer<String, String>(Map.of(
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers,
+                ConsumerConfig.GROUP_ID_CONFIG, "graph-node-dlq-it-" + UUID.randomUUID(),
+                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
+                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class,
+                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class))) {
+            dlq.subscribe(List.of(TOPIC + ".dlq"));
+            var template = stringKafkaTemplate();
+            template.send(new ProducerRecord<>(TOPIC, key, malformedJson));
+            template.flush();
+
+            Awaitility.await()
+                    .atMost(Duration.ofSeconds(20))
+                    .until(() -> {
+                        for (ConsumerRecord<String, String> record : dlq.poll(Duration.ofMillis(300))) {
+                            if (key.equals(record.key()) && malformedJson.equals(record.value())) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    });
+        }
     }
 }

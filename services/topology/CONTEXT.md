@@ -93,9 +93,7 @@ Implemented: backfill, dependency CRUD, graph read (`[1.1]`–`[1.3]`), blast ra
 
 | Topic | Source | Action |
 |---|---|---|
-| `cartogra.registry.service.registered` | Registry | Create node in graph (no-op if already exists) |
-| `cartogra.registry.service.updated` | Registry | Refresh node metadata cache, including `team_id`/`tier` (used for orphan risk and SPOF severity — ADR-0028) |
-| `cartogra.registry.service.deleted` | Registry | Soft-delete all edges for that service |
+| `cartogra.registry.service.changed` | Registry | By `event_type`: `service.registered` creates the node (no-op if it exists); `service.updated` refreshes node metadata, including `team_id`/`tier` (orphan risk and SPOF severity — ADR-0028); `service.deleted` soft-deletes the node and all its edges. Failures go to `cartogra.registry.service.changed.dlq` |
 | `cartogra.observability.spans` | OTel Collector | Raw OTLP/JSON, not an `EventEnvelope`; upsert observed edges; unattributable records go to `cartogra.observability.spans.dlq` (ADR-0029) |
 
 **Produced:**
