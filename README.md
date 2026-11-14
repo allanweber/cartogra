@@ -127,7 +127,7 @@ docker images | grep "cartogra/registry\|cartogra/gateway\|cartogra/ingestion"
 
 ## Configuration
 
-**Local development requires no environment variables.** All service defaults (database, Kafka, Redis, OTel endpoints) are hardcoded in each service's `application.yml`. Docker Compose infra defaults are inlined in `docker-compose.dev.yml`.
+**Local development requires no environment variables.** All service defaults (database, Kafka, Valkey, OTel endpoints) are hardcoded in each service's `application.yml`. Docker Compose infra defaults are inlined in `docker-compose.dev.yml`.
 
 For non-local environments (CI, staging, production) override via standard [Spring Boot env var binding](https://docs.spring.io/spring-boot/reference/features/external-config.html#features.external-config.typesafe-configuration-properties.relaxed-binding.environment-variables) — dots become underscores, e.g. `spring.datasource.url` → `SPRING_DATASOURCE_URL`.
 
@@ -189,7 +189,7 @@ Milestones map to development phases: Phase 0 (Foundation) through Phase 5 (Inge
 
 ## Tech Stack
 
-Java 25 · Spring Boot 4 · Spring Data JDBC · PostgreSQL · Apache Kafka · Redis · OpenTelemetry · TanStack Start · shadcn/ui · D3
+Java 25 · Spring Boot 4 · Spring Data JDBC · PostgreSQL · Apache Kafka · Valkey · OpenTelemetry · TanStack Start · shadcn/ui · D3
 
 ## Skills
 
