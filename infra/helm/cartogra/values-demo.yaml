@@ -38,6 +38,10 @@ registry:
 
 topology:
   <<: *jvm
+  # Heap (75%) + non-heap outgrew 512Mi; 640Mi lifts the heap cap to ~480m.
+  resources:
+    requests: { cpu: 250m, memory: 640Mi }
+    limits: { cpu: 500m, memory: 640Mi }
   env:
     # Default P7D would hide seeded "missing" drift for a week. Safe only with continuous
     # in-cluster Acme traffic (step 6); bursty traffic + a short window makes drift flap.
@@ -72,10 +76,10 @@ postgres:
     limits: { cpu: 200m, memory: 384Mi }
 
 kafka:
-  heapOpts: "-XX:InitialRAMPercentage=60 -XX:MaxRAMPercentage=60"  # ≈384m of 640Mi
+  heapOpts: "-XX:InitialRAMPercentage=50 -XX:MaxRAMPercentage=50"  # ≈384m of 768Mi; extra room is off-heap
   resources:
-    requests: { cpu: 250m, memory: 640Mi }
-    limits: { cpu: 500m, memory: 640Mi }
+    requests: { cpu: 250m, memory: 768Mi }
+    limits: { cpu: 500m, memory: 768Mi }
 
 alerting:
   enabled: true
