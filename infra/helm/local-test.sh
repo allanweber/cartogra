@@ -13,7 +13,7 @@ CLUSTER="${CLUSTER:-cartogra-local}"
 PORT="${PORT:-8088}"
 URL="http://localhost:$PORT"
 ADMIN_PASSWORD=k3d-Admin-pw1
-SERVICES="gateway registry topology ingestion frontend"
+SERVICES="gateway registry topology contract ingestion frontend"
 
 REUSE=false
 BUILD=true
@@ -96,22 +96,22 @@ k3d image import -c "$CLUSTER" $images
 
 step "Namespaces, RBAC and secrets"
 kubectl apply -f infra/k8s/cluster-setup.yaml
-if ! kubectl -n cartogra get secret gateway-secrets >/dev/null 2>&1; then
-  key=$(head -c32 /dev/urandom | base64)
-  for s in gateway registry topology ingestion postgres; do
-    kubectl -n cartogra create secret generic "$s-secrets" \
-      --from-literal=DB_USERNAME=cartogra \
-      --from-literal=DB_PASSWORD=k3d-test-pw \
-      --from-literal=JWT_SECRET=k3d-test-secret-at-least-32-bytes-long \
-      --from-literal=RESEND_API_KEY=re_placeholder \
-      --from-literal=GOOGLE_CLIENT_SECRET=x \
-      --from-literal=GITHUB_CLIENT_SECRET=x \
-      --from-literal=CLUSTER_CREDENTIALS_KEY="$key" \
-      --from-literal=BOOTSTRAP_ADMIN_PASSWORD="$ADMIN_PASSWORD"
-  done
-  kubectl -n acme-system create secret generic acme-bootstrap \
-    --from-literal=ACME_PASSWORD="$ADMIN_PASSWORD"
-fi
+key=$(head -c32 /dev/urandom | base64)
+# Per secret, so a reused cluster picks up a service added since it was created.
+for s in gateway registry topology contract ingestion postgres; do
+  kubectl -n cartogra get secret "$s-secrets" >/dev/null 2>&1 && continue
+  kubectl -n cartogra create secret generic "$s-secrets" \
+    --from-literal=DB_USERNAME=cartogra \
+    --from-literal=DB_PASSWORD=k3d-test-pw \
+    --from-literal=JWT_SECRET=k3d-test-secret-at-least-32-bytes-long \
+    --from-literal=RESEND_API_KEY=re_placeholder \
+    --from-literal=GOOGLE_CLIENT_SECRET=x \
+    --from-literal=GITHUB_CLIENT_SECRET=x \
+    --from-literal=CLUSTER_CREDENTIALS_KEY="$key" \
+    --from-literal=BOOTSTRAP_ADMIN_PASSWORD="$ADMIN_PASSWORD"
+done
+kubectl -n acme-system get secret acme-bootstrap >/dev/null 2>&1 \
+  || kubectl -n acme-system create secret generic acme-bootstrap --from-literal=ACME_PASSWORD="$ADMIN_PASSWORD"
 
 step "Install cartogra (gateway creates the tenant and admin)"
 helm upgrade --install cartogra infra/helm/cartogra -n cartogra \
@@ -151,7 +151,7 @@ step "Check NetworkPolicy"
 # One pod: the open gateway must answer (proves the pod runs), the backends must not.
 out=$(kubectl -n cartogra run np-check --rm -i --restart=Never --quiet --image=curlimages/curl:8.10.1 -- sh -c '
   curl -fsm 5 -o /dev/null http://gateway:8080/actuator/health/live && echo gateway-open
-  for target in registry:8081 topology:8082 ingestion:8085; do
+  for target in registry:8081 topology:8082 contract:8083 ingestion:8085; do
     curl -sm 3 -o /dev/null "http://$target/" && echo "$target-open"
   done
   true' 2>&1) || true

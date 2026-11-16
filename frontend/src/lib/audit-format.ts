@@ -28,6 +28,7 @@ const ENTITY_LABELS: Record<string, string> = {
   drift: 'Drift',
   scm_connection: 'SCM connection',
   cluster: 'Cluster',
+  contract: 'Contract',
   user: 'User',
   invitation: 'Invitation',
   oidc_config: 'OIDC config',
@@ -49,6 +50,7 @@ const ACTION_LABELS: Record<string, string> = {
   resolved: 'resolved',
   sync_completed: 'sync completed',
   sync_failed: 'sync failed',
+  version_published: 'version published',
   invited: 'sent',
   role_changed: 'role changed',
   disabled: 'disabled',
@@ -83,7 +85,15 @@ export function auditMessage(event: AuditEvent): string {
     changes && typeof changes === 'object' ? Object.keys(changes) : []
   const detail = changed.length > 0 ? `: ${changed.join(', ')}` : ''
   const error = event.action === 'sync_failed' ? str(event.payload.error) : null
-  return `${entity} ${action}${detail}${error ? ` — ${error}` : ''}`
+  return `${entity} ${action}${detail}${contractVersion(event)}${error ? ` — ${error}` : ''}`
+}
+
+/** ` v2 (1.1.0)` for a contract event that names a version, else empty. */
+function contractVersion(event: AuditEvent): string {
+  const n = event.payload.versionNumber
+  if (event.entityType !== 'contract' || typeof n !== 'number') return ''
+  const label = str(event.payload.label)
+  return ` v${n}${label ? ` (${label})` : ''}`
 }
 
 export function auditActor(event: AuditEvent): string {

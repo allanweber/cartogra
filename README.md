@@ -158,7 +158,7 @@ Each service must use its own PostgreSQL schema and independent Flyway history t
 | `MANAGEMENT_OTLP_METRICS_EXPORT_URL` | Metrics exporter (HTTP) | `http://otel-collector:4318/v1/metrics` |
 | `MANAGEMENT_OPENTELEMETRY_LOGGING_EXPORT_OTLP_ENDPOINT` | Log exporter (HTTP) | `http://otel-collector:4318/v1/logs` |
 
-### `topology` · `contract` · `intelligence` _(not yet scaffolded)_
+### `topology` · `contract` · `intelligence` _(intelligence not yet scaffolded)_
 
 Will follow the same pattern as `registry` once added.
 

@@ -1,0 +1,21 @@
+package io.cartogra.contract.api.dto;
+
+import io.cartogra.contract.domain.ContractVersion;
+import org.jspecify.annotations.Nullable;
+
+import java.time.Instant;
+import java.util.UUID;
+
+public record ContractVersionResponse(
+        UUID id,
+        UUID contractId,
+        int versionNumber,
+        @Nullable String label,
+        String specHash,
+        Instant createdAt
+) {
+    public static ContractVersionResponse from(ContractVersion v) {
+        return new ContractVersionResponse(v.id(), v.contractId(), v.versionNumber(), v.label(), v.specHash(),
+                v.createdAt());
+    }
+}

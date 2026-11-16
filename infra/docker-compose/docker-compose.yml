@@ -129,6 +129,7 @@ services:
       REDIS_PORT: 6379
       REGISTRY_URI: http://registry:8081
       TOPOLOGY_URI: http://topology:8082
+      CONTRACT_URI: http://contract:8083
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production-min-32-bytes}
       RESEND_API_KEY: ${RESEND_API_KEY:-re_placeholder}
       RESEND_FROM: ${RESEND_FROM:-noreply@cartogra.dev}
@@ -233,6 +234,43 @@ services:
         condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8082/api/v1/topology/actuator/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - cartogra-net
+
+  contract:
+    build:
+      context: ../..
+      dockerfile: infra/docker/contract/Dockerfile
+    image: cartogra/contract:local
+    container_name: cartogra-contract
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: "1.0"
+    ports:
+      - "8083:8083"
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/cartogra?currentSchema=contract
+      DB_USERNAME: cartogra
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-cartogra}
+      SPRING_FLYWAY_TABLE: flyway_schema_history_contract
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/api/v1/contracts/actuator/health/live"]
       interval: 15s
       timeout: 5s
       retries: 10

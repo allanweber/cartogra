@@ -1,4 +1,4 @@
-# postgres — one instance, schemas registry/topology/ingestion (Flyway creates them).
+# postgres — one instance, schemas registry/topology/ingestion/contract (Flyway creates them).
 # Secret keys (files under /etc/cartogra/secrets): DB_USERNAME, DB_PASSWORD — same values the services use.
 
 image:

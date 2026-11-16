@@ -456,7 +456,7 @@ paths:
             type: array
             items:
               type: string
-              enum: [service, team, dependency, drift, scm_connection, cluster, user, invitation, oidc_config]
+              enum: [service, team, dependency, drift, scm_connection, contract, cluster, user, invitation, oidc_config]
           style: form
           explode: false
         - name: entityId

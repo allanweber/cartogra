@@ -49,7 +49,7 @@ jobs:
 
       - name: Images exist for this commit
         run: |
-          for image in gateway registry topology ingestion frontend acme; do
+          for image in gateway registry topology contract ingestion frontend acme; do
             docker manifest inspect "ghcr.io/${{ github.repository_owner }}/cartogra-$image:$SHA" > /dev/null \
               || { echo "missing cartogra-$image:$SHA (did images.yml finish?)"; exit 1; }
           done

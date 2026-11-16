@@ -47,6 +47,8 @@ class GuestModeIT extends AbstractGatewayIT {
         "/api/v1/topology/dependencies",
         "/api/v1/topology/drifts/" + UUID.randomUUID() + "/resolve",
         "/api/v1/ingestion/scm-connections",
+        "/api/v1/contracts",
+        "/api/v1/contracts/" + UUID.randomUUID() + "/versions",
         "/api/v1/not-yet-built/anything");
 
     @Autowired

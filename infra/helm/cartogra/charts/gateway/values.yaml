@@ -9,6 +9,7 @@ env:
   REDIS_PORT: "6379"
   REGISTRY_URI: http://registry:8081
   TOPOLOGY_URI: http://topology:8082
+  CONTRACT_URI: http://contract:8083
   INGESTION_URI: http://ingestion:8085
   SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
   OTEL_EXPORTER_OTLP_ENDPOINT: http://collector:4318

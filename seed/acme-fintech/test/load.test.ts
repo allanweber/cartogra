@@ -54,6 +54,24 @@ describe('loadSeed', () => {
     expect(api.edges).toContain('svc-ledger-service>svc-ledger-db DB')
   })
 
+  it('creates the ledger-service contract with v1 then publishes v2', async () => {
+    const api = new FakeApi(seed)
+    const summary = await loadSeed(api, seed, fast)
+    expect(summary).toMatchObject({ contractsCreated: 1, contractVersionsPublished: 1 })
+    const contract = await api.getContract(summary.contracts['ledger-service'])
+    expect(contract.serviceId).toBe('svc-ledger-service')
+    expect(contract.latestVersion).toMatchObject({ versionNumber: 2, label: '1.1.0' })
+  })
+
+  it('reuses the existing contract on a re-run and stores no new version', async () => {
+    const api = new FakeApi(seed)
+    const first = await loadSeed(api, seed, fast)
+    const second = await loadSeed(api, seed, fast)
+    expect(second).toMatchObject({ contractsCreated: 0, contractVersionsPublished: 0 })
+    expect(second.contracts).toEqual(first.contracts)
+    expect((await api.getContract(first.contracts['ledger-service'])).latestVersion.versionNumber).toBe(2)
+  })
+
   it('skips edges that already exist on the server (409)', async () => {
     const api = new FakeApi(seed)
     await loadSeed(api, seed, fast)

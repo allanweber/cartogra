@@ -211,7 +211,7 @@ DOMAIN=cartogra.dev
 CONF_DIR="$HOME/.config/cartogra-demo"
 S3=https://fsn1.your-objectstorage.com
 BUCKET=cartogra-demo-backups
-IMAGES=(gateway registry topology ingestion frontend acme)
+IMAGES=(gateway registry topology contract ingestion frontend acme)
 export KUBECONFIG="$HOME/.kube/cartogra-demo"
 
 # run CMD... echoes a command, then runs it.
@@ -487,12 +487,13 @@ if begin seal; then
     --from-literal=BOOTSTRAP_ADMIN_PASSWORD="$ADMIN_PASSWORD"
   seal cartogra registry-secrets "${DB[@]}"
   seal cartogra topology-secrets "${DB[@]}"
+  seal cartogra contract-secrets "${DB[@]}"
   seal cartogra postgres-secrets "${DB[@]}"
   seal cartogra ingestion-secrets "${DB[@]}" --from-literal=CLUSTER_CREDENTIALS_KEY="$CLUSTER_CREDENTIALS_KEY"
   seal cartogra backup-secrets --from-literal=S3_ACCESS_KEY="$S3_ACCESS_KEY" --from-literal=S3_SECRET_KEY="$S3_SECRET_KEY"
   seal acme-system acme-bootstrap --from-literal=ACME_PASSWORD="$ADMIN_PASSWORD" --from-literal=ACME_GITHUB_TOKEN="$ACME_GITHUB_TOKEN"
   run kubectl apply -f infra/k8s/sealed/
-  run kubectl -n cartogra get secrets     # expect 6
+  run kubectl -n cartogra get secrets     # expect 7
   run kubectl -n acme-system get secrets  # expect acme-bootstrap
   finished seal
 fi

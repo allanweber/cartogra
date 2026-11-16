@@ -10,6 +10,7 @@ dependencies:
   - { name: gateway, version: 0.1.0 }
   - { name: registry, version: 0.1.0 }
   - { name: topology, version: 0.1.0 }
+  - { name: contract, version: 0.1.0 }
   - { name: ingestion, version: 0.1.0 }
   - { name: frontend, version: 0.1.0 }
   - { name: collector, version: 0.1.0 }

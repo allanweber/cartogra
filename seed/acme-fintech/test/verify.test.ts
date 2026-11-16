@@ -17,6 +17,27 @@ describe('verify', () => {
   })
 })
 
+describe('verify contracts', () => {
+  const opts = { skipObserved: true, sleep: async () => {}, pollMs: 0, discoveryTimeoutMs: 50, syncTimeoutMs: 50 }
+
+  it('passes when ledger-service is at v2 and re-publishing stores nothing', async () => {
+    const checks = await verify(new FakeApi(seed), seed, opts)
+    expect(checks.filter((c) => c.name.startsWith('ledger-service') && /contract|re-publishing/.test(c.name)).map((c) => [c.name, c.ok])).toEqual([
+      ['ledger-service contract exists', true],
+      ['ledger-service contract at v2', true],
+      ['ledger-service re-publishing latest spec stores nothing', true],
+    ])
+  })
+
+  it('fails when the server stored a duplicate version for an unchanged spec', async () => {
+    const api = new FakeApi(seed)
+    const publish = api.publishContractVersion.bind(api)
+    api.publishContractVersion = async (id, spec) => ({ ...(await publish(id, spec)), created: true })
+    const checks = await verify(api, seed, opts)
+    expect(checks.find((c) => c.name === 'ledger-service re-publishing latest spec stores nothing')?.ok).toBe(false)
+  })
+})
+
 describe('verify with drift', () => {
   const sleep = async () => {}
   const opts = { sleep, pollMs: 0, discoveryTimeoutMs: 50, syncTimeoutMs: 50, observedTimeoutMs: 0, driftTimeoutMs: 0 }

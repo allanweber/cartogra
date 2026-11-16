@@ -1,0 +1,29 @@
+FROM --platform=$BUILDPLATFORM eclipse-temurin:25-jdk-jammy AS builder
+WORKDIR /build
+
+COPY gradle/ gradle/
+COPY gradlew settings.gradle.kts build.gradle.kts gradle.properties ./
+COPY infra/docker/settings.docker.gradle.kts ./settings.gradle.kts
+COPY shared/ shared/
+COPY services/contract/ services/contract/
+
+RUN --mount=type=cache,target=/root/.gradle,sharing=locked chmod +x ./gradlew && ./gradlew -Ddocker.service=contract :services:contract:bootJar -x test --no-daemon
+
+FROM eclipse-temurin:25-jre-jammy AS runtime
+
+# --only-upgrade pulls jammy-security fixes for packages already on the base image
+# (libssl3/openssl: CVE-2026-84782; apt/libapt-pkg6.0: CVE-2026-109518) without a
+# general `apt-get upgrade -y` pulling in unrelated package churn.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --only-upgrade libssl3 openssl apt libapt-pkg6.0 \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -m -u 1000 appuser
+
+WORKDIR /app
+COPY --from=builder --chown=appuser:appuser /build/services/contract/build/libs/contract.jar app.jar
+
+USER appuser
+EXPOSE 8083
+HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 CMD curl -f http://localhost:8083/api/v1/contracts/actuator/health/live || exit 1
+ENTRYPOINT ["sh", "-c", "exec java ${JAVA_OPTS} -XX:MaxRAMPercentage=75 -jar app.jar"]

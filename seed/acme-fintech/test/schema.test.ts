@@ -68,6 +68,12 @@ describe('validateSeed', () => {
     calls: [{ from: 'a', to: 'b', declared: true, enabled: true }],
   }
 
+  it('rejects a contractVersions that is not a positive integer', () => {
+    for (const contractVersions of [0, 1.5]) {
+      expect(() => validateSeed({ ...base, services: [{ ...base.services[0], contractVersions }, base.services[1]] })).toThrow(/contractVersions/)
+    }
+  })
+
   it('rejects unknown call targets, duplicates and self calls', () => {
     expect(() => validateSeed({ ...base, calls: [{ from: 'a', to: 'zzz', declared: true, enabled: true }] })).toThrow(/unknown target/)
     expect(() => validateSeed({ ...base, calls: [base.calls[0], base.calls[0]] })).toThrow(/duplicate/)

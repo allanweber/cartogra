@@ -13,7 +13,7 @@
 | **Service Catalog** | `services/registry` | Live (Phase 0/1) |
 | **Ingestion** | `services/ingestion` | Live (Phase 0/1) |
 | **Topology** | `services/topology` | Live (Phase 1 complete — backfill, dependency CRUD, graph read; Phase 2 mostly complete — blast radius [2.1], impact panel [2.2], cycles [2.3], SPOFs [2.4], risks [2.5] shipped; performance evidence [2.6] in progress) |
-| **Contract** | `services/contract` | Empty directory (Phase 5) |
+| **Contract** | `services/contract` | Live (Phase 5 — contract store [5.1]: contracts, immutable versions, `service.deleted` cascade) |
 | **Intelligence** | `services/intelligence` | Empty directory (Phase 6) |
 | **Frontend Shell** | `frontend/` | Partial (Phase 1) |
 | **Shared Kernel** | `shared/common` | Live |
@@ -80,10 +80,10 @@
 |---|---|---|---|
 | Identity & Access | Service Catalog | **Open Host Service / Conformist** | Declarative reverse proxy (Spring Cloud Gateway route, circuit-breaker guarded); Gateway forwards `X-Tenant-Id` derived from JWT |
 | Identity & Access | Topology | Open Host Service / Conformist | Declarative reverse proxy (`gateway/application.yml`, `Path=/api/v1/topology/**`); backfill, dependency CRUD, graph read, blast radius, cycles, SPOFs, and risks are all live behind it — [1.1]–[1.6], [2.1]–[2.5] |
-| Identity & Access | Contract | Open Host Service / Conformist | Declarative reverse proxy (Phase 5 — route not yet created) |
+| Identity & Access | Contract | Open Host Service / Conformist | Declarative reverse proxy (`gateway/application.yml`, `Path=/api/v1/contracts/**`, breaker `contract`) — [5.1] |
 | Identity & Access | Intelligence | Open Host Service / Conformist | Declarative reverse proxy (Phase 6 — route not yet created) |
 | Service Catalog (U) | Topology (D) | **Customer / Supplier** | Live: Kafka `cartogra.registry.service.changed` (`event_type` `service.{registered,updated,deleted}`), consumed by `GraphNodeEventConsumer` to project `graph_nodes` (including `team_id`/`tier`, used for orphan risk and SPOF scoring — ADR-0028). No separate `ownership-changed` topic exists or is needed (ADR-0028 supersedes ADR-0027's plan to add one) |
-| Service Catalog (U) | Contract (D) | Customer / Supplier | Planned, Phase 5: Kafka `cartogra.registry.service.changed` (on `service.deleted`) |
+| Service Catalog (U) | Contract (D) | Customer / Supplier | Live: Kafka `cartogra.registry.service.changed`, consumed by `ServiceDeletedConsumer` on `service.deleted` only (soft-deletes the contract, tombstones the service) |
 | Service Catalog (U) | Intelligence (D) | Customer / Supplier | Planned, Phase 6: Kafka registry events |
 | Ingestion (U) | Service Catalog (D) | **Published Language** | Live today: Kafka `cartogra.ingestion.service.discovered`, `ownership.resolved` |
 | Ingestion (U) | Contract (D) | Published Language | Planned, Phase 5 (5.8): Kafka `cartogra.ingestion.spec.discovered` |
@@ -125,7 +125,7 @@ history table is simply `flyway_schema_history` — scoping comes from the schem
 | Service Catalog | `registry` | `flyway_schema_history` (in `registry`) |
 | Ingestion | `ingestion` | `flyway_schema_history` (in `ingestion`) |
 | Topology | `topology` — already dedicated, not a future-phase item; `dependencies`, `dependency_drifts`, `dependency_graph_edges` MV exist there today | `flyway_schema_history` (in `topology`) |
-| Contract | Not created yet (Phase 5) | — |
+| Contract | `contract` | `flyway_schema_history` (in `contract`) |
 | Intelligence | Not created yet (Phase 6) | — |
 
 > **Phase 0 compromise**: Gateway reads the `registry` schema's `users`, `tenants`, `refresh_tokens`, and `tenant_oidc_configs` tables directly. This avoids a premature auth microservice. Tracked in ADR-0010.
@@ -153,7 +153,7 @@ no consumer, and no code (`docs/roadmap.md` §12).
 - `services/registry/CONTEXT.md` — Service Catalog context
 - `services/ingestion/CONTEXT.md` — Ingestion context
 - `services/topology/CONTEXT.md` — Topology context (Phase 1 complete, Phase 2 mostly complete)
-- `services/contract/CONTEXT.md` — Contract context (planned)
+- `services/contract/CONTEXT.md` — Contract context (5.1 contract store live)
 - `services/intelligence/CONTEXT.md` — Intelligence context (planned)
 - `frontend/CONTEXT.md` — Frontend Shell context
 - `shared/common/CONTEXT.md` — Shared Kernel

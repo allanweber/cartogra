@@ -37,6 +37,14 @@ describe('audit-format', () => {
     ).toBe('SCM connection sync failed — 401')
   })
 
+  it('names contract actions with the version number and spec label', () => {
+    const contract = (action: string, payload: Record<string, unknown>) =>
+      auditMessage(event({ entityType: 'contract', action, payload }))
+    expect(contract('created', { versionNumber: 1, label: '1.0.0' })).toBe('Contract created v1 (1.0.0)')
+    expect(contract('version_published', { versionNumber: 2 })).toBe('Contract version published v2')
+    expect(contract('deleted', { serviceId: 's' })).toBe('Contract deleted')
+  })
+
   it('shows system, the actor name, or a short user id', () => {
     expect(auditActor(event({ actorKind: 'system', actorId: null, actorName: null }))).toBe('system')
     expect(auditActor(event())).toBe('Alice')

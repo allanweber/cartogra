@@ -1,4 +1,7 @@
-import { ApiError, type CartograApi, type CatalogService, type Drift, type Graph, type Risk, type Team, type UnresolvedSpanService } from '../src/api.ts'
+import {
+  ApiError, type CartograApi, type CatalogService, type Contract, type ContractVersion, type Drift, type Graph, type PublishedVersion, type Risk,
+  type Team, type UnresolvedSpanService,
+} from '../src/api.ts'
 import { declaredCycles, type Protocol, type SeedData } from '../src/schema.ts'
 
 export class FakeApi implements CartograApi {
@@ -11,6 +14,8 @@ export class FakeApi implements CartograApi {
   driftRecords: Drift[] = []
   unresolved: UnresolvedSpanService[] = []
   nodeLagReads = 0
+  /** Versions per contract id; the spec text itself stands in for the canonical hash. */
+  readonly contracts = new Map<string, { serviceId: string; versions: ContractVersion[] }>()
   private seq = 0
   private readonly seed: SeedData
 
@@ -96,4 +101,31 @@ export class FakeApi implements CartograApi {
   async unresolvedSpanServices() {
     return [...this.unresolved]
   }
+  async createContract(serviceId: string, spec: string): Promise<Contract> {
+    this.calls.push(`createContract:${serviceId}`)
+    const existing = [...this.contracts].find(([, c]) => c.serviceId === serviceId)
+    if (existing) throw new ApiError(409, 'CONFLICT', 'exists', 't', { contractId: existing[0] })
+    const id = `contract-${++this.seq}`
+    this.contracts.set(id, { serviceId, versions: [fakeVersion(1, spec)] })
+    return this.getContract(id)
+  }
+  async publishContractVersion(contractId: string, spec: string): Promise<PublishedVersion> {
+    this.calls.push(`publishContractVersion:${contractId}`)
+    const contract = this.contracts.get(contractId)
+    if (!contract) throw new ApiError(404, 'NOT_FOUND', 'unknown contract', 't')
+    const latest = contract.versions.at(-1)!
+    if (latest.specHash === spec) return { version: latest, created: false }
+    const version = fakeVersion(latest.versionNumber + 1, spec)
+    contract.versions.push(version)
+    return { version, created: true }
+  }
+  async getContract(contractId: string): Promise<Contract> {
+    const contract = this.contracts.get(contractId)
+    if (!contract) throw new ApiError(404, 'NOT_FOUND', 'unknown contract', 't')
+    return { id: contractId, serviceId: contract.serviceId, latestVersion: contract.versions.at(-1)! }
+  }
+}
+
+function fakeVersion(versionNumber: number, spec: string): ContractVersion {
+  return { id: `v-${versionNumber}`, versionNumber, label: /version: "([^"]+)"/.exec(spec)?.[1] ?? null, specHash: spec }
 }

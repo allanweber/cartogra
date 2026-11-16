@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { remoteFor, renderRepo, routesFor, teamSlug } from '../src/repos.ts'
+import { openapiSpec, remoteFor, renderRepo, routesFor, teamSlug } from '../src/repos.ts'
 import { loadSeedFile, type SeedService } from '../src/schema.ts'
 
 const seed = loadSeedFile(resolve(import.meta.dirname, '../seed-data.json'))
@@ -33,6 +33,21 @@ describe('renderRepo', () => {
     const yaml = renderRepo(byName('ledger-service')).get('openapi.yaml')!
     expect(yaml).toContain('openapi: "3.0.3"')
     for (const r of routesFor(byName('ledger-service'))) expect(yaml).toContain(`"${r.path}"`)
+  })
+
+  it('declares the {id} path parameter so the spec passes OpenAPI validation', () => {
+    const yaml = renderRepo(byName('card-service')).get('openapi.yaml')!
+    expect(yaml).toContain('"/cards/{id}":\n    parameters:\n      - name: id\n        in: path\n        required: true')
+  })
+
+  it('pushes the latest contract version, which adds a history path and bumps info.version', () => {
+    const ledger = byName('ledger-service')
+    expect(ledger.contractVersions).toBe(2)
+    expect(renderRepo(ledger).get('openapi.yaml')).toBe(openapiSpec(ledger, 2))
+    expect(openapiSpec(ledger, 1)).toContain('version: "1.0.0"')
+    expect(openapiSpec(ledger, 1)).not.toContain('/history')
+    expect(openapiSpec(ledger, 2)).toContain('version: "1.1.0"')
+    expect(openapiSpec(ledger, 2)).toContain('"/ledgers/{id}/history":')
   })
 
   it('is deterministic', () => {

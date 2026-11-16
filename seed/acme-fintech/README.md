@@ -6,7 +6,7 @@ project: no imports from Cartogra code, own `package.json`. It runs in the **kin
 | What | Where it comes from |
 |---|---|
 | 21 services in the catalog | Cartogra **discovery**: K8s (health, namespace) and SCM repos (repo, tech stack, ownership). Registry merges both by service name. The loader never calls `POST /services` |
-| 5 teams, owners, tiers, declared dependencies | `pnpm acme load` through the gateway API |
+| 5 teams, owners, tiers, declared dependencies, `ledger-service`'s API contract (v1, v2) | `pnpm acme load` through the gateway API |
 | Observed edges, the drift | Real OTel spans emitted by the fake services through the collector |
 | 21 source repos (all Azure DevOps; Java, Node, Python) | `pnpm acme repos`, generated from `seed-data.json` |
 
@@ -211,12 +211,16 @@ no team matched the handle, or several teams matched. `service.discovered` and `
 topics, so a first sync can occasionally see ownership before the service exists; a second sync fixes it. The same
 mapping is asserted without an SCM org by `AcmeCodeownersMappingIT` (registry).
 
-## 5. Load teams, owners, tiers, declared edges
+## 5. Load teams, owners, tiers, declared edges, contracts
 
 ```bash
 export ACME_EMAIL=... ACME_PASSWORD=...
 pnpm acme load            # waits (<= 2 min) for discovery to produce all 21 services, then adds the rest
 ```
+
+It also stores the contract of each service with `contractVersions` in `seed-data.json` (`ledger-service`: v1, then
+v2, which adds `/ledgers/{id}/history` and bumps `info.version` to `1.1.0`); the repo's `openapi.yaml` is the latest
+version.
 
 Run it as often as you like: it is additive and idempotent. If discovery hasn't produced every service, it
 exits non-zero and lists the missing ones.
@@ -224,7 +228,7 @@ exits non-zero and lists the missing ones.
 ## 6. Verify, then demo
 
 ```bash
-pnpm acme verify                 # load twice + identical-state diff, /cycles = 2, SPOF, 3 orphans, observed edges (incl. 2 kafka + 1 db), stripe-gateway unresolved
+pnpm acme verify                 # load twice + identical-state diff, /cycles = 2, SPOF, 3 orphans, observed edges (incl. 2 kafka + 1 db), stripe-gateway unresolved, ledger-service contract at v2
 pnpm acme verify --with-drift    # also switches the 3 undeclared calls on and waits for the observed edges and 4 drift records
 pnpm acme drift on               # demo: watch 3 edges nobody declared appear on /graph (Drift edge mode)
 pnpm acme drift off
@@ -292,7 +296,7 @@ Clean up the scratch namespaces: `kubectl delete namespace no-tenant late-adopte
 | `pnpm acme manifests --helm` | Rewrites `infra/helm/acme/files/services.json`; run after editing `seed-data.json` (a test fails otherwise) |
 | `pnpm acme repos [--provider github]` | Generates and pushes the 21 source repos (idempotent); `--provider github` mirrors them all to `ACME_GITHUB_ORG` (needs `gh auth setup-git`) |
 | `pnpm acme bootstrap` | In-cluster onboarding (the chart's Job): waits for login, registers the cluster with the reader token, connects GitHub, then `load` |
-| `pnpm acme load` | Teams, owners, tiers, declared edges via the gateway |
+| `pnpm acme load` | Teams, owners, tiers, declared edges, contracts via the gateway |
 | `pnpm acme verify [--with-drift] [--no-spans]` | End-to-end checks against the live stack |
 | `pnpm acme drift on\|off` | `kubectl port-forward` to each caller and toggles the dormant calls |
 | `pnpm test` / `pnpm typecheck` | Unit tests (no network) / types |
