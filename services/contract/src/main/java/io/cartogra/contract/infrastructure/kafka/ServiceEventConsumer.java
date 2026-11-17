@@ -2,6 +2,7 @@ package io.cartogra.contract.infrastructure.kafka;
 
 import io.cartogra.common.event.EventEnvelope;
 import io.cartogra.contract.domain.ContractService;
+import io.cartogra.contract.domain.ServiceProjectionService;
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
@@ -21,11 +22,16 @@ import tools.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.StreamSupport;
 
-/** Cascades Registry's {@code service.deleted} to the service's contract; every other service event is ignored. */
+/**
+ * Keeps the service-name projection from {@code service.registered}/{@code service.updated} and cascades
+ * {@code service.deleted} to the service's contract; other event types are acked and ignored.
+ */
 @Component
-public class ServiceDeletedConsumer {
+public class ServiceEventConsumer {
 
     static final String TOPIC = "cartogra.registry.service.changed";
+    static final String SERVICE_REGISTERED = "service.registered";
+    static final String SERVICE_UPDATED = "service.updated";
     static final String SERVICE_DELETED = "service.deleted";
 
     private static final TextMapGetter<Headers> HEADERS_GETTER = new TextMapGetter<>() {
@@ -42,17 +48,20 @@ public class ServiceDeletedConsumer {
         }
     };
 
-    private static final Logger log = LoggerFactory.getLogger(ServiceDeletedConsumer.class);
+    private static final Logger log = LoggerFactory.getLogger(ServiceEventConsumer.class);
 
     private final ContractService contractService;
+    private final ServiceProjectionService serviceProjectionService;
     private final ObjectMapper objectMapper;
 
-    public ServiceDeletedConsumer(ContractService contractService, ObjectMapper objectMapper) {
+    public ServiceEventConsumer(ContractService contractService, ServiceProjectionService serviceProjectionService,
+                                ObjectMapper objectMapper) {
         this.contractService = contractService;
+        this.serviceProjectionService = serviceProjectionService;
         this.objectMapper = objectMapper;
     }
 
-    @KafkaListener(id = "serviceDeletedConsumer", topics = TOPIC, groupId = "${spring.kafka.consumer.group-id}")
+    @KafkaListener(id = "serviceEventConsumer", topics = TOPIC, groupId = "${spring.kafka.consumer.group-id}")
     public void consume(ConsumerRecord<String, String> record, Acknowledgment ack) {
         Context ctx = W3CTraceContextPropagator.getInstance().extract(
                 Context.current(), record.headers(), HEADERS_GETTER);
@@ -60,11 +69,17 @@ public class ServiceDeletedConsumer {
         try (Scope _ = ctx.makeCurrent()) {
             EventEnvelope<JsonNode> envelope = objectMapper.readValue(
                     record.value(), new TypeReference<EventEnvelope<JsonNode>>() {});
-            if (SERVICE_DELETED.equals(envelope.eventType())) {
-                contractService.deleteForService(envelope.tenantId(), envelope.entityId());
-                log.info("Applied {} eventId={} serviceId={} tenant={}",
-                        envelope.eventType(), envelope.eventId(), envelope.entityId(), envelope.tenantId());
+            switch (envelope.eventType()) {
+                case SERVICE_REGISTERED, SERVICE_UPDATED -> serviceProjectionService.recordName(
+                        envelope.tenantId(), envelope.entityId(), envelope.payload().required("name").asString());
+                case SERVICE_DELETED -> contractService.deleteForService(envelope.tenantId(), envelope.entityId());
+                default -> {
+                    ack.acknowledge();
+                    return;
+                }
             }
+            log.info("Applied {} eventId={} serviceId={} tenant={}",
+                    envelope.eventType(), envelope.eventId(), envelope.entityId(), envelope.tenantId());
             ack.acknowledge();
         } catch (Exception e) {
             log.warn("Failed to process {} key={} partition={} offset={}: {}",

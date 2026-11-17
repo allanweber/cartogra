@@ -13,6 +13,8 @@ import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -37,6 +39,22 @@ public class JdbcServiceRepository implements ServiceRepository {
                 .addValue("tenantId", tenantId)
                 .addValue("id", id);
         return jdbc.query(sql, params, SERVICE_MAPPER).stream().findFirst();
+    }
+
+    @Override
+    public Map<UUID, String> findNames(UUID tenantId, Collection<UUID> ids) {
+        Map<UUID, String> names = new LinkedHashMap<>();
+        if (ids.isEmpty()) {
+            return names;
+        }
+        jdbc.query("""
+                SELECT id, name FROM services
+                WHERE tenant_id = :tenantId AND id IN (:ids) AND deleted_at IS NULL
+                """, new MapSqlParameterSource().addValue("tenantId", tenantId).addValue("ids", ids),
+                rs -> {
+                    names.put(rs.getObject("id", UUID.class), rs.getString("name"));
+                });
+        return names;
     }
 
     @Override
@@ -197,27 +215,6 @@ public class JdbcServiceRepository implements ServiceRepository {
                   AND deleted_at IS NULL
                 """;
         return jdbc.query(sql, Map.of(), SERVICE_MAPPER);
-    }
-
-    @Override
-    public List<Service> findAllActive(int limit, int offset) {
-        String sql = """
-                SELECT * FROM services
-                WHERE deleted_at IS NULL
-                ORDER BY tenant_id, id
-                LIMIT :limit OFFSET :offset
-                """;
-        var params = new MapSqlParameterSource()
-                .addValue("limit", limit)
-                .addValue("offset", offset);
-        return jdbc.query(sql, params, SERVICE_MAPPER);
-    }
-
-    @Override
-    public long countActive() {
-        String sql = "SELECT COUNT(*) FROM services WHERE deleted_at IS NULL";
-        Long result = jdbc.queryForObject(sql, Map.of(), Long.class);
-        return result != null ? result : 0L;
     }
 
     @Override

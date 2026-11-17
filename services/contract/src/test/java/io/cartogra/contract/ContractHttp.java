@@ -34,6 +34,11 @@ public final class ContractHttp {
         return send(base(("/" + contractId), tenantId, "ADMIN").GET().build());
     }
 
+    /** GET {@code path} under {@code /api/v1/contracts}, as a guest: reads need no write role. */
+    public HttpResponse<String> read(UUID tenantId, String path) {
+        return send(base(path, tenantId, "GUEST").GET().build());
+    }
+
     public HttpResponse<String> post(String path, UUID tenantId, String role, String body) {
         return send(base(path, tenantId, role).POST(HttpRequest.BodyPublishers.ofString(body)).build());
     }

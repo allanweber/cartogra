@@ -4,13 +4,18 @@ import io.cartogra.registry.domain.Service;
 import io.cartogra.registry.domain.ServiceHealthStatus;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 public interface ServiceRepository {
 
     Optional<Service> findById(UUID tenantId, UUID id);
+
+    /** Names of the tenant's live services among {@code ids}, by id; unknown or deleted ids are absent. */
+    Map<UUID, String> findNames(UUID tenantId, Collection<UUID> ids);
 
     List<Service> findAll(UUID tenantId, ServiceFilter filter, int limit, int offset);
 
@@ -42,16 +47,6 @@ public interface ServiceRepository {
 
     /** Cross-tenant query; excludes K8s-sourced services and deleted rows. */
     List<Service> findAllWithHealthEndpoint();
-
-    /**
-     * Cross-tenant, paginated, active-only. Backs the internal {@code /internal/services}
-     * endpoint used by Topology's admin backfill (walks every tenant's services once for
-     * tenants that predate its Kafka consumer).
-     */
-    List<Service> findAllActive(int limit, int offset);
-
-    /** Total active (non-deleted) service count across every tenant — pairs with {@link #findAllActive}. */
-    long countActive();
 
     void updateHealth(UUID tenantId, UUID id, ServiceHealthStatus status, Instant checkedAt);
 

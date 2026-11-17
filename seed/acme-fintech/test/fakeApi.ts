@@ -1,6 +1,6 @@
 import {
   ApiError, type CartograApi, type CatalogService, type Contract, type ContractVersion, type Drift, type Graph, type PublishedVersion, type Risk,
-  type Team, type UnresolvedSpanService,
+  type Team, type UnresolvedSpanService, type VersionDiff,
 } from '../src/api.ts'
 import { declaredCycles, type Protocol, type SeedData } from '../src/schema.ts'
 
@@ -122,7 +122,27 @@ export class FakeApi implements CartograApi {
   async getContract(contractId: string): Promise<Contract> {
     const contract = this.contracts.get(contractId)
     if (!contract) throw new ApiError(404, 'NOT_FOUND', 'unknown contract', 't')
-    return { id: contractId, serviceId: contract.serviceId, latestVersion: contract.versions.at(-1)! }
+    const serviceName = this.services.find((s) => s.id === contract.serviceId)?.name ?? null
+    return { id: contractId, serviceId: contract.serviceId, serviceName, latestVersion: contract.versions.at(-1)! }
+  }
+  async listContracts(): Promise<Contract[]> {
+    return Promise.all([...this.contracts.keys()].map((id) => this.getContract(id)))
+  }
+  /** Reports each path key the version adds over the previous one; the spec text is in `specHash`. */
+  async contractDiff(contractId: string, versionNumber: number): Promise<VersionDiff> {
+    const contract = this.contracts.get(contractId)
+    const to = contract?.versions[versionNumber - 1]
+    if (!contract || !to) throw new ApiError(404, 'NOT_FOUND', 'unknown version', 't')
+    const from = contract.versions[versionNumber - 2] ?? null
+    const paths = (spec: string) => [...spec.matchAll(/^ {2}"([^"]+)":$/gm)].map((m) => m[1])
+    const before = new Set(from ? paths(from.specHash) : [])
+    const added = paths(to.specHash).filter((p) => !before.has(p))
+    return {
+      from,
+      to,
+      changes: added.map((p) => ({ op: 'added', pointer: `/paths/${p.replaceAll('~', '~0').replaceAll('/', '~1')}`, path: ['paths', p] })),
+      lines: added.map((p) => ({ kind: 'added', left: null, right: `  ${p}:` })),
+    }
   }
 }
 

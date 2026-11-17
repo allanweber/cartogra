@@ -36,15 +36,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-class ServiceDeletedConsumerIT extends AbstractContractIT {
+class ServiceEventConsumerIT extends AbstractContractIT {
 
-    private static final String TOPIC = ServiceDeletedConsumer.TOPIC;
+    private static final String TOPIC = ServiceEventConsumer.TOPIC;
     private static final String SPEC = """
             openapi: 3.0.3
             info: {title: Cascade, version: '1'}
@@ -74,7 +73,7 @@ class ServiceDeletedConsumerIT extends AbstractContractIT {
 
     @BeforeEach
     void setUp() {
-        ContainerTestUtils.waitForAssignment(listenerRegistry.getListenerContainer("serviceDeletedConsumer"), 1);
+        ContainerTestUtils.waitForAssignment(listenerRegistry.getListenerContainer("serviceEventConsumer"), 1);
         http = new ContractHttp(port);
         tenant = UUID.randomUUID();
     }
@@ -110,14 +109,37 @@ class ServiceDeletedConsumerIT extends AbstractContractIT {
     }
 
     @Test
-    void otherServiceEventsAreIgnored() {
+    void registeredAndUpdatedKeepTheServiceNameWithoutTouchingTheContract() {
         UUID serviceId = UUID.randomUUID();
         String id = contractId(serviceId);
 
-        send(serviceId, "service.updated");
+        send(serviceId, envelope(serviceId, "service.registered", "ledger"));
+        Awaitility.await().atMost(Duration.ofSeconds(15)).pollInterval(Duration.ofMillis(300))
+                .untilAsserted(() -> assertThat(name(serviceId)).isEqualTo("ledger"));
 
-        verify(contractService, after(3_000).never()).deleteForService(eq(tenant), any());
+        send(serviceId, envelope(serviceId, "service.updated", "ledger-v2"));
+        Awaitility.await().atMost(Duration.ofSeconds(15)).pollInterval(Duration.ofMillis(300))
+                .untilAsserted(() -> assertThat(name(serviceId)).isEqualTo("ledger-v2"));
+
+        verify(contractService, never()).deleteForService(eq(tenant), any());
         assertThat(http.get(tenant, id).statusCode()).isEqualTo(200);
+    }
+
+    @Test
+    void updateAfterDeleteDoesNotResurrectTheService() {
+        UUID serviceId = UUID.randomUUID();
+        send(serviceId, envelope(serviceId, "service.registered", "ledger"));
+        send(serviceId, "service.deleted");
+        send(serviceId, envelope(serviceId, "service.updated", "renamed"));
+        String marker = envelope(serviceId, "service.health_changed", "ledger");
+        send(serviceId, marker);
+
+        verify(contractService, timeout(15_000)).deleteForService(tenant, serviceId);
+        Awaitility.await().atMost(Duration.ofSeconds(15)).pollInterval(Duration.ofMillis(300))
+                .untilAsserted(() -> assertThat(tombstones(serviceId)).isEqualTo(1));
+        Awaitility.await().during(Duration.ofSeconds(2)).atMost(Duration.ofSeconds(5))
+                .untilAsserted(() -> assertThat(name(serviceId)).isEqualTo("ledger"));
+        assertThat(http.create(tenant, serviceId, SPEC).statusCode()).isEqualTo(404);
     }
 
     @Test
@@ -152,8 +174,18 @@ class ServiceDeletedConsumerIT extends AbstractContractIT {
     }
 
     private String envelope(UUID serviceId, String eventType) {
+        return envelope(serviceId, eventType, "ledger");
+    }
+
+    private String envelope(UUID serviceId, String eventType, String name) {
         return objectMapper.writeValueAsString(EventEnvelope.of(eventType, serviceId, tenant, 1,
-                Map.of("id", serviceId, "tenantId", tenant, "name", "ledger")));
+                Map.of("id", serviceId, "tenantId", tenant, "name", name)));
+    }
+
+    private String name(UUID serviceId) {
+        List<String> names = jdbc.queryForList("SELECT name FROM services WHERE tenant_id = :t AND service_id = :s",
+                new MapSqlParameterSource().addValue("t", tenant).addValue("s", serviceId), String.class);
+        return names.isEmpty() ? null : names.getFirst();
     }
 
     private void send(UUID serviceId, String eventTypeOrJson) {
@@ -178,7 +210,7 @@ class ServiceDeletedConsumerIT extends AbstractContractIT {
 
     private int tombstones(UUID serviceId) {
         return jdbc.queryForObject(
-                "SELECT count(*) FROM deleted_services WHERE tenant_id = :t AND service_id = :s",
+                "SELECT count(*) FROM services WHERE tenant_id = :t AND service_id = :s AND deleted_at IS NOT NULL",
                 new MapSqlParameterSource().addValue("t", tenant).addValue("s", serviceId), Integer.class);
     }
 }

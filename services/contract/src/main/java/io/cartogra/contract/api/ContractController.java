@@ -1,14 +1,18 @@
 package io.cartogra.contract.api;
 
 import io.cartogra.common.api.ApiResponse;
+import io.cartogra.common.api.PageResult;
 import io.cartogra.common.identity.Actor;
 import io.cartogra.contract.api.dto.ContractRequest;
 import io.cartogra.contract.api.dto.ContractResponse;
+import io.cartogra.contract.api.dto.ContractSummaryResponse;
+import io.cartogra.contract.api.dto.VersionDiffResponse;
 import io.cartogra.contract.api.dto.ContractVersionResponse;
 import io.cartogra.contract.domain.ContractService;
 import io.cartogra.contract.domain.VersionPublication;
 import io.cartogra.web.api.TracedResponse;
 import jakarta.validation.Valid;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,6 +20,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
@@ -53,5 +58,32 @@ public class ContractController {
             @RequestHeader("X-Tenant-Id") UUID tenantId,
             @PathVariable UUID id) {
         return TracedResponse.ok(ContractResponse.from(contractService.get(tenantId, id)));
+    }
+
+    @GetMapping({"", "/"})
+    public ResponseEntity<ApiResponse<PageResult<ContractSummaryResponse>>> list(
+            @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @RequestParam(required = false) @Nullable String q,
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(defaultValue = "0") int offset) {
+        return TracedResponse.ok(contractService.list(tenantId, q, limit, offset).map(ContractSummaryResponse::from));
+    }
+
+    @GetMapping("/{id}/versions")
+    public ResponseEntity<ApiResponse<PageResult<ContractVersionResponse>>> listVersions(
+            @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(defaultValue = "0") int offset) {
+        return TracedResponse.ok(contractService.listVersions(tenantId, id, limit, offset)
+                .map(ContractVersionResponse::from));
+    }
+
+    @GetMapping("/{id}/versions/{versionNumber}/diff")
+    public ResponseEntity<ApiResponse<VersionDiffResponse>> diff(
+            @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @PathVariable UUID id,
+            @PathVariable int versionNumber) {
+        return TracedResponse.ok(VersionDiffResponse.from(contractService.diff(tenantId, id, versionNumber)));
     }
 }

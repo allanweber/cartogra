@@ -3,7 +3,6 @@ package io.cartogra.topology.api;
 import io.cartogra.common.api.ApiError;
 import io.cartogra.common.api.ApiErrorResponse;
 import io.cartogra.common.api.ErrorCodes;
-import io.cartogra.topology.domain.exception.BackfillFailedException;
 import io.cartogra.topology.domain.exception.DependencyNotFoundException;
 import io.cartogra.topology.domain.exception.DriftAlreadyResolvedException;
 import io.cartogra.topology.domain.exception.DriftNoLongerObservedException;
@@ -106,17 +105,6 @@ public class GlobalExceptionHandler {
         logger.warn("Downstream service call failed", ex);
         return respond(HttpStatus.SERVICE_UNAVAILABLE, ErrorCodes.SERVICE_UNAVAILABLE,
                 "A downstream service is unavailable");
-    }
-
-    @ExceptionHandler(BackfillFailedException.class)
-    public ResponseEntity<ApiErrorResponse> handleBackfillFailed(BackfillFailedException ex) {
-        logger.warn("Backfill failed", ex);
-        String traceId = traceId();
-        var error = new ApiError(ErrorCodes.SERVICE_UNAVAILABLE, ex.getMessage(),
-                Map.of("nodesUpserted", ex.nodesUpserted(), "failedAtOffset", ex.failedAtOffset()));
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .header("X-Trace-Id", traceId)
-                .body(new ApiErrorResponse(error, traceId));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

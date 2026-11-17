@@ -23,8 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Backs Topology's declared-dependency authorization check (Topology issue [1.2]): "is this
- * user a member of the team owning this service?" Tenant-scoped, unlike the cross-tenant
- * {@code /internal/services} (see {@link ServiceInternalControllerIT}).
+ * user a member of the team owning this service?" Tenant-scoped.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class ServiceAccessInternalControllerIT {

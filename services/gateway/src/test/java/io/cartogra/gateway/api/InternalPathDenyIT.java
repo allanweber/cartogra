@@ -37,19 +37,10 @@ class InternalPathDenyIT extends AbstractGatewayIT {
             .andExpect(status().is4xxClientError());
     }
 
-    // Registry's new /internal/services (Topology issue [1.1] backfill) and Topology's new
-    // /internal/backfill are two more instances of the same downstream-internal-path shape —
-    // the deny rule (`/api/v1/*/internal/**`) is generic, but each new internal endpoint is
-    // worth its own regression assertion.
+    // The deny rule (`/api/v1/*/internal/**`) is generic, but each internal endpoint gets its own regression assertion.
     @Test
-    void unauthenticatedRequestToRegistryInternalServicesIsRejected() throws Exception {
-        mockMvc.perform(get("/api/v1/registry/internal/services"))
-            .andExpect(status().is4xxClientError());
-    }
-
-    @Test
-    void unauthenticatedRequestToTopologyInternalBackfillIsRejected() throws Exception {
-        mockMvc.perform(post("/api/v1/topology/internal/backfill"))
+    void unauthenticatedRequestToRegistryServiceNamesIsRejected() throws Exception {
+        mockMvc.perform(post("/api/v1/registry/internal/services/names"))
             .andExpect(status().is4xxClientError());
     }
 

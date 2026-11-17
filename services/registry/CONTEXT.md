@@ -109,8 +109,8 @@ The service's own `server.servlet.context-path` is `/api/v1/registry` — paths 
 | POST/GET/GET·`/mine`/GET·`{id}`/PUT·`{id}`/DELETE·`{id}` | `/teams` | Team CRUD — `TeamService` |
 | GET/POST·`/members`/DELETE·`/members/{memberUserId}` | `/teams/{id}/members` | Team membership — `TeamService` |
 | GET | `/internal/plan-limits/{tenantId}` | `PlanLimitInternalController` → `PlanLimitService` |
-| GET | `/internal/services` | `ServiceInternalController` → `ServiceService.listAllActive` — cross-tenant, paginated; no `X-Tenant-Id`. Backs Topology's admin backfill (Topology issue [1.1]) |
-| POST | `/internal/services/access` | `ServiceAccessInternalController` → `ServiceService.isAccessibleBy` — body `{tenantId, userId, serviceIds[]}`, returns `{serviceId: boolean}` per id. Tenant-scoped (unlike `/internal/services` above) — unknown/cross-tenant/orphan-team resolves to `false`, never an error. Backs Topology's declared-dependency authorization check (Topology issue [1.2]) |
+| POST | `/internal/services/access` | `ServiceAccessInternalController` → `ServiceService.isAccessibleBy` — body `{tenantId, userId, serviceIds[]}`, returns `{serviceId: boolean}` per id. Tenant-scoped — unknown/cross-tenant/orphan-team resolves to `false`, never an error. Backs Topology's declared-dependency authorization check (Topology issue [1.2]) |
+| POST | `/internal/services/names` | `ServiceNamesInternalController` → `ServiceService.findNames` — body `{tenantId, serviceIds[]}` (1–100), returns `{serviceId: name}` from one query. Tenant-scoped; unknown/deleted/cross-tenant ids are left out. Backs Contract's name lookup for services it has no name for (5.2) |
 
 There is no `/scm-connections` endpoint in this service — see the SCM Connection note above.
 

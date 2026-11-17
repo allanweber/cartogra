@@ -259,6 +259,7 @@ services:
       DB_USERNAME: cartogra
       DB_PASSWORD: ${POSTGRES_PASSWORD:-cartogra}
       SPRING_FLYWAY_TABLE: flyway_schema_history_contract
+      REGISTRY_URI: http://registry:8081
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318

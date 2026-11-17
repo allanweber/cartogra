@@ -41,6 +41,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("io.swagger.parser.v3:swagger-parser-v3:2.1.48")
     implementation("tools.jackson.dataformat:jackson-dataformat-yaml")
+    implementation("io.github.java-diff-utils:java-diff-utils:4.15")
     runtimeOnly("org.postgresql:postgresql")
     testImplementation(project(":shared:test-support"))
     testImplementation(testFixtures(project(":shared:web")))
@@ -48,4 +49,5 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers-postgresql")
     testImplementation("org.springframework.kafka:spring-kafka-test")
     testImplementation("org.springframework.security:spring-security-test")
+    testImplementation("org.wiremock:wiremock-standalone:3.9.1")
 }

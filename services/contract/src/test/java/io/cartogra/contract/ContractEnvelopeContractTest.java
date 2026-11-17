@@ -81,6 +81,32 @@ class ContractEnvelopeContractTest extends AbstractContractIT {
         assertConforms("POST", path, resp, 403);
     }
 
+    @Test
+    void list200() {
+        contractId();
+        assertConforms("GET", "/api/v1/contracts", http.read(tenant, ""), 200);
+    }
+
+    @Test
+    void versions200And404() {
+        String id = contractId();
+        String path = "/api/v1/contracts/" + id + "/versions";
+        assertConforms("GET", path, http.read(tenant, "/" + id + "/versions"), 200);
+        assertConforms("GET", path, http.read(UUID.randomUUID(), "/" + id + "/versions"), 404);
+    }
+
+    @Test
+    void diff200And404() {
+        String id = contractId();
+        http.publish(tenant, id, SPEC.replace("version: '1'", "version: '2'"));
+        assertConforms("GET", "/api/v1/contracts/" + id + "/versions/2/diff",
+                http.read(tenant, "/" + id + "/versions/2/diff"), 200);
+        assertConforms("GET", "/api/v1/contracts/" + id + "/versions/1/diff",
+                http.read(tenant, "/" + id + "/versions/1/diff"), 200);
+        assertConforms("GET", "/api/v1/contracts/" + id + "/versions/5/diff",
+                http.read(tenant, "/" + id + "/versions/5/diff"), 404);
+    }
+
     private String contractId() {
         HttpResponse<String> resp = http.create(tenant, UUID.randomUUID(), SPEC);
         return objectMapper.readTree(resp.body()).get("data").get("id").stringValue();

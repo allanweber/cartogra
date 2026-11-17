@@ -32,6 +32,11 @@ spring:
     resources:
       add-mappings: false
 
+contract:
+  registry:
+    base-url: ${REGISTRY_URI:http://localhost:8081}/api/v1/registry
+    timeout: ${CONTRACT_REGISTRY_TIMEOUT:PT3S}
+
 server:
   port: 8083
   shutdown: graceful

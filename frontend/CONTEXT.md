@@ -21,7 +21,6 @@ The Frontend Shell is Cartogra's single-page application. It renders the service
 | **apiFetch** | The canonical API call helper; unwraps the `{ data, traceId }` envelope; throws `ApiError` on errors |
 | **ApiError** | Typed error with `code`, `message`, and `traceId` for support reference |
 | **Tenant context** | The `currentTenantId` from `useTenantStore`; injected as `X-Tenant-Id` header on every API call |
-| **Mock data** | Static fixtures in `src/lib/mock-data.ts`; used while real API wiring is pending (task 1.64) |
 | **Command palette** | Keyboard-driven search overlay (cmdk); accessible via `Ctrl+K` / `Cmd+K` |
 | **Inspector panel** | The right-side panel on the Graph page; tabs react to node selection (Details, Blast Radius) plus one tenant-wide tab (Drift) that needs no selection |
 | **Edge mode** | The Graph page's unified edge-visibility control: All / Declared only / Observed only / Drift only — replaces having separate declared-vs-observed and drift toggles |
@@ -67,7 +66,8 @@ All authenticated routes are children of `_authenticated` which calls `fetchSess
 | `/_authenticated/catalog` | `routes/_authenticated/catalog.index.tsx` | Live (mock data) |
 | `/_authenticated/catalog/$serviceId` | `routes/_authenticated/catalog.$serviceId.tsx` | Live (mock data) |
 | `/_authenticated/graph` | Phase placeholder | Planned (Phase 2) — design brief confirmed, see below |
-| `/_authenticated/contracts` | Phase placeholder | Planned (Phase 3) |
+| `/_authenticated/contracts` | Contract list (search, paging) | Live (5.2) |
+| `/_authenticated/contracts/$contractId?v=` | Version timeline + change list + side-by-side diff of vN against vN-1 | Live (5.2) |
 | `/_authenticated/risks` | Live (mock data) | Design brief confirmed for real API wiring (Phase 2) |
 | `/_authenticated/intelligence` | Phase placeholder | Planned (Phase 4) |
 | `/_authenticated/teams` | Phase placeholder | Planned (Phase 1+) |
@@ -120,7 +120,7 @@ shadcn/ui primitives in use: Alert, Badge, Button, Card, DropdownMenu, Input, Sc
 | Identity & Access (Gateway) | Conformist | All API calls go to Gateway; cookies managed by Gateway |
 | Service Catalog (Registry) | Conformist (via Gateway proxy) | `/api/v1/services`, `/api/v1/teams`, etc. |
 | Topology | Conformist (Phase 2) | Will call `/api/v1/topology/**` for graph page |
-| Contract | Conformist (Phase 3) | Will call `/api/v1/contracts/**` for contracts page |
+| Contract | Conformist | Calls `/api/v1/contracts` (list), `/{id}`, `/{id}/versions`, `/{id}/versions/{v}/diff`; renders the server's diff rows as-is |
 | Intelligence | Conformist (Phase 4) | Will call `/api/v1/intelligence/**` for AI panel |
 
 ---
@@ -131,7 +131,6 @@ shadcn/ui primitives in use: Alert, Badge, Button, Card, DropdownMenu, Input, Sc
 |---|---|
 | `src/lib/api.ts` | `apiFetch`, `apiMutate`, `ApiError` |
 | `src/lib/session.ts` | `fetchSession()` — SSR-safe session check |
-| `src/lib/mock-data.ts` | Static fixtures for unfinished catalog wiring |
 | `src/stores/useAuthStore.ts` | Auth Zustand store |
 | `src/stores/useTenantStore.ts` | Tenant context store |
 | `src/router.tsx` | TanStack Router root configuration |

@@ -5,11 +5,13 @@ import io.cartogra.common.audit.AuditEventPort;
 import io.cartogra.common.identity.Actor;
 import io.cartogra.contract.api.dto.ContractRequest;
 import io.cartogra.contract.domain.exception.ContractAlreadyExistsException;
+import io.cartogra.contract.domain.exception.ContractNotFoundException;
+import io.cartogra.contract.domain.exception.VersionNotFoundException;
 import io.cartogra.contract.domain.exception.MissingFieldException;
 import io.cartogra.contract.domain.exception.ServiceDeletedException;
 import io.cartogra.contract.repository.ContractRepository;
 import io.cartogra.contract.repository.ContractVersionRepository;
-import io.cartogra.contract.repository.DeletedServiceRepository;
+import io.cartogra.contract.repository.ServiceProjectionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -42,7 +44,8 @@ class ContractServiceTest {
 
     @Mock ContractRepository contractRepository;
     @Mock ContractVersionRepository versionRepository;
-    @Mock DeletedServiceRepository deletedServiceRepository;
+    @Mock ServiceProjectionRepository serviceProjectionRepository;
+    @Mock ServiceProjectionService serviceProjectionService;
     @Mock AuditEventPort auditEventPort;
     @Mock PlatformTransactionManager transactionManager;
 
@@ -51,8 +54,9 @@ class ContractServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ContractService(contractRepository, versionRepository, deletedServiceRepository, specParser,
-                auditEventPort, transactionManager);
+        service = new ContractService(contractRepository, versionRepository, serviceProjectionRepository,
+                serviceProjectionService, specParser,
+                new SpecDiffer(), auditEventPort, transactionManager);
     }
 
     @Test
@@ -92,7 +96,7 @@ class ContractServiceTest {
 
     @Test
     void createForDeletedServiceIsRejected() {
-        when(deletedServiceRepository.exists(TENANT, SERVICE)).thenReturn(true);
+        when(serviceProjectionRepository.isDeleted(TENANT, SERVICE)).thenReturn(true);
 
         assertThatThrownBy(() -> service.create(TENANT, USER, new ContractRequest(SERVICE, SpecParserTest.YAML_30)))
                 .isInstanceOf(ServiceDeletedException.class);
@@ -138,7 +142,7 @@ class ContractServiceTest {
 
         service.deleteForService(TENANT, SERVICE);
 
-        verify(deletedServiceRepository).insert(eq(TENANT), eq(SERVICE), any());
+        verify(serviceProjectionRepository).tombstone(eq(TENANT), eq(SERVICE), any());
         verify(versionRepository).softDeleteByContracts(eq(TENANT), eq(List.of(id)), any());
         AuditEvent event = capturedAudit();
         assertThat(event.action()).isEqualTo("deleted");
@@ -169,5 +173,29 @@ class ContractServiceTest {
     private static ContractVersion version(UUID contractId, int number, ParsedSpec parsed) {
         return new ContractVersion(UUID.randomUUID(), TENANT, contractId, number, parsed.label(), "raw",
                 parsed.canonical(), parsed.hash(), Instant.now());
+    }
+
+    @Test
+    void listClampsThePageSize() {
+        when(contractRepository.listLive(TENANT, null, ContractService.MAX_PAGE_SIZE, 0)).thenReturn(List.of());
+
+        var page = service.list(TENANT, null, 10_000, -5);
+
+        assertThat(page.limit()).isEqualTo(ContractService.MAX_PAGE_SIZE);
+        assertThat(page.offset()).isZero();
+        verify(serviceProjectionService).fillMissingNames(TENANT);
+    }
+
+    @Test
+    void diffOfUnknownContractOrVersionIsNotFound() {
+        UUID id = UUID.randomUUID();
+        when(contractRepository.findLive(TENANT, id)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.diff(TENANT, id, 1)).isInstanceOf(ContractNotFoundException.class);
+
+        UUID live = UUID.randomUUID();
+        when(contractRepository.findLive(TENANT, live)).thenReturn(Optional.of(
+                new ApiContract(live, TENANT, SERVICE, ApiContract.OPENAPI, Instant.now(), Instant.now(), null)));
+        when(versionRepository.findByNumber(TENANT, live, 3)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.diff(TENANT, live, 3)).isInstanceOf(VersionNotFoundException.class);
     }
 }

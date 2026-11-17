@@ -66,11 +66,10 @@ Cross-context references stored as IDs only — Topology never hydrates a `Servi
 
 ## Inbound Ports (API)
 
-Implemented: backfill, dependency CRUD, graph read (`[1.1]`–`[1.3]`), blast radius (`[2.1]`), cycles (`[2.3]`), SPOFs (`[2.4]`), risks (`[2.5]`). Drift detection and resolution (`[3.3]`). Unresolved span services (`[3.6]`).
+Implemented: dependency CRUD, graph read (`[1.1]`–`[1.3]`), blast radius (`[2.1]`), cycles (`[2.3]`), SPOFs (`[2.4]`), risks (`[2.5]`). Drift detection and resolution (`[3.3]`). Unresolved span services (`[3.6]`).
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/internal/backfill` | Admin: walk Registry once via `GraphNodeService.backfill()`, seeding `graph_nodes` for tenants that predate `GraphNodeEventConsumer` — [1.1] |
 | POST | `/api/v1/topology/dependencies` | Declare a dependency — validated against `graph_nodes` (404 unknown/soft-deleted node, 422 self-edge, 409 duplicate, 403 unauthorized); always `dependency_type=declared` — [1.2] |
 | PUT | `/api/v1/topology/dependencies/{id}` | Full replace of a declared dependency; same validation as POST, re-checked against both the old and new source/target pair — [1.2] |
 | GET | `/api/v1/topology/dependencies` | List dependencies for tenant |

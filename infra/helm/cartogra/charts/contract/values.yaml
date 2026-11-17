@@ -6,6 +6,7 @@ env:
   DB_URL: jdbc:postgresql://postgres:5432/cartogra?currentSchema=contract
   SPRING_FLYWAY_TABLE: flyway_schema_history_contract
   SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  REGISTRY_URI: http://registry:8081
   OTEL_EXPORTER_OTLP_ENDPOINT: http://collector:4318
   MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info
 

@@ -31,6 +31,8 @@ import { Route as AuthenticatedTeamsRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedTimelineRouteImport } from './routes/_authenticated/timeline'
 import { Route as AuthenticatedCatalogIndexRouteImport } from './routes/_authenticated/catalog.index'
 import { Route as AuthenticatedCatalogServiceIdRouteImport } from './routes/_authenticated/catalog.$serviceId'
+import { Route as AuthenticatedContractsIndexRouteImport } from './routes/_authenticated/contracts.index'
+import { Route as AuthenticatedContractsContractIdRouteImport } from './routes/_authenticated/contracts.$contractId'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings.index'
 import { Route as AuthenticatedSettingsApiKeysRouteImport } from './routes/_authenticated/settings.api-keys'
 import { Route as AuthenticatedSettingsConnectionsRouteImport } from './routes/_authenticated/settings.connections'
@@ -151,6 +153,18 @@ const AuthenticatedCatalogServiceIdRoute =
     path: '/$serviceId',
     getParentRoute: () => AuthenticatedCatalogRoute,
   } as any)
+const AuthenticatedContractsIndexRoute =
+  AuthenticatedContractsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedContractsRoute,
+  } as any)
+const AuthenticatedContractsContractIdRoute =
+  AuthenticatedContractsContractIdRouteImport.update({
+    id: '/$contractId',
+    path: '/$contractId',
+    getParentRoute: () => AuthenticatedContractsRoute,
+  } as any)
 const AuthenticatedSettingsIndexRoute =
   AuthenticatedSettingsIndexRouteImport.update({
     id: '/',
@@ -205,7 +219,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/catalog': typeof AuthenticatedCatalogRouteWithChildren
-  '/contracts': typeof AuthenticatedContractsRoute
+  '/contracts': typeof AuthenticatedContractsRouteWithChildren
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/graph': typeof AuthenticatedGraphRoute
   '/intelligence': typeof AuthenticatedIntelligenceRoute
@@ -215,6 +229,7 @@ export interface FileRoutesByFullPath {
   '/teams': typeof AuthenticatedTeamsRoute
   '/timeline': typeof AuthenticatedTimelineRoute
   '/catalog/$serviceId': typeof AuthenticatedCatalogServiceIdRoute
+  '/contracts/$contractId': typeof AuthenticatedContractsContractIdRoute
   '/settings/api-keys': typeof AuthenticatedSettingsApiKeysRoute
   '/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
   '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
@@ -222,6 +237,7 @@ export interface FileRoutesByFullPath {
   '/settings/tenant': typeof AuthenticatedSettingsTenantRoute
   '/settings/users': typeof AuthenticatedSettingsUsersRoute
   '/catalog/': typeof AuthenticatedCatalogIndexRoute
+  '/contracts/': typeof AuthenticatedContractsIndexRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -234,7 +250,6 @@ export interface FileRoutesByTo {
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
-  '/contracts': typeof AuthenticatedContractsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/graph': typeof AuthenticatedGraphRoute
   '/intelligence': typeof AuthenticatedIntelligenceRoute
@@ -243,6 +258,7 @@ export interface FileRoutesByTo {
   '/teams': typeof AuthenticatedTeamsRoute
   '/timeline': typeof AuthenticatedTimelineRoute
   '/catalog/$serviceId': typeof AuthenticatedCatalogServiceIdRoute
+  '/contracts/$contractId': typeof AuthenticatedContractsContractIdRoute
   '/settings/api-keys': typeof AuthenticatedSettingsApiKeysRoute
   '/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
   '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
@@ -250,6 +266,7 @@ export interface FileRoutesByTo {
   '/settings/tenant': typeof AuthenticatedSettingsTenantRoute
   '/settings/users': typeof AuthenticatedSettingsUsersRoute
   '/catalog': typeof AuthenticatedCatalogIndexRoute
+  '/contracts': typeof AuthenticatedContractsIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
 }
 export interface FileRoutesById {
@@ -265,7 +282,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/_authenticated/catalog': typeof AuthenticatedCatalogRouteWithChildren
-  '/_authenticated/contracts': typeof AuthenticatedContractsRoute
+  '/_authenticated/contracts': typeof AuthenticatedContractsRouteWithChildren
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/graph': typeof AuthenticatedGraphRoute
   '/_authenticated/intelligence': typeof AuthenticatedIntelligenceRoute
@@ -275,6 +292,7 @@ export interface FileRoutesById {
   '/_authenticated/teams': typeof AuthenticatedTeamsRoute
   '/_authenticated/timeline': typeof AuthenticatedTimelineRoute
   '/_authenticated/catalog/$serviceId': typeof AuthenticatedCatalogServiceIdRoute
+  '/_authenticated/contracts/$contractId': typeof AuthenticatedContractsContractIdRoute
   '/_authenticated/settings/api-keys': typeof AuthenticatedSettingsApiKeysRoute
   '/_authenticated/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
   '/_authenticated/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
@@ -282,6 +300,7 @@ export interface FileRoutesById {
   '/_authenticated/settings/tenant': typeof AuthenticatedSettingsTenantRoute
   '/_authenticated/settings/users': typeof AuthenticatedSettingsUsersRoute
   '/_authenticated/catalog/': typeof AuthenticatedCatalogIndexRoute
+  '/_authenticated/contracts/': typeof AuthenticatedContractsIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
 }
 export interface FileRouteTypes {
@@ -307,6 +326,7 @@ export interface FileRouteTypes {
     | '/teams'
     | '/timeline'
     | '/catalog/$serviceId'
+    | '/contracts/$contractId'
     | '/settings/api-keys'
     | '/settings/connections'
     | '/settings/notifications'
@@ -314,6 +334,7 @@ export interface FileRouteTypes {
     | '/settings/tenant'
     | '/settings/users'
     | '/catalog/'
+    | '/contracts/'
     | '/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -326,7 +347,6 @@ export interface FileRouteTypes {
     | '/register'
     | '/reset-password'
     | '/verify-email'
-    | '/contracts'
     | '/dashboard'
     | '/graph'
     | '/intelligence'
@@ -335,6 +355,7 @@ export interface FileRouteTypes {
     | '/teams'
     | '/timeline'
     | '/catalog/$serviceId'
+    | '/contracts/$contractId'
     | '/settings/api-keys'
     | '/settings/connections'
     | '/settings/notifications'
@@ -342,6 +363,7 @@ export interface FileRouteTypes {
     | '/settings/tenant'
     | '/settings/users'
     | '/catalog'
+    | '/contracts'
     | '/settings'
   id:
     | '__root__'
@@ -366,6 +388,7 @@ export interface FileRouteTypes {
     | '/_authenticated/teams'
     | '/_authenticated/timeline'
     | '/_authenticated/catalog/$serviceId'
+    | '/_authenticated/contracts/$contractId'
     | '/_authenticated/settings/api-keys'
     | '/_authenticated/settings/connections'
     | '/_authenticated/settings/notifications'
@@ -373,6 +396,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings/tenant'
     | '/_authenticated/settings/users'
     | '/_authenticated/catalog/'
+    | '/_authenticated/contracts/'
     | '/_authenticated/settings/'
   fileRoutesById: FileRoutesById
 }
@@ -545,6 +569,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCatalogServiceIdRouteImport
       parentRoute: typeof AuthenticatedCatalogRoute
     }
+    '/_authenticated/contracts/': {
+      id: '/_authenticated/contracts/'
+      path: '/'
+      fullPath: '/contracts/'
+      preLoaderRoute: typeof AuthenticatedContractsIndexRouteImport
+      parentRoute: typeof AuthenticatedContractsRoute
+    }
+    '/_authenticated/contracts/$contractId': {
+      id: '/_authenticated/contracts/$contractId'
+      path: '/$contractId'
+      fullPath: '/contracts/$contractId'
+      preLoaderRoute: typeof AuthenticatedContractsContractIdRouteImport
+      parentRoute: typeof AuthenticatedContractsRoute
+    }
     '/_authenticated/settings/': {
       id: '/_authenticated/settings/'
       path: '/'
@@ -610,6 +648,23 @@ const AuthenticatedCatalogRouteChildren: AuthenticatedCatalogRouteChildren = {
 const AuthenticatedCatalogRouteWithChildren =
   AuthenticatedCatalogRoute._addFileChildren(AuthenticatedCatalogRouteChildren)
 
+interface AuthenticatedContractsRouteChildren {
+  AuthenticatedContractsContractIdRoute: typeof AuthenticatedContractsContractIdRoute
+  AuthenticatedContractsIndexRoute: typeof AuthenticatedContractsIndexRoute
+}
+
+const AuthenticatedContractsRouteChildren: AuthenticatedContractsRouteChildren =
+  {
+    AuthenticatedContractsContractIdRoute:
+      AuthenticatedContractsContractIdRoute,
+    AuthenticatedContractsIndexRoute: AuthenticatedContractsIndexRoute,
+  }
+
+const AuthenticatedContractsRouteWithChildren =
+  AuthenticatedContractsRoute._addFileChildren(
+    AuthenticatedContractsRouteChildren,
+  )
+
 interface AuthenticatedSettingsRouteChildren {
   AuthenticatedSettingsApiKeysRoute: typeof AuthenticatedSettingsApiKeysRoute
   AuthenticatedSettingsConnectionsRoute: typeof AuthenticatedSettingsConnectionsRoute
@@ -638,7 +693,7 @@ const AuthenticatedSettingsRouteWithChildren =
 
 interface AuthenticatedRouteChildren {
   AuthenticatedCatalogRoute: typeof AuthenticatedCatalogRouteWithChildren
-  AuthenticatedContractsRoute: typeof AuthenticatedContractsRoute
+  AuthenticatedContractsRoute: typeof AuthenticatedContractsRouteWithChildren
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedGraphRoute: typeof AuthenticatedGraphRoute
   AuthenticatedIntelligenceRoute: typeof AuthenticatedIntelligenceRoute
@@ -651,7 +706,7 @@ interface AuthenticatedRouteChildren {
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedCatalogRoute: AuthenticatedCatalogRouteWithChildren,
-  AuthenticatedContractsRoute: AuthenticatedContractsRoute,
+  AuthenticatedContractsRoute: AuthenticatedContractsRouteWithChildren,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedGraphRoute: AuthenticatedGraphRoute,
   AuthenticatedIntelligenceRoute: AuthenticatedIntelligenceRoute,

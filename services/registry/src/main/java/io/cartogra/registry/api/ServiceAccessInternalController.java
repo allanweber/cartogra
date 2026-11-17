@@ -19,7 +19,7 @@ import java.util.UUID;
  * Internal, service-to-service endpoint — reached directly by Topology (not proxied through
  * the Gateway; see {@code InternalPathDenyIT}), same trust model as {@link PlanLimitInternalController}.
  * Backs Topology's declared-dependency authorization check: "is this user a member of the team
- * owning this service?" Unlike {@link ServiceInternalController}, this IS tenant-scoped — an
+ * owning this service?" Tenant-scoped — an
  * unknown or cross-tenant serviceId resolves to {@code false} rather than leaking across tenants.
  */
 @RestController

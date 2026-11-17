@@ -35,6 +35,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -241,16 +242,14 @@ public class ServiceService {
         return PageResult.of(items, total, limit, offset);
     }
 
-    /** Cross-tenant, active-only — backs the internal {@code /internal/services} endpoint. */
-    public PageResult<Service> listAllActive(int limit, int offset) {
-        List<Service> items = serviceRepository.findAllActive(limit, offset);
-        long total = serviceRepository.countActive();
-        return PageResult.of(items, total, limit, offset);
+    /** Backs the internal {@code /internal/services/names} endpoint; unknown or deleted ids are left out. */
+    public Map<UUID, String> findNames(UUID tenantId, List<UUID> serviceIds) {
+        return serviceRepository.findNames(tenantId, serviceIds);
     }
 
     /**
      * Backs the internal {@code /internal/services/access} endpoint — Topology's authorization
-     * check for declared-dependency mutations. Tenant-scoped (unlike {@link #listAllActive}):
+     * check for declared-dependency mutations. Tenant-scoped:
      * an unknown or cross-tenant {@code serviceId}, or an orphan service with no owning team,
      * resolves to {@code false} rather than throwing.
      */

@@ -1,6 +1,7 @@
 package io.cartogra.contract.api.dto;
 
 import io.cartogra.contract.domain.ContractVersion;
+import io.cartogra.contract.domain.VersionHeader;
 import org.jspecify.annotations.Nullable;
 
 import java.time.Instant;
@@ -15,6 +16,11 @@ public record ContractVersionResponse(
         Instant createdAt
 ) {
     public static ContractVersionResponse from(ContractVersion v) {
+        return new ContractVersionResponse(v.id(), v.contractId(), v.versionNumber(), v.label(), v.specHash(),
+                v.createdAt());
+    }
+
+    public static ContractVersionResponse from(VersionHeader v) {
         return new ContractVersionResponse(v.id(), v.contractId(), v.versionNumber(), v.label(), v.specHash(),
                 v.createdAt());
     }

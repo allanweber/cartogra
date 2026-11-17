@@ -1,10 +1,11 @@
 openapi: "3.1.0"
 info:
   title: Cartogra Contract API
-  version: "0.2.0"
+  version: "0.3.0"
   description: |
-    Store each service's OpenAPI contract and its immutable versions (roadmap 5.1).
-    Listing, diffs (5.2), the breaking-change engine (5.3) and the CI check (5.5) are not built yet.
+    Store each service's OpenAPI contract and its immutable versions (roadmap 5.1); list contracts, their
+    version timeline and a structured diff of each version against the previous one (5.2).
+    The breaking-change engine (5.3) and the CI check (5.5) are not built yet.
 
     **Authentication:** JWT cookie or Bearer token (Gateway-issued). Gateway injects `X-Tenant-Id`.
     Writes need ADMIN or MEMBER; GUEST and VIEWER get 403.
@@ -31,6 +32,37 @@ tags:
 
 paths:
   /contracts:
+    get:
+      summary: List the tenant's contracts
+      description: |
+        Live contracts with their latest version, most recently changed first. `serviceName` comes from
+        contract's projection of Registry services and is null until that projection has seen the service.
+      operationId: listContracts
+      tags: [contracts]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: Case-insensitive substring of the service name
+          schema:
+            type: string
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/OffsetParam"
+      responses:
+        "200":
+          description: A page of contracts
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContractSummaryPageEnvelope"
+        "400":
+          $ref: "#/components/responses/BadRequest"
     post:
       summary: Create a service's contract with its first version
       description: |
@@ -94,6 +126,31 @@ paths:
           $ref: "#/components/responses/NotFound"
 
   /contracts/{contractId}/versions:
+    get:
+      summary: List a contract's versions, newest first
+      operationId: listContractVersions
+      tags: [contracts]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ContractIdParam"
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/OffsetParam"
+      responses:
+        "200":
+          description: A page of versions
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContractVersionPageEnvelope"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
     post:
       summary: Publish a new version of a contract
       description: |
@@ -142,6 +199,42 @@ paths:
         "422":
           $ref: "#/components/responses/InvalidSpec"
 
+  /contracts/{contractId}/versions/{versionNumber}/diff:
+    get:
+      summary: Diff a version against the previous one
+      description: |
+        Both specs are compared in canonical form, so reformatting and key order never show as changes.
+        `changes` is a structural diff of the two JSON trees (objects key by key, arrays by index), each change
+        located by an RFC 6901 pointer. `lines` aligns the two specs rendered as YAML with sorted keys, row by row,
+        for a side-by-side view. Version 1 is diffed against an empty spec: `from` is null and every line is added.
+      operationId: diffContractVersion
+      tags: [contracts]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ContractIdParam"
+        - name: versionNumber
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: The diff
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionDiffEnvelope"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -168,6 +261,22 @@ components:
       schema:
         type: string
         format: uuid
+
+    LimitParam:
+      name: limit
+      in: query
+      required: false
+      description: Page size, clamped to 1..100
+      schema:
+        type: integer
+        default: 20
+    OffsetParam:
+      name: offset
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 0
 
   schemas:
     TraceId:
@@ -214,7 +323,7 @@ components:
 
     Contract:
       type: object
-      required: [id, serviceId, specType, createdAt, updatedAt, latestVersion]
+      required: [id, serviceId, serviceName, specType, createdAt, updatedAt, latestVersion]
       properties:
         id:
           type: string
@@ -222,6 +331,9 @@ components:
         serviceId:
           type: string
           format: uuid
+        serviceName:
+          type: [string, "null"]
+          description: Null until contract's projection of Registry services has seen the service
         specType:
           type: string
           enum: [openapi]
@@ -249,6 +361,131 @@ components:
       properties:
         data:
           $ref: "#/components/schemas/ContractVersion"
+        traceId:
+          $ref: "#/components/schemas/TraceId"
+
+    ContractSummary:
+      type: object
+      required: [id, serviceId, serviceName, latestVersion, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        serviceId:
+          type: string
+          format: uuid
+        serviceName:
+          type: [string, "null"]
+        latestVersion:
+          $ref: "#/components/schemas/ContractVersion"
+        updatedAt:
+          type: string
+          format: date-time
+
+    ContractSummaryPageEnvelope:
+      type: object
+      required: [data, traceId]
+      properties:
+        data:
+          type: object
+          required: [items, total, limit, offset]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/ContractSummary"
+            total:
+              type: integer
+            limit:
+              type: integer
+            offset:
+              type: integer
+        traceId:
+          $ref: "#/components/schemas/TraceId"
+
+    ContractVersionPageEnvelope:
+      type: object
+      required: [data, traceId]
+      properties:
+        data:
+          type: object
+          required: [items, total, limit, offset]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/ContractVersion"
+            total:
+              type: integer
+            limit:
+              type: integer
+            offset:
+              type: integer
+        traceId:
+          $ref: "#/components/schemas/TraceId"
+
+    SpecChange:
+      type: object
+      required: [op, pointer, path]
+      properties:
+        op:
+          type: string
+          enum: [added, removed, changed]
+        pointer:
+          type: string
+          description: RFC 6901 JSON pointer into the canonical spec
+        path:
+          type: array
+          items:
+            type: string
+          description: The pointer's unescaped segments, for display
+        before:
+          description: The value before; null when added
+        after:
+          description: The value after; null when removed
+
+    DiffLine:
+      type: object
+      required: [kind, leftNo, left, rightNo, right]
+      properties:
+        kind:
+          type: string
+          enum: [same, added, removed, changed]
+        leftNo:
+          type: [integer, "null"]
+        left:
+          type: [string, "null"]
+        rightNo:
+          type: [integer, "null"]
+        right:
+          type: [string, "null"]
+
+    VersionDiff:
+      type: object
+      required: [from, to, changes, lines]
+      properties:
+        from:
+          description: The previous version; null for version 1
+          anyOf:
+            - $ref: "#/components/schemas/ContractVersion"
+            - type: "null"
+        to:
+          $ref: "#/components/schemas/ContractVersion"
+        changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/SpecChange"
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/DiffLine"
+
+    VersionDiffEnvelope:
+      type: object
+      required: [data, traceId]
+      properties:
+        data:
+          $ref: "#/components/schemas/VersionDiff"
         traceId:
           $ref: "#/components/schemas/TraceId"
 

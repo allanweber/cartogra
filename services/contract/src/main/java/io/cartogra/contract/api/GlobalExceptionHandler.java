@@ -8,6 +8,7 @@ import io.cartogra.contract.domain.exception.ContractNotFoundException;
 import io.cartogra.contract.domain.exception.InvalidSpecException;
 import io.cartogra.contract.domain.exception.MissingFieldException;
 import io.cartogra.contract.domain.exception.ServiceDeletedException;
+import io.cartogra.contract.domain.exception.VersionNotFoundException;
 import io.opentelemetry.api.trace.Span;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,6 +36,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ContractNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleContractNotFound(ContractNotFoundException ex) {
+        return respond(HttpStatus.NOT_FOUND, ErrorCodes.NOT_FOUND, ex.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(VersionNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleVersionNotFound(VersionNotFoundException ex) {
         return respond(HttpStatus.NOT_FOUND, ErrorCodes.NOT_FOUND, ex.getMessage(), Map.of());
     }
 

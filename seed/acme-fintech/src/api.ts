@@ -68,7 +68,28 @@ export interface ContractVersion {
 export interface Contract {
   id: string
   serviceId: string
+  /** Null until contract knows the service's name; contract looks it up from Registry on read. */
+  serviceName: string | null
   latestVersion: ContractVersion
+}
+
+export interface SpecChange {
+  op: 'added' | 'removed' | 'changed'
+  pointer: string
+  path: string[]
+}
+
+export interface DiffLine {
+  kind: 'same' | 'added' | 'removed' | 'changed'
+  left: string | null
+  right: string | null
+}
+
+export interface VersionDiff {
+  from: ContractVersion | null
+  to: ContractVersion
+  changes: SpecChange[]
+  lines: DiffLine[]
 }
 
 export interface PublishedVersion {
@@ -111,6 +132,8 @@ export interface CartograApi {
   createContract(serviceId: string, spec: string): Promise<Contract>
   publishContractVersion(contractId: string, spec: string): Promise<PublishedVersion>
   getContract(contractId: string): Promise<Contract>
+  listContracts(): Promise<Contract[]>
+  contractDiff(contractId: string, versionNumber: number): Promise<VersionDiff>
 }
 
 export interface Cluster {
@@ -243,6 +266,14 @@ export class HttpCartograApi implements CartograApi, ConnectionsApi {
 
   getContract(contractId: string): Promise<Contract> {
     return this.request<Contract>('GET', `/api/v1/contracts/${contractId}`)
+  }
+
+  listContracts(): Promise<Contract[]> {
+    return this.listAll<Contract>('/api/v1/contracts')
+  }
+
+  contractDiff(contractId: string, versionNumber: number): Promise<VersionDiff> {
+    return this.request<VersionDiff>('GET', `/api/v1/contracts/${contractId}/versions/${versionNumber}/diff`)
   }
 
   listClusters(): Promise<Cluster[]> {
