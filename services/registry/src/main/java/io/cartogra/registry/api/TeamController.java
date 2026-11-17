@@ -72,7 +72,7 @@ public class TeamController {
             @AuthenticationPrincipal Actor actor,
             @PathVariable UUID id,
             @Valid @RequestBody UpdateTeamRequest req) {
-        var result = TeamResponse.from(service.update(tenantId, actor, id, req.name()));
+        var result = TeamResponse.from(service.update(tenantId, actor, id, req.name(), req.serviceIds(), req.memberIds()));
         return TracedResponse.ok(result);
     }
 

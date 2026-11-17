@@ -1,5 +1,6 @@
 package io.cartogra.registry.domain;
 
+import io.cartogra.common.audit.AuditEvent;
 import io.cartogra.common.identity.Actor;
 import io.cartogra.registry.api.dto.CreateServiceRequest;
 import io.cartogra.registry.api.dto.UpdateServiceRequest;
@@ -27,12 +28,15 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -49,6 +53,7 @@ class ServiceServiceTest {
     @Mock AdvisoryLockRepository advisoryLockRepository;
 
     private ServiceService serviceService;
+    private final List<AuditEvent> audits = new java.util.ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -58,7 +63,7 @@ class ServiceServiceTest {
         serviceService = new ServiceService(
                 serviceRepository, historyRepository, teamRepository,
                 new ObjectMapper(), eventProducer, healthEndpointValidator, planLimitService,
-                advisoryLockRepository, _ -> { });
+                advisoryLockRepository, audits::add);
     }
 
     // ── create ────────────────────────────────────────────────────────────────
@@ -790,6 +795,168 @@ class ServiceServiceTest {
         var captor = org.mockito.ArgumentCaptor.forClass(Service.class);
         verify(serviceRepository).save(captor.capture());
         assertThat(captor.getValue().healthStatus()).isEqualTo(ServiceHealthStatus.HEALTHY);
+    }
+
+    // ── setTeamServices ───────────────────────────────────────────────────────
+
+    @Test
+    void setTeamServicesTakesAddedAndOrphansRemovedInBulk() {
+        UUID tenantId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        UUID otherTeam = UUID.randomUUID();
+        Service kept = serviceWithTeam(tenantId, UUID.randomUUID(), "kept", teamId);
+        Service dropped = serviceWithTeam(tenantId, UUID.randomUUID(), "dropped", teamId);
+        Service orphan = service(tenantId, UUID.randomUUID(), "orphan");
+        Service taken = serviceWithTeam(tenantId, UUID.randomUUID(), "taken", otherTeam);
+        when(serviceRepository.findByTeam(tenantId, teamId)).thenReturn(List.of(kept, dropped));
+        when(serviceRepository.findByIds(tenantId, Set.of(orphan.id(), taken.id()))).thenReturn(List.of(orphan, taken));
+
+        serviceService.setTeamServices(tenantId, ADMIN, teamId, Set.of(kept.id(), orphan.id(), taken.id()));
+
+        verify(serviceRepository).updateTeam(eq(tenantId), eq(Set.of(orphan.id(), taken.id())), eq(teamId), any());
+        verify(serviceRepository).updateTeam(eq(tenantId), eq(List.of(dropped.id())), isNull(), any());
+        verify(serviceRepository, never()).save(any());
+        verify(historyRepository, never()).save(any());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ServiceSnapshot>> snapshots = ArgumentCaptor.forClass(List.class);
+        verify(historyRepository).saveAll(snapshots.capture());
+        assertThat(snapshots.getValue()).extracting(ServiceSnapshot::serviceId)
+                .containsExactlyInAnyOrder(orphan.id(), taken.id(), dropped.id());
+        assertThat(audits).extracting(AuditEvent::entityId)
+                .containsExactlyInAnyOrder(orphan.id(), taken.id(), dropped.id());
+        assertThat(audits).extracting(AuditEvent::action).containsOnly("owner_changed");
+        ArgumentCaptor<Service> published = ArgumentCaptor.forClass(Service.class);
+        verify(eventProducer, times(3)).publishUpdated(published.capture());
+        assertThat(published.getAllValues()).filteredOn(s -> s.id().equals(dropped.id()))
+                .singleElement().extracting(Service::teamId).isNull();
+        assertThat(published.getAllValues()).filteredOn(s -> !s.id().equals(dropped.id()))
+                .extracting(Service::teamId).containsOnly(teamId);
+    }
+
+    @Test
+    void setTeamServicesWithNoChangeWritesNothing() {
+        UUID tenantId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        Service kept = serviceWithTeam(tenantId, UUID.randomUUID(), "kept", teamId);
+        when(serviceRepository.findByTeam(tenantId, teamId)).thenReturn(List.of(kept));
+        when(serviceRepository.findByIds(tenantId, Set.of())).thenReturn(List.of());
+
+        serviceService.setTeamServices(tenantId, ADMIN, teamId, Set.of(kept.id()));
+
+        verify(serviceRepository, never()).updateTeam(any(), any(), any(), any());
+        verifyNoInteractions(historyRepository, eventProducer);
+        assertThat(audits).isEmpty();
+    }
+
+    @Test
+    void setTeamServicesWithUnknownIdThrowsBeforeWriting() {
+        UUID tenantId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        UUID unknown = UUID.randomUUID();
+        when(serviceRepository.findByTeam(tenantId, teamId)).thenReturn(List.of());
+        when(serviceRepository.findByIds(tenantId, Set.of(unknown))).thenReturn(List.of());
+
+        assertThatThrownBy(() -> serviceService.setTeamServices(tenantId, ADMIN, teamId, Set.of(unknown)))
+                .isInstanceOf(ServiceNotFoundException.class);
+
+        verify(serviceRepository, never()).updateTeam(any(), any(), any(), any());
+        verifyNoInteractions(historyRepository, eventProducer);
+    }
+
+    @Test
+    void setTeamServicesLetsAMemberTakeFromATeamTheyBelongTo() {
+        UUID tenantId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        UUID otherTeam = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        Service taken = serviceWithTeam(tenantId, UUID.randomUUID(), "taken", otherTeam);
+        when(serviceRepository.findByTeam(tenantId, teamId)).thenReturn(List.of());
+        when(serviceRepository.findByIds(tenantId, Set.of(taken.id()))).thenReturn(List.of(taken));
+        when(teamRepository.findTeamIdsByMember(tenantId, userId)).thenReturn(Set.of(teamId, otherTeam));
+
+        serviceService.setTeamServices(tenantId, Actor.user(userId), teamId, Set.of(taken.id()));
+
+        verify(serviceRepository).updateTeam(eq(tenantId), eq(Set.of(taken.id())), eq(teamId), any());
+    }
+
+    @Test
+    void setTeamServicesRejectsAMemberTakingFromAnotherTeam() {
+        UUID tenantId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        Service taken = serviceWithTeam(tenantId, UUID.randomUUID(), "taken", UUID.randomUUID());
+        when(serviceRepository.findByTeam(tenantId, teamId)).thenReturn(List.of());
+        when(serviceRepository.findByIds(tenantId, Set.of(taken.id()))).thenReturn(List.of(taken));
+        when(teamRepository.findTeamIdsByMember(tenantId, userId)).thenReturn(Set.of(teamId));
+
+        assertThatThrownBy(() -> serviceService.setTeamServices(tenantId, Actor.user(userId), teamId, Set.of(taken.id())))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+        verify(serviceRepository, never()).updateTeam(any(), any(), any(), any());
+        verifyNoInteractions(historyRepository, eventProducer);
+    }
+
+    @Test
+    void setTeamServicesRejectsAMemberTakingAnOrphan() {
+        UUID tenantId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        Service orphan = service(tenantId, UUID.randomUUID(), "orphan");
+        when(serviceRepository.findByTeam(tenantId, teamId)).thenReturn(List.of());
+        when(serviceRepository.findByIds(tenantId, Set.of(orphan.id()))).thenReturn(List.of(orphan));
+        when(teamRepository.findTeamIdsByMember(tenantId, userId)).thenReturn(Set.of(teamId));
+
+        assertThatThrownBy(() -> serviceService.setTeamServices(tenantId, Actor.user(userId), teamId, Set.of(orphan.id())))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+        verify(serviceRepository, never()).updateTeam(any(), any(), any(), any());
+    }
+
+    @Test
+    void setTeamServicesLetsAMemberOrphanTheirOwnTeamsServices() {
+        UUID tenantId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        Service dropped = serviceWithTeam(tenantId, UUID.randomUUID(), "dropped", teamId);
+        when(serviceRepository.findByTeam(tenantId, teamId)).thenReturn(List.of(dropped));
+        when(serviceRepository.findByIds(tenantId, Set.of())).thenReturn(List.of());
+
+        serviceService.setTeamServices(tenantId, Actor.user(UUID.randomUUID()), teamId, Set.of());
+
+        verify(serviceRepository).updateTeam(eq(tenantId), eq(List.of(dropped.id())), isNull(), any());
+        verify(teamRepository, never()).findTeamIdsByMember(any(), any());
+    }
+
+    @Test
+    void withTeamChangesOnlyTheOwnerAndUpdatedAt() {
+        Service before = serviceWithTeam(UUID.randomUUID(), UUID.randomUUID(), "svc", UUID.randomUUID());
+        UUID newTeam = UUID.randomUUID();
+        Instant at = before.updatedAt().plusSeconds(60);
+
+        Service after = before.withTeam(newTeam, at);
+
+        assertThat(after.teamId()).isEqualTo(newTeam);
+        assertThat(after.updatedAt()).isEqualTo(at);
+        assertThat(after).usingRecursiveComparison().ignoringFields("teamId", "updatedAt").isEqualTo(before);
+        assertThat(before.withTeam(null, at).teamId()).isNull();
+    }
+
+    // ── checkAccess ───────────────────────────────────────────────────────────
+
+    @Test
+    void checkAccessReturnsOneEntryPerIdInRequestOrderFromOneLookup() {
+        UUID tenantId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID a = UUID.randomUUID();
+        UUID b = UUID.randomUUID();
+        UUID c = UUID.randomUUID();
+        when(serviceRepository.findAccessible(tenantId, userId, List.of(a, b, c))).thenReturn(Set.of(b));
+
+        Map<UUID, Boolean> result = serviceService.checkAccess(tenantId, userId, List.of(a, b, c));
+
+        assertThat(result).containsExactly(Map.entry(a, false), Map.entry(b, true), Map.entry(c, false));
+        verify(serviceRepository).findAccessible(tenantId, userId, List.of(a, b, c));
+        verifyNoMoreInteractions(serviceRepository);
+        verifyNoInteractions(teamRepository);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

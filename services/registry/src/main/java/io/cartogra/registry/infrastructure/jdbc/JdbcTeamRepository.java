@@ -8,6 +8,8 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -175,6 +177,36 @@ public class JdbcTeamRepository implements TeamRepository {
                 .addValue("tenantId", tenantId)
                 .addValue("teamId", teamId)
                 .addValue("userId", userId));
+    }
+
+    @Override
+    public void addMembers(UUID tenantId, UUID teamId, Collection<UUID> userIds, Instant at) {
+        if (userIds.isEmpty()) {
+            return;
+        }
+        jdbc.update("""
+                INSERT INTO team_members (tenant_id, team_id, user_id, created_at)
+                SELECT :tenantId, :teamId, u, :at FROM unnest(CAST(:userIds AS uuid[])) AS u
+                ON CONFLICT (team_id, user_id) DO NOTHING
+                """, new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("teamId", teamId)
+                .addValue("userIds", userIds.toArray(UUID[]::new))
+                .addValue("at", java.sql.Timestamp.from(at)));
+    }
+
+    @Override
+    public void removeMembers(UUID tenantId, UUID teamId, Collection<UUID> userIds) {
+        if (userIds.isEmpty()) {
+            return;
+        }
+        jdbc.update("""
+                DELETE FROM team_members
+                WHERE tenant_id = :tenantId AND team_id = :teamId AND user_id IN (:userIds)
+                """, new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("teamId", teamId)
+                .addValue("userIds", userIds));
     }
 
     private static final RowMapper<TeamMember> TEAM_MEMBER_MAPPER = (rs, _) -> new TeamMember(

@@ -248,6 +248,30 @@ public class JdbcDependencyRepository implements DependencyRepository {
     }
 
     @Override
+    public int declareMissing(UUID tenantId, UUID sourceServiceId, UUID targetServiceId,
+            List<DependencyProtocol> protocols, Instant now) {
+        if (protocols.isEmpty()) {
+            return 0;
+        }
+        String sql = """
+                INSERT INTO dependencies (id, tenant_id, source_service_id, target_service_id,
+                                          dependency_type, protocol, created_at, updated_at)
+                SELECT gen_random_uuid(), :tenantId, :sourceServiceId, :targetServiceId, 'declared', p, :now, :now
+                FROM unnest(CAST(:protocols AS text[])) AS p
+                WHERE NOT EXISTS (SELECT 1 FROM dependencies d
+                                  WHERE d.tenant_id = :tenantId AND d.source_service_id = :sourceServiceId
+                                    AND d.target_service_id = :targetServiceId AND d.dependency_type = 'declared'
+                                    AND d.protocol = p AND d.deleted_at IS NULL)
+                """;
+        return jdbc.update(sql, new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("sourceServiceId", sourceServiceId)
+                .addValue("targetServiceId", targetServiceId)
+                .addValue("protocols", protocols.stream().map(DependencyProtocol::toDbValue).toArray(String[]::new))
+                .addValue("now", Timestamp.from(now)));
+    }
+
+    @Override
     public int softDeleteDeclaredPair(UUID tenantId, UUID sourceServiceId, UUID targetServiceId) {
         String sql = """
                 UPDATE dependencies SET deleted_at = now(), updated_at = now()

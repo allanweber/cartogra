@@ -40,6 +40,14 @@ public record Service(
         @Nullable String documentationUrl,
         @Nullable String runbookUrl
 ) {
+    /** A copy owned by {@code newTeamId} (null = orphaned), stamped {@code at}. */
+    public Service withTeam(@Nullable UUID newTeamId, Instant at) {
+        return new Service(id, tenantId, name, description, newTeamId, repositoryUrl, techStack, metadata,
+                healthStatus, lastDeployedAt, createdAt, at, deletedAt, externalId, connectionId, source,
+                repositoryRef, k8sCluster, k8sNamespace, k8sDeployment, healthEndpoint, lastCommitAt, lastCommitSha,
+                healthCheckedAt, tier, tags, slaTarget, documentationUrl, runbookUrl);
+    }
+
     public boolean isOrphaned() {
         return teamId == null;
     }

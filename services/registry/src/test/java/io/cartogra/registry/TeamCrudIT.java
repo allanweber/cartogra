@@ -121,7 +121,7 @@ class TeamCrudIT {
 
         HttpResponse<String> updated = HTTP.send(
                 put("/api/v1/registry/teams/" + teamId, """
-                        {"name":"platform-engineering"}"""), HttpResponse.BodyHandlers.ofString());
+                        {"name":"platform-engineering","serviceIds":[],"memberIds":[]}"""), HttpResponse.BodyHandlers.ofString());
         assertThat(updated.statusCode()).isEqualTo(200);
         assertThat(objectMapper.readTree(updated.body()).get("data").get("name").asString()).isEqualTo("platform-engineering");
 
@@ -179,7 +179,7 @@ class TeamCrudIT {
     void updateNonExistentTeamReturns404() throws Exception {
         HttpResponse<String> resp = HTTP.send(
                 put("/api/v1/registry/teams/" + UUID.randomUUID(), """
-                        {"name":"ghost-team"}"""), HttpResponse.BodyHandlers.ofString());
+                        {"name":"ghost-team","serviceIds":[],"memberIds":[]}"""), HttpResponse.BodyHandlers.ofString());
         assertThat(resp.statusCode()).isEqualTo(404);
         assertThat(objectMapper.readTree(resp.body()).get("error").get("code").asString()).isEqualTo("NOT_FOUND");
     }
@@ -215,7 +215,7 @@ class TeamCrudIT {
 
         HttpResponse<String> resp = HTTP.send(
                 put("/api/v1/registry/teams/" + secondId, """
-                        {"name":"rename-target-team"}"""), HttpResponse.BodyHandlers.ofString());
+                        {"name":"rename-target-team","serviceIds":[],"memberIds":[]}"""), HttpResponse.BodyHandlers.ofString());
         assertThat(resp.statusCode()).isEqualTo(409);
         assertThat(objectMapper.readTree(resp.body()).get("error").get("code").asString()).isEqualTo("CONFLICT");
     }

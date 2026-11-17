@@ -101,6 +101,25 @@ function mockEditFetch(
   })
 }
 
+/** Every non-GET call the dialog made; a save must be exactly one PUT. */
+function writeCalls() {
+  return vi.mocked(apiFetch).mock.calls.filter(([, init]) => init?.method && init.method !== 'GET')
+}
+
+async function clickSaveWhenReady() {
+  const save = screen.getByRole('button', { name: /save changes/i })
+  await waitFor(() => expect(save).toBeEnabled())
+  fireEvent.click(save)
+}
+
+function savedBody() {
+  const writes = writeCalls()
+  expect(writes).toHaveLength(1)
+  expect(writes[0][0]).toBe('/v1/registry/teams/team-1')
+  expect(writes[0][1]?.method).toBe('PUT')
+  return JSON.parse(writes[0][1]!.body as string)
+}
+
 function renderDialog(props: {
   team?: RegistryTeam
   open?: boolean
@@ -291,7 +310,7 @@ describe('TeamDialog — edit mode', () => {
     renderDialog({ team: MOCK_TEAM })
 
     fireEvent.change(screen.getByDisplayValue('Platform'), { target: { value: 'Platform v2' } })
-    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    await clickSaveWhenReady()
 
     await waitFor(() => {
       const putCall = vi.mocked(apiFetch).mock.calls.find(
@@ -302,44 +321,94 @@ describe('TeamDialog — edit mode', () => {
     })
   })
 
-  it('PATCH /v1/registry/services/:id/owner when assigning an orphan', async () => {
+  it('one PUT with the orphan added to serviceIds when assigning it', async () => {
     mockEditFetch(WITH_SERVICES)
     renderDialog({ team: MOCK_TEAM })
 
     const checkbox = await screen.findByRole('checkbox', { name: 'Orphan Worker' })
     fireEvent.click(checkbox)
-    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    await clickSaveWhenReady()
 
-    await waitFor(() => {
-      const patchCall = vi.mocked(apiFetch).mock.calls.find(
-        ([path, init]) => init?.method === 'PATCH' && path.includes('svc-2'),
-      )
-      expect(patchCall).toBeDefined()
-      expect(JSON.parse((patchCall![1] as RequestInit).body as string).teamId).toBe('team-1')
-    })
+    await waitFor(() => expect(writeCalls()).toHaveLength(1))
+    expect(savedBody()).toEqual({ name: 'Platform', serviceIds: ['svc-1', 'svc-2'], memberIds: [] })
   })
 
-  it('DELETE /v1/registry/services/:id/owner when unassigning an owned service', async () => {
+  it('one PUT without the owned service in serviceIds when unassigning it', async () => {
     mockEditFetch(WITH_SERVICES)
     renderDialog({ team: MOCK_TEAM })
 
     const checkbox = await screen.findByRole('checkbox', { name: 'API Gateway' })
     fireEvent.click(checkbox)
-    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    await clickSaveWhenReady()
 
-    await waitFor(() => {
-      const deleteCall = vi.mocked(apiFetch).mock.calls.find(
-        ([path, init]) => init?.method === 'DELETE' && path.includes('svc-1/owner'),
-      )
-      expect(deleteCall).toBeDefined()
+    await waitFor(() => expect(writeCalls()).toHaveLength(1))
+    expect(savedBody().serviceIds).toEqual([])
+  })
+
+  it('disables save until services and members have loaded', async () => {
+    let resolveMembers: (v: unknown) => void = () => {}
+    vi.mocked(apiFetch).mockImplementation((path: string, init?: RequestInit) => {
+      if (!init?.method || init.method === 'GET') {
+        if (path.includes('/members')) return new Promise((r) => (resolveMembers = r))
+        if (path.includes('/admin/users')) return Promise.resolve(TENANT_USERS)
+        return Promise.resolve(WITH_SERVICES)
+      }
+      return Promise.resolve(UPDATED_TEAM)
     })
+    renderDialog({ team: MOCK_TEAM })
+
+    await screen.findByRole('checkbox', { name: 'API Gateway' })
+    const save = screen.getByRole('button', { name: /save changes/i })
+    expect(save).toBeDisabled()
+    fireEvent.click(save)
+    expect(writeCalls()).toHaveLength(0)
+
+    resolveMembers([])
+    await waitFor(() => expect(save).toBeEnabled())
+  })
+
+  it('always sends both lists, even when the team owns nothing and has no members', async () => {
+    mockEditFetch()
+    renderDialog({ team: MOCK_TEAM })
+
+    const save = screen.getByRole('button', { name: /save changes/i })
+    await waitFor(() => expect(save).toBeEnabled())
+    fireEvent.click(save)
+
+    await waitFor(() => expect(writeCalls()).toHaveLength(1))
+    expect(savedBody()).toEqual({ name: 'Platform', serviceIds: [], memberIds: [] })
+  })
+
+  it('sends the members unchanged for a user who cannot manage members', async () => {
+    mockRoles = ['MEMBER']
+    vi.mocked(apiFetch).mockImplementation((path: string, init?: RequestInit) => {
+      if (!init?.method || init.method === 'GET') {
+        if (path.includes('/members')) {
+          return Promise.resolve([
+            { id: 'm1', teamId: 'team-1', userId: 'user-1', createdAt: '2024-01-01T00:00:00Z' },
+          ])
+        }
+        if (path.includes('/teams/mine')) return Promise.resolve(['team-1'])
+        if (path.includes('/auth/users?ids=')) return Promise.resolve(TENANT_USERS)
+        return Promise.resolve(WITH_SERVICES)
+      }
+      return Promise.resolve(UPDATED_TEAM)
+    })
+    renderDialog({ team: MOCK_TEAM })
+
+    const save = screen.getByRole('button', { name: /save changes/i })
+    await waitFor(() => expect(save).toBeEnabled())
+    fireEvent.click(save)
+
+    await waitFor(() => expect(writeCalls()).toHaveLength(1))
+    expect(savedBody()).toEqual({ name: 'Platform', serviceIds: ['svc-1'], memberIds: ['user-1'] })
   })
 
   it('calls onOpenChange(false) after successful save', async () => {
     mockEditFetch()
     const { onOpenChange } = renderDialog({ team: MOCK_TEAM })
 
-    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    await clickSaveWhenReady()
 
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
   })
@@ -353,7 +422,7 @@ describe('TeamDialog — edit mode', () => {
     })
     renderDialog({ team: MOCK_TEAM })
 
-    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    await clickSaveWhenReady()
 
     expect(await screen.findByText(/name already taken/i)).toBeInTheDocument()
     expect(await screen.findByText(/trace-e1/)).toBeInTheDocument()
@@ -368,7 +437,7 @@ describe('TeamDialog — edit mode', () => {
     })
     renderDialog({ team: MOCK_TEAM })
 
-    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    await clickSaveWhenReady()
 
     expect(await screen.findByText(/saving/i)).toBeInTheDocument()
   })
@@ -480,17 +549,10 @@ describe('TeamDialog — edit mode', () => {
       expect.objectContaining({ method: 'POST' }),
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    await clickSaveWhenReady()
 
-    await waitFor(() =>
-      expect(apiFetch).toHaveBeenCalledWith(
-        '/v1/registry/teams/team-1/members',
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({ userId: 'user-1' }),
-        }),
-      ),
-    )
+    await waitFor(() => expect(writeCalls()).toHaveLength(1))
+    expect(savedBody().memberIds).toEqual(['user-1'])
   })
 
   it('staged member removal only calls the API after save', async () => {
@@ -517,14 +579,10 @@ describe('TeamDialog — edit mode', () => {
       expect.objectContaining({ method: 'DELETE' }),
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    await clickSaveWhenReady()
 
-    await waitFor(() =>
-      expect(apiFetch).toHaveBeenCalledWith(
-        '/v1/registry/teams/team-1/members/user-1',
-        expect.objectContaining({ method: 'DELETE' }),
-      ),
-    )
+    await waitFor(() => expect(writeCalls()).toHaveLength(1))
+    expect(savedBody().memberIds).toEqual([])
   })
 
   it('hides the "add existing user" search for non-admins', async () => {

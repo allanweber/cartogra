@@ -37,6 +37,28 @@ public class JdbcServiceHistoryRepository implements ServiceHistoryRepository {
     }
 
     @Override
+    public void saveAll(List<ServiceSnapshot> snapshots) {
+        if (snapshots.isEmpty()) {
+            return;
+        }
+        var params = new MapSqlParameterSource();
+        var rows = new java.util.StringJoiner(", ");
+        for (int i = 0; i < snapshots.size(); i++) {
+            ServiceSnapshot s = snapshots.get(i);
+            rows.add("(:id%1$d, :serviceId%1$d, :tenantId%1$d, CAST(:snapshot%1$d AS JSONB), :changedBy%1$d, :changedAt%1$d)"
+                    .formatted(i));
+            params.addValue("id" + i, s.id())
+                    .addValue("serviceId" + i, s.serviceId())
+                    .addValue("tenantId" + i, s.tenantId())
+                    .addValue("snapshot" + i, s.snapshot())
+                    .addValue("changedBy" + i, s.changedBy())
+                    .addValue("changedAt" + i, java.sql.Timestamp.from(s.changedAt()));
+        }
+        jdbc.update("INSERT INTO services_history (id, service_id, tenant_id, snapshot, changed_by, changed_at) VALUES "
+                + rows, params);
+    }
+
+    @Override
     public List<ServiceSnapshot> findByServiceId(UUID tenantId, UUID serviceId, int limit, int offset) {
         String sql = """
                 SELECT * FROM services_history

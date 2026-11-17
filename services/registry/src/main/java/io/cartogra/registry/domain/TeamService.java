@@ -22,6 +22,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 public class TeamService {
@@ -31,15 +33,17 @@ public class TeamService {
     private final PlanLimitService planLimitService;
     private final AdvisoryLockRepository advisoryLockRepository;
     private final AuditEventPort auditEventPort;
+    private final ServiceService serviceService;
 
     public TeamService(TeamRepository teamRepository, TeamLifecycleEventProducer eventProducer,
                         PlanLimitService planLimitService, AdvisoryLockRepository advisoryLockRepository,
-                        AuditEventPort auditEventPort) {
+                        AuditEventPort auditEventPort, ServiceService serviceService) {
         this.teamRepository = teamRepository;
         this.eventProducer = eventProducer;
         this.planLimitService = planLimitService;
         this.advisoryLockRepository = advisoryLockRepository;
         this.auditEventPort = auditEventPort;
+        this.serviceService = serviceService;
     }
 
     @PreAuthorize(Roles.CAN_WRITE)
@@ -70,19 +74,28 @@ public class TeamService {
         }
     }
 
+    /**
+     * Saves the whole team in one transaction: the name, exactly which services it owns and exactly which users
+     * are its members. Runs a fixed number of queries, whatever the number of changes.
+     */
     @PreAuthorize(Roles.CAN_WRITE)
     @Transactional
-    public Team update(UUID tenantId, Actor actor, UUID teamId, String name) {
+    public Team update(UUID tenantId, Actor actor, UUID teamId, String name,
+                       Set<UUID> serviceIds, Set<UUID> memberIds) {
         requireAdminOrTeamMember(tenantId, teamId, actor);
-        Team existing = teamRepository.findById(tenantId, teamId)
+        Team team = teamRepository.findById(tenantId, teamId)
                 .orElseThrow(() -> new TeamNotFoundException(teamId));
-
-        if (existing.name().equals(name)) {
-            return existing;
+        if (!team.name().equals(name)) {
+            team = rename(team, actor, name);
         }
+        serviceService.setTeamServices(tenantId, actor, teamId, serviceIds);
+        setMembers(team, actor, memberIds);
+        return team;
+    }
 
+    private Team rename(Team existing, Actor actor, String name) {
         if (!existing.name().equalsIgnoreCase(name)
-                && teamRepository.existsByName(tenantId, name, teamId)) {
+                && teamRepository.existsByName(existing.tenantId(), name, existing.id())) {
             throw new DuplicateTeamNameException(name);
         }
         Team saved = teamRepository.save(new Team(
@@ -92,6 +105,24 @@ public class TeamService {
                 "changes", Map.of("name", Map.of("from", existing.name(), "to", name))));
         eventProducer.publishUpdated(saved);
         return saved;
+    }
+
+    private void setMembers(Team team, Actor actor, Set<UUID> memberIds) {
+        Set<UUID> current = teamRepository.findMembers(team.tenantId(), team.id()).stream()
+                .map(TeamMember::userId)
+                .collect(Collectors.toSet());
+        List<UUID> added = memberIds.stream().filter(id -> !current.contains(id)).toList();
+        List<UUID> removed = current.stream().filter(id -> !memberIds.contains(id)).toList();
+        teamRepository.addMembers(team.tenantId(), team.id(), added, Instant.now());
+        teamRepository.removeMembers(team.tenantId(), team.id(), removed);
+        auditEventPort.recordAll(Stream.concat(
+                added.stream().map(userId -> auditEvent(team, "member_added", actor, userId)),
+                removed.stream().map(userId -> auditEvent(team, "member_removed", actor, userId))).toList());
+    }
+
+    private static AuditEvent auditEvent(Team team, String action, Actor actor, UUID userId) {
+        return AuditEvent.of(team.tenantId(), AuditKind.TEAM, team.id(), action, actor,
+                Map.of("name", team.name(), "userId", userId));
     }
 
     @PreAuthorize(Roles.CAN_WRITE)

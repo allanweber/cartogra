@@ -1,5 +1,6 @@
 package io.cartogra.registry.domain;
 
+import io.cartogra.common.audit.AuditEvent;
 import io.cartogra.common.identity.Actor;
 import io.cartogra.registry.domain.exception.DuplicateTeamNameException;
 import io.cartogra.registry.domain.exception.TeamNotFoundException;
@@ -15,13 +16,18 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -33,13 +39,16 @@ class TeamServiceTest {
     @Mock TeamLifecycleEventProducer eventProducer;
     @Mock PlanLimitService planLimitService;
     @Mock AdvisoryLockRepository advisoryLockRepository;
+    @Mock ServiceService serviceService;
 
     private TeamService teamService;
+    private final List<AuditEvent> audits = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
         lenient().when(advisoryLockRepository.tryAcquireLock(anyLong())).thenReturn(true);
-        teamService = new TeamService(teamRepository, eventProducer, planLimitService, advisoryLockRepository, _ -> { });
+        teamService = new TeamService(teamRepository, eventProducer, planLimitService, advisoryLockRepository, audits::add,
+                serviceService);
     }
 
     @Test
@@ -80,7 +89,7 @@ class TeamServiceTest {
         when(teamRepository.existsByName(tenantId, "new-name", teamId)).thenReturn(false);
         when(teamRepository.save(any())).thenReturn(saved);
 
-        teamService.update(tenantId, ADMIN, teamId, "new-name");
+        teamService.update(tenantId, ADMIN, teamId, "new-name", Set.of(), Set.of());
 
         var captor = ArgumentCaptor.forClass(Team.class);
         verify(eventProducer).publishUpdated(captor.capture());
@@ -93,7 +102,7 @@ class TeamServiceTest {
         UUID teamId = UUID.randomUUID();
         when(teamRepository.findById(tenantId, teamId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> teamService.update(tenantId, ADMIN, teamId, "x"))
+        assertThatThrownBy(() -> teamService.update(tenantId, ADMIN, teamId, "x", Set.of(), Set.of()))
                 .isInstanceOf(TeamNotFoundException.class);
 
         verifyNoInteractions(eventProducer);
@@ -232,9 +241,83 @@ class TeamServiceTest {
         when(teamRepository.existsByName(tenantId, "new-name", teamId)).thenReturn(false);
         when(teamRepository.save(any())).thenReturn(saved);
 
-        teamService.update(tenantId, Actor.user(userId), teamId, "new-name");
+        teamService.update(tenantId, Actor.user(userId), teamId, "new-name", Set.of(), Set.of());
 
         verify(eventProducer).publishUpdated(any());
+    }
+
+    @Test
+    void updateSavesServicesAndMemberDifferencesInBulk() {
+        UUID tenantId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        UUID kept = UUID.randomUUID();
+        UUID dropped = UUID.randomUUID();
+        UUID added = UUID.randomUUID();
+        Set<UUID> serviceIds = Set.of(UUID.randomUUID());
+        when(teamRepository.findById(tenantId, teamId)).thenReturn(Optional.of(team(tenantId, teamId, "same")));
+        when(teamRepository.findMembers(tenantId, teamId)).thenReturn(List.of(member(tenantId, teamId, kept),
+                member(tenantId, teamId, dropped)));
+
+        teamService.update(tenantId, ADMIN, teamId, "same", serviceIds, Set.of(kept, added));
+
+        verify(serviceService).setTeamServices(tenantId, ADMIN, teamId, serviceIds);
+        verify(teamRepository).addMembers(eq(tenantId), eq(teamId), eq(List.of(added)), any());
+        verify(teamRepository).removeMembers(tenantId, teamId, List.of(dropped));
+        verify(teamRepository, never()).addMember(any());
+        verify(teamRepository, never()).removeMember(any(), any(), any());
+        assertThat(audits).extracting(AuditEvent::action, e -> e.payload().get("userId"))
+                .containsExactlyInAnyOrder(org.assertj.core.groups.Tuple.tuple("member_added", added),
+                        org.assertj.core.groups.Tuple.tuple("member_removed", dropped));
+    }
+
+    @Test
+    void updateWithSameNameDoesNotRenameButStillSavesTheLists() {
+        UUID tenantId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        when(teamRepository.findById(tenantId, teamId)).thenReturn(Optional.of(team(tenantId, teamId, "same")));
+
+        Team result = teamService.update(tenantId, ADMIN, teamId, "same", Set.of(), Set.of());
+
+        assertThat(result.name()).isEqualTo("same");
+        verify(teamRepository, never()).save(any());
+        verifyNoInteractions(eventProducer);
+        verify(serviceService).setTeamServices(tenantId, ADMIN, teamId, Set.of());
+        verify(teamRepository).findMembers(tenantId, teamId);
+        assertThat(audits).isEmpty();
+    }
+
+    @Test
+    void updateWithUnchangedMembersRecordsNoMemberAudit() {
+        UUID tenantId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        UUID kept = UUID.randomUUID();
+        when(teamRepository.findById(tenantId, teamId)).thenReturn(Optional.of(team(tenantId, teamId, "same")));
+        when(teamRepository.findMembers(tenantId, teamId)).thenReturn(List.of(member(tenantId, teamId, kept)));
+
+        teamService.update(tenantId, ADMIN, teamId, "same", Set.of(), Set.of(kept));
+
+        verify(teamRepository).addMembers(eq(tenantId), eq(teamId), eq(List.of()), any());
+        verify(teamRepository).removeMembers(tenantId, teamId, List.of());
+        assertThat(audits).isEmpty();
+    }
+
+    @Test
+    void updateByNonMemberIsDeniedBeforeAnythingIsSaved() {
+        UUID tenantId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        when(teamRepository.isMember(tenantId, teamId, userId)).thenReturn(false);
+
+        assertThatThrownBy(() -> teamService.update(tenantId, Actor.user(userId), teamId, "x", Set.of(), Set.of()))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+        verifyNoInteractions(serviceService, eventProducer);
+        verify(teamRepository, never()).addMembers(any(), any(), anyCollection(), any());
+        verify(teamRepository, never()).removeMembers(any(), any(), anyCollection());
+    }
+
+    private TeamMember member(UUID tenantId, UUID teamId, UUID userId) {
+        return new TeamMember(UUID.randomUUID(), tenantId, teamId, userId, Instant.now());
     }
 
     private Team team(UUID tenantId, String name) {

@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -34,10 +33,6 @@ public class ServiceAccessInternalController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<Map<UUID, Boolean>>> checkAccess(@Valid @RequestBody ServiceAccessRequest request) {
-        Map<UUID, Boolean> result = new LinkedHashMap<>();
-        for (UUID serviceId : request.serviceIds()) {
-            result.put(serviceId, service.isAccessibleBy(request.tenantId(), request.userId(), serviceId));
-        }
-        return TracedResponse.ok(result);
+        return TracedResponse.ok(service.checkAccess(request.tenantId(), request.userId(), request.serviceIds()));
     }
 }

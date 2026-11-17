@@ -3,6 +3,8 @@ package io.cartogra.registry.repository;
 import io.cartogra.registry.domain.Team;
 import io.cartogra.registry.domain.TeamMember;
 
+import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -33,4 +35,10 @@ public interface TeamRepository {
     TeamMember addMember(TeamMember member);
 
     void removeMember(UUID tenantId, UUID teamId, UUID userId);
+
+    /** Adds every member in one statement; a user already in the team is skipped. */
+    void addMembers(UUID tenantId, UUID teamId, Collection<UUID> userIds, Instant at);
+
+    /** Removes every listed user from the team in one statement. */
+    void removeMembers(UUID tenantId, UUID teamId, Collection<UUID> userIds);
 }
