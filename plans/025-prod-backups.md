@@ -1,5 +1,5 @@
 # Production backups + stop calling the production host "demo"
-Issue: new (draft below, create on user approval) · Branch: `feat/prod-backups`
+Issue: new (draft below, create on user approval) · Branches: `feat/prod-backups` (#227), `fix/backup-compliance` (#229), `feat/prod-backups-offsite`
 Plan file in repo: `plans/025-prod-backups.md`
 
 ## Context
@@ -29,14 +29,13 @@ Found (live cluster, 2026-11-18):
 | Gap | Decision |
 |---|---|
 | 1 No failure alert | Heartbeat: upload container pings healthchecks.io on success; the service emails when a ping is late (also catches a dead node or a stopped CronJob). |
-| 2 Up to 24h loss | CloudNativePG + Barman Cloud plugin: continuous WAL + scheduled base backups to S3, PITR. CNPG retention 30d. |
+| 2 Up to 24h loss | Hourly `pg_dump` (max loss 1h). CNPG + Barman (PITR) rejected for memory cost (user, 2026-11-18). |
 | 3 7-day retention | Logical dump: `daily/` 30d, `monthly/` (on the 1st) 365d. |
 | 4 One provider | Copy each logical dump to Cloudflare R2 too. |
 | 5 Key can delete backups | New buckets with object lock (compliance, 30d). Hetzner keys are project-wide and can bypass governance. |
 | 6 Restore not proven | Weekly CronJob: restore newest dump into a throwaway Postgres, check row counts, ping a second heartbeat. |
-| 7 PV on node disk | hcloud-csi; CNPG instance PVC on a Hetzner Volume. |
+| 7 PV on node disk | Accepted (user, 2026-11-18): stays `local-path`. Node loss = new host + restore of the newest dump. hcloud-csi rejected for memory cost. |
 | 8 Keys outside git | Password manager stays the store; restore runbook gets a checklist item: the stored `CLUSTER_CREDENTIALS_KEY` decrypts restored data; stored Sealed Secrets key matches the live one. |
-| — Logical dump with CNPG | Keep the `pg_dump` CronJob as the second, portable backup. |
 | — Kafka/Valkey | No backup. Postgres is the source of truth; documented in ADR-0032. Restore drill confirms services recover with an empty Kafka. |
 | — Delivery | One branch, linear checklist, each step on user's call. |
 
@@ -54,41 +53,29 @@ Found (live cluster, 2026-11-18):
      - `UPDATE registry.services SET k8s_cluster='production'` for the Acme tenant (21 rows), then `PUT /api/v1/ingestion/k8s/clusters/5ac773f8-…` `name: production`. Worker restarted, no errors, 21 services, no duplicates.
      - **Merge this PR before any other PR.** A deploy from `main` with `clusterName: demo` registers a second cluster.
    - Gate: `grep -rniI demo --exclude-dir={node_modules,.git,build,bip,plans,portfolio}` → only guest-demo feature hits.
-2. **Heartbeat** — sealed secret `backup-heartbeat` (key `HEARTBEAT_URL`); upload container `curl -fsS -m 10 --retry 3 "$(cat …)"` after `aws s3 cp` succeeds, and `/fail` on error. Check that `amazon/aws-cli:2.31.35` has `curl`; else a third tiny container. healthchecks.io check: period 1d, grace 2h, email alert.
+2. **Heartbeat + hourly schedule** — schedule `17 * * * *` (RPO 1h; the job uses ~144Mi for ~30s). Sealed secret `backup-heartbeat` (BACKUP_URL, VERIFY_URL) from the wizard, optional volume. Upload moved to an init container; the main container `curlimages/curl:8.22.0` pings only after both uploads succeed. healthchecks.io: `cartogra-backup` period 1h, grace 30min; `cartogra-restore-verify` period 7d, grace 6h.
 3. **New locked bucket + retention** — DONE 2026-11-18. Follow-up (branch `fix/backup-compliance`): aws-cli 2.17.0 `s3 cp` rejects `--checksum-algorithm`, so the nightly job failed; the chart now uses `aws-cli:2.31.35`, and a manual job wrote `postgres/daily/cartogra-2026-11-18T0932Z.dump`. The cluster key bypassed governance in a test, so the default retention is now COMPLIANCE 30d; a bypass delete then failed with `forbidden by object lock`. Old bucket `cartogra-demo-backups` deleted. Bucket created with object lock, governance 30d default, lifecycle daily/monthly/delete-markers; 8 dumps copied to `daily/`; a version delete fails with `forbidden by object lock`. Chart writes `daily/` + `monthly/` with `--checksum-algorithm CRC32` (object-lock PUTs need a checksum; aws-cli 2.17 sends none by default). After the merge: run a manual job, check the file in `daily/`. Governance mode can be bypassed by a key with `s3:BypassGovernanceRetention`; Hetzner keys are project-wide, so check whether the cluster key can bypass. If it can, switch to compliance mode. Local aws-cli 2.31 on Python 3.14: `list-object-versions` fails ("badly formed help string"); use `head-object` for version IDs.
-   - Create `cartogra-production-backups` with object lock enabled at creation; default retention compliance 30d; lifecycle `postgres/daily/` 30d, `postgres/monthly/` 365d, `cnpg/` handled by CNPG retention.
+   - Create `cartogra-production-backups` with object lock enabled at creation; default retention compliance 30d; lifecycle `postgres/daily/` 30d, `postgres/monthly/` 365d.
    - Check Hetzner support for object lock and for a key without delete rights. If no scoped key: record it in ADR-0032; object lock is the protection.
    - Copy the last 7 dumps from the old bucket to `daily/`. Delete the old bucket after step 4 verifies.
    - CronJob writes `daily/` and, on day 1, also `monthly/`. Values `backup.s3.bucket` → new name.
-4. **Cloudflare R2 copy** — R2 bucket `cartogra-production-backups` with a bucket lock rule 30d, lifecycle 30d/365d; R2 token scoped to the bucket; sealed secret `backup-offsite-secrets`; second `aws s3 cp` with the R2 endpoint. Chart: `backup.offsite.*` values, off by default.
-5. **Weekly restore verify** — `templates/backup-verify-cronjob.yaml` (Sunday 04:00): init container downloads the newest `daily/` dump; sidecar `postgres:16-alpine` on emptyDir; `pg_restore`; SQL row counts per schema (registry/topology/ingestion/gateway tables) > 0 for tables with production data; ping heartbeat 2. Resource limits 256Mi. No access to the live database.
-6. **hcloud-csi** — install the `hcloud-csi` chart (pinned version, arm64 image) into `kube-system` with a sealed hcloud API token; StorageClass `hcloud-volumes` (`reclaimPolicy: Retain`). Runbook: install + rebuild steps.
-7. **CloudNativePG** — operator (pinned chart, `cnpg-system`) + Barman Cloud plugin. Chart `charts/postgres` → CNPG `Cluster` (1 instance, `postgres:16` image to match, storage `hcloud-volumes` 10Gi, same `database`/owner, credentials from `postgres-secrets`), `ObjectStore` to `s3://cartogra-production-backups/cnpg/`, `ScheduledBackup` daily, retention 30d. Service name: keep `postgres` reachable (CNPG creates `<cluster>-rw`; set cluster name or add an ExternalName/alias Service so service `DB_URL`s do not change). `backup.postgres.host` → the rw service. Memory budget: operator ≤ 200Mi; check the node stays < 75%.
-8. **Cutover (maintenance window, user runs or approves each command)**
-   1. Run a manual backup; confirm the file in both buckets.
-   2. (Done in step 1: Acme cluster row rename + data fix.)
-   3. Scale apps to 0. Final `pg_dump`.
-   4. Merge → `deploy.yml` installs CNPG Cluster (empty) + new values. Restore the final dump into the CNPG primary (`pg_restore --clean --if-exists`), or use CNPG `bootstrap.initdb.import` from the old service before removal — pick in this step after a k3d rehearsal.
-   5. Scale apps to 1. Acme `verify` green. Trigger an on-demand CNPG `Backup`; confirm WAL files arrive.
-   6. Remove the old StatefulSet + `data-postgres-0` PVC only after 7 days without problems.
-   7. (Done in step 1: hcloud and local renames.) **Do not run the wizard from `main`.** It looks for `cartogra-demo` and creates a second server.
-   8. Change the context name in the CI kubeconfig (GitHub `production` secret `KUBECONFIG`) only when you make that kubeconfig again. The old context name `demo` works.
-9. **Node rename** — DONE 2026-11-18, before CNPG, by the user's choice (no real data). Node is `cartogra-production`; the Postgres, Kafka and Valkey PVCs were deleted and made again empty; Acme was reseeded by the deploy of PR #227 (21 services, cluster `production`); old PV directories deleted from the node. Original plan: Kafka and Valkey PVs are still `local-path` on `cartogra-demo`: delete them (no backup by decision), set k3s `--node-name cartogra-production` (or the hostname), restart k3s, delete the old Node object, and let the StatefulSets make new PVCs. Short downtime.
-10. **Runbooks** — `deployment.md` §10 rewritten: three backup kinds (CNPG PITR, logical dump, R2 copy), restore for each, PITR example (`bootstrap.recovery` with `targetTime`), key checklist (gap 8), heartbeat setup. `incident-response.md`: "backup heartbeat late" entry.
-
-## Rehearsal (before step 8, on k3d `cartogra-local` via `local-test.sh`, with user approval for containers)
-- Install CNPG + plugin with MinIO or a test bucket; migrate a seeded Acme database; PITR restore to a timestamp; services start and Acme verify passes.
+4. **Cloudflare R2 copy** — the user makes the R2 bucket (bucket lock 30d, lifecycle 30d/365d) and a token for that bucket only, with `infra/k8s/backup-secrets-wizard.sh`; it seals `backup-offsite-secrets` (R2_ACCESS_KEY, R2_SECRET_KEY, R2_ENDPOINT). The `upload` init container copies the dump to R2 after Hetzner. `backup.offsite.enabled: true` in production.
+5. **Weekly restore verify** — `templates/backup-verify-cronjob.yaml` (Sunday 04:00): init `download` (newest `daily/` dump), init `restore` (`postgres:16-alpine` as uid 70 on an emptyDir; `pg_restore --no-owner`; `backup.verify.requiredTables` must have rows), container `heartbeat` pings `VERIFY_URL`. No access to the live database. A one-off run on 2026-11-18 passed.
+6. **Memory trim** (requests were 93% of the node, real use 42%): Acme 21 × 96Mi → 48Mi + `NODE_OPTIONS=--max-old-space-size=24`; collector 256 → 128Mi; alerting Prometheus 192 → 128Mi, Alertmanager 64 → 32Mi; Valkey 128 → 64Mi with `maxmemory 32mb`. Frees about 1.3Gi. If an Acme pod is OOMKilled, go back to 64Mi.
+7. **CloudNativePG + Barman + hcloud-csi** — DROPPED 2026-11-18 (user: too much memory for this project). A rehearsal on production worked (import, WAL archive to the locked bucket, base backup); the Barman sidecar was OOMKilled at 128Mi; the PITR test did not finish. The operators were uninstalled; their CRDs stay (Helm keep policy). Recorded as a rejected alternative in ADR-0032.
+8. **Cutover** — not needed (no CNPG).
+9. **Node rename** — DONE 2026-11-18, by the user's choice (no real data). Node is `cartogra-production`; the Postgres, Kafka and Valkey PVCs were deleted and made again empty; Acme was reseeded by the deploy of PR #227 (21 services, cluster `production`); old PV directories deleted from the node. Original plan: Kafka and Valkey PVs are still `local-path` on `cartogra-demo`: delete them (no backup by decision), set k3s `--node-name cartogra-production` (or the hostname), restart k3s, delete the old Node object, and let the StatefulSets make new PVCs. Short downtime.
+10. **Runbooks** — `deployment.md` §10: jobs + heartbeats table, wizard, manual runs, restore from Hetzner or R2, key checklist (gap 8). `incident-response.md`: heartbeat-late detection.
 
 ## Acceptance criteria
-- [ ] No repo text names the production host "demo" (grep gate, step 1); guest-demo feature names unchanged.
-- [ ] Deployed pods carry `environment=production`; one Acme cluster row, named `production`.
-- [ ] ADR-0032 accepted, ADR-0030 superseded.
-- [ ] A missed or failed nightly backup sends an email within 26h (tested: suspend the CronJob for 1 day, or ping `/fail`).
-- [ ] Logical dumps in Hetzner (object lock on) and R2; `daily/` 30d, `monthly/` 365d; a delete with the cluster's key fails inside the lock window.
-- [ ] CNPG continuous archiving: `kubectl cnpg status` shows WAL archiving OK; a PITR restore to a chosen time works (rehearsal + one production test into a separate Cluster).
-- [ ] Postgres data on a Hetzner Volume (`Retain`).
-- [ ] Weekly verify job green and its heartbeat active.
-- [ ] Runbook §10 covers all restore paths; key checklist done once.
+- [x] No repo text names the production host "demo" (grep gate, step 1); guest-demo feature names unchanged.
+- [x] Deployed pods carry `environment=production`; one Acme cluster row, named `production`.
+- [x] ADR-0032 accepted, ADR-0030 superseded.
+- [ ] A missed or failed hourly backup sends an email within 90 min (test: suspend the CronJob for 2 hours).
+- [ ] Dumps in Hetzner (compliance lock) and R2 (bucket lock); `daily/` 30d, `monthly/` 365d. Hetzner: a bypass delete with the cluster key fails (DONE 2026-11-18).
+- [ ] Weekly verify job green and its heartbeat active (one-off run with the rendered template passed 2026-11-18).
+- [ ] Memory requests after the trim leave > 640Mi free on the node (one rollout surge).
+- [ ] Runbook §10 covers the restore from Hetzner and from R2; key checklist done once.
 
 ## Tests
 - `helm lint --strict` + `helm template` for HA defaults, production values, acme (CI `helm.yml`); kubeconform as today.

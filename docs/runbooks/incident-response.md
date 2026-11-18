@@ -17,7 +17,7 @@ Security (P0 data/write cases): turn guest mode off first (section 4), investiga
 ## 1. Detection
 
 - External uptime check on `https://cartogra.dev/api/auth/features` (deployment.md section 8).
-- A failed `postgres-backup` Job (`kubectl -n cartogra get jobs`).
+- A healthchecks.io email: `cartogra-backup` (hourly backup) or `cartogra-restore-verify` (weekly restore test) is late. Look at the last Job: `kubectl -n cartogra get jobs`, then the `upload` or `restore` container log (deployment.md section 10).
 - Someone telling you production is broken.
 
 ## 2. Triage
@@ -93,7 +93,7 @@ kubectl -n cartogra exec valkey-0 -- valkey-cli --scan --pattern 'rate_limit:*' 
 kubectl -n cartogra exec valkey-0 -- valkey-cli del '<key>'
 ```
 
-**Reset the Acme data** (Acme state corrupted): restore last night's backup (deployment.md section 10), or
+**Reset the Acme data** (Acme state corrupted): restore the newest backup (deployment.md section 10), or
 for a clean slate, `helm uninstall acme -n acme-system`, delete the Acme tenant's rows, and re-run
 **Deploy**; the gateway bootstrap and the Job recreate everything.
 

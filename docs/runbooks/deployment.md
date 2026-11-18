@@ -464,22 +464,48 @@ Same for `acme` in `acme-system`. Then re-run **Deploy**.
 
 ## 10. Backups and restore
 
-`postgres-backup` (`values-production.yaml` → `backup`) dumps the database nightly at 02:00 UTC to
-`s3://cartogra-production-backups/postgres/daily/cartogra-<timestamp>.dump`, and on the 1st of the month also to
-`postgres/monthly/`. Lifecycle rules (section 1) keep daily files 30 days and monthly files 365 days; object lock blocks
-deletes for 30 days. Run one now:
+The design is in ADR-0032. All parts are short jobs; none uses permanent memory.
+
+| Job | Schedule (UTC) | What | Heartbeat |
+|---|---|---|---|
+| `postgres-backup` | hourly, at :17 | `pg_dump -Fc` → Hetzner `postgres/daily/`, then the same file → R2 `postgres/daily/`. The 00:17 run on the 1st also writes `postgres/monthly/`. | `cartogra-backup` (period 1 h, grace 30 min) |
+| `postgres-backup-verify` | Sunday 04:00 | Restores the newest Hetzner dump into a temporary Postgres (no access to the live database) and checks that the tables in `backup.verify.requiredTables` have rows. | `cartogra-restore-verify` (period 7 d, grace 6 h) |
+
+Lifecycle rules keep daily files 30 days and monthly files 365 days, in both buckets. Object lock blocks deletes for 30 days
+(Hetzner: compliance mode, section 1; R2: bucket lock rule). A ping that is late sends an email from healthchecks.io.
+
+### Set up the secrets (one time, or after a rebuild)
+
+```bash
+infra/k8s/backup-secrets-wizard.sh   # healthchecks.io checks, R2 bucket + lock + lifecycle + token; seals and applies
+git add infra/k8s/sealed/backup-heartbeat.yaml infra/k8s/sealed/backup-offsite-secrets.yaml
+```
+
+Without `backup-offsite-secrets`, the upload container fails after the Hetzner upload, and no heartbeat is sent.
+Without `backup-heartbeat`, the jobs work but send no ping (the log says `no heartbeat secret`).
+
+### Run a backup or a restore test now
 
 ```bash
 kubectl -n cartogra create job --from=cronjob/postgres-backup backup-manual
 kubectl -n cartogra logs -f job/backup-manual -c upload
-aws s3 ls s3://cartogra-production-backups/postgres/daily/ --endpoint-url https://fsn1.your-objectstorage.com
+kubectl -n cartogra logs job/backup-manual -c heartbeat
 kubectl -n cartogra delete job backup-manual
+
+kubectl -n cartogra create job --from=cronjob/postgres-backup-verify verify-manual
+kubectl -n cartogra logs job/verify-manual -c restore
+kubectl -n cartogra delete job verify-manual
 ```
 
-Restore (needs the `AWS_*` variables from section 1). Scaling down also stops the alerting pod until the last step:
+### Restore into production
+
+Use the Hetzner copy (needs the `AWS_*` variables from section 1). If Hetzner is not available, use R2: set the R2 keys
+as `AWS_*` and use `--endpoint-url https://<account-id>.r2.cloudflarestorage.com --region auto`.
+Scaling down also stops the alerting pod until the last step:
 
 ```bash
 kubectl -n cartogra scale deploy --all --replicas=0
+aws s3 ls s3://cartogra-production-backups/postgres/daily/ --endpoint-url https://fsn1.your-objectstorage.com | tail -3
 aws s3 cp s3://cartogra-production-backups/postgres/daily/<file>.dump restore.dump --endpoint-url https://fsn1.your-objectstorage.com
 kubectl -n cartogra cp restore.dump postgres-0:/tmp/restore.dump
 kubectl -n cartogra exec postgres-0 -- sh -c 'pg_restore --clean --if-exists -U "$(cat /etc/cartogra/secrets/DB_USERNAME)" -d cartogra /tmp/restore.dump'
@@ -488,7 +514,12 @@ rm restore.dump
 kubectl -n cartogra scale deploy --all --replicas=1
 ```
 
-The restored database only works with the same `CLUSTER_CREDENTIALS_KEY` it was written with.
+After a restore, do this checklist:
+
+1. The services start, and Acme `verify` passes.
+2. The `CLUSTER_CREDENTIALS_KEY` in the password manager is the key that the restored data was written with. An SCM sync with a stored credential succeeds.
+3. On a new host: the Sealed Secrets key in the password manager is restored before you apply `infra/k8s/sealed/`.
+4. Kafka starts empty. Events that were not consumed before the loss are lost; the services must start without them.
 
 ## 11. Rebuild from scratch
 

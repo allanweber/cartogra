@@ -67,9 +67,10 @@ collector:
   pdb: { enabled: false }
   env:
     CARTOGRA_TENANT_ID: *acmeTenantId
+  # Uses ~65Mi (2026-11-18).
   resources:
-    requests: { cpu: 50m, memory: 256Mi }
-    limits: { cpu: 100m, memory: 256Mi }
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: 100m, memory: 128Mi }
 
 postgres:
   config:
@@ -79,6 +80,13 @@ postgres:
     requests: { cpu: 100m, memory: 384Mi }
     limits: { cpu: 200m, memory: 384Mi }
 
+# Uses ~4Mi; maxmemory stays below the limit.
+valkey:
+  maxmemory: 32mb
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: 100m, memory: 64Mi }
+
 kafka:
   heapOpts: "-XX:InitialRAMPercentage=50 -XX:MaxRAMPercentage=50"  # ≈384m of 768Mi; extra room is off-heap
   resources:
@@ -87,6 +95,14 @@ kafka:
 
 alerting:
   enabled: true
+  # Prometheus uses ~50Mi, Alertmanager ~11Mi (2026-11-18).
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: 100m, memory: 128Mi }
+  alertmanager:
+    resources:
+      requests: { cpu: 20m, memory: 32Mi }
+      limits: { cpu: 40m, memory: 32Mi }
   email:
     from: alerts@cartogra.dev
     # to: set at deploy time (GitHub environment variable ALERT_EMAIL).
@@ -97,3 +113,8 @@ backup:
     endpoint: https://fsn1.your-objectstorage.com
     region: fsn1
     bucket: cartogra-production-backups
+  offsite:
+    enabled: true
+    bucket: cartogra-production-backups
+  verify:
+    enabled: true
