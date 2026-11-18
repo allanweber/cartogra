@@ -33,13 +33,16 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * All operations on the Service aggregate: CRUD, ownership assignment, orphan detection,
@@ -106,6 +109,7 @@ public class ServiceService {
                 teamRepository.findById(tenantId, req.teamId())
                         .orElseThrow(() -> new TeamNotFoundException(req.teamId()));
             }
+            requireAdminOrOwningTeamMember(tenantId, req.teamId(), actor);
             if (req.healthEndpoint() != null) {
                 healthEndpointValidator.validate(req.healthEndpoint());
             }
@@ -241,24 +245,21 @@ public class ServiceService {
         return PageResult.of(items, total, limit, offset);
     }
 
-    /** Cross-tenant, active-only — backs the internal {@code /internal/services} endpoint. */
-    public PageResult<Service> listAllActive(int limit, int offset) {
-        List<Service> items = serviceRepository.findAllActive(limit, offset);
-        long total = serviceRepository.countActive();
-        return PageResult.of(items, total, limit, offset);
+    /** Backs the internal {@code /internal/services/names} endpoint; unknown or deleted ids are left out. */
+    public Map<UUID, String> findNames(UUID tenantId, List<UUID> serviceIds) {
+        return serviceRepository.findNames(tenantId, serviceIds);
     }
 
     /**
      * Backs the internal {@code /internal/services/access} endpoint — Topology's authorization
-     * check for declared-dependency mutations. Tenant-scoped (unlike {@link #listAllActive}):
-     * an unknown or cross-tenant {@code serviceId}, or an orphan service with no owning team,
-     * resolves to {@code false} rather than throwing.
+     * check for declared-dependency mutations. One entry per requested id; an unknown,
+     * cross-tenant or team-less service resolves to {@code false}.
      */
-    public boolean isAccessibleBy(UUID tenantId, UUID userId, UUID serviceId) {
-        return serviceRepository.findById(tenantId, serviceId)
-                .map(Service::teamId)
-                .map(teamId -> teamRepository.isMember(tenantId, teamId, userId))
-                .orElse(false);
+    public Map<UUID, Boolean> checkAccess(UUID tenantId, UUID userId, List<UUID> serviceIds) {
+        Set<UUID> accessible = serviceRepository.findAccessible(tenantId, userId, serviceIds);
+        Map<UUID, Boolean> result = new LinkedHashMap<>();
+        serviceIds.forEach(id -> result.put(id, accessible.contains(id)));
+        return result;
     }
 
     public PageResult<Service> detectOrphans(UUID tenantId, int limit, int offset) {
@@ -282,25 +283,66 @@ public class ServiceService {
             return existing;
         }
 
-        var updated = new Service(
-                existing.id(), existing.tenantId(), existing.name(), existing.description(),
-                teamId,
-                existing.repositoryUrl(), existing.techStack(), existing.metadata(),
-                existing.healthStatus(), existing.lastDeployedAt(), existing.createdAt(),
-                Instant.now(), null,
-                existing.externalId(), existing.connectionId(), existing.source(), existing.repositoryRef(),
-                existing.k8sCluster(), existing.k8sNamespace(), existing.k8sDeployment(),
-                existing.healthEndpoint(), existing.lastCommitAt(), existing.lastCommitSha(),
-                existing.healthCheckedAt(),
-                existing.tier(), existing.tags(), existing.slaTarget(),
-                existing.documentationUrl(), existing.runbookUrl()
-        );
+        var updated = existing.withTeam(teamId, Instant.now());
 
         Service saved = serviceRepository.save(updated);
         historyRepository.save(snapshot(saved, actor));
         auditChanges(existing, saved, "owner_changed", actor);
         eventProducer.publishUpdated(saved);
         return saved;
+    }
+
+    /**
+     * Makes {@code serviceIds} exactly the set of services {@code teamId} owns: services added are taken from
+     * their current owner (or from no owner), services left out become orphans. A fixed number of queries,
+     * whatever the number of changes. Outside ADMIN, taking a service needs membership of its current owning
+     * team, and an orphan can only be taken by ADMIN — the same rules as {@link #assignOwner}. The caller has
+     * already checked the actor may manage {@code teamId}.
+     */
+    @PreAuthorize(Roles.CAN_WRITE)
+    @Transactional
+    public void setTeamServices(UUID tenantId, Actor actor, UUID teamId, Set<UUID> serviceIds) {
+        List<Service> owned = serviceRepository.findByTeam(tenantId, teamId);
+        Set<UUID> ownedIds = owned.stream().map(Service::id).collect(Collectors.toSet());
+        List<Service> removed = owned.stream().filter(s -> !serviceIds.contains(s.id())).toList();
+        Set<UUID> addedIds = serviceIds.stream().filter(id -> !ownedIds.contains(id))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        List<Service> added = serviceRepository.findByIds(tenantId, addedIds);
+        if (added.size() < addedIds.size()) {
+            Set<UUID> found = added.stream().map(Service::id).collect(Collectors.toSet());
+            throw new ServiceNotFoundException(addedIds.stream().filter(id -> !found.contains(id)).findFirst().orElseThrow());
+        }
+        requireCanTakeServices(tenantId, actor, added);
+        if (added.isEmpty() && removed.isEmpty()) {
+            return;
+        }
+
+        Instant now = Instant.now();
+        serviceRepository.updateTeam(tenantId, addedIds, teamId, now);
+        serviceRepository.updateTeam(tenantId, removed.stream().map(Service::id).toList(), null, now);
+
+        List<OwnerChange> changes = Stream.concat(
+                added.stream().map(before -> new OwnerChange(before, before.withTeam(teamId, now))),
+                removed.stream().map(before -> new OwnerChange(before, before.withTeam(null, now)))).toList();
+        historyRepository.saveAll(changes.stream().map(c -> snapshot(c.after(), actor)).toList());
+        auditEventPort.recordAll(changes.stream()
+                .flatMap(c -> changeEvent(c.before(), c.after(), "owner_changed", actor).stream())
+                .toList());
+        changes.forEach(c -> eventProducer.publishUpdated(c.after()));
+    }
+
+    private record OwnerChange(Service before, Service after) {
+    }
+
+    private void requireCanTakeServices(UUID tenantId, Actor actor, List<Service> services) {
+        if (actor.admin() || services.isEmpty()) {
+            return;
+        }
+        Set<UUID> myTeams = actor.userId() == null ? Set.of() : teamRepository.findTeamIdsByMember(tenantId, actor.userId());
+        if (services.stream().anyMatch(s -> s.teamId() == null || !myTeams.contains(s.teamId()))) {
+            throw new AccessDeniedException("Only ADMIN or a member of the owning team may edit this service");
+        }
     }
 
     public PageResult<ServiceSnapshot> history(UUID tenantId, UUID serviceId, int limit, int offset) {
@@ -511,11 +553,15 @@ public class ServiceService {
 
     /** Health, commit and timestamp bumps are not on the allowlist, so a merge that only moves those is not audited. */
     private void auditChanges(Service before, Service after, String action, Actor actor) {
+        changeEvent(before, after, action, actor).ifPresent(auditEventPort::record);
+    }
+
+    private Optional<AuditEvent> changeEvent(Service before, Service after, String action, Actor actor) {
         var changes = AuditPayload.changes(objectMapper, before, after, AUDIT_FIELDS);
         if (changes.isEmpty()) {
-            return;
+            return Optional.empty();
         }
-        auditEventPort.record(AuditEvent.of(after.tenantId(), AuditKind.SERVICE, after.id(), action, actor,
+        return Optional.of(AuditEvent.of(after.tenantId(), AuditKind.SERVICE, after.id(), action, actor,
                 AuditPayload.with(changes, "name", after.name())));
     }
 

@@ -2,15 +2,34 @@ package io.cartogra.registry.repository;
 
 import io.cartogra.registry.domain.Service;
 import io.cartogra.registry.domain.ServiceHealthStatus;
+import org.jspecify.annotations.Nullable;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 public interface ServiceRepository {
 
     Optional<Service> findById(UUID tenantId, UUID id);
+
+    /** Names of the tenant's live services among {@code ids}, by id; unknown or deleted ids are absent. */
+    Map<UUID, String> findNames(UUID tenantId, Collection<UUID> ids);
+
+    /** Ids among {@code ids} of the tenant's live services owned by a team {@code userId} belongs to. */
+    Set<UUID> findAccessible(UUID tenantId, UUID userId, Collection<UUID> ids);
+
+    /** The tenant's live services among {@code ids}; unknown or deleted ids are absent. */
+    List<Service> findByIds(UUID tenantId, Collection<UUID> ids);
+
+    /** Every live service owned by {@code teamId}. */
+    List<Service> findByTeam(UUID tenantId, UUID teamId);
+
+    /** Sets the owning team (null = orphan) of every live service among {@code ids}, in one statement. */
+    void updateTeam(UUID tenantId, Collection<UUID> ids, @Nullable UUID teamId, Instant at);
 
     List<Service> findAll(UUID tenantId, ServiceFilter filter, int limit, int offset);
 
@@ -42,16 +61,6 @@ public interface ServiceRepository {
 
     /** Cross-tenant query; excludes K8s-sourced services and deleted rows. */
     List<Service> findAllWithHealthEndpoint();
-
-    /**
-     * Cross-tenant, paginated, active-only. Backs the internal {@code /internal/services}
-     * endpoint used by Topology's admin backfill (walks every tenant's services once for
-     * tenants that predate its Kafka consumer).
-     */
-    List<Service> findAllActive(int limit, int offset);
-
-    /** Total active (non-deleted) service count across every tenant — pairs with {@link #findAllActive}. */
-    long countActive();
 
     void updateHealth(UUID tenantId, UUID id, ServiceHealthStatus status, Instant checkedAt);
 

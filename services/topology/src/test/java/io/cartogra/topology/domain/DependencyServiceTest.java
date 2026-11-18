@@ -423,19 +423,13 @@ class DependencyServiceTest {
     @Test
     void declareObservedPairDeclaresEveryObservedProtocolNotYetDeclared() {
         stubLiveNodes();
+        List<DependencyProtocol> observed = List.of(DependencyProtocol.HTTP, DependencyProtocol.GRPC);
         when(dependencyRepository.findLiveProtocols(tenantId, sourceId, targetId, DependencyType.OBSERVED))
-                .thenReturn(List.of(DependencyProtocol.HTTP, DependencyProtocol.GRPC));
-        when(dependencyRepository.findByEdgeIdentity(tenantId, sourceId, targetId, DependencyType.DECLARED,
-                DependencyProtocol.HTTP)).thenReturn(Optional.empty());
-        when(dependencyRepository.findByEdgeIdentity(tenantId, sourceId, targetId, DependencyType.DECLARED,
-                DependencyProtocol.GRPC)).thenReturn(Optional.of(org.mockito.Mockito.mock(Dependency.class)));
+                .thenReturn(observed);
 
         assertThat(service.declareObservedPair(tenantId, sourceId, targetId)).isTrue();
 
-        ArgumentCaptor<Dependency> saved = ArgumentCaptor.forClass(Dependency.class);
-        verify(dependencyRepository).save(saved.capture());
-        assertThat(saved.getValue().type()).isEqualTo(DependencyType.DECLARED);
-        assertThat(saved.getValue().protocol()).isEqualTo(DependencyProtocol.HTTP);
+        verify(dependencyRepository).declareMissing(eq(tenantId), eq(sourceId), eq(targetId), eq(observed), any());
         verify(graphViewRefreshScheduler).markDirty();
     }
 

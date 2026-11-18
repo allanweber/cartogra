@@ -26,6 +26,7 @@ jobs:
           - { image: gateway,   context: .,                 dockerfile: infra/docker/gateway/Dockerfile }
           - { image: registry,  context: .,                 dockerfile: infra/docker/registry/Dockerfile }
           - { image: topology,  context: .,                 dockerfile: infra/docker/topology/Dockerfile }
+          - { image: contract,  context: .,                 dockerfile: infra/docker/contract/Dockerfile }
           - { image: ingestion, context: .,                 dockerfile: infra/docker/ingestion/Dockerfile }
           - { image: frontend,  context: .,                 dockerfile: infra/docker/frontend/Dockerfile }
           - { image: acme,      context: seed/acme-fintech, dockerfile: seed/acme-fintech/Dockerfile }

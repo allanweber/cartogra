@@ -1,6 +1,6 @@
 # Cartogra Helm chart
 
-Umbrella chart: `gateway`, `registry`, `topology`, `ingestion`, `frontend`, `collector`, plus single-replica `postgres`, `kafka` and `valkey` StatefulSets, and optional `alerting` (Prometheus + Alertmanager, on in production). `charts/common` is a library chart with the shared Deployment/Service/ConfigMap/PDB/HPA template.
+Umbrella chart: `gateway`, `registry`, `topology`, `contract`, `ingestion`, `frontend`, `collector`, plus single-replica `postgres`, `kafka` and `valkey` StatefulSets, and optional `alerting` (Prometheus + Alertmanager, on in production). `charts/common` is a library chart with the shared Deployment/Service/ConfigMap/PDB/HPA template.
 
 Subcharts are rendered through the umbrella only. They call `common.*` templates without declaring the library as a dependency, which works because Helm shares named templates across a release.
 
@@ -20,7 +20,7 @@ The chart creates no Secrets. Each one is mounted read-only at `/etc/cartogra/se
 | Secret | Keys |
 |---|---|
 | `gateway-secrets` | `DB_USERNAME` `DB_PASSWORD` `JWT_SECRET` `RESEND_API_KEY` `GOOGLE_CLIENT_SECRET` `GITHUB_CLIENT_SECRET`, plus `BOOTSTRAP_ADMIN_PASSWORD` when `BOOTSTRAP_TENANT_ID` is set (production) |
-| `registry-secrets`, `topology-secrets` | `DB_USERNAME` `DB_PASSWORD` |
+| `registry-secrets`, `topology-secrets`, `contract-secrets` | `DB_USERNAME` `DB_PASSWORD` |
 | `ingestion-secrets` | `DB_USERNAME` `DB_PASSWORD` `CLUSTER_CREDENTIALS_KEY` |
 | `postgres-secrets` | `DB_USERNAME` `DB_PASSWORD` (same values the services use) |
 
@@ -28,7 +28,7 @@ The chart creates no Secrets. Each one is mounted read-only at `/etc/cartogra/se
 
 The ingress routes `/api` to the gateway and everything else to the frontend. The collector's OTLP ports stay ClusterIP-only: `cartogra.tenant.id` is unauthenticated until roadmap 5.9. Its metrics port (8889) is ClusterIP-only too.
 
-`registry`, `topology` and `ingestion` trust the gateway's `X-Tenant-Id` / `X-User-*` headers, so each gets a `NetworkPolicy` (`networkPolicy.allowFrom` in its values) that admits only the listed `app` labels on its app port: `registry` ← gateway, ingestion, topology; `topology` and `ingestion` ← gateway. The gateway and frontend stay open for the ingress controller. A CNI that does not enforce NetworkPolicy ignores these silently; k3s enforces them.
+`registry`, `topology`, `contract` and `ingestion` trust the gateway's `X-Tenant-Id` / `X-User-*` headers, so each gets a `NetworkPolicy` (`networkPolicy.allowFrom` in its values) that admits only the listed `app` labels on its app port: `registry` ← gateway, ingestion, topology; `topology`, `contract` and `ingestion` ← gateway. The gateway and frontend stay open for the ingress controller. A CNI that does not enforce NetworkPolicy ignores these silently; k3s enforces them.
 
 ## Alerting
 

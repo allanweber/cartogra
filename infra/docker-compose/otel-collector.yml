@@ -36,6 +36,7 @@ processors:
         - 'resource.attributes["service.name"] == "gateway"'
         - 'resource.attributes["service.name"] == "registry"'
         - 'resource.attributes["service.name"] == "ingestion"'
+        - 'resource.attributes["service.name"] == "contract"'
         - 'resource.attributes["cartogra.tenant.id"] == "unset"'
 
 exporters:

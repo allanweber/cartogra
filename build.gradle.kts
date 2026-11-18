@@ -31,6 +31,7 @@ val debugPorts = mapOf(
     "registry" to 5006,
     "ingestion" to 5007,
     "topology" to 5008,
+    "contract" to 5009,
 )
 
 subprojects {

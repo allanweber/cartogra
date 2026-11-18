@@ -10,7 +10,7 @@
   // whole class of bug rather than patching around it with vmArgs/spring.config overrides.
   //
   // Each service's bootRun always opens its own fixed JDWP port (root build.gradle.kts,
-  // debugPorts map) so all four can run — and be attached to — at the same time.
+  // debugPorts map) so all of them can run — and be attached to — at the same time.
   "configurations": [
     {
       "type": "java",
@@ -49,6 +49,15 @@
       "preLaunchTask": "bootRun topology (debug)"
     },
     {
+      "type": "java",
+      "name": "Debug Contract",
+      "request": "attach",
+      "hostName": "localhost",
+      "port": 5009,
+      "projectName": "contract",
+      "preLaunchTask": "bootRun contract (debug)"
+    },
+    {
       "type": "node-terminal",
       "name": "Debug Frontend (pnpm dev)",
       "request": "launch",
@@ -59,7 +68,7 @@
   "compounds": [
     {
       "name": "Debug All Backend Services",
-      "configurations": ["Debug Gateway", "Debug Registry", "Debug Ingestion", "Debug Topology"],
+      "configurations": ["Debug Gateway", "Debug Registry", "Debug Ingestion", "Debug Topology", "Debug Contract"],
       "stopAll": true
     },
     {
@@ -69,6 +78,7 @@
         "Debug Registry",
         "Debug Ingestion",
         "Debug Topology",
+        "Debug Contract",
         "Debug Frontend (pnpm dev)"
       ],
       "stopAll": true

@@ -11,9 +11,10 @@ services:
     environment:
       POSTGRES_DB: cartogra
       POSTGRES_USER: cartogra
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cartogra}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD (see infra/docker-compose/.env.example)}
+    # Loopback only: host tools (psql, e2e) reach it; the network does not.
     ports:
-      - "5436:5432"
+      - "127.0.0.1:5436:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -33,12 +34,15 @@ services:
         limits:
           memory: 128M
           cpus: "0.25"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD (see infra/docker-compose/.env.example)}
+    command: ["sh", "-c", "exec valkey-server --requirepass \"$$REDIS_PASSWORD\""]
     ports:
-      - "6380:6379"
+      - "127.0.0.1:6380:6379"
     volumes:
       - valkey-data:/data
     healthcheck:
-      test: ["CMD", "valkey-cli", "ping"]
+      test: ["CMD-SHELL", "valkey-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -71,8 +75,9 @@ services:
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_HEAP_OPTS: "-Xms256m -Xmx256m"
+    # Loopback only: the PLAINTEXT listener has no authentication, so it must not be reachable from the network.
     ports:
-      - "9092:9092"
+      - "127.0.0.1:9092:9092"
     volumes:
       - kafka-data:/var/lib/kafka/data
     healthcheck:
@@ -124,12 +129,14 @@ services:
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/cartogra?currentSchema=registry
       DB_USERNAME: cartogra
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-cartogra}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD (see infra/docker-compose/.env.example)}
       REDIS_HOST: valkey
       REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD (see infra/docker-compose/.env.example)}
       REGISTRY_URI: http://registry:8081
       TOPOLOGY_URI: http://topology:8082
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-min-32-bytes}
+      CONTRACT_URI: http://contract:8083
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET to at least 32 random bytes (openssl rand -base64 48)}
       RESEND_API_KEY: ${RESEND_API_KEY:-re_placeholder}
       RESEND_FROM: ${RESEND_FROM:-noreply@cartogra.dev}
       RESEND_TEST_MODE: ${RESEND_TEST_MODE:-true}
@@ -144,7 +151,7 @@ services:
       BOOTSTRAP_TENANT_PLAN: business
       BOOTSTRAP_TENANT_PUBLIC_SANDBOX: "true"
       BOOTSTRAP_ADMIN_EMAIL: admin@demo.invalid
-      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-Demo-Admin-pw1}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?Set BOOTSTRAP_ADMIN_PASSWORD (12+ characters, not a published default)}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
@@ -182,7 +189,7 @@ services:
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/cartogra?currentSchema=registry
       DB_USERNAME: cartogra
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-cartogra}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD (see infra/docker-compose/.env.example)}
       SPRING_FLYWAY_TABLE: flyway_schema_history_registry
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info
@@ -219,7 +226,7 @@ services:
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/cartogra?currentSchema=topology
       DB_USERNAME: cartogra
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-cartogra}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD (see infra/docker-compose/.env.example)}
       SPRING_FLYWAY_TABLE: flyway_schema_history_topology
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info
@@ -233,6 +240,44 @@ services:
         condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8082/api/v1/topology/actuator/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - cartogra-net
+
+  contract:
+    build:
+      context: ../..
+      dockerfile: infra/docker/contract/Dockerfile
+    image: cartogra/contract:local
+    container_name: cartogra-contract
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: "1.0"
+    ports:
+      - "8083:8083"
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/cartogra?currentSchema=contract
+      DB_USERNAME: cartogra
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD (see infra/docker-compose/.env.example)}
+      SPRING_FLYWAY_TABLE: flyway_schema_history_contract
+      REGISTRY_URI: http://registry:8081
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/api/v1/contracts/actuator/health/live"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -256,8 +301,9 @@ services:
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/cartogra?currentSchema=ingestion
       DB_USERNAME: cartogra
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-cartogra}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD (see infra/docker-compose/.env.example)}
       SPRING_FLYWAY_TABLE: flyway_schema_history_ingestion
+      CLUSTER_CREDENTIALS_KEY: ${CLUSTER_CREDENTIALS_KEY:?Set CLUSTER_CREDENTIALS_KEY (openssl rand -base64 32)}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318

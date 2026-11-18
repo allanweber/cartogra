@@ -12,7 +12,7 @@ class AuditKindTest {
     @Test
     void settingsKindsAreHiddenFromGuests() {
         assertThat(AuditKind.guestVisibleEntityTypes())
-                .containsExactlyInAnyOrder("service", "team", "dependency", "drift", "scm_connection")
+                .containsExactlyInAnyOrder("service", "team", "dependency", "drift", "scm_connection", "contract")
                 .doesNotContain("user", "invitation", "oidc_config", "cluster");
     }
 

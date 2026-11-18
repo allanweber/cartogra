@@ -164,13 +164,20 @@ class AuditEventIT {
     @Test
     void creatingAServiceRecordsExactlyOneAuditRow() throws Exception {
         UUID userId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        jdbc.update("INSERT INTO teams (id, tenant_id, name) VALUES (:id, :t, :name)",
+                new MapSqlParameterSource().addValue("id", teamId).addValue("t", tenantId)
+                        .addValue("name", "team-" + teamId));
+        jdbc.update("INSERT INTO team_members (tenant_id, team_id, user_id) VALUES (:t, :team, :u)",
+                new MapSqlParameterSource().addValue("t", tenantId).addValue("team", teamId).addValue("u", userId));
         var response = HTTP.send(HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + "/api/v1/registry/services"))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", tenantId.toString())
                 .header("X-User-Id", userId.toString())
                 .header("X-User-Roles", "MEMBER")
-                .POST(HttpRequest.BodyPublishers.ofString("{\"name\":\"audited-svc\"}"))
+                .POST(HttpRequest.BodyPublishers.ofString(
+                        "{\"name\":\"audited-svc\",\"teamId\":\"%s\"}".formatted(teamId)))
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(201);
         UUID serviceId = UUID.fromString(objectMapper.readTree(response.body()).get("data").get("id").asString());

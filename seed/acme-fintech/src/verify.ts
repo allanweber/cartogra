@@ -1,5 +1,6 @@
 import type { CartograApi } from './api.ts'
-import { loadSeed, type LoadOptions } from './load.ts'
+import { loadSeed, type LoadOptions, type LoadSummary } from './load.ts'
+import { historyPath, openapiSpec } from './repos.ts'
 import {
   allCycles, callKey, callKind, declaredCalls, declaredCycles, dormantCalls, edgeKey, externalCalls, silentDeclaredCalls,
   unownedServices, type SeedData,
@@ -48,12 +49,16 @@ export async function verify(api: CartograApi, seed: SeedData, options: VerifyOp
   const first = await waitForDeclared(api, seed, options, sleep)
   const second = await loadSeed(api, seed, options)
   const after = await waitForDeclared(api, seed, options, sleep)
-  add('second load changes nothing', second.teamsCreated + second.tiersUpdated + second.ownersAssigned + second.edgesCreated === 0, JSON.stringify(second))
+  const secondChanges = second.teamsCreated + second.tiersUpdated + second.ownersAssigned + second.edgesCreated
+    + second.contractsCreated + second.contractVersionsPublished
+  add('second load changes nothing', secondChanges === 0, JSON.stringify(second))
   add('state identical after second load', JSON.stringify(first) === JSON.stringify(after))
   const presentTeams = new Set(after.teams.map((t) => t.toLowerCase()))
   add(`${seed.teams.length} teams present`, seed.teams.every((t) => presentTeams.has(t.toLowerCase())))
   const absentDeclared = missingDeclared(seed, after)
   add('all declared edges present', absentDeclared.length === 0, absentDeclared.join(', '))
+
+  await verifyContracts(api, seed, second, add)
 
   const graph = await api.graph()
   const nodeId = new Map(graph.nodes.map((n) => [n.name, n.serviceId]))
@@ -111,6 +116,44 @@ export async function verify(api: CartograApi, seed: SeedData, options: VerifyOp
     }
   }
   return checks
+}
+
+async function verifyContracts(
+  api: CartograApi,
+  seed: SeedData,
+  loaded: LoadSummary,
+  add: (name: string, ok: boolean, detail?: string) => void,
+): Promise<void> {
+  const listed = new Map((await api.listContracts()).map((c) => [c.id, c]))
+  for (const s of seed.services) {
+    const versions = s.contractVersions
+    if (versions === undefined) continue
+    const id = loaded.contracts[s.name]
+    if (!id) {
+      add(`${s.name} contract exists`, false)
+      continue
+    }
+    const latest = (await api.getContract(id)).latestVersion
+    add(`${s.name} contract exists`, true)
+    add(`${s.name} contract at v${versions}`, latest.versionNumber >= versions && latest.label === `1.${versions - 1}.0`,
+      `v${latest.versionNumber} label ${latest.label}`)
+    const row = listed.get(id)
+    add(`${s.name} contract listed with its service name`, row?.serviceName === s.name && row.latestVersion.versionNumber === latest.versionNumber,
+      row ? `name ${row.serviceName}, v${row.latestVersion.versionNumber}` : 'not in the list')
+    if (versions > 1) {
+      const diff = await api.contractDiff(id, 2)
+      const history = historyPath(s)
+      add(`${s.name} v1 → v2 diff adds ${history}`,
+        diff.from?.versionNumber === 1
+          && diff.changes.some((c) => c.op === 'added' && c.path.length === 2 && c.path[0] === 'paths' && c.path[1] === history)
+          && diff.lines.some((l) => l.kind === 'added' && l.right?.includes(history) === true),
+        `${diff.changes.length} change(s): ${diff.changes.map((c) => `${c.op} ${c.pointer}`).join(', ')}`)
+      const republished = await api.publishContractVersion(id, openapiSpec(s, versions))
+      add(`${s.name} re-publishing latest spec stores nothing`,
+        !republished.created && republished.version.versionNumber === latest.versionNumber
+          && republished.version.specHash === latest.specHash)
+    }
+  }
 }
 
 function unresolvedNames(api: CartograApi): () => Promise<Set<string>> {

@@ -18,6 +18,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -31,6 +32,7 @@ class TeamServiceSecurityTest {
     @MockitoBean TeamLifecycleEventProducer eventProducer;
     @MockitoBean AuditEventPort auditEventPort;
     @MockitoBean PlanLimitRepository planLimitRepository;
+    @MockitoBean ServiceService serviceService;
 
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry registry) {
@@ -46,14 +48,14 @@ class TeamServiceSecurityTest {
 
     @Test
     void update_withoutAuthentication_throwsSecurityException() {
-        assertThatThrownBy(() -> teamService.update(TENANT, Actor.ANONYMOUS, UUID.randomUUID(), "x"))
+        assertThatThrownBy(() -> teamService.update(TENANT, Actor.ANONYMOUS, UUID.randomUUID(), "x", Set.of(), Set.of()))
                 .isInstanceOf(AuthenticationCredentialsNotFoundException.class);
     }
 
     @Test
     @WithMockUser(roles = "MEMBER")
     void update_asPlainMember_throwsAccessDenied() {
-        assertThatThrownBy(() -> teamService.update(TENANT, Actor.ANONYMOUS, UUID.randomUUID(), "x"))
+        assertThatThrownBy(() -> teamService.update(TENANT, Actor.ANONYMOUS, UUID.randomUUID(), "x", Set.of(), Set.of()))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -69,7 +71,7 @@ class TeamServiceSecurityTest {
         when(teamRepository.existsByName(TENANT, "new-name", teamId)).thenReturn(false);
         when(teamRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        teamService.update(TENANT, Actor.user(requestedBy), teamId, "new-name");
+        teamService.update(TENANT, Actor.user(requestedBy), teamId, "new-name", Set.of(), Set.of());
     }
 
     @Test
@@ -79,7 +81,7 @@ class TeamServiceSecurityTest {
         UUID requestedBy = UUID.randomUUID();
         when(teamRepository.isMember(TENANT, teamId, requestedBy)).thenReturn(false);
 
-        assertThatThrownBy(() -> teamService.update(TENANT, Actor.user(requestedBy), teamId, "new-name"))
+        assertThatThrownBy(() -> teamService.update(TENANT, Actor.user(requestedBy), teamId, "new-name", Set.of(), Set.of()))
                 .isInstanceOf(AccessDeniedException.class);
     }
 

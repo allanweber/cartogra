@@ -128,7 +128,8 @@
         "provider": "azure",
         "stack": "java",
         "port": 8111
-      }
+      },
+      "contractVersions": 2
     },
     {
       "name": "reporting-service",

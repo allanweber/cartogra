@@ -28,5 +28,6 @@ include(
     "services:gateway",
     "services:registry",
     "services:ingestion",
-    "services:topology"
+    "services:topology",
+    "services:contract"
 )

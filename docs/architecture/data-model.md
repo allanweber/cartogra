@@ -9,7 +9,8 @@ Each service owns its schema entirely. No cross-service joins. Cross-aggregate r
 | Registry — tenants, teams, users, scm_connections | Phase 0 | Implemented |
 | Registry — services, services_history, tenant_api_keys | Phase 1 | Planned |
 | Topology — dependencies, dependency_drifts | Phase 2 | Planned |
-| Contract — api_contracts, contract_versions, contract_consumers, contract_checks, outbox_events | Phase 3 | Planned |
+| Contract — api_contracts, contract_versions, deleted_services | Phase 5 (5.1) | Implemented |
+| Contract — contract_checks (5.5), inbound-edge projection (5.4) | Phase 5 | Planned |
 | Intelligence — nl_query_logs, health_scores | Phase 4 | Planned |
 
 ---
@@ -146,58 +147,48 @@ Append-only audit log — one row per version.
 
 ## Contract Service (`services/contract`)
 
+RLS policy `tenant_isolation` on all three tables (5.1).
+
 ### `api_contracts`
+One live contract per service: unique `(tenant_id, service_id) WHERE deleted_at IS NULL`.
+
 | Column | Type | Notes |
 |--------|------|-------|
 | `id` | UUID PK | |
 | `tenant_id` | UUID NOT NULL | |
-| `service_id` | UUID NOT NULL | ID ref to registry.services |
-| `spec_type` | TEXT | `openapi` \| `asyncapi` |
+| `service_id` | UUID NOT NULL | ID ref to registry.services; not validated against Registry |
+| `spec_type` | TEXT NOT NULL | `openapi` only (CHECK) |
 | `created_at` | TIMESTAMPTZ | |
-| `deleted_at` | TIMESTAMPTZ | |
+| `updated_at` | TIMESTAMPTZ | Bumped when a version is published |
+| `deleted_at` | TIMESTAMPTZ | Set on `service.deleted` |
 
 ### `contract_versions`
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | UUID PK | |
-| `contract_id` | UUID NOT NULL | |
-| `tenant_id` | UUID NOT NULL | |
-| `version` | TEXT NOT NULL | Semver or SHA |
-| `spec_content` | TEXT NOT NULL | Raw YAML/JSON |
-| `spec_hash` | TEXT NOT NULL | SHA-256 for dedup |
-| `created_at` | TIMESTAMPTZ | |
+Immutable. `UNIQUE (contract_id, version_number)`; numbered under `SELECT … FOR UPDATE` on the contract row.
 
-### `contract_consumers`
 | Column | Type | Notes |
 |--------|------|-------|
 | `id` | UUID PK | |
 | `tenant_id` | UUID NOT NULL | |
-| `contract_id` | UUID NOT NULL | |
-| `consumer_service_id` | UUID NOT NULL | |
+| `contract_id` | UUID NOT NULL | FK `api_contracts` |
+| `version_number` | INT NOT NULL | 1, 2, 3 per contract, server-assigned |
+| `label` | TEXT | Spec `info.version`, display only |
+| `spec_raw` | TEXT NOT NULL | As submitted (YAML or JSON) |
+| `spec_canonical` | TEXT NOT NULL | Keys sorted recursively, arrays in order, compact JSON; `$ref` unresolved |
+| `spec_hash` | CHAR(64) NOT NULL | SHA-256 hex of `spec_canonical`; same as latest = no new version |
 | `created_at` | TIMESTAMPTZ | |
-| `deleted_at` | TIMESTAMPTZ | |
+| `deleted_at` | TIMESTAMPTZ | Set with the contract's |
 
-### `contract_checks`
+### `deleted_services`
+Tombstone of services Registry deleted; create/publish for one returns 404. PK `(tenant_id, service_id)`.
+
 | Column | Type | Notes |
 |--------|------|-------|
-| `id` | UUID PK | |
 | `tenant_id` | UUID NOT NULL | |
-| `contract_id` | UUID NOT NULL | |
-| `baseline_version_id` | UUID | |
-| `candidate_version_id` | UUID | |
-| `result` | TEXT | `compatible` \| `breaking` \| `warning` |
-| `findings` | JSONB | Array of breaking change descriptions |
-| `checked_at` | TIMESTAMPTZ | |
+| `service_id` | UUID NOT NULL | |
+| `deleted_at` | TIMESTAMPTZ NOT NULL | When the event was applied |
 
-### `outbox_events`
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | UUID PK | |
-| `tenant_id` | UUID NOT NULL | |
-| `event_type` | TEXT NOT NULL | |
-| `payload` | JSONB NOT NULL | |
-| `published_at` | TIMESTAMPTZ | NULL = unpublished |
-| `created_at` | TIMESTAMPTZ | |
+### `contract_checks` _(planned, 5.5)_
+Written by the CI check once the 5.3 engine defines `changes[]`.
 
 ---
 

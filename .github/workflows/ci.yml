@@ -167,9 +167,27 @@ jobs:
           path: services/topology/build/reports/jacoco/test/html/
           retention-days: 14
 
-      # - name: Build & test contract
-      #   if: steps.changes.outputs.contract == 'true'
-      #   run: gradle :services:contract:build --no-daemon
+      - name: Build & test contract
+        if: steps.changes.outputs.contract == 'true'
+        run: gradle :services:contract:build --no-daemon
+
+      - name: Upload contract test reports
+        if: steps.changes.outputs.contract == 'true' && always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: test-reports-contract
+          path: |
+            services/contract/build/reports/tests/
+            services/contract/build/test-results/
+          retention-days: 14
+
+      - name: Upload contract coverage report
+        if: steps.changes.outputs.contract == 'true' && always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage-contract
+          path: services/contract/build/reports/jacoco/test/html/
+          retention-days: 14
 
       # - name: Build & test intelligence
       #   if: steps.changes.outputs.intelligence == 'true'
@@ -237,12 +255,12 @@ jobs:
           row registry     "${{ steps.changes.outputs.registry }}"     "$RUN_URL#artifacts"
           row gateway      "${{ steps.changes.outputs.gateway }}"      "—"
           row topology     "${{ steps.changes.outputs.topology }}"     "$RUN_URL#artifacts"
-          row contract     "${{ steps.changes.outputs.contract }}"     "—"
+          row contract     "${{ steps.changes.outputs.contract }}"     "$RUN_URL#artifacts"
           row intelligence "${{ steps.changes.outputs.intelligence }}" "—"
           row ingestion    "${{ steps.changes.outputs.ingestion }}"    "$RUN_URL#artifacts"
 
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "> Coverage artifacts (JaCoCo HTML) are uploaded for **registry**, **topology**, and **ingestion** when their tests run. Download from the run's Artifacts section." >> $GITHUB_STEP_SUMMARY
+          echo "> Coverage artifacts (JaCoCo HTML) are uploaded for **registry**, **topology**, **contract**, and **ingestion** when their tests run. Download from the run's Artifacts section." >> $GITHUB_STEP_SUMMARY
 
           if [ -f trivy-report.txt ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
@@ -336,6 +354,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Generate secrets for the compose stack
+        run: |
+          {
+            echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)"
+            echo "REDIS_PASSWORD=$(openssl rand -hex 24)"
+            echo "JWT_SECRET=$(openssl rand -base64 48 | tr -d '\n')"
+            echo "BOOTSTRAP_ADMIN_PASSWORD=$(openssl rand -hex 16)"
+            echo "CLUSTER_CREDENTIALS_KEY=$(openssl rand -base64 32)"
+          } >> "$GITHUB_ENV"
+
       - name: Start backend stack (every service in docker-compose.yml)
         working-directory: infra/docker-compose
         run: docker compose -f docker-compose.yml -f ../perf/docker-compose.gc-probe.yml up -d --build
@@ -368,7 +396,7 @@ jobs:
           CI: 'true'
           E2E_BASE_URL: http://localhost:3016
           E2E_API_BASE_URL: http://localhost:8080
-          E2E_DB_URL: postgresql://cartogra:cartogra@localhost:5436/cartogra
+          E2E_DB_URL: postgresql://cartogra:${{ env.POSTGRES_PASSWORD }}@localhost:5436/cartogra
         run: pnpm run test:e2e
 
       # Runs even when e2e failed: an OOM-killed service is a likely cause and should be named.
@@ -488,6 +516,7 @@ jobs:
           check registry  'services/registry|infra/docker/registry'
           check gateway   'services/gateway|infra/docker/gateway'
           check topology  'services/topology|infra/docker/topology'
+          check contract  'services/contract|infra/docker/contract'
           check ingestion 'services/ingestion|infra/docker/ingestion'
           check frontend  'frontend|infra/docker/frontend'
           check acme      'seed/acme-fintech'
@@ -532,6 +561,21 @@ jobs:
         with:
           scan-type: 'image'
           image-ref: 'cartogra/topology:ci'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+          format: 'table'
+
+      - name: Build contract image
+        if: steps.changes.outputs.contract == 'true'
+        run: docker build -f infra/docker/contract/Dockerfile -t cartogra/contract:ci .
+
+      - name: Scan contract image — fail on CRITICAL or HIGH (unfixed suppressed)
+        if: steps.changes.outputs.contract == 'true'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: 'image'
+          image-ref: 'cartogra/contract:ci'
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
           ignore-unfixed: true
@@ -602,6 +646,7 @@ jobs:
           row registry  cartogra/registry:ci  "${{ steps.changes.outputs.registry }}"
           row gateway   cartogra/gateway:ci   "${{ steps.changes.outputs.gateway }}"
           row topology  cartogra/topology:ci  "${{ steps.changes.outputs.topology }}"
+          row contract  cartogra/contract:ci  "${{ steps.changes.outputs.contract }}"
           row ingestion cartogra/ingestion:ci "${{ steps.changes.outputs.ingestion }}"
           row frontend  cartogra/frontend:ci  "${{ steps.changes.outputs.frontend }}"
 

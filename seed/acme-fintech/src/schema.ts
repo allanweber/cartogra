@@ -17,6 +17,8 @@ export interface SeedService {
   tier: Tier
   description: string
   repo: SeedRepo
+  /** Contract versions `load` publishes (1..n); absent = the service gets no contract. */
+  contractVersions?: number
 }
 
 export type CallKind = 'http' | 'messaging' | 'db'
@@ -172,6 +174,10 @@ export function validateSeed(seed: SeedData): void {
     if (!TIERS.includes(s.tier)) errors.push(`service ${s.name}: invalid tier ${s.tier}`)
     if (!PROVIDERS.includes(s.repo?.provider)) errors.push(`service ${s.name}: invalid repo provider`)
     if (!STACKS.includes(s.repo?.stack)) errors.push(`service ${s.name}: invalid repo stack`)
+    const versions = s.contractVersions
+    if (versions !== undefined && (!Number.isInteger(versions) || versions < 1)) {
+      errors.push(`service ${s.name}: contractVersions must be a positive integer`)
+    }
   }
   const ports = seed.services.map((s) => s.repo?.port)
   if (new Set(ports).size !== ports.length) errors.push('repo ports must be unique')

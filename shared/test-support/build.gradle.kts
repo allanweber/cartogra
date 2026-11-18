@@ -11,3 +11,8 @@ dependencies {
     api("com.atlassian.oai:swagger-request-validator-core:2.46.0")
     runtimeOnly("org.junit.jupiter:junit-jupiter-engine")
 }
+
+dependencies {
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}

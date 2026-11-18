@@ -1,0 +1,82 @@
+spring:
+  application:
+    name: contract
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5436/cartogra?currentSchema=contract}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  flyway:
+    enabled: true
+    create-schemas: true
+    schemas: contract
+    default-schema: contract
+    locations: classpath:db/migration
+    table: flyway_schema_history
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: contract-consumer
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      ack-mode: manual_immediate
+  mvc:
+    throw-exception-if-no-handler-found: true
+  web:
+    resources:
+      add-mappings: false
+
+contract:
+  registry:
+    base-url: ${REGISTRY_URI:http://localhost:8081}/api/v1/registry
+    timeout: ${CONTRACT_REGISTRY_TIMEOUT:PT3S}
+
+server:
+  port: 8083
+  shutdown: graceful
+  servlet:
+    context-path: /api/v1/contracts
+  tomcat:
+    # The collection root is the context root: POST /api/v1/contracts must reach the controller, not 302 to a trailing slash.
+    redirect-context-root: false
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+      group:
+        live:
+          include: livenessState
+        ready:
+          include: readinessState
+  tracing:
+    sampling:
+      probability: 1.0
+    export:
+      otlp:
+        enabled: true
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/traces
+          transport: http
+    logging:
+      export:
+        otlp:
+          endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/logs
+  otlp:
+    metrics:
+      export:
+        url: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/metrics

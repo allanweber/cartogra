@@ -18,7 +18,7 @@ import java.util.UUID;
 
 /**
  * Direct service-to-service call to Registry's internal membership-check endpoint (bypasses
- * the Gateway, same trust model as {@link RegistryGraphNodeClient}). Unlike
+ * the Gateway). Unlike
  * {@code RegistryPlanLimitClient}'s fail-open pattern, this fails closed: a propagated
  * {@link RestClientException} must be treated as "deny", not "allow".
  */

@@ -53,6 +53,10 @@ public interface DependencyRepository {
     List<DependencyProtocol> findLiveProtocols(UUID tenantId, UUID sourceServiceId, UUID targetServiceId,
             DependencyType type);
 
+    /** Inserts a live declared edge of the pair for each of {@code protocols} not declared yet, in one statement. */
+    int declareMissing(UUID tenantId, UUID sourceServiceId, UUID targetServiceId,
+            List<DependencyProtocol> protocols, Instant now);
+
     /** Soft-deletes every live declared edge of the pair, whatever its protocol. */
     int softDeleteDeclaredPair(UUID tenantId, UUID sourceServiceId, UUID targetServiceId);
 }

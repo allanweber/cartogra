@@ -1,6 +1,8 @@
 package io.cartogra.topology.infrastructure.jdbc;
 
+import io.cartogra.test.SqlStatementCounter;
 import io.cartogra.topology.AbstractTopologyIT;
+import io.cartogra.topology.StatementCountingConfig;
 import io.cartogra.topology.domain.Dependency;
 import io.cartogra.topology.domain.DependencyProtocol;
 import io.cartogra.topology.domain.DependencyType;
@@ -9,6 +11,7 @@ import io.cartogra.topology.repository.DependencyRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import io.cartogra.topology.repository.UpsertOutcome;
+import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -22,6 +25,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+@Import(StatementCountingConfig.class)
 class JdbcDependencyRepositoryIT extends AbstractTopologyIT {
 
     private static final UUID TENANT = UUID.randomUUID();
@@ -154,6 +158,70 @@ class JdbcDependencyRepositoryIT extends AbstractTopologyIT {
 
         assertThat(repository.findAll(tenant, new DependencyFilter(null, DependencyType.OBSERVED, null), 100, 0))
                 .isEmpty();
+    }
+
+    @Test
+    void declareMissingInsertsOnlyProtocolsNotDeclaredYetInOneStatement() throws Exception {
+        UUID source = UUID.randomUUID();
+        UUID target = UUID.randomUUID();
+        repository.save(newDependency(source, target, DependencyType.DECLARED, DependencyProtocol.GRPC));
+        Instant now = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+
+        int[] inserted = new int[1];
+        int statements = SqlStatementCounter.count(() -> inserted[0] = repository.declareMissing(TENANT, source, target,
+                List.of(DependencyProtocol.HTTP, DependencyProtocol.GRPC, DependencyProtocol.KAFKA), now));
+
+        assertThat(statements).isEqualTo(1);
+        assertThat(inserted[0]).isEqualTo(2);
+        assertThat(repository.findLiveProtocols(TENANT, source, target, DependencyType.DECLARED))
+                .containsExactlyInAnyOrder(DependencyProtocol.HTTP, DependencyProtocol.GRPC, DependencyProtocol.KAFKA);
+        Dependency http = repository.findByEdgeIdentity(TENANT, source, target, DependencyType.DECLARED,
+                DependencyProtocol.HTTP).orElseThrow();
+        assertThat(http.createdAt()).isEqualTo(now);
+        assertThat(http.updatedAt()).isEqualTo(now);
+        assertThat(http.isDeleted()).isFalse();
+    }
+
+    @Test
+    void declareMissingIsIdempotentAndIgnoresSoftDeletedAndOtherTenantEdges() {
+        UUID source = UUID.randomUUID();
+        UUID target = UUID.randomUUID();
+        Dependency deleted = repository.save(newDependency(source, target, DependencyType.DECLARED, DependencyProtocol.HTTP));
+        repository.softDelete(TENANT, deleted.id());
+        UUID otherTenant = UUID.randomUUID();
+        repository.save(new Dependency(UUID.randomUUID(), otherTenant, source, target, DependencyType.DECLARED,
+                DependencyProtocol.HTTP, null, Instant.now(), Instant.now(), null));
+
+        assertThat(repository.declareMissing(TENANT, source, target, List.of(DependencyProtocol.HTTP), Instant.now()))
+                .isEqualTo(1);
+        assertThat(repository.declareMissing(TENANT, source, target, List.of(DependencyProtocol.HTTP), Instant.now()))
+                .isZero();
+        assertThat(repository.findLiveProtocols(otherTenant, source, target, DependencyType.DECLARED))
+                .containsExactly(DependencyProtocol.HTTP);
+    }
+
+    @Test
+    void declareMissingIgnoresObservedEdgesOfTheSameProtocol() {
+        UUID source = UUID.randomUUID();
+        UUID target = UUID.randomUUID();
+        repository.save(newDependency(source, target, DependencyType.OBSERVED, DependencyProtocol.HTTP));
+
+        assertThat(repository.declareMissing(TENANT, source, target, List.of(DependencyProtocol.HTTP), Instant.now()))
+                .isEqualTo(1);
+        assertThat(repository.findLiveProtocols(TENANT, source, target, DependencyType.OBSERVED))
+                .containsExactly(DependencyProtocol.HTTP);
+    }
+
+    @Test
+    void declareMissingWithNoProtocolsRunsNothing() throws Exception {
+        UUID source = UUID.randomUUID();
+        UUID target = UUID.randomUUID();
+
+        int statements = SqlStatementCounter.count(() ->
+                assertThat(repository.declareMissing(TENANT, source, target, List.of(), Instant.now())).isZero());
+
+        assertThat(statements).isZero();
+        assertThat(repository.findLiveProtocols(TENANT, source, target, DependencyType.DECLARED)).isEmpty();
     }
 
     private Dependency newDependency(UUID source, UUID target, DependencyType type, DependencyProtocol protocol) {

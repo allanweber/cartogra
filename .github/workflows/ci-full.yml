@@ -74,8 +74,26 @@ jobs:
           path: services/topology/build/reports/jacoco/test/html/
           retention-days: 14
 
-      # - name: Build & test contract
-      #   run: gradle :services:contract:build --no-daemon
+      - name: Build & test contract
+        run: gradle :services:contract:build --no-daemon
+
+      - name: Upload contract test reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: test-reports-contract
+          path: |
+            services/contract/build/reports/tests/
+            services/contract/build/test-results/
+          retention-days: 14
+
+      - name: Upload contract coverage report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage-contract
+          path: services/contract/build/reports/jacoco/test/html/
+          retention-days: 14
 
       # - name: Build & test intelligence
       #   run: gradle :services:intelligence:build --no-daemon
@@ -193,6 +211,9 @@ jobs:
       - name: Build topology image
         run: docker build -f infra/docker/topology/Dockerfile -t cartogra/topology:ci .
 
+      - name: Build contract image
+        run: docker build -f infra/docker/contract/Dockerfile -t cartogra/contract:ci .
+
       - name: Build ingestion image
         run: docker build -f infra/docker/ingestion/Dockerfile -t cartogra/ingestion:ci .
 
@@ -209,5 +230,6 @@ jobs:
           echo "| registry | \`cartogra/registry:ci\` | ✅ Built |" >> $GITHUB_STEP_SUMMARY
           echo "| gateway | \`cartogra/gateway:ci\` | ✅ Built |" >> $GITHUB_STEP_SUMMARY
           echo "| topology | \`cartogra/topology:ci\` | ✅ Built |" >> $GITHUB_STEP_SUMMARY
+          echo "| contract | \`cartogra/contract:ci\` | ✅ Built |" >> $GITHUB_STEP_SUMMARY
           echo "| ingestion | \`cartogra/ingestion:ci\` | ✅ Built |" >> $GITHUB_STEP_SUMMARY
           echo "| frontend | \`cartogra/frontend:ci\` | ✅ Built |" >> $GITHUB_STEP_SUMMARY

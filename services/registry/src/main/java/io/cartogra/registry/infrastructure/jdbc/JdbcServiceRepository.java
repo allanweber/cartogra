@@ -5,6 +5,7 @@ import io.cartogra.registry.repository.ServiceRepository;
 import io.cartogra.registry.domain.Service;
 import io.cartogra.registry.domain.ServiceHealthStatus;
 import io.cartogra.registry.domain.ServiceTier;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -13,9 +14,12 @@ import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Repository
@@ -37,6 +41,72 @@ public class JdbcServiceRepository implements ServiceRepository {
                 .addValue("tenantId", tenantId)
                 .addValue("id", id);
         return jdbc.query(sql, params, SERVICE_MAPPER).stream().findFirst();
+    }
+
+    @Override
+    public Map<UUID, String> findNames(UUID tenantId, Collection<UUID> ids) {
+        Map<UUID, String> names = new LinkedHashMap<>();
+        if (ids.isEmpty()) {
+            return names;
+        }
+        jdbc.query("""
+                SELECT id, name FROM services
+                WHERE tenant_id = :tenantId AND id IN (:ids) AND deleted_at IS NULL
+                """, new MapSqlParameterSource().addValue("tenantId", tenantId).addValue("ids", ids),
+                rs -> {
+                    names.put(rs.getObject("id", UUID.class), rs.getString("name"));
+                });
+        return names;
+    }
+
+    @Override
+    public Set<UUID> findAccessible(UUID tenantId, UUID userId, Collection<UUID> ids) {
+        if (ids.isEmpty()) {
+            return Set.of();
+        }
+        return Set.copyOf(jdbc.queryForList("""
+                SELECT s.id FROM services s
+                JOIN team_members m ON m.tenant_id = s.tenant_id AND m.team_id = s.team_id AND m.user_id = :userId
+                WHERE s.tenant_id = :tenantId AND s.id IN (:ids) AND s.deleted_at IS NULL
+                """, new MapSqlParameterSource()
+                        .addValue("tenantId", tenantId)
+                        .addValue("userId", userId)
+                        .addValue("ids", ids), UUID.class));
+    }
+
+    @Override
+    public List<Service> findByIds(UUID tenantId, Collection<UUID> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.query("""
+                SELECT * FROM services
+                WHERE tenant_id = :tenantId AND id IN (:ids) AND deleted_at IS NULL
+                """, new MapSqlParameterSource().addValue("tenantId", tenantId).addValue("ids", ids), SERVICE_MAPPER);
+    }
+
+    @Override
+    public List<Service> findByTeam(UUID tenantId, UUID teamId) {
+        return jdbc.query("""
+                SELECT * FROM services
+                WHERE tenant_id = :tenantId AND team_id = :teamId AND deleted_at IS NULL
+                """, new MapSqlParameterSource().addValue("tenantId", tenantId).addValue("teamId", teamId),
+                SERVICE_MAPPER);
+    }
+
+    @Override
+    public void updateTeam(UUID tenantId, Collection<UUID> ids, @Nullable UUID teamId, Instant at) {
+        if (ids.isEmpty()) {
+            return;
+        }
+        jdbc.update("""
+                UPDATE services SET team_id = :teamId, updated_at = :at
+                WHERE tenant_id = :tenantId AND id IN (:ids) AND deleted_at IS NULL
+                """, new MapSqlParameterSource()
+                        .addValue("tenantId", tenantId)
+                        .addValue("ids", ids)
+                        .addValue("teamId", teamId)
+                        .addValue("at", java.sql.Timestamp.from(at)));
     }
 
     @Override
@@ -197,27 +267,6 @@ public class JdbcServiceRepository implements ServiceRepository {
                   AND deleted_at IS NULL
                 """;
         return jdbc.query(sql, Map.of(), SERVICE_MAPPER);
-    }
-
-    @Override
-    public List<Service> findAllActive(int limit, int offset) {
-        String sql = """
-                SELECT * FROM services
-                WHERE deleted_at IS NULL
-                ORDER BY tenant_id, id
-                LIMIT :limit OFFSET :offset
-                """;
-        var params = new MapSqlParameterSource()
-                .addValue("limit", limit)
-                .addValue("offset", offset);
-        return jdbc.query(sql, params, SERVICE_MAPPER);
-    }
-
-    @Override
-    public long countActive() {
-        String sql = "SELECT COUNT(*) FROM services WHERE deleted_at IS NULL";
-        Long result = jdbc.queryForObject(sql, Map.of(), Long.class);
-        return result != null ? result : 0L;
     }
 
     @Override

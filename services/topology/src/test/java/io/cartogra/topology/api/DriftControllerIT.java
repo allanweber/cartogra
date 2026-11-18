@@ -4,8 +4,11 @@ import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import io.cartogra.test.KafkaTestSupport;
 import io.cartogra.test.PostgresTestSupport;
+import io.cartogra.test.SqlStatementCounter;
+import io.cartogra.topology.StatementCountingConfig;
 import io.cartogra.topology.domain.Dependency;
 import io.cartogra.topology.domain.DependencyProtocol;
+import io.cartogra.topology.domain.DependencyService;
 import io.cartogra.topology.domain.DependencyType;
 import io.cartogra.topology.domain.DependencyDrift;
 import io.cartogra.topology.domain.DriftService;
@@ -23,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import tools.jackson.databind.JsonNode;
@@ -47,6 +51,7 @@ import static org.assertj.core.api.Assertions.assertThat;
         "topology.graph-view.refresh-interval=PT1H",
         "topology.drift.sweep-interval=PT1H",
         "topology.drift.missing-after=PT1M"})
+@Import(StatementCountingConfig.class)
 class DriftControllerIT {
 
     private static final HttpClient HTTP = HttpClient.newHttpClient();
@@ -87,6 +92,7 @@ class DriftControllerIT {
     @Autowired private DependencyDriftRepository driftRepository;
     @Autowired private DriftService driftService;
     @Autowired private ObservedDependencyService observedDependencyService;
+    @Autowired private DependencyService dependencyService;
 
     private UUID node(UUID tenantId, String name) {
         UUID id = UUID.randomUUID();
@@ -95,8 +101,13 @@ class DriftControllerIT {
     }
 
     private void edge(UUID tenantId, UUID source, UUID target, DependencyType type, Instant createdAt) {
+        edge(tenantId, source, target, type, DependencyProtocol.HTTP, createdAt);
+    }
+
+    private void edge(UUID tenantId, UUID source, UUID target, DependencyType type, DependencyProtocol protocol,
+            Instant createdAt) {
         dependencyRepository.save(new Dependency(UUID.randomUUID(), tenantId, source, target, type,
-                DependencyProtocol.HTTP, null, createdAt, createdAt, null));
+                protocol, null, createdAt, createdAt, null));
     }
 
     private HttpResponse<String> send(String method, String path, UUID tenantId, String roles, String body)
@@ -167,6 +178,29 @@ class DriftControllerIT {
         HttpResponse<String> resp = send("GET", "", UUID.randomUUID(), null, null);
 
         assertThat(objectMapper.readTree(resp.body()).get("data").get("items")).isEmpty();
+    }
+
+    @Test
+    void declareObservedPairRunsTheSameNumberOfQueriesWhateverTheProtocolCount() throws Exception {
+        UUID tenant = UUID.randomUUID();
+        UUID a = node(tenant, "a");
+        UUID b = node(tenant, "b");
+        UUID c = node(tenant, "c");
+        Instant now = Instant.now();
+        edge(tenant, a, b, DependencyType.OBSERVED, DependencyProtocol.HTTP, now);
+        edge(tenant, a, c, DependencyType.OBSERVED, DependencyProtocol.HTTP, now);
+        edge(tenant, a, c, DependencyType.OBSERVED, DependencyProtocol.GRPC, now);
+        edge(tenant, a, c, DependencyType.OBSERVED, DependencyProtocol.KAFKA, now);
+        edge(tenant, a, c, DependencyType.DECLARED, DependencyProtocol.GRPC, now);
+
+        int oneProtocol = SqlStatementCounter.count(() -> dependencyService.declareObservedPair(tenant, a, b));
+        int threeProtocols = SqlStatementCounter.count(() -> dependencyService.declareObservedPair(tenant, a, c));
+
+        assertThat(threeProtocols).isEqualTo(oneProtocol);
+        assertThat(dependencyRepository.findLiveProtocols(tenant, a, c, DependencyType.DECLARED))
+                .containsExactlyInAnyOrder(DependencyProtocol.HTTP, DependencyProtocol.GRPC, DependencyProtocol.KAFKA);
+        assertThat(dependencyRepository.findLiveProtocols(tenant, a, b, DependencyType.DECLARED))
+                .containsExactly(DependencyProtocol.HTTP);
     }
 
     @Test

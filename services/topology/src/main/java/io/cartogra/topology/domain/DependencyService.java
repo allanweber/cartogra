@@ -140,15 +140,7 @@ public class DependencyService {
             if (observed.isEmpty()) {
                 return false;
             }
-            Instant now = Instant.now();
-            for (DependencyProtocol protocol : observed) {
-                boolean declared = dependencyRepository.findByEdgeIdentity(tenantId, sourceServiceId,
-                        targetServiceId, DependencyType.DECLARED, protocol).isPresent();
-                if (!declared) {
-                    dependencyRepository.save(new Dependency(UUID.randomUUID(), tenantId, sourceServiceId,
-                            targetServiceId, DependencyType.DECLARED, protocol, null, now, now, null));
-                }
-            }
+            dependencyRepository.declareMissing(tenantId, sourceServiceId, targetServiceId, observed, Instant.now());
             graphViewRefreshScheduler.markDirty();
             return true;
         }));

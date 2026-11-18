@@ -116,4 +116,50 @@ class WebhookServiceTest {
         verify(githubProvider).verifyWebhookSignature(any(), any(), eq("s3cr3t"));
         verify(syncCommandProducer).publish(conn);
     }
+
+    @Test
+    void rejectsWhenWebhookSecretIsMissing() {
+        ScmConnection conn = new ScmConnection(CONN_ID, UUID.randomUUID(), "github", "{}",
+                false, 15, null, null, null, null, true,
+                Instant.now(), Instant.now(), null);
+        when(connectionRepository.findByIdForWebhook(CONN_ID)).thenReturn(Optional.of(conn));
+
+        assertThatThrownBy(() -> service.process("github", CONN_ID, BODY, HEADERS))
+                .isInstanceOf(WebhookSignatureInvalidException.class);
+
+        verify(githubProvider, never()).verifyWebhookSignature(any(), any(), any());
+        verify(syncCommandProducer, never()).publish(any());
+    }
+
+    @Test
+    void rejectsWhenWebhookSecretCannotBeDecrypted() {
+        ScmConnection conn = new ScmConnection(CONN_ID, UUID.randomUUID(), "github",
+                "{\"webhookSecret\":\"enc:corrupt\"}",
+                false, 15, null, null, null, null, true,
+                Instant.now(), Instant.now(), null);
+        when(connectionRepository.findByIdForWebhook(CONN_ID)).thenReturn(Optional.of(conn));
+        when(credentialEncryptor.decrypt("enc:corrupt")).thenThrow(new IllegalStateException("Failed to decrypt"));
+
+        assertThatThrownBy(() -> service.process("github", CONN_ID, BODY, HEADERS))
+                .isInstanceOf(WebhookSignatureInvalidException.class);
+
+        verify(githubProvider, never()).verifyWebhookSignature(any(), any(), any());
+        verify(syncCommandProducer, never()).publish(any());
+    }
+
+    @Test
+    void rejectsWhenWebhookSecretDecryptsToBlank() {
+        ScmConnection conn = new ScmConnection(CONN_ID, UUID.randomUUID(), "github",
+                "{\"webhookSecret\":\"enc:blank\"}",
+                false, 15, null, null, null, null, true,
+                Instant.now(), Instant.now(), null);
+        when(connectionRepository.findByIdForWebhook(CONN_ID)).thenReturn(Optional.of(conn));
+        when(credentialEncryptor.decrypt("enc:blank")).thenReturn("  ");
+
+        assertThatThrownBy(() -> service.process("github", CONN_ID, BODY, HEADERS))
+                .isInstanceOf(WebhookSignatureInvalidException.class);
+
+        verify(githubProvider, never()).verifyWebhookSignature(any(), any(), any());
+        verify(syncCommandProducer, never()).publish(any());
+    }
 }

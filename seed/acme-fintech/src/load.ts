@@ -1,4 +1,5 @@
 import { ApiError, type CartograApi, type CatalogService } from './api.ts'
+import { openapiSpec } from './repos.ts'
 import { callProtocol, declaredCalls, edgeKey, type Protocol, type SeedData } from './schema.ts'
 
 export interface LoadOptions {
@@ -17,6 +18,10 @@ export interface LoadSummary {
   ownersAssigned: number
   edgesCreated: number
   edgesExisting: number
+  contractsCreated: number
+  contractVersionsPublished: number
+  /** Contract id per service name, for every service with `contractVersions`. */
+  contracts: Record<string, string>
 }
 
 export class MissingServicesError extends Error {
@@ -39,7 +44,10 @@ export async function loadSeed(api: CartograApi, seed: SeedData, options: LoadOp
   const pollMs = options.pollMs ?? 3000
   const discoveryTimeoutMs = options.discoveryTimeoutMs ?? 120_000
   const syncTimeoutMs = options.syncTimeoutMs ?? 60_000
-  const summary: LoadSummary = { teamsCreated: 0, tiersUpdated: 0, ownersAssigned: 0, edgesCreated: 0, edgesExisting: 0 }
+  const summary: LoadSummary = {
+    teamsCreated: 0, tiersUpdated: 0, ownersAssigned: 0, edgesCreated: 0, edgesExisting: 0,
+    contractsCreated: 0, contractVersionsPublished: 0, contracts: {},
+  }
 
   const services = await waitForServices(api, seed, discoveryTimeoutMs, pollMs, sleep, log)
 
@@ -85,7 +93,41 @@ export async function loadSeed(api: CartograApi, seed: SeedData, options: LoadOp
     else summary.edgesExisting++
   }
   log(`edges: ${summary.edgesCreated} created, ${summary.edgesExisting} already declared`)
+
+  await loadContracts(api, seed, services, summary, log)
   return summary
+}
+
+/** Creates each contract with version 1 and publishes 2..n; a re-run gets 409 then 200s and stores nothing. */
+async function loadContracts(
+  api: CartograApi,
+  seed: SeedData,
+  services: Map<string, CatalogService>,
+  summary: LoadSummary,
+  log: (message: string) => void,
+): Promise<void> {
+  for (const seeded of seed.services) {
+    const versions = seeded.contractVersions
+    if (versions === undefined) continue
+    const serviceId = services.get(seeded.name.toLowerCase())!.id
+    let contractId: string
+    try {
+      contractId = (await api.createContract(serviceId, openapiSpec(seeded, 1))).id
+      summary.contractsCreated++
+      log(`contract created: ${seeded.name}`)
+    } catch (error) {
+      if (!(error instanceof ApiError && error.status === 409 && typeof error.details.contractId === 'string')) throw error
+      contractId = error.details.contractId
+    }
+    summary.contracts[seeded.name] = contractId
+    for (let v = 2; v <= versions; v++) {
+      const published = await api.publishContractVersion(contractId, openapiSpec(seeded, v))
+      if (published.created) {
+        summary.contractVersionsPublished++
+        log(`contract version published: ${seeded.name} v${published.version.versionNumber} (${published.version.label})`)
+      }
+    }
+  }
 }
 
 async function waitForServices(

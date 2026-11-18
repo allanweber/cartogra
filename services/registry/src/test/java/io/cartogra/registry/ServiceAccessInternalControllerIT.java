@@ -1,11 +1,14 @@
 package io.cartogra.registry;
 
+import io.cartogra.registry.domain.ServiceService;
 import io.cartogra.test.KafkaTestSupport;
 import io.cartogra.test.PostgresTestSupport;
+import io.cartogra.test.SqlStatementCounter;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -17,16 +20,20 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Backs Topology's declared-dependency authorization check (Topology issue [1.2]): "is this
- * user a member of the team owning this service?" Tenant-scoped, unlike the cross-tenant
- * {@code /internal/services} (see {@link ServiceInternalControllerIT}).
+ * user a member of the team owning this service?" Tenant-scoped.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Import(StatementCountingConfig.class)
 class ServiceAccessInternalControllerIT {
 
     private static final HttpClient HTTP = HttpClient.newHttpClient();
@@ -39,6 +46,9 @@ class ServiceAccessInternalControllerIT {
 
     @Autowired
     private NamedParameterJdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private ServiceService serviceService;
 
     @DynamicPropertySource
     static void datasourceProperties(DynamicPropertyRegistry registry) {
@@ -104,6 +114,12 @@ class ServiceAccessInternalControllerIT {
     }
 
     private JsonNode checkAccess(UUID tenantId, UUID userId, UUID... serviceIds) throws Exception {
+        HttpResponse<String> resp = postAccess(tenantId, userId, serviceIds);
+        assertThat(resp.statusCode()).isEqualTo(200);
+        return objectMapper.readTree(resp.body()).get("data");
+    }
+
+    private HttpResponse<String> postAccess(UUID tenantId, UUID userId, UUID... serviceIds) throws Exception {
         StringBuilder ids = new StringBuilder();
         for (int i = 0; i < serviceIds.length; i++) {
             if (i > 0) {
@@ -114,15 +130,45 @@ class ServiceAccessInternalControllerIT {
         String body = """
                 {"tenantId":"%s","userId":"%s","serviceIds":[%s]}
                 """.formatted(tenantId, userId, ids);
-        HttpResponse<String> resp = HTTP.send(
+        return HTTP.send(
                 HttpRequest.newBuilder()
                         .uri(URI.create("http://localhost:" + port + "/api/v1/registry/internal/services/access"))
                         .header("Content-Type", "application/json")
                         .POST(HttpRequest.BodyPublishers.ofString(body))
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
-        assertThat(resp.statusCode()).isEqualTo(200);
-        return objectMapper.readTree(resp.body()).get("data");
+    }
+
+    @Test
+    void manyServiceIds_resolvedWithOneQuery() throws Exception {
+        UUID tenantId = seedTenant();
+        UUID teamId = createTeam(tenantId);
+        UUID userId = UUID.randomUUID();
+        addTeamMember(tenantId, teamId, userId);
+        UUID owned1 = createService(tenantId, teamId);
+        UUID owned2 = createService(tenantId, teamId);
+        UUID otherTeam = createService(tenantId, createTeam(tenantId));
+        UUID noTeam = createService(tenantId, null);
+        UUID unknown = UUID.randomUUID();
+        List<UUID> ids = List.of(owned1, otherTeam, owned2, noTeam, unknown);
+
+        AtomicReference<Map<UUID, Boolean>> result = new AtomicReference<>();
+        int statements = SqlStatementCounter.count(() -> result.set(serviceService.checkAccess(tenantId, userId, ids)));
+
+        assertThat(statements).isEqualTo(1);
+        assertThat(result.get()).containsExactly(
+                Map.entry(owned1, true), Map.entry(otherTeam, false), Map.entry(owned2, true),
+                Map.entry(noTeam, false), Map.entry(unknown, false));
+    }
+
+    @Test
+    void moreThanHundredServiceIds_rejected() throws Exception {
+        List<UUID> ids = new ArrayList<>();
+        for (int i = 0; i < 101; i++) {
+            ids.add(UUID.randomUUID());
+        }
+        HttpResponse<String> resp = postAccess(UUID.randomUUID(), UUID.randomUUID(), ids.toArray(UUID[]::new));
+        assertThat(resp.statusCode()).isEqualTo(400);
     }
 
     @Test

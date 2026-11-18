@@ -50,6 +50,10 @@ topology:
 ingestion:
   <<: *jvm
 
+# Node memory requests ~88% with contract added: resize the VM before Phase 6.
+contract:
+  <<: *jvm
+
 frontend:
   replicaCount: 1
   pdb: { enabled: false }

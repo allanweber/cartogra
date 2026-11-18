@@ -72,6 +72,9 @@ export function TeamDialog({
     enabled: isEdit && open,
   })
 
+  /** Saving sends the full lists, so it waits until both are loaded. */
+  const teamLoaded = !isEdit || (servicesPage !== undefined && members !== undefined)
+
   const canManageMembers = isEdit
     ? can('team.manage', { teamId: team.id }) === 'allow'
     : can('team.create') === 'allow'
@@ -147,52 +150,16 @@ export function TeamDialog({
   )
 
   const saveMutation = useMutation({
-    mutationFn: async (name: string) => {
-      const initialOwned = new Set(ownedServices.map((s) => s.id))
-      const toAdd = [...selectedServiceIds].filter(
-        (id) => !initialOwned.has(id),
-      )
-      const toRemove = [...initialOwned].filter(
-        (id) => !selectedServiceIds.has(id),
-      )
-
-      const memberIdsToAdd = [...selectedMemberIds].filter(
-        (id) => !initialMemberIds.has(id),
-      )
-      const memberIdsToRemove = [...initialMemberIds].filter(
-        (id) => !selectedMemberIds.has(id),
-      )
-
-      await Promise.all([
-        apiFetch<RegistryTeam>(`/v1/registry/teams/${team!.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name }),
+    mutationFn: (name: string) =>
+      apiFetch<RegistryTeam>(`/v1/registry/teams/${team!.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          serviceIds: [...selectedServiceIds],
+          memberIds: [...selectedMemberIds],
         }),
-        ...toAdd.map((id) =>
-          apiFetch(`/v1/registry/services/${id}/owner`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ teamId: team!.id }),
-          }),
-        ),
-        ...toRemove.map((id) =>
-          apiFetch(`/v1/registry/services/${id}/owner`, { method: 'DELETE' }),
-        ),
-        ...memberIdsToAdd.map((id) =>
-          apiFetch(`/v1/registry/teams/${team!.id}/members`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: id }),
-          }),
-        ),
-        ...memberIdsToRemove.map((id) =>
-          apiFetch(`/v1/registry/teams/${team!.id}/members/${id}`, {
-            method: 'DELETE',
-          }),
-        ),
-      ])
-    },
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['teams'] })
       queryClient.invalidateQueries({ queryKey: ['services', 'teams-page'] })
@@ -250,6 +217,7 @@ export function TeamDialog({
     onSubmit: ({ value }) => {
       const name = value.name.trim()
       if (isEdit) {
+        if (!teamLoaded) return
         saveMutation.mutate(name)
       } else {
         createMutation.mutate(name)
@@ -603,7 +571,7 @@ export function TeamDialog({
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isPending}>
+                <Button type="submit" disabled={isPending || !teamLoaded}>
                   {isEdit
                     ? saveMutation.isPending
                       ? 'Saving…'

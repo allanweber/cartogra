@@ -58,16 +58,58 @@ export interface Drift {
   targetServiceId: string
 }
 
+export interface ContractVersion {
+  id: string
+  versionNumber: number
+  label: string | null
+  specHash: string
+}
+
+export interface Contract {
+  id: string
+  serviceId: string
+  /** Null until contract knows the service's name; contract looks it up from Registry on read. */
+  serviceName: string | null
+  latestVersion: ContractVersion
+}
+
+export interface SpecChange {
+  op: 'added' | 'removed' | 'changed'
+  pointer: string
+  path: string[]
+}
+
+export interface DiffLine {
+  kind: 'same' | 'added' | 'removed' | 'changed'
+  left: string | null
+  right: string | null
+}
+
+export interface VersionDiff {
+  from: ContractVersion | null
+  to: ContractVersion
+  changes: SpecChange[]
+  lines: DiffLine[]
+}
+
+export interface PublishedVersion {
+  version: ContractVersion
+  /** False when the spec matched the latest version (HTTP 200): nothing was stored. */
+  created: boolean
+}
+
 export class ApiError extends Error {
   readonly status: number
   readonly code: string
   readonly traceId: string
+  readonly details: Record<string, unknown>
 
-  constructor(status: number, code: string, message: string, traceId: string) {
+  constructor(status: number, code: string, message: string, traceId: string, details: Record<string, unknown> = {}) {
     super(`${status} ${code}: ${message} (trace: ${traceId})`)
     this.status = status
     this.code = code
     this.traceId = traceId
+    this.details = details
   }
 }
 
@@ -86,6 +128,12 @@ export interface CartograApi {
   risks(): Promise<Risk[]>
   drifts(): Promise<Drift[]>
   unresolvedSpanServices(): Promise<UnresolvedSpanService[]>
+  /** 409 `CONFLICT` with `details.contractId` when the service already has one. */
+  createContract(serviceId: string, spec: string): Promise<Contract>
+  publishContractVersion(contractId: string, spec: string): Promise<PublishedVersion>
+  getContract(contractId: string): Promise<Contract>
+  listContracts(): Promise<Contract[]>
+  contractDiff(contractId: string, versionNumber: number): Promise<VersionDiff>
 }
 
 export interface Cluster {
@@ -207,6 +255,27 @@ export class HttpCartograApi implements CartograApi, ConnectionsApi {
     return this.listAll<UnresolvedSpanService>('/api/v1/topology/unresolved-span-services')
   }
 
+  createContract(serviceId: string, spec: string): Promise<Contract> {
+    return this.request<Contract>('POST', '/api/v1/contracts', { serviceId, spec })
+  }
+
+  async publishContractVersion(contractId: string, spec: string): Promise<PublishedVersion> {
+    const { data, status } = await this.send<ContractVersion>('POST', `/api/v1/contracts/${contractId}/versions`, { spec })
+    return { version: data, created: status === 201 }
+  }
+
+  getContract(contractId: string): Promise<Contract> {
+    return this.request<Contract>('GET', `/api/v1/contracts/${contractId}`)
+  }
+
+  listContracts(): Promise<Contract[]> {
+    return this.listAll<Contract>('/api/v1/contracts')
+  }
+
+  contractDiff(contractId: string, versionNumber: number): Promise<VersionDiff> {
+    return this.request<VersionDiff>('GET', `/api/v1/contracts/${contractId}/versions/${versionNumber}/diff`)
+  }
+
   listClusters(): Promise<Cluster[]> {
     return this.listAll<Cluster>('/api/v1/ingestion/k8s/clusters')
   }
@@ -249,6 +318,10 @@ export class HttpCartograApi implements CartograApi, ConnectionsApi {
   }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+    return (await this.send<T>(method, path, body)).data
+  }
+
+  private async send<T>(method: string, path: string, body?: unknown): Promise<{ data: T; status: number }> {
     const response = await fetch(`${this.baseUrl}${path}`, {
       method,
       headers: {
@@ -259,10 +332,13 @@ export class HttpCartograApi implements CartograApi, ConnectionsApi {
     })
     const traceId = response.headers.get('X-Trace-Id') ?? 'unknown'
     const text = await response.text()
-    const json = text ? (JSON.parse(text) as { data?: T; error?: { code: string; message: string } }) : {}
+    const json = text
+      ? (JSON.parse(text) as { data?: T; error?: { code: string; message: string; details?: Record<string, unknown> } })
+      : {}
     if (!response.ok) {
-      throw new ApiError(response.status, json.error?.code ?? 'UNKNOWN', json.error?.message ?? response.statusText, traceId)
+      const e = json.error
+      throw new ApiError(response.status, e?.code ?? 'UNKNOWN', e?.message ?? response.statusText, traceId, e?.details ?? {})
     }
-    return json.data as T
+    return { data: json.data as T, status: response.status }
   }
 }

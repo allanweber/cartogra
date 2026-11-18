@@ -23,6 +23,7 @@ public enum AuditKind {
     SCM_CONNECTION("scm_connection", Set.of(
             "provider", "syncScheduler", "pollIntervalMinutes", "webhookEnabled", "configChanged",
             "repositoriesSynced")),
+    CONTRACT("contract", Set.of("serviceId", "versionNumber", "label", "specHash")),
     CLUSTER("cluster", Set.of()),
     USER("user", Set.of()),
     INVITATION("invitation", Set.of()),

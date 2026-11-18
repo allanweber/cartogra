@@ -11,6 +11,9 @@ public interface ServiceHistoryRepository {
 
     void save(ServiceSnapshot snapshot);
 
+    /** Inserts every snapshot in one statement. */
+    void saveAll(List<ServiceSnapshot> snapshots);
+
     List<ServiceSnapshot> findByServiceId(UUID tenantId, UUID serviceId, int limit, int offset);
 
     Optional<ServiceSnapshot> findAtPointInTime(UUID tenantId, UUID serviceId, Instant at);

@@ -51,10 +51,10 @@ class GitHubProviderWebhookTest {
     }
 
     @Test
-    void verifyWebhookSignature_acceptsWhenNoSecretConfigured() {
+    void verifyWebhookSignature_rejectsWhenNoSecretConfigured() {
         byte[] body = "{}".getBytes(StandardCharsets.UTF_8);
-        assertThat(provider.verifyWebhookSignature(body, Map.of(), null)).isTrue();
-        assertThat(provider.verifyWebhookSignature(body, Map.of(), "")).isTrue();
+        assertThat(provider.verifyWebhookSignature(body, Map.of(), null)).isFalse();
+        assertThat(provider.verifyWebhookSignature(body, Map.of(), "")).isFalse();
     }
 
     @Test

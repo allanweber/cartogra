@@ -1,6 +1,7 @@
 package io.cartogra.registry.api.dto;
 
 import io.cartogra.registry.domain.ServiceTier;
+import io.cartogra.common.validation.HttpUrl;
 import io.cartogra.common.validation.NoHtml;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
@@ -14,7 +15,7 @@ import java.util.List;
 public record UpdateServiceRequest(
         @NotBlank @Size(min = 1, max = 255) @NoHtml String name,
         @Size(max = 1_000) @NoHtml String description,
-        @Size(max = 2_048) @NoHtml String repositoryUrl,
+        @Size(max = 2_048) @HttpUrl String repositoryUrl,
         @Size(max = 30) List<@Size(min = 1, max = 100) @NoHtml String> techStack,
         @Size(max = 10_000) String metadata,
         @Pattern(regexp = "(?i)healthy|degraded|unhealthy|probe_auth_failed|unknown",
@@ -29,6 +30,6 @@ public record UpdateServiceRequest(
         @DecimalMin(value = "0.0", message = "slaTarget must be between 0.0 and 100.0")
         @DecimalMax(value = "100.0", message = "slaTarget must be between 0.0 and 100.0")
         BigDecimal slaTarget,
-        @Size(max = 2_048) @NoHtml String documentationUrl,
-        @Size(max = 2_048) @NoHtml String runbookUrl
+        @Size(max = 2_048) @HttpUrl String documentationUrl,
+        @Size(max = 2_048) @HttpUrl String runbookUrl
 ) {}

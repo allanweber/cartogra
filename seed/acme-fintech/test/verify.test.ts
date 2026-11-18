@@ -17,6 +17,45 @@ describe('verify', () => {
   })
 })
 
+describe('verify contracts', () => {
+  const opts = { skipObserved: true, sleep: async () => {}, pollMs: 0, discoveryTimeoutMs: 50, syncTimeoutMs: 50 }
+
+  it('passes when ledger-service is at v2 and re-publishing stores nothing', async () => {
+    const checks = await verify(new FakeApi(seed), seed, opts)
+    expect(checks.filter((c) => c.name.startsWith('ledger-service') && /contract|diff|re-publishing/.test(c.name)).map((c) => [c.name, c.ok])).toEqual([
+      ['ledger-service contract exists', true],
+      ['ledger-service contract at v2', true],
+      ['ledger-service contract listed with its service name', true],
+      ['ledger-service v1 → v2 diff adds /ledgers/{id}/history', true],
+      ['ledger-service re-publishing latest spec stores nothing', true],
+    ])
+  })
+
+  it('fails when the list has no service name for the contract', async () => {
+    const api = new FakeApi(seed)
+    const list = api.listContracts.bind(api)
+    api.listContracts = async () => (await list()).map((c) => ({ ...c, serviceName: null }))
+    const checks = await verify(api, seed, opts)
+    expect(checks.find((c) => c.name === 'ledger-service contract listed with its service name')?.ok).toBe(false)
+  })
+
+  it('fails when the v2 diff does not add the history path', async () => {
+    const api = new FakeApi(seed)
+    const diff = api.contractDiff.bind(api)
+    api.contractDiff = async (id, v) => ({ ...(await diff(id, v)), changes: [] })
+    const checks = await verify(api, seed, opts)
+    expect(checks.find((c) => c.name === 'ledger-service v1 → v2 diff adds /ledgers/{id}/history')?.ok).toBe(false)
+  })
+
+  it('fails when the server stored a duplicate version for an unchanged spec', async () => {
+    const api = new FakeApi(seed)
+    const publish = api.publishContractVersion.bind(api)
+    api.publishContractVersion = async (id, spec) => ({ ...(await publish(id, spec)), created: true })
+    const checks = await verify(api, seed, opts)
+    expect(checks.find((c) => c.name === 'ledger-service re-publishing latest spec stores nothing')?.ok).toBe(false)
+  })
+})
+
 describe('verify with drift', () => {
   const sleep = async () => {}
   const opts = { sleep, pollMs: 0, discoveryTimeoutMs: 50, syncTimeoutMs: 50, observedTimeoutMs: 0, driftTimeoutMs: 0 }

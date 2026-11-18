@@ -14,6 +14,7 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6380}
+      password: ${REDIS_PASSWORD:}
   cloud:
     gateway:
       server:
@@ -49,6 +50,16 @@ spring:
                   args:
                     id: topology
                     fallbackPath: /internal/fallback/topology
+                    statusCodes: 500,501,502,503,504
+            - id: contract
+              uri: ${CONTRACT_URI:http://localhost:8083}
+              predicates:
+                - Path=/api/v1/contracts/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    id: contract
+                    fallbackPath: /internal/fallback/contract
                     statusCodes: 500,501,502,503,504
 
 server:
@@ -107,6 +118,8 @@ resilience4j:
         base-config: default
       topology:
         base-config: default
+      contract:
+        base-config: default
   timelimiter:
     configs:
       default:
@@ -117,6 +130,8 @@ resilience4j:
       ingestion:
         base-config: default
       topology:
+        base-config: default
+      contract:
         base-config: default
 
 app:

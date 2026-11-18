@@ -17,6 +17,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static io.cartogra.web.filter.InternalAuthMockMvc.withInternalAuth;
@@ -130,29 +131,91 @@ class TeamControllerTest {
     }
 
     @Test
-    void updateReturns200() throws Exception {
+    void updateReturns200AndPassesTheFullSets() throws Exception {
         UUID id = UUID.randomUUID();
-        when(teamService.update(TENANT, Actor.ANONYMOUS, id, "platform-eng")).thenReturn(team("platform-eng"));
+        UUID svc = UUID.randomUUID();
+        UUID member = UUID.randomUUID();
+        when(teamService.update(TENANT, Actor.ANONYMOUS, id, "platform-eng", Set.of(svc), Set.of(member)))
+                .thenReturn(team("platform-eng"));
 
         mockMvc.perform(put("/teams/{id}", id)
                         .header("X-Tenant-Id", TENANT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name":"platform-eng"}"""))
+                                {"name":"platform-eng","serviceIds":["%s"],"memberIds":["%s"]}""".formatted(svc, member)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.name").value("platform-eng"));
     }
 
     @Test
-    void updateNotFoundReturns404() throws Exception {
+    void updateAcceptsEmptySets() throws Exception {
         UUID id = UUID.randomUUID();
-        when(teamService.update(eq(TENANT), any(), eq(id), anyString())).thenThrow(new TeamNotFoundException(id));
+        when(teamService.update(TENANT, Actor.ANONYMOUS, id, "x", Set.of(), Set.of())).thenReturn(team("x"));
 
         mockMvc.perform(put("/teams/{id}", id)
                         .header("X-Tenant-Id", TENANT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name":"x"}"""))
+                                {"name":"x","serviceIds":[],"memberIds":[]}"""))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void updateWithoutServiceIdsReturns400() throws Exception {
+        mockMvc.perform(put("/teams/{id}", UUID.randomUUID())
+                        .header("X-Tenant-Id", TENANT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"x","memberIds":[]}"""))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(teamService);
+    }
+
+    @Test
+    void updateWithoutMemberIdsReturns400() throws Exception {
+        mockMvc.perform(put("/teams/{id}", UUID.randomUUID())
+                        .header("X-Tenant-Id", TENANT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"x","serviceIds":[]}"""))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(teamService);
+    }
+
+    @Test
+    void updateWithMoreThanThousandServiceIdsReturns400() throws Exception {
+        String ids = java.util.stream.Stream.generate(() -> "\"" + UUID.randomUUID() + "\"")
+                .limit(1001).collect(java.util.stream.Collectors.joining(","));
+        mockMvc.perform(put("/teams/{id}", UUID.randomUUID())
+                        .header("X-Tenant-Id", TENANT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"x\",\"serviceIds\":[" + ids + "],\"memberIds\":[]}"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(teamService);
+    }
+
+    @Test
+    void updateWithMoreThanThousandMemberIdsReturns400() throws Exception {
+        String ids = java.util.stream.Stream.generate(() -> "\"" + UUID.randomUUID() + "\"")
+                .limit(1001).collect(java.util.stream.Collectors.joining(","));
+        mockMvc.perform(put("/teams/{id}", UUID.randomUUID())
+                        .header("X-Tenant-Id", TENANT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"x\",\"serviceIds\":[],\"memberIds\":[" + ids + "]}"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(teamService);
+    }
+
+    @Test
+    void updateNotFoundReturns404() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(teamService.update(eq(TENANT), any(), eq(id), anyString(), any(), any())).thenThrow(new TeamNotFoundException(id));
+
+        mockMvc.perform(put("/teams/{id}", id)
+                        .header("X-Tenant-Id", TENANT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"x","serviceIds":[],"memberIds":[]}"""))
                 .andExpect(status().isNotFound());
     }
 

@@ -21,7 +21,8 @@ not the domain descriptions below, which can drift again — re-run that grep be
 | Registry | 2 (`service.changed`, `team.changed`) | `service.changed` consumed by Topology; `team.changed` has no consumer |
 | Ingestion | 4 (`service.discovered`, `ownership.resolved`, `sync.completed`, `sync.command`) | `service.discovered` and `ownership.resolved` are consumed by Registry; `sync.completed` has no consumer; `sync.command` is produced *and* consumed inside Ingestion itself despite its `registry.` prefix — see below |
 | Topology | 0 | Service has schema + CI + IT harness only (Phase 0); no service class, controller, producer, or consumer exists |
-| Contract, Intelligence | 0 | Empty directories — no code at all |
+| Contract | 0 | Consumes `registry.service.changed` (`service.deleted`); produces only `platform.audit.recorded` |
+| Intelligence | 0 | Empty directory — no code at all |
 
 There is no "Notification" domain and no "Notification worker" module. An earlier version of this document
 carried a Notification domain with a `cartogra.notification.sent` topic; `docs/roadmap.md` §12 records it as
@@ -35,7 +36,7 @@ removed — "No producer, no consumer, no module. Violates the project's own no-
 
 | Topic | Producer | Consumers today | Description |
 | ----- | -------- | ---------------- | ----------- |
-| `cartogra.registry.service.changed` | Registry (`ServiceLifecycleEventProducer`) | Topology (`GraphNodeEventConsumer`) | Service lifecycle, keyed by service id; `event_type` `service.registered` / `service.updated` / `service.deleted` (soft delete) |
+| `cartogra.registry.service.changed` | Registry (`ServiceLifecycleEventProducer`) | Topology (`GraphNodeEventConsumer`), Contract (`ServiceDeletedConsumer`, group `contract-consumer`, acts on `service.deleted` only) | Service lifecycle, keyed by service id; `event_type` `service.registered` / `service.updated` / `service.deleted` (soft delete) |
 | `cartogra.registry.team.changed` | Registry (`TeamLifecycleEventProducer`) | none | Team lifecycle, keyed by team id; `event_type` `team.created` / `team.updated` (rename) / `team.deleted` |
 
 ### Ingestion domain
@@ -51,18 +52,18 @@ removed — "No producer, no consumer, no module. Violates the project's own no-
 
 | Topic | Producer | Consumers today | Description |
 | ----- | -------- | ---------------- | ----------- |
-| `cartogra.platform.audit.recorded` | Topology, Ingestion (`KafkaAuditEventAdapter`, `shared:web`) | Registry (`AuditRecordedConsumer`) | A state change for the audit trail (ADR-0017). Envelope payload is the `AuditEvent`; key = entity id. Registry inserts idempotently on `AuditEvent.eventId`. Registry and Gateway don't publish — they write `audit_events` directly |
+| `cartogra.platform.audit.recorded` | Topology, Ingestion, Contract (`KafkaAuditEventAdapter`, `shared:web`) | Registry (`AuditRecordedConsumer`) | A state change for the audit trail (ADR-0017). Envelope payload is the `AuditEvent`; key = entity id. Registry inserts idempotently on `AuditEvent.eventId`. Registry and Gateway don't publish — they write `audit_events` directly |
 
 ### Dead-letter topics
 
-The two Registry consumers and Topology's `GraphNodeEventConsumer` have DLQ handling configured
-(`{registry,topology}/config/KafkaConfig.java`, a `DefaultErrorHandler` with a 3-attempt fixed backoff before
+The two Registry consumers, Topology's `GraphNodeEventConsumer` and Contract's `ServiceDeletedConsumer` have DLQ
+handling configured (`{registry,topology,contract}/config/KafkaConfig.java`, a `DefaultErrorHandler` with a 3-attempt fixed backoff before
 recovery). The DLQ topic is the source topic with a `.dlq` suffix — **not** the `cartogra.dlq.{suffix}` prefix
 pattern this document used to describe:
 
 - `cartogra.ingestion.service.discovered.dlq`
 - `cartogra.ingestion.ownership.resolved.dlq`
-- `cartogra.registry.service.changed.dlq`
+- `cartogra.registry.service.changed.dlq` — shared by Topology's and Contract's consumers; each lands its own poison records there
 
 Ingestion's own consumer (`SyncCommandConsumer`) has no error handler configured at all — no retry, no DLQ.
 A poison `cartogra.registry.sync.command` message currently blocks that consumer's partition rather than
