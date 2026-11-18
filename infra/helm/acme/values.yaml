@@ -1,10 +1,10 @@
 # Acme Fintech: a simulated customer, not part of Cartogra. Install after the cartogra chart:
 #   helm upgrade --install acme infra/helm/acme -n acme-system --create-namespace --set image.tag=<sha>
-# On the demo host infra/k8s/cluster-setup.yaml creates the namespaces, so CI omits --create-namespace.
+# On the production host infra/k8s/cluster-setup.yaml creates the namespaces, so CI omits --create-namespace.
 # Services come from files/services.json (`pnpm acme manifests --helm`, never edit by hand).
 
 global:
-  environment: demo
+  environment: production
 
 # Cartogra tenant that owns the services; must match the gateway's BOOTSTRAP_TENANT_ID.
 tenantId: a0000000-0000-4000-8000-00000000ac3e
@@ -34,7 +34,7 @@ reader:
 bootstrap:
   enabled: true
   apiUrl: http://gateway.cartogra.svc.cluster.local:8080
-  clusterName: demo
+  clusterName: production
   # Must match the gateway's BOOTSTRAP_ADMIN_EMAIL.
   adminEmail: admin@acme-fintech.invalid
   # Empty = no SCM connection. Public org holding the `pnpm acme repos` mirror.

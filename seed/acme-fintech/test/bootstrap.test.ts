@@ -30,7 +30,7 @@ class FakeConnections implements ConnectionsApi {
   }
 }
 
-const cluster: ClusterCredentials = { name: 'demo', apiServerUrl: 'https://kubernetes.default.svc', caCertPem: 'ca', saToken: 't' }
+const cluster: ClusterCredentials = { name: 'production', apiServerUrl: 'https://kubernetes.default.svc', caCertPem: 'ca', saToken: 't' }
 
 describe('connectSources', () => {
   it('registers the cluster and github once, syncing every run', async () => {
@@ -38,14 +38,14 @@ describe('connectSources', () => {
     await connectSources(api, { cluster, github: { org: 'acme', token: 'x' } })
     await connectSources(api, { cluster, github: { org: 'acme', token: 'x' } })
 
-    expect(api.calls).toEqual(['createCluster:demo', 'createGitHub:acme', 'sync:scm-1', 'sync:scm-1'])
+    expect(api.calls).toEqual(['createCluster:production', 'createGitHub:acme', 'sync:scm-1', 'sync:scm-1'])
   })
 
   it('skips github without org/token', async () => {
     const api = new FakeConnections()
     await connectSources(api, { cluster })
 
-    expect(api.calls).toEqual(['createCluster:demo'])
+    expect(api.calls).toEqual(['createCluster:production'])
   })
 })
 

@@ -1,14 +1,14 @@
 # Runbook: Incident Response
 
-Scope: the public demo, a single-node k3s host (see [deployment.md](deployment.md), ADR-0030). One person on
-call, no paging. All commands assume `KUBECONFIG=~/.kube/cartogra-demo`.
+Scope: production (cartogra.dev), a single-node k3s host (see [deployment.md](deployment.md), ADR-0032). One person on
+call, no paging. All commands assume `KUBECONFIG=~/.kube/cartogra-production`.
 
 ## Severity
 
 | Level | Definition | Examples |
 |-------|-----------|---------|
-| **P0** | Demo unreachable or leaking data | Ingress/TLS down, gateway down, a guest can write, secrets exposed |
-| **P1** | Demo up but its point is broken | `/demo` fails, graph empty, Acme not discovered, Postgres full |
+| **P0** | Production unreachable or leaking data | Ingress/TLS down, gateway down, a guest can write, secrets exposed |
+| **P1** | Production up but its point is broken | `/demo` fails, graph empty, Acme not discovered, Postgres full |
 | **P2** | Degraded | Observed edges stale, drift flapping, SCM sync failing, backup failed |
 | **P3** | Cosmetic | UI glitch, slow page |
 
@@ -18,7 +18,7 @@ Security (P0 data/write cases): turn guest mode off first (section 4), investiga
 
 - External uptime check on `https://cartogra.dev/api/auth/features` (deployment.md section 8).
 - A failed `postgres-backup` Job (`kubectl -n cartogra get jobs`).
-- Someone telling you the demo is broken.
+- Someone telling you production is broken.
 
 ## 2. Triage
 
@@ -43,7 +43,7 @@ kubectl -n cartogra exec deploy/registry -- curl -sf localhost:8081/api/v1/regis
 
 | Symptom | Likely cause | Action |
 |---|---|---|
-| `OOMKilled` | `values-demo.yaml` limits too tight for real load | Raise that service's memory in `values-demo.yaml`, redeploy; resize to CAX31 only if the node itself is full |
+| `OOMKilled` | `values-production.yaml` limits too tight for real load | Raise that service's memory in `values-production.yaml`, redeploy; resize to CAX31 only if the node itself is full |
 | Pods `Pending`, PVC unbound | `local-path` disk full | `ssh` in, `df -h /var/lib/rancher`; free space or resize the volume |
 | Certificate not issued | DNS not pointing at the VM, or port 80 closed | `kubectl -n cartogra describe certificate cartogra-tls`, check the HTTP-01 challenge |
 | `ImagePullBackOff` | Images for that SHA not pushed, or GHCR package private | Check `images.yml` run; make the package public |
@@ -77,7 +77,7 @@ helm -n cartogra rollback cartogra <revision> --wait      # bad release (deploym
 ```
 
 **Turn guest mode off** (suspected guest abuse or a write leak): set `gateway.env.GUEST_TENANT_ID: ""` in
-`values-demo.yaml` and redeploy, or immediately:
+`values-production.yaml` and redeploy, or immediately:
 
 ```bash
 kubectl -n cartogra patch configmap gateway-config --type merge -p '{"data":{"GUEST_TENANT_ID":""}}'
@@ -93,7 +93,7 @@ kubectl -n cartogra exec valkey-0 -- valkey-cli --scan --pattern 'rate_limit:*' 
 kubectl -n cartogra exec valkey-0 -- valkey-cli del '<key>'
 ```
 
-**Reset the demo data** (Acme state corrupted): restore last night's backup (deployment.md section 10), or
+**Reset the Acme data** (Acme state corrupted): restore last night's backup (deployment.md section 10), or
 for a clean slate, `helm uninstall acme -n acme-system`, delete the Acme tenant's rows, and re-run
 **Deploy**; the gateway bootstrap and the Job recreate everything.
 

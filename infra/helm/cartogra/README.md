@@ -1,6 +1,6 @@
 # Cartogra Helm chart
 
-Umbrella chart: `gateway`, `registry`, `topology`, `ingestion`, `frontend`, `collector`, plus single-replica `postgres`, `kafka` and `valkey` StatefulSets, and optional `alerting` (Prometheus + Alertmanager, on in the demo). `charts/common` is a library chart with the shared Deployment/Service/ConfigMap/PDB/HPA template.
+Umbrella chart: `gateway`, `registry`, `topology`, `ingestion`, `frontend`, `collector`, plus single-replica `postgres`, `kafka` and `valkey` StatefulSets, and optional `alerting` (Prometheus + Alertmanager, on in production). `charts/common` is a library chart with the shared Deployment/Service/ConfigMap/PDB/HPA template.
 
 Subcharts are rendered through the umbrella only. They call `common.*` templates without declaring the library as a dependency, which works because Helm shares named templates across a release.
 
@@ -9,7 +9,7 @@ Subcharts are rendered through the umbrella only. They call `common.*` templates
 | File | Use |
 |---|---|
 | `values.yaml` | Production shape: 3 replicas, PDB `minAvailable: 2`, HPA 3–6 (infra.md). |
-| `values-demo.yaml` | Public demo on single-node k3s ([ADR-0030](../../../docs/adr/0030-demo-on-single-node-k3s.md)): 1 replica, no PDB/HPA, sized for 8GB. Guest mode on (Acme tenant), signup off. |
+| `values-production.yaml` | Production (cartogra.dev) on single-node k3s ([ADR-0032](../../../docs/adr/0032-production-on-single-node-k3s.md)): 1 replica, no PDB/HPA, sized for 8GB. Guest mode on (Acme tenant), signup off. |
 
 Required: `global.host` (ingress, OAuth redirects, CORS). CI sets `global.imageTag` to the commit SHA; `latest` is rejected. With `alerting.enabled`: `alerting.email.to` and `alerting.email.from`.
 
@@ -19,7 +19,7 @@ The chart creates no Secrets. Each one is mounted read-only at `/etc/cartogra/se
 
 | Secret | Keys |
 |---|---|
-| `gateway-secrets` | `DB_USERNAME` `DB_PASSWORD` `JWT_SECRET` `RESEND_API_KEY` `GOOGLE_CLIENT_SECRET` `GITHUB_CLIENT_SECRET`, plus `BOOTSTRAP_ADMIN_PASSWORD` when `BOOTSTRAP_TENANT_ID` is set (demo) |
+| `gateway-secrets` | `DB_USERNAME` `DB_PASSWORD` `JWT_SECRET` `RESEND_API_KEY` `GOOGLE_CLIENT_SECRET` `GITHUB_CLIENT_SECRET`, plus `BOOTSTRAP_ADMIN_PASSWORD` when `BOOTSTRAP_TENANT_ID` is set (production) |
 | `registry-secrets`, `topology-secrets` | `DB_USERNAME` `DB_PASSWORD` |
 | `ingestion-secrets` | `DB_USERNAME` `DB_PASSWORD` `CLUSTER_CREDENTIALS_KEY` |
 | `postgres-secrets` | `DB_USERNAME` `DB_PASSWORD` (same values the services use) |
@@ -49,11 +49,11 @@ kubectl -n cartogra port-forward deploy/alerting 9090 9093   # Prometheus and Al
 ## Checks
 
 ```bash
-helm lint infra/helm/cartogra --strict -f infra/helm/cartogra/values-demo.yaml --set global.imageTag=dev --set alerting.email.to=dev@example.invalid
-helm template cartogra infra/helm/cartogra -f infra/helm/cartogra/values-demo.yaml --set global.imageTag=dev --set alerting.email.to=dev@example.invalid
+helm lint infra/helm/cartogra --strict -f infra/helm/cartogra/values-production.yaml --set global.imageTag=dev --set alerting.email.to=dev@example.invalid
+helm template cartogra infra/helm/cartogra -f infra/helm/cartogra/values-production.yaml --set global.imageTag=dev --set alerting.email.to=dev@example.invalid
 ```
 
-CI runs both for the prod and demo values (`.github/workflows/helm.yml`).
+CI runs both for the HA defaults and the production values (`.github/workflows/helm.yml`).
 
 ## Test on a local cluster
 

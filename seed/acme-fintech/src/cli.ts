@@ -82,7 +82,7 @@ async function main(): Promise<number> {
       const githubToken = optionalEnv('ACME_GITHUB_TOKEN')
       await connectSources(api, {
         cluster: {
-          name: process.env.ACME_CLUSTER_NAME ?? 'demo',
+          name: process.env.ACME_CLUSTER_NAME ?? 'production',
           apiServerUrl: process.env.ACME_K8S_API ?? 'https://kubernetes.default.svc',
           caCertPem: readFileSync(process.env.ACME_K8S_CA_FILE ?? '/var/run/acme-reader/ca.crt', 'utf8'),
           saToken: readFileSync(process.env.ACME_K8S_TOKEN_FILE ?? '/var/run/acme-reader/token', 'utf8').trim(),

@@ -1,6 +1,6 @@
 # Test on a local cluster
 
-`infra/helm/local-test.sh` installs `infra/helm/cartogra` and `infra/helm/acme` on a k3d cluster (`cartogra-local`, http://localhost:8088) with demo values. The gateway creates the Acme tenant and the bootstrap Job seeds it. The script then checks the Acme pods and guest access, and stops at the first failure.
+`infra/helm/local-test.sh` installs `infra/helm/cartogra` and `infra/helm/acme` on a k3d cluster (`cartogra-local`, http://localhost:8088) with production values. The gateway creates the Acme tenant and the bootstrap Job seeds it. The script then checks the Acme pods and guest access, and stops at the first failure.
 
 ```bash
 sh infra/helm/local-test.sh              # delete the cluster if it exists, build images, install, seed, check

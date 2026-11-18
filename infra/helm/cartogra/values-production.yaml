@@ -1,8 +1,8 @@
-# Public demo on single-node k3s (ADR-0030): 1 replica, no PDB/HPA, sized for an 8GB ARM VM.
+# Production on single-node k3s (ADR-0032): 1 replica, no PDB/HPA, sized for an 8GB ARM VM.
 # Probes, requests+limits, securityContext, secrets-as-volumes and labels still apply.
 
 global:
-  environment: demo
+  environment: production
   host: cartogra.dev
 
 # Fixed Acme tenant UUID, created by the step-6 bootstrap Job. Referenced below for guest
@@ -92,4 +92,4 @@ backup:
   s3:
     endpoint: https://fsn1.your-objectstorage.com
     region: fsn1
-    bucket: cartogra-demo-backups
+    bucket: cartogra-production-backups
