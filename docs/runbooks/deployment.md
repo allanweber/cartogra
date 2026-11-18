@@ -65,7 +65,7 @@ hcloud ssh-key create --name cartogra-production --public-key-from-file ~/.ssh/i
 ```
 
 **Hetzner Object Storage.** Console → Security → S3 credentials → generate; note the access and secret keys. Then
-create the bucket with object lock (you can set it only at creation), a 30-day governance retention, and lifecycle
+create the bucket with object lock (you can set it only at creation), a 30-day compliance retention, and lifecycle
 rules: `postgres/daily/` 30 days, `postgres/monthly/` 365 days. Bucket names are global: if this one is taken, change
 `backup.s3.bucket` in `values-production.yaml` and section 10.
 
@@ -74,7 +74,7 @@ export AWS_ACCESS_KEY_ID=<access key> AWS_SECRET_ACCESS_KEY=<secret key> AWS_DEF
 S3=https://fsn1.your-objectstorage.com B=cartogra-production-backups
 aws s3api create-bucket --bucket $B --object-lock-enabled-for-bucket --endpoint-url $S3
 aws s3api put-object-lock-configuration --bucket $B --endpoint-url $S3 \
-  --object-lock-configuration '{"ObjectLockEnabled":"Enabled","Rule":{"DefaultRetention":{"Mode":"GOVERNANCE","Days":30}}}'
+  --object-lock-configuration '{"ObjectLockEnabled":"Enabled","Rule":{"DefaultRetention":{"Mode":"COMPLIANCE","Days":30}}}'
 aws s3api put-bucket-lifecycle-configuration --bucket $B --endpoint-url $S3 --lifecycle-configuration '{"Rules":[
   {"ID":"daily","Status":"Enabled","Filter":{"Prefix":"postgres/daily/"},"Expiration":{"Days":30},"NoncurrentVersionExpiration":{"NoncurrentDays":1}},
   {"ID":"monthly","Status":"Enabled","Filter":{"Prefix":"postgres/monthly/"},"Expiration":{"Days":365},"NoncurrentVersionExpiration":{"NoncurrentDays":1}},

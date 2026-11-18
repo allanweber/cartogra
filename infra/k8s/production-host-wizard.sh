@@ -299,7 +299,7 @@ if begin s3; then
       || { warn "Name taken? Change backup.s3.bucket in values-production.yaml + deployment.md §10, then re-run."; exit 1; }
   fi
   run aws s3api put-object-lock-configuration --bucket "$BUCKET" --endpoint-url "$S3" \
-    --object-lock-configuration '{"ObjectLockEnabled":"Enabled","Rule":{"DefaultRetention":{"Mode":"GOVERNANCE","Days":30}}}'
+    --object-lock-configuration '{"ObjectLockEnabled":"Enabled","Rule":{"DefaultRetention":{"Mode":"COMPLIANCE","Days":30}}}'
   run aws s3api put-bucket-lifecycle-configuration --bucket "$BUCKET" --endpoint-url "$S3" --lifecycle-configuration '{"Rules":[
     {"ID":"daily","Status":"Enabled","Filter":{"Prefix":"postgres/daily/"},"Expiration":{"Days":30},"NoncurrentVersionExpiration":{"NoncurrentDays":1}},
     {"ID":"monthly","Status":"Enabled","Filter":{"Prefix":"postgres/monthly/"},"Expiration":{"Days":365},"NoncurrentVersionExpiration":{"NoncurrentDays":1}},
