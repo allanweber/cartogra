@@ -25,7 +25,7 @@ The backup in place on 2026-11-18 was one nightly `pg_dump` to one Hetzner bucke
   | Logical | Nightly `pg_dump -Fc` (the CronJob stays): Hetzner `daily/` and, on the 1st of the month, `monthly/` | 30 days daily, 365 days monthly |
   | Offsite | The same logical dump, copied to Cloudflare R2 | 30 days daily, 365 days monthly |
 
-- The backup buckets have **object lock** (governance, 30 days). The cluster keys have no delete rights where the provider allows this.
+- The backup buckets have **object lock** (compliance, 30 days). Hetzner keys are project-wide and can bypass governance mode, so only compliance mode stops a stolen key.
 - The Postgres volume is on a **Hetzner Volume** (hcloud-csi, `reclaimPolicy: Retain`), not on the node disk.
 - **Monitoring of backups:** the backup job pings an external heartbeat (healthchecks.io) when it succeeds. A weekly job restores the newest dump into a temporary Postgres, checks the row counts, and pings a second heartbeat. A late ping sends an email.
 - **Kafka and Valkey have no backup.** Valkey holds only cache and rate-limit data. If Kafka data is lost, events that were not yet consumed are lost. Services must start with an empty Kafka, and the restore drill checks this.
