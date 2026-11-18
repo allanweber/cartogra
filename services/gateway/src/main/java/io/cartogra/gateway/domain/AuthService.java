@@ -28,6 +28,7 @@ import io.cartogra.gateway.repository.UserRepository;
 import io.cartogra.gateway.infrastructure.jwt.JwtClaims;
 import io.cartogra.gateway.infrastructure.jwt.JwtTokenProvider;
 import io.cartogra.common.identity.Actor;
+import io.cartogra.web.tenant.TenantDb;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -102,6 +103,10 @@ public class AuthService {
     }
 
     public RegisterResponse register(RegisterRequest request) {
+        return TenantDb.asSystem(() -> runRegister(request));
+    }
+
+    private RegisterResponse runRegister(RegisterRequest request) {
         if (!signup.enabled()) {
             throw new SignupDisabledException();
         }
@@ -134,6 +139,10 @@ public class AuthService {
     }
 
     public void verifyEmail(String email, String token) {
+        TenantDb.runAsSystem(() -> runVerifyEmail(email, token));
+    }
+
+    private void runVerifyEmail(String email, String token) {
         User user = userRepository.findByVerificationToken(token)
             .orElseThrow(() -> new InvalidOtpException("Invalid or expired verification token"));
 
@@ -152,6 +161,10 @@ public class AuthService {
     }
 
     public void resendVerification(String email) {
+        TenantDb.runAsSystem(() -> runResendVerification(email));
+    }
+
+    private void runResendVerification(String email) {
         for (User user : userRepository.findAllByEmail(email)) {
             if (user.emailVerified()) {
                 continue;
@@ -170,6 +183,10 @@ public class AuthService {
     }
 
     public TokenResponse login(String email, String password) {
+        return TenantDb.asSystem(() -> runLogin(email, password));
+    }
+
+    private TokenResponse runLogin(String email, String password) {
         User user = userRepository.findByEmail(email)
             .orElseThrow(() -> new UnauthorizedException("Invalid credentials"));
 
@@ -190,6 +207,10 @@ public class AuthService {
     }
 
     public TokenResponse refreshToken(String rawRefreshToken) {
+        return TenantDb.asSystem(() -> runRefreshToken(rawRefreshToken));
+    }
+
+    private TokenResponse runRefreshToken(String rawRefreshToken) {
         String hash = sha256(rawRefreshToken);
         RefreshToken session = refreshTokenRepository.findActiveByHash(hash)
             .orElseThrow(() -> rejectStaleRefreshToken(hash));
@@ -225,12 +246,20 @@ public class AuthService {
     }
 
     public void logout(String rawRefreshToken) {
+        TenantDb.runAsSystem(() -> runLogout(rawRefreshToken));
+    }
+
+    private void runLogout(String rawRefreshToken) {
         String hash = sha256(rawRefreshToken);
         refreshTokenRepository.findActiveByHash(hash)
             .ifPresent(token -> refreshTokenRepository.revoke(token.id()));
     }
 
     public void forgotPassword(String email) {
+        TenantDb.runAsSystem(() -> runForgotPassword(email));
+    }
+
+    private void runForgotPassword(String email) {
         // Always succeed to avoid leaking whether an email exists.
         for (User user : userRepository.findAllByEmail(email)) {
             if (!user.emailVerified()) {
@@ -250,6 +279,10 @@ public class AuthService {
     }
 
     public void resetPassword(String token, String newPassword) {
+        TenantDb.runAsSystem(() -> runResetPassword(token, newPassword));
+    }
+
+    private void runResetPassword(String token, String newPassword) {
         User user = userRepository.findByPasswordResetToken(token)
             .orElseThrow(() -> new InvalidOtpException("Invalid or expired reset token"));
 
@@ -396,6 +429,10 @@ public class AuthService {
     }
 
     public TokenResponse acceptInvite(AcceptInviteRequest request) {
+        return TenantDb.asSystem(() -> runAcceptInvite(request));
+    }
+
+    private TokenResponse runAcceptInvite(AcceptInviteRequest request) {
         Invitation invitation = invitationRepository.findByToken(request.token())
             .orElseThrow(() -> new InvalidOtpException("Invalid or expired invite token"));
 

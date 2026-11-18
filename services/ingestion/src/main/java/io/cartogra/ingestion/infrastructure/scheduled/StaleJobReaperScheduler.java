@@ -2,6 +2,7 @@ package io.cartogra.ingestion.infrastructure.scheduled;
 
 import io.cartogra.ingestion.repository.SyncJobRepository;
 import io.cartogra.ingestion.infrastructure.kafka.SyncResultProducer;
+import io.cartogra.web.tenant.TenantDb;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,6 +32,10 @@ public class StaleJobReaperScheduler {
 
     @Scheduled(fixedDelayString = "${ingestion.sync.reaper-interval:PT1M}")
     public void reap() {
+        TenantDb.runAsSystem(this::reapStaleJobs);
+    }
+
+    private void reapStaleJobs() {
         var threshold = Instant.now().minus(staleTimeout);
         var staleJobs = syncJobRepository.findStaleRunning(threshold);
         for (var job : staleJobs) {

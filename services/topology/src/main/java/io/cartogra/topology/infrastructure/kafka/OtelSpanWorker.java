@@ -7,6 +7,8 @@ import io.cartogra.topology.domain.exception.UnattributedSpanBatchException;
 import io.cartogra.topology.infrastructure.otel.OtlpSpanParser;
 import io.cartogra.topology.infrastructure.otel.OtlpSpanParser.TenantSpans;
 import io.cartogra.topology.infrastructure.otel.OtlpTraceRequest;
+import io.cartogra.web.tenant.TenantContext;
+import io.cartogra.web.tenant.TenantDb;
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
@@ -65,7 +67,8 @@ public class OtelSpanWorker {
             Map<UUID, List<SpanObservation>> byTenant = new LinkedHashMap<>();
             for (TenantSpans group : groups) {
                 try {
-                    UUID tenantId = observedDependencyService.requireAttributedTenant(group.tenantRaw());
+                    UUID tenantId = TenantDb.asSystem(
+                            () -> observedDependencyService.requireAttributedTenant(group.tenantRaw()));
                     byTenant.computeIfAbsent(tenantId, _ -> new ArrayList<>()).addAll(group.observations());
                 } catch (UnattributedSpanBatchException e) {
                     if (firstQuarantined == null) {
@@ -73,7 +76,8 @@ public class OtelSpanWorker {
                     }
                 }
             }
-            byTenant.forEach(observedDependencyService::ingest);
+            byTenant.forEach((tenantId, observations) ->
+                    TenantContext.runAs(tenantId, () -> observedDependencyService.ingest(tenantId, observations)));
             if (firstQuarantined != null) {
                 throw firstQuarantined;
             }

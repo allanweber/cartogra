@@ -1,6 +1,8 @@
 package io.cartogra.gateway.api;
 
 import io.cartogra.gateway.AbstractGatewayIT;
+import io.cartogra.gateway.infrastructure.scheduler.TenantBootstrapScheduler;
+import io.cartogra.test.NoTenantScope;
 import io.cartogra.gateway.domain.TenantBootstrapService;
 import io.cartogra.gateway.domain.Tenant;
 import io.cartogra.gateway.domain.User;
@@ -75,5 +77,18 @@ class TenantBootstrapIT extends AbstractGatewayIT {
                     """.formatted(EMAIL, PASSWORD, TENANT)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.accessToken").isNotEmpty());
+    }
+
+    @Autowired
+    private TenantBootstrapScheduler tenantBootstrapScheduler;
+
+    @Test
+    @NoTenantScope
+    void theSchedulerCreatesTheTenantInItsOwnSystemScope() throws InterruptedException {
+        for (int i = 0; i < 100 && !tenantBootstrapScheduler.isDone(); i++) {
+            Thread.sleep(100);
+        }
+
+        assertThat(tenantBootstrapScheduler.isDone()).isTrue();
     }
 }

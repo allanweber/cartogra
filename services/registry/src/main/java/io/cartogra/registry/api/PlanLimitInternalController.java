@@ -1,5 +1,6 @@
 package io.cartogra.registry.api;
 
+import io.cartogra.web.tenant.TenantContext;
 import io.cartogra.common.api.ApiResponse;
 import io.cartogra.registry.api.dto.PlanLimitsResponse;
 import io.cartogra.registry.domain.PlanLimitService;
@@ -30,7 +31,8 @@ public class PlanLimitInternalController {
 
     @GetMapping("/{tenantId}")
     public ResponseEntity<ApiResponse<PlanLimitsResponse>> get(@PathVariable UUID tenantId) {
-        PlanLimitsResponse result = PlanLimitsResponse.from(planLimitService.getLimits(tenantId));
+        PlanLimitsResponse result = TenantContext.callAs(tenantId,
+                () -> PlanLimitsResponse.from(planLimitService.getLimits(tenantId)));
         return TracedResponse.ok(result);
     }
 }

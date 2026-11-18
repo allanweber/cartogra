@@ -10,7 +10,10 @@ import java.util.List;
 import java.util.UUID;
 
 public interface DependencyGraphViewRepository {
-    /** Runs {@code REFRESH MATERIALIZED VIEW CONCURRENTLY dependency_graph_edges}. */
+    /**
+     * Runs {@code REFRESH MATERIALIZED VIEW CONCURRENTLY dependency_graph_edges} through a function that the
+     * owner of the view defines: the app role cannot refresh a view that it does not own.
+     */
     void refresh();
 
     /**

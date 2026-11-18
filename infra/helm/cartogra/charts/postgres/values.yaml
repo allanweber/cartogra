@@ -1,5 +1,6 @@
 # postgres — one instance, schemas registry/topology/ingestion/contract (Flyway creates them).
-# Secret keys (files under /etc/cartogra/secrets): DB_USERNAME, DB_PASSWORD — same values the services use.
+# Secret keys (files under /etc/cartogra/secrets): DB_USERNAME, DB_PASSWORD (the superuser), and
+# CARTOGRA_OWNER_PASSWORD, CARTOGRA_APP_PASSWORD (the roles that files/bootstrap-roles.sql creates).
 
 image:
   registry: docker.io

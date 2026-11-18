@@ -12,10 +12,14 @@ services:
       POSTGRES_DB: cartogra
       POSTGRES_USER: cartogra
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cartogra}
+      CARTOGRA_OWNER_PASSWORD: ${CARTOGRA_OWNER_PASSWORD:-cartogra_owner}
+      CARTOGRA_APP_PASSWORD: ${CARTOGRA_APP_PASSWORD:-cartogra_app}
     ports:
       - "5436:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+      - ../helm/cartogra/charts/postgres/files/bootstrap-roles.sql:/bootstrap/bootstrap-roles.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U cartogra -d cartogra"]
       interval: 10s

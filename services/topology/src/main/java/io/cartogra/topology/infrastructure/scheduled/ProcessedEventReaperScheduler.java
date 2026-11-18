@@ -1,6 +1,7 @@
 package io.cartogra.topology.infrastructure.scheduled;
 
 import io.cartogra.topology.repository.ProcessedEventRepository;
+import io.cartogra.web.tenant.TenantDb;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,7 +29,7 @@ public class ProcessedEventReaperScheduler {
     @Scheduled(fixedDelayString = "${topology.processed-events.reaper-interval:PT1H}")
     public void reap() {
         Instant threshold = Instant.now().minus(retention);
-        int deleted = processedEventRepository.deleteOlderThan(threshold);
+        int deleted = TenantDb.asSystem(() -> processedEventRepository.deleteOlderThan(threshold));
         if (deleted > 0) {
             log.info("Reaped {} processed_events rows older than {}", deleted, threshold);
         }

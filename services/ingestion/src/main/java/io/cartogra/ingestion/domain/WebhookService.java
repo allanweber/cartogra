@@ -8,6 +8,7 @@ import io.cartogra.ingestion.infrastructure.scm.ScmProvider;
 import io.cartogra.ingestion.repository.ScmConnectionRepository;
 import io.cartogra.ingestion.domain.exception.WebhookConnectionNotFoundException;
 import io.cartogra.ingestion.domain.exception.WebhookSignatureInvalidException;
+import io.cartogra.web.tenant.TenantDb;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -50,7 +51,7 @@ public class WebhookService {
             throw new WebhookConnectionNotFoundException(providerType);
         }
 
-        ScmConnection connection = connectionRepository.findByIdForWebhook(connectionId)
+        ScmConnection connection = TenantDb.asSystem(() -> connectionRepository.findByIdForWebhook(connectionId))
                 .orElseThrow(() -> new WebhookConnectionNotFoundException(connectionId.toString()));
 
         if (!provider.providerType().equals(connection.provider())) {

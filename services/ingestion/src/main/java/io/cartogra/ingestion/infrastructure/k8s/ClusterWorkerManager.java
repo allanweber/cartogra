@@ -4,6 +4,8 @@ import io.cartogra.ingestion.domain.Cluster;
 import io.cartogra.ingestion.domain.ClusterStatus;
 import io.cartogra.ingestion.infrastructure.kafka.ServiceDiscoveredProducer;
 import io.cartogra.ingestion.repository.ClusterRepository;
+import io.cartogra.web.tenant.TenantContext;
+import io.cartogra.web.tenant.TenantDb;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientBuilder;
 import io.fabric8.kubernetes.client.Config;
@@ -43,13 +45,13 @@ public class ClusterWorkerManager {
 
     @PostConstruct
     public void init() {
-        List<Cluster> clusters = clusterRepository.findAllActive();
+        List<Cluster> clusters = TenantDb.asSystem(clusterRepository::findAllActive);
         log.info("Reconnecting {} K8s cluster worker(s) on startup", clusters.size());
-        clusters.forEach(cluster -> Thread.ofVirtual().start(() -> connectAndWatch(cluster)));
+        clusters.forEach(this::start);
     }
 
     public void start(Cluster cluster) {
-        Thread.ofVirtual().start(() -> connectAndWatch(cluster));
+        Thread.ofVirtual().start(() -> TenantContext.runAs(cluster.tenantId(), () -> connectAndWatch(cluster)));
     }
 
     public void stop(UUID clusterId) {

@@ -1,6 +1,7 @@
 package io.cartogra.gateway.infrastructure.scheduler;
 
 import io.cartogra.gateway.repository.RefreshTokenRepository;
+import io.cartogra.web.tenant.TenantDb;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,7 +31,7 @@ public class RefreshTokenPurgeScheduler {
         log.info("Refresh token purge started [retentionPeriod={}]", retentionPeriod);
         long start = System.currentTimeMillis();
         try {
-            int deleted = refreshTokenRepository.deleteExpiredAndRevoked(retentionPeriod);
+            int deleted = TenantDb.asSystem(() -> refreshTokenRepository.deleteExpiredAndRevoked(retentionPeriod));
             log.info("Refresh token purge finished [deleted={}, durationMs={}]",
                     deleted, System.currentTimeMillis() - start);
         } catch (Exception ex) {

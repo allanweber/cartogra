@@ -11,6 +11,7 @@ import io.cartogra.web.security.InternalClaims;
 import io.cartogra.web.security.InternalTokenCodec;
 import io.cartogra.web.security.InternalTokenProperties;
 import io.cartogra.web.security.InternalTokens;
+import io.cartogra.web.tenant.TenantContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -21,7 +22,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -129,5 +132,26 @@ class InternalTokenFilterTest {
 
     private static InternalClaims claims() {
         return new InternalClaims(TENANT, USER_ID.toString(), List.of("ADMIN"));
+    }
+
+    @Test
+    void validTokenBindsTheTokenTenantForTheChain() throws Exception {
+        when(request.getHeader(InternalTokens.HEADER)).thenReturn(InternalTokens.service(AUDIENCE, TENANT));
+        AtomicReference<Optional<UUID>> seen = new AtomicReference<>();
+
+        filter.doFilter(request, response, (req, res) -> seen.set(TenantContext.current()));
+
+        assertThat(seen.get()).contains(TENANT);
+        assertThat(TenantContext.current()).isEmpty();
+    }
+
+    @Test
+    void missingTokenBindsNoTenant() throws Exception {
+        when(request.getHeader("X-Tenant-Id")).thenReturn(TENANT.toString());
+        AtomicReference<Optional<UUID>> seen = new AtomicReference<>();
+
+        filter.doFilter(request, response, (req, res) -> seen.set(TenantContext.current()));
+
+        assertThat(seen.get()).isEmpty();
     }
 }
