@@ -1,7 +1,7 @@
 # ADR-0030 — Public demo on single-node k3s, exempt from HA rules
 
 **Date:** 2026-10-28
-**Status:** Accepted
+**Status:** Superseded by [ADR-0032](0032-production-on-single-node-k3s.md) (2026-11-18): the host is production, not a demo.
 **Deciders:** Allan Weber
 
 ---

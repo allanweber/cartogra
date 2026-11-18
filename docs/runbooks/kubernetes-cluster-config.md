@@ -167,7 +167,7 @@ cluster owner's tenant; a namespace labelled with any other UUID is skipped and 
 
 ## In-cluster (Cartogra watching the cluster it runs on)
 
-The public demo's case: Cartogra and the monitored workloads (Acme) share one k3s cluster. Same least-privilege
+The production case (cartogra.dev): Cartogra and the monitored workloads (Acme) share one k3s cluster. Same least-privilege
 account as Production, with two differences:
 
 - **API server URL** is the in-cluster address `https://kubernetes.default.svc`, reachable from the ingestion pod
@@ -185,7 +185,7 @@ TOKEN=$(kubectl -n acme-system get secret cartogra-reader-token -o jsonpath='{.d
 CA=$(kubectl -n acme-system get secret cartogra-reader-token -o jsonpath='{.data.ca\.crt}' | base64 -d)
 curl -s -X POST https://cartogra.dev/api/v1/ingestion/k8s/clusters -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H 'Content-Type: application/json' \
-  -d "$(jq -n --arg t "$TOKEN" --arg ca "$CA" '{name:"demo",source:"MANUAL",apiServerUrl:"https://kubernetes.default.svc",caCertPem:$ca,saToken:$t,skipTlsVerify:false}')"
+  -d "$(jq -n --arg t "$TOKEN" --arg ca "$CA" '{name:"production",source:"MANUAL",apiServerUrl:"https://kubernetes.default.svc",caCertPem:$ca,saToken:$t,skipTlsVerify:false}')"
 ```
 
 Never point Cartogra at the ingestion pod's own ServiceAccount: in a multi-tenant install any tenant could then
