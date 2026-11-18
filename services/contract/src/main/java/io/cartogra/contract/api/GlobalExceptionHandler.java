@@ -7,7 +7,9 @@ import io.cartogra.contract.domain.exception.ContractAlreadyExistsException;
 import io.cartogra.contract.domain.exception.ContractNotFoundException;
 import io.cartogra.contract.domain.exception.InvalidSpecException;
 import io.cartogra.contract.domain.exception.MissingFieldException;
+import io.cartogra.contract.domain.exception.RegistryUnavailableException;
 import io.cartogra.contract.domain.exception.ServiceDeletedException;
+import io.cartogra.contract.domain.exception.ServiceNotFoundException;
 import io.cartogra.contract.domain.exception.VersionNotFoundException;
 import io.opentelemetry.api.trace.Span;
 import org.slf4j.Logger;
@@ -42,6 +44,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(VersionNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleVersionNotFound(VersionNotFoundException ex) {
         return respond(HttpStatus.NOT_FOUND, ErrorCodes.NOT_FOUND, ex.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(ServiceNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleServiceNotFound(ServiceNotFoundException ex) {
+        return respond(HttpStatus.NOT_FOUND, ErrorCodes.NOT_FOUND, ex.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(RegistryUnavailableException.class)
+    public ResponseEntity<ApiErrorResponse> handleRegistryUnavailable(RegistryUnavailableException ex) {
+        return respond(HttpStatus.SERVICE_UNAVAILABLE, ErrorCodes.SERVICE_UNAVAILABLE, ex.getMessage(), Map.of());
     }
 
     @ExceptionHandler(ServiceDeletedException.class)

@@ -96,6 +96,48 @@ class ServiceControllerTest {
                 .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+            "repositoryUrl    | javascript:alert(1)",
+            "documentationUrl | java\\tscript:alert(1)",
+            "runbookUrl       | data:text/html,x",
+            "runbookUrl       | vbscript:msgbox(1)"
+    })
+    void updateWithNonHttpUrlReturns400(String field, String url) throws Exception {
+        mockMvc.perform(put("/services/{id}", UUID.randomUUID())
+                        .header("X-Tenant-Id", TENANT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"svc\",\"%s\":\"%s\"}".formatted(field, url)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
+        verifyNoInteractions(serviceService);
+    }
+
+    @Test
+    void createWithJavascriptRepositoryUrlReturns400() throws Exception {
+        mockMvc.perform(post("/services")
+                        .header("X-Tenant-Id", TENANT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"svc","repositoryUrl":"javascript:alert(1)"}"""))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(serviceService);
+    }
+
+    @Test
+    void updateWithHttpsUrlsReturns200() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(serviceService.update(eq(TENANT), eq(Actor.ANONYMOUS), eq(id), any())).thenReturn(service("svc"));
+
+        mockMvc.perform(put("/services/{id}", id)
+                        .header("X-Tenant-Id", TENANT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"svc","repositoryUrl":"https://github.com/o/r",
+                                 "documentationUrl":"https://docs.example.com","runbookUrl":"http://wiki.local/rb"}"""))
+                .andExpect(status().isOk());
+    }
+
     @Test
     void createMissingTenantHeaderReturns400() throws Exception {
         mockMvc.perform(post("/services")

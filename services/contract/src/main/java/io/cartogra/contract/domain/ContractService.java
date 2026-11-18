@@ -67,6 +67,7 @@ public class ContractService {
             throw new MissingFieldException("serviceId");
         }
         ParsedSpec parsed = specParser.parse(request.spec());
+        serviceProjectionService.requireExists(tenantId, serviceId);
         PublishedContract created;
         try {
             created = transactionTemplate.execute(_ -> {

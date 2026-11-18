@@ -11,6 +11,7 @@ import io.cartogra.registry.repository.TeamRepository;
 import io.cartogra.registry.domain.exception.DuplicateTeamNameException;
 import io.cartogra.registry.domain.exception.PlanLimitExceededException;
 import io.cartogra.registry.domain.exception.TeamNotFoundException;
+import io.cartogra.registry.domain.exception.UserNotFoundException;
 import io.cartogra.web.lock.AdvisoryLockRepository;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -113,6 +114,7 @@ public class TeamService {
                 .collect(Collectors.toSet());
         List<UUID> added = memberIds.stream().filter(id -> !current.contains(id)).toList();
         List<UUID> removed = current.stream().filter(id -> !memberIds.contains(id)).toList();
+        requireTenantUsers(team.tenantId(), added);
         teamRepository.addMembers(team.tenantId(), team.id(), added, Instant.now());
         teamRepository.removeMembers(team.tenantId(), team.id(), removed);
         auditEventPort.recordAll(Stream.concat(
@@ -150,6 +152,7 @@ public class TeamService {
                     .findFirst()
                     .orElseThrow();
         }
+        requireTenantUsers(tenantId, List.of(userId));
         TeamMember member = teamRepository.addMember(
                 new TeamMember(UUID.randomUUID(), tenantId, teamId, userId, Instant.now()));
         audit(team, "member_added", actor, Map.of("name", team.name(), "userId", userId));
@@ -194,6 +197,13 @@ public class TeamService {
 
     private void audit(Team team, String action, Actor actor, Map<String, Object> payload) {
         auditEventPort.record(AuditEvent.of(team.tenantId(), AuditKind.TEAM, team.id(), action, actor, payload));
+    }
+
+    private void requireTenantUsers(UUID tenantId, List<UUID> userIds) {
+        Set<UUID> found = teamRepository.findTenantUserIds(tenantId, userIds);
+        userIds.stream().filter(id -> !found.contains(id)).findFirst().ifPresent(id -> {
+            throw new UserNotFoundException(id);
+        });
     }
 
     private void requireAdminOrTeamMember(UUID tenantId, UUID teamId, Actor actor) {

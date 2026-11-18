@@ -4,6 +4,7 @@ import io.cartogra.common.audit.AuditEvent;
 import io.cartogra.common.identity.Actor;
 import io.cartogra.registry.domain.exception.DuplicateTeamNameException;
 import io.cartogra.registry.domain.exception.TeamNotFoundException;
+import io.cartogra.registry.domain.exception.UserNotFoundException;
 import io.cartogra.registry.infrastructure.kafka.TeamLifecycleEventProducer;
 import io.cartogra.registry.repository.TeamRepository;
 import io.cartogra.web.lock.AdvisoryLockRepository;
@@ -257,6 +258,7 @@ class TeamServiceTest {
         when(teamRepository.findById(tenantId, teamId)).thenReturn(Optional.of(team(tenantId, teamId, "same")));
         when(teamRepository.findMembers(tenantId, teamId)).thenReturn(List.of(member(tenantId, teamId, kept),
                 member(tenantId, teamId, dropped)));
+        when(teamRepository.findTenantUserIds(tenantId, List.of(added))).thenReturn(Set.of(added));
 
         teamService.update(tenantId, ADMIN, teamId, "same", serviceIds, Set.of(kept, added));
 
@@ -314,6 +316,51 @@ class TeamServiceTest {
         verifyNoInteractions(serviceService, eventProducer);
         verify(teamRepository, never()).addMembers(any(), any(), anyCollection(), any());
         verify(teamRepository, never()).removeMembers(any(), any(), anyCollection());
+    }
+
+    @Test
+    void updateRejectsMemberFromAnotherTenantBeforeAnythingIsSaved() {
+        UUID tenantId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        UUID foreignUser = UUID.randomUUID();
+        when(teamRepository.findById(tenantId, teamId)).thenReturn(Optional.of(team(tenantId, teamId, "same")));
+        when(teamRepository.findTenantUserIds(tenantId, List.of(foreignUser))).thenReturn(Set.of());
+
+        assertThatThrownBy(() -> teamService.update(tenantId, ADMIN, teamId, "same", Set.of(), Set.of(foreignUser)))
+                .isInstanceOf(UserNotFoundException.class);
+
+        verify(teamRepository, never()).addMembers(any(), any(), anyCollection(), any());
+        verify(teamRepository, never()).removeMembers(any(), any(), anyCollection());
+        assertThat(audits).isEmpty();
+    }
+
+    @Test
+    void addMemberRejectsUserFromAnotherTenant() {
+        UUID tenantId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        UUID foreignUser = UUID.randomUUID();
+        when(teamRepository.findById(tenantId, teamId)).thenReturn(Optional.of(team(tenantId, teamId, "t")));
+        when(teamRepository.findTenantUserIds(tenantId, List.of(foreignUser))).thenReturn(Set.of());
+
+        assertThatThrownBy(() -> teamService.addMember(tenantId, ADMIN, teamId, foreignUser))
+                .isInstanceOf(UserNotFoundException.class);
+
+        verify(teamRepository, never()).addMember(any());
+        assertThat(audits).isEmpty();
+    }
+
+    @Test
+    void addMemberAddsUserOfTheTenant() {
+        UUID tenantId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        TeamMember saved = member(tenantId, teamId, userId);
+        when(teamRepository.findById(tenantId, teamId)).thenReturn(Optional.of(team(tenantId, teamId, "t")));
+        when(teamRepository.findTenantUserIds(tenantId, List.of(userId))).thenReturn(Set.of(userId));
+        when(teamRepository.addMember(any())).thenReturn(saved);
+
+        assertThat(teamService.addMember(tenantId, ADMIN, teamId, userId)).isEqualTo(saved);
+        assertThat(audits).extracting(AuditEvent::action).containsExactly("member_added");
     }
 
     private TeamMember member(UUID tenantId, UUID teamId, UUID userId) {

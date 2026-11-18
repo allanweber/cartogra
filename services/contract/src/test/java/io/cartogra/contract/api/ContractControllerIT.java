@@ -86,6 +86,30 @@ class ContractControllerIT extends AbstractContractIT {
     }
 
     @Test
+    void createForServiceRegistryDoesNotKnowIs404AndStoresNothing() {
+        org.mockito.Mockito.when(registryNameClient.findNames(org.mockito.ArgumentMatchers.eq(tenant),
+                org.mockito.ArgumentMatchers.any())).thenReturn(Map.of());
+
+        HttpResponse<String> resp = http.create(tenant, UUID.randomUUID(), V1);
+
+        assertThat(resp.statusCode()).isEqualTo(404);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM api_contracts WHERE tenant_id = :t",
+                new MapSqlParameterSource("t", tenant), Long.class)).isZero();
+    }
+
+    @Test
+    void createWhenRegistryIsDownIs503AndStoresNothing() {
+        org.mockito.Mockito.when(registryNameClient.findNames(org.mockito.ArgumentMatchers.eq(tenant),
+                org.mockito.ArgumentMatchers.any())).thenThrow(new org.springframework.web.client.RestClientException("down"));
+
+        HttpResponse<String> resp = http.create(tenant, UUID.randomUUID(), V1);
+
+        assertThat(resp.statusCode()).isEqualTo(503);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM api_contracts WHERE tenant_id = :t",
+                new MapSqlParameterSource("t", tenant), Long.class)).isZero();
+    }
+
+    @Test
     void createWithTrailingSlashAlsoWorks() {
         HttpResponse<String> resp = http.post("/", tenant, "ADMIN", ContractHttp.body(UUID.randomUUID(), V1));
 

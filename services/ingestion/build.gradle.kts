@@ -9,6 +9,7 @@ tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
 }
 
 tasks.test {
+    systemProperty("ingestion.k8s.allow-plaintext-credentials", "true")
     finalizedBy(tasks.jacocoTestReport)
 }
 

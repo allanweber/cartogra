@@ -23,12 +23,27 @@ public class CredentialEncryptor {
 
     private final SecretKey key;
 
-    public CredentialEncryptor(@Value("${ingestion.k8s.credentials-key:}") String base64Key) {
+    /**
+     * Fails closed: without a key, startup fails unless {@code allowPlaintext} is true (local development and tests
+     * only). Then, values are stored in plain text.
+     */
+    public CredentialEncryptor(
+            @Value("${ingestion.k8s.credentials-key:}") String base64Key,
+            @Value("${ingestion.k8s.allow-plaintext-credentials:false}") boolean allowPlaintext) {
         if (base64Key == null || base64Key.isBlank()) {
-            log.warn("ingestion.k8s.credentials-key not set — cluster credentials stored without encryption");
+            if (!allowPlaintext) {
+                throw new IllegalStateException("ingestion.k8s.credentials-key (CLUSTER_CREDENTIALS_KEY) is not set. "
+                        + "Set a Base64 AES key (openssl rand -base64 32). For local development only, set "
+                        + "ingestion.k8s.allow-plaintext-credentials=true to store credentials in plain text.");
+            }
+            log.warn("ingestion.k8s.credentials-key not set — credentials stored without encryption "
+                    + "(allow-plaintext-credentials=true)");
             this.key = null;
         } else {
             byte[] keyBytes = Base64.getDecoder().decode(base64Key);
+            if (keyBytes.length != 16 && keyBytes.length != 24 && keyBytes.length != 32) {
+                throw new IllegalStateException("ingestion.k8s.credentials-key must decode to 16, 24 or 32 bytes");
+            }
             this.key = new SecretKeySpec(keyBytes, "AES");
         }
     }
@@ -55,9 +70,12 @@ public class CredentialEncryptor {
     }
 
     public String decrypt(String value) {
-        if (key == null || value == null) return value;
+        if (value == null) return null;
         // Values stored before a key was configured have no prefix — return as-is.
         if (!value.startsWith(ENC_PREFIX)) return value;
+        if (key == null) {
+            throw new IllegalStateException("Failed to decrypt credential: value is encrypted but no key is set");
+        }
         try {
             byte[] decoded = Base64.getDecoder().decode(value.substring(ENC_PREFIX.length()));
             byte[] iv = Arrays.copyOfRange(decoded, 0, IV_LENGTH);

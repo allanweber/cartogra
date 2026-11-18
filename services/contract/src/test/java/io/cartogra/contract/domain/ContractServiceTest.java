@@ -9,6 +9,7 @@ import io.cartogra.contract.domain.exception.ContractNotFoundException;
 import io.cartogra.contract.domain.exception.VersionNotFoundException;
 import io.cartogra.contract.domain.exception.MissingFieldException;
 import io.cartogra.contract.domain.exception.ServiceDeletedException;
+import io.cartogra.contract.domain.exception.ServiceNotFoundException;
 import io.cartogra.contract.repository.ContractRepository;
 import io.cartogra.contract.repository.ContractVersionRepository;
 import io.cartogra.contract.repository.ServiceProjectionRepository;
@@ -73,6 +74,19 @@ class ContractServiceTest {
         assertThat(event.entityType()).isEqualTo("contract");
         assertThat(event.payload()).containsEntry("serviceId", SERVICE).containsEntry("versionNumber", 1)
                 .containsKey("specHash").doesNotContainKey("spec");
+    }
+
+    @Test
+    void createForUnknownServiceIsRejectedBeforeAnythingIsStored() {
+        org.mockito.Mockito.doThrow(new ServiceNotFoundException(SERVICE))
+                .when(serviceProjectionService).requireExists(TENANT, SERVICE);
+
+        assertThatThrownBy(() -> service.create(TENANT, USER, new ContractRequest(SERVICE, SpecParserTest.YAML_30)))
+                .isInstanceOf(ServiceNotFoundException.class);
+
+        verify(contractRepository, never()).insert(any());
+        verify(versionRepository, never()).insert(any());
+        verifyNoInteractions(auditEventPort);
     }
 
     @Test

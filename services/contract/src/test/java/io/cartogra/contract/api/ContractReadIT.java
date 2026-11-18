@@ -68,6 +68,7 @@ class ContractReadIT extends AbstractContractIT {
         nameService(ledger, "ledger-service");
         String ledgerId = create(ledger, V1);
         String paymentsId = create(payments, V1);
+        forgetName(payments);
         assertThat(http.publish(tenant, ledgerId, V2).statusCode()).isEqualTo(201);
 
         JsonNode page = data(http.read(tenant, ""));
@@ -176,6 +177,7 @@ class ContractReadIT extends AbstractContractIT {
     void listAsksRegistryOnceForServicesWithNoNameAndKeepsTheAnswer() {
         UUID payments = UUID.randomUUID();
         create(payments, V1);
+        forgetName(payments);
         clearInvocations(registryNameClient);
         when(registryNameClient.findNames(eq(tenant), any())).thenReturn(Map.of(payments, "payments-service"));
 
@@ -206,6 +208,7 @@ class ContractReadIT extends AbstractContractIT {
     void registryDownLeavesTheNameEmpty() {
         UUID payments = UUID.randomUUID();
         String id = create(payments, V1);
+        forgetName(payments);
         when(registryNameClient.findNames(eq(tenant), any())).thenThrow(new RestClientException("down"));
 
         JsonNode item = data(http.read(tenant, "")).get("items").get(0);
@@ -213,6 +216,13 @@ class ContractReadIT extends AbstractContractIT {
 
         assertThat(item.get("serviceName").isNull()).isTrue();
         assertThat(contract.get("serviceName").isNull()).isTrue();
+    }
+
+    /** Makes the service look like one created before contract stored names, so reads must fill the name in. */
+    private void forgetName(UUID serviceId) {
+        when(registryNameClient.findNames(eq(tenant), any())).thenReturn(Map.of());
+        jdbc.update("UPDATE services SET name = NULL WHERE tenant_id = :t AND service_id = :s",
+                new MapSqlParameterSource().addValue("t", tenant).addValue("s", serviceId));
     }
 
     private void nameService(UUID serviceId, String name) {

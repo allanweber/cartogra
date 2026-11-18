@@ -1,6 +1,8 @@
 package io.cartogra.contract.domain;
 
 import io.cartogra.contract.infrastructure.registry.RegistryNameClient;
+import io.cartogra.contract.domain.exception.RegistryUnavailableException;
+import io.cartogra.contract.domain.exception.ServiceNotFoundException;
 import io.cartogra.contract.repository.ServiceProjectionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,6 +45,26 @@ public class ServiceProjectionService {
             return known;
         }
         return Optional.ofNullable(fetch(tenantId, List.of(serviceId)).get(serviceId));
+    }
+
+    /**
+     * Fails closed: a service that Registry does not know in this tenant is a 404, and Registry being down is a 503.
+     * A known name in the projection means the service exists, so Registry is not called.
+     */
+    public void requireExists(UUID tenantId, UUID serviceId) {
+        if (repository.findName(tenantId, serviceId).isPresent()) {
+            return;
+        }
+        Map<UUID, String> names;
+        try {
+            names = registry.findNames(tenantId, List.of(serviceId));
+        } catch (RestClientException e) {
+            throw new RegistryUnavailableException(e);
+        }
+        if (!names.containsKey(serviceId)) {
+            throw new ServiceNotFoundException(serviceId);
+        }
+        repository.upsertNames(tenantId, names, Instant.now());
     }
 
     /** Fetches the names of the tenant's live contracts' services that have none yet, so search and sort see them. */

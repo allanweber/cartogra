@@ -354,6 +354,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Generate secrets for the compose stack
+        run: |
+          {
+            echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)"
+            echo "REDIS_PASSWORD=$(openssl rand -hex 24)"
+            echo "JWT_SECRET=$(openssl rand -base64 48 | tr -d '\n')"
+            echo "BOOTSTRAP_ADMIN_PASSWORD=$(openssl rand -hex 16)"
+            echo "CLUSTER_CREDENTIALS_KEY=$(openssl rand -base64 32)"
+          } >> "$GITHUB_ENV"
+
       - name: Start backend stack (every service in docker-compose.yml)
         working-directory: infra/docker-compose
         run: docker compose -f docker-compose.yml -f ../perf/docker-compose.gc-probe.yml up -d --build
@@ -386,7 +396,7 @@ jobs:
           CI: 'true'
           E2E_BASE_URL: http://localhost:3016
           E2E_API_BASE_URL: http://localhost:8080
-          E2E_DB_URL: postgresql://cartogra:cartogra@localhost:5436/cartogra
+          E2E_DB_URL: postgresql://cartogra:${{ env.POSTGRES_PASSWORD }}@localhost:5436/cartogra
         run: pnpm run test:e2e
 
       # Runs even when e2e failed: an OOM-killed service is a likely cause and should be named.

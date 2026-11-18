@@ -71,6 +71,8 @@ See [docs/runbooks/local-development.md](docs/runbooks/local-development.md) for
 
 The local stack lives in `infra/docker-compose/`. All services connect via `localhost` using the env-var defaults in `.env.example`.
 
+`docker-compose.yml` needs secrets. Copy `infra/docker-compose/.env.example` to `infra/docker-compose/.env` and set each value. If a value is missing, `docker compose` does not start. Postgres, Kafka and Valkey listen on `127.0.0.1` only.
+
 ```bash
 # Base infra only (Postgres, Kafka, Valkey)
 cd infra/docker-compose && docker compose -f docker-compose.yml up -d

@@ -27,7 +27,7 @@
 
 ## Local Infrastructure
 
-Start local dependencies from repository root:
+Start local dependencies from repository root. First, copy `infra/docker-compose/.env.example` to `infra/docker-compose/.env` and set each value. If a value is missing, `docker compose` does not start.
 
 ```bash
 docker compose -f infra/docker-compose/docker-compose.yml up -d

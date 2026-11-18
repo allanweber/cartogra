@@ -8,7 +8,7 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "app.jwt")
 @Validated
 public record JwtConfig(
-    @NotEmpty String secret,
+    @NotEmpty @StrongSecret(minBytes = 32) String secret,
     @Positive long accessTokenExpirySeconds,
     @Positive long refreshTokenExpirySeconds,
     boolean cookieSecure

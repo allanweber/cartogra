@@ -36,8 +36,9 @@ class AzureDevOpsProviderWebhookTest {
     }
 
     @Test
-    void verifyWebhookSignature_acceptsWhenNoSecretConfigured() {
-        assertThat(provider.verifyWebhookSignature(new byte[0], Map.of(), null)).isTrue();
+    void verifyWebhookSignature_rejectsWhenNoSecretConfigured() {
+        assertThat(provider.verifyWebhookSignature(new byte[0], Map.of(), null)).isFalse();
+        assertThat(provider.verifyWebhookSignature(new byte[0], Map.of(), " ")).isFalse();
     }
 
     @Test

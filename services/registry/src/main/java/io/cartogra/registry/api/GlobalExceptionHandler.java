@@ -9,6 +9,7 @@ import io.cartogra.registry.domain.exception.InvalidHealthEndpointException;
 import io.cartogra.registry.domain.exception.PlanLimitExceededException;
 import io.cartogra.registry.domain.exception.ServiceNotFoundException;
 import io.cartogra.registry.domain.exception.TeamNotFoundException;
+import io.cartogra.registry.domain.exception.UserNotFoundException;
 import org.springframework.security.access.AccessDeniedException;
 import io.opentelemetry.api.trace.Span;
 import org.springframework.dao.DuplicateKeyException;
@@ -39,6 +40,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ServiceNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleServiceNotFound(ServiceNotFoundException ex) {
+        String traceId = Span.current().getSpanContext().getTraceId();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .header("X-Trace-Id", traceId)
+                .body(new ApiErrorResponse(ApiError.of(ErrorCodes.NOT_FOUND, ex.getMessage()), traceId));
+    }
+
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleUserNotFound(UserNotFoundException ex) {
         String traceId = Span.current().getSpanContext().getTraceId();
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .header("X-Trace-Id", traceId)

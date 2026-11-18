@@ -115,6 +115,51 @@ class ServiceServiceTest {
     }
 
     @Test
+    void createByMemberForTeamTheyDoNotBelongToIsDenied() {
+        UUID tenantId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        var req = new CreateServiceRequest("payments", null, teamId, null, null, null, null);
+        when(teamRepository.findById(tenantId, teamId)).thenReturn(Optional.of(
+                new Team(teamId, tenantId, "other", Instant.now(), Instant.now(), null)));
+        when(teamRepository.isMember(tenantId, teamId, userId)).thenReturn(false);
+
+        assertThatThrownBy(() -> serviceService.create(tenantId, Actor.user(userId), req))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+        verify(serviceRepository, never()).save(any());
+        verifyNoInteractions(eventProducer);
+        verify(advisoryLockRepository).releaseLock(anyLong());
+    }
+
+    @Test
+    void createOrphanByMemberIsDenied() {
+        UUID tenantId = UUID.randomUUID();
+        var req = new CreateServiceRequest("payments", null, null, null, null, null, null);
+
+        assertThatThrownBy(() -> serviceService.create(tenantId, Actor.user(UUID.randomUUID()), req))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+        verify(serviceRepository, never()).save(any());
+    }
+
+    @Test
+    void createByMemberOfTheTeamSucceeds() {
+        UUID tenantId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        var req = new CreateServiceRequest("payments", null, teamId, null, null, null, null);
+        when(teamRepository.findById(tenantId, teamId)).thenReturn(Optional.of(
+                new Team(teamId, tenantId, "mine", Instant.now(), Instant.now(), null)));
+        when(teamRepository.isMember(tenantId, teamId, userId)).thenReturn(true);
+        when(serviceRepository.save(any())).thenReturn(service(tenantId, "payments"));
+
+        serviceService.create(tenantId, Actor.user(userId), req);
+
+        verify(serviceRepository).save(any());
+    }
+
+    @Test
     void createAcquiresAndReleasesPlanLimitLockAroundCountCheckAndSave() {
         UUID tenantId = UUID.randomUUID();
         var req = new CreateServiceRequest("payments", null, null, null, null, null, null);

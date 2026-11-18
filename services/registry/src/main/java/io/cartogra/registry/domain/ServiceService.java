@@ -109,6 +109,7 @@ public class ServiceService {
                 teamRepository.findById(tenantId, req.teamId())
                         .orElseThrow(() -> new TeamNotFoundException(req.teamId()));
             }
+            requireAdminOrOwningTeamMember(tenantId, req.teamId(), actor);
             if (req.healthEndpoint() != null) {
                 healthEndpointValidator.validate(req.healthEndpoint());
             }

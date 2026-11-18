@@ -14,7 +14,7 @@ class CredentialEncryptorTest {
 
     @Test
     void encryptDecrypt_roundtrip() {
-        CredentialEncryptor encryptor = new CredentialEncryptor(VALID_KEY);
+        CredentialEncryptor encryptor = new CredentialEncryptor(VALID_KEY, false);
         String plaintext = "my-secret-token";
 
         String encrypted = encryptor.encrypt(plaintext);
@@ -26,7 +26,7 @@ class CredentialEncryptorTest {
 
     @Test
     void encrypt_producesDifferentCiphertextEachTime() {
-        CredentialEncryptor encryptor = new CredentialEncryptor(VALID_KEY);
+        CredentialEncryptor encryptor = new CredentialEncryptor(VALID_KEY, false);
         String plaintext = "same-token";
 
         String first = encryptor.encrypt(plaintext);
@@ -39,7 +39,7 @@ class CredentialEncryptorTest {
 
     @Test
     void encryptDecrypt_withEmptyKey_passthroughWithoutEncryption() {
-        CredentialEncryptor encryptor = new CredentialEncryptor("");
+        CredentialEncryptor encryptor = new CredentialEncryptor("", true);
         String plaintext = "my-token";
 
         assertThat(encryptor.encrypt(plaintext)).isEqualTo(plaintext);
@@ -48,7 +48,7 @@ class CredentialEncryptorTest {
 
     @Test
     void encryptDecrypt_withNullKey_passthroughWithoutEncryption() {
-        CredentialEncryptor encryptor = new CredentialEncryptor(null);
+        CredentialEncryptor encryptor = new CredentialEncryptor(null, true);
         String plaintext = "token";
 
         assertThat(encryptor.encrypt(plaintext)).isEqualTo(plaintext);
@@ -57,12 +57,12 @@ class CredentialEncryptorTest {
 
     @Test
     void decrypt_withWrongKey_throws() {
-        CredentialEncryptor encryptor = new CredentialEncryptor(VALID_KEY);
+        CredentialEncryptor encryptor = new CredentialEncryptor(VALID_KEY, false);
         String encrypted = encryptor.encrypt("secret");
 
         byte[] otherKeyBytes = new byte[32];
         otherKeyBytes[0] = 1;
-        CredentialEncryptor other = new CredentialEncryptor(Base64.getEncoder().encodeToString(otherKeyBytes));
+        CredentialEncryptor other = new CredentialEncryptor(Base64.getEncoder().encodeToString(otherKeyBytes), false);
 
         assertThatThrownBy(() -> other.decrypt(encrypted))
                 .isInstanceOf(IllegalStateException.class)
@@ -71,16 +71,43 @@ class CredentialEncryptorTest {
 
     @Test
     void decrypt_plaintextStoredBeforeKeyWasConfigured_returnedAsIs() {
-        CredentialEncryptor encryptor = new CredentialEncryptor(VALID_KEY);
+        CredentialEncryptor encryptor = new CredentialEncryptor(VALID_KEY, false);
         // Simulates a row written when no key was set (no "enc:" prefix)
         assertThat(encryptor.decrypt("raw-plaintext-token")).isEqualTo("raw-plaintext-token");
     }
 
     @Test
     void encryptDecrypt_longValue() {
-        CredentialEncryptor encryptor = new CredentialEncryptor(VALID_KEY);
+        CredentialEncryptor encryptor = new CredentialEncryptor(VALID_KEY, false);
         String pem = "-----BEGIN CERTIFICATE-----\n" + "A".repeat(1000) + "\n-----END CERTIFICATE-----";
 
         assertThat(encryptor.decrypt(encryptor.encrypt(pem))).isEqualTo(pem);
+    }
+
+    @Test
+    void startupFailsWithoutKeyWhenPlaintextIsNotAllowed() {
+        assertThatThrownBy(() -> new CredentialEncryptor("", false))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("CLUSTER_CREDENTIALS_KEY");
+        assertThatThrownBy(() -> new CredentialEncryptor(null, false))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void startupFailsForKeyOfInvalidLength() {
+        String fiveBytes = Base64.getEncoder().encodeToString(new byte[5]);
+        assertThatThrownBy(() -> new CredentialEncryptor(fiveBytes, false))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("16, 24 or 32 bytes");
+    }
+
+    @Test
+    void decrypt_encryptedValueWithoutKey_throws() {
+        String encrypted = new CredentialEncryptor(VALID_KEY, false).encrypt("secret");
+        CredentialEncryptor noKey = new CredentialEncryptor("", true);
+
+        assertThatThrownBy(() -> noKey.decrypt(encrypted))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("no key is set");
     }
 }

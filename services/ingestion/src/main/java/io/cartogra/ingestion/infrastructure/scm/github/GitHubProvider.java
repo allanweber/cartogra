@@ -61,7 +61,7 @@ public class GitHubProvider implements ScmProvider {
     @Override
     public boolean verifyWebhookSignature(byte[] rawBody, Map<String, String> headers, @Nullable String secret) {
         if (secret == null || secret.isBlank()) {
-            return true;
+            return false;
         }
         String signature = headers.get("X-Hub-Signature-256");
         if (signature == null || signature.isBlank()) {

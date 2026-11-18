@@ -23,11 +23,11 @@ public interface ScmProvider {
     OwnershipMap resolveOwnership(ScmConnectionConfig config, ScmRepository repository);
 
     /**
-     * Verify an inbound webhook request. Headers are case-insensitive. When no secret is
-     * configured, providers should accept the request. Default: accept (override to enforce).
+     * Verify an inbound webhook request. Headers are case-insensitive. Fails closed: a null or
+     * blank secret rejects the request. Default: reject (override to support webhooks).
      */
     default boolean verifyWebhookSignature(byte[] rawBody, Map<String, String> headers, @Nullable String secret) {
-        return true;
+        return false;
     }
 
     /**

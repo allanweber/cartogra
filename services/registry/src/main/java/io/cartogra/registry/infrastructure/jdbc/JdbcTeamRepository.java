@@ -127,6 +127,21 @@ public class JdbcTeamRepository implements TeamRepository {
     }
 
     @Override
+    public Set<UUID> findTenantUserIds(UUID tenantId, Collection<UUID> userIds) {
+        if (userIds.isEmpty()) {
+            return Set.of();
+        }
+        String sql = """
+                SELECT id FROM users
+                WHERE tenant_id = :tenantId AND id = ANY(CAST(:userIds AS uuid[])) AND deleted_at IS NULL
+                """;
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("userIds", userIds.toArray(UUID[]::new));
+        return Set.copyOf(jdbc.queryForList(sql, params, UUID.class));
+    }
+
+    @Override
     public Set<UUID> findTeamIdsByMember(UUID tenantId, UUID userId) {
         String sql = """
                 SELECT team_id FROM team_members

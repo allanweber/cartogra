@@ -28,6 +28,9 @@ public interface TeamRepository {
 
     boolean isMember(UUID tenantId, UUID teamId, UUID userId);
 
+    /** Returns the IDs from {@code userIds} that belong to a live user of the tenant. */
+    Set<UUID> findTenantUserIds(UUID tenantId, Collection<UUID> userIds);
+
     Set<UUID> findTeamIdsByMember(UUID tenantId, UUID userId);
 
     List<TeamMember> findMembers(UUID tenantId, UUID teamId);

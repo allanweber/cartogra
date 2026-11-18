@@ -84,4 +84,42 @@ class ServiceProjectionServiceTest {
 
         verify(repository).upsertNames(eq(TENANT), eq(Map.of(SERVICE, "ledger")), any());
     }
+
+    @Test
+    void requireExistsAcceptsANameKnownLocallyWithoutCallingRegistry() {
+        when(repository.findName(TENANT, SERVICE)).thenReturn(Optional.of("ledger"));
+
+        service.requireExists(TENANT, SERVICE);
+
+        verifyNoInteractions(registry);
+    }
+
+    @Test
+    void requireExistsAsksRegistryAndStoresTheName() {
+        when(repository.findName(TENANT, SERVICE)).thenReturn(Optional.empty());
+        when(registry.findNames(TENANT, List.of(SERVICE))).thenReturn(Map.of(SERVICE, "ledger"));
+
+        service.requireExists(TENANT, SERVICE);
+
+        verify(repository).upsertNames(eq(TENANT), eq(Map.of(SERVICE, "ledger")), any());
+    }
+
+    @Test
+    void requireExistsRejectsAServiceRegistryDoesNotKnowInTheTenant() {
+        when(repository.findName(TENANT, SERVICE)).thenReturn(Optional.empty());
+        when(registry.findNames(TENANT, List.of(SERVICE))).thenReturn(Map.of());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.requireExists(TENANT, SERVICE))
+                .isInstanceOf(io.cartogra.contract.domain.exception.ServiceNotFoundException.class);
+        verify(repository, never()).upsertNames(any(), anyMap(), any());
+    }
+
+    @Test
+    void requireExistsFailsClosedWhenRegistryIsDown() {
+        when(repository.findName(TENANT, SERVICE)).thenReturn(Optional.empty());
+        when(registry.findNames(TENANT, List.of(SERVICE))).thenThrow(new RestClientException("down"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.requireExists(TENANT, SERVICE))
+                .isInstanceOf(io.cartogra.contract.domain.exception.RegistryUnavailableException.class);
+    }
 }

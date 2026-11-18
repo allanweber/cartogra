@@ -62,7 +62,7 @@ public class AzureDevOpsProvider implements ScmProvider {
         // Azure DevOps service hooks authenticate with HTTP Basic auth; the configured
         // secret is the "user:password" pair the hook was registered with.
         if (secret == null || secret.isBlank()) {
-            return true;
+            return false;
         }
         String auth = headers.get("Authorization");
         if (auth == null || !auth.startsWith("Basic ")) {

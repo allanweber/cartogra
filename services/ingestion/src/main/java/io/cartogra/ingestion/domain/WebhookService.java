@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -56,7 +57,10 @@ public class WebhookService {
             throw new WebhookConnectionNotFoundException(connectionId.toString());
         }
 
-        String webhookSecret = extractWebhookSecret(connection.config());
+        String webhookSecret = extractWebhookSecret(connection.config()).orElseThrow(() -> {
+            log.warn("Rejecting webhook for connection={}: webhook secret is missing or cannot be read", connectionId);
+            return new WebhookSignatureInvalidException(connectionId);
+        });
 
         if (!provider.verifyWebhookSignature(rawBody, headers, webhookSecret)) {
             throw new WebhookSignatureInvalidException(connectionId);
@@ -70,13 +74,16 @@ public class WebhookService {
         syncCommandProducer.publish(connection);
     }
 
-    private String extractWebhookSecret(String configJson) {
+    /** Empty when the secret is absent, blank, or cannot be decrypted: the caller must then reject the request. */
+    private Optional<String> extractWebhookSecret(String configJson) {
         try {
             Map<String, Object> config = objectMapper.readValue(configJson, new TypeReference<>() {});
             Object secret = config.get("webhookSecret");
-            return secret instanceof String s ? credentialEncryptor.decrypt(s) : null;
+            return secret instanceof String s
+                    ? Optional.ofNullable(credentialEncryptor.decrypt(s)).filter(v -> !v.isBlank())
+                    : Optional.empty();
         } catch (Exception _) {
-            return null;
+            return Optional.empty();
         }
     }
 }

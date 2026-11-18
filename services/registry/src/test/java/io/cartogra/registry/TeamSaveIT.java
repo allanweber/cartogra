@@ -68,7 +68,7 @@ class TeamSaveIT {
         UUID orphan2 = createService(tenant, null);
         UUID keptMember = UUID.randomUUID();
         UUID droppedMember = UUID.randomUUID();
-        UUID newMember = UUID.randomUUID();
+        UUID newMember = createUser(tenant);
         addMember(tenant, team, keptMember);
         addMember(tenant, team, droppedMember);
         String historySql = "SELECT COUNT(*) FROM services_history WHERE tenant_id = :t AND service_id IN (:ids)";
@@ -163,6 +163,54 @@ class TeamSaveIT {
     }
 
     @Test
+    void anotherTenantsUserCannotBeAddedAndNothingIsSaved() throws Exception {
+        UUID tenant = seedTenant();
+        UUID otherTenant = seedTenant();
+        UUID team = createTeam(tenant);
+        UUID kept = createUser(tenant);
+        addMember(tenant, team, kept);
+        UUID foreignUser = createUser(otherTenant);
+
+        HttpResponse<String> resp = putTeam(tenant, team,
+                "{\"name\":\"team-%s\",\"serviceIds\":[],\"memberIds\":[\"%s\"]}".formatted(team, foreignUser));
+
+        assertThat(resp.statusCode()).isEqualTo(404);
+        assertThat(members(tenant, team)).containsExactly(kept);
+    }
+
+    @Test
+    void deletedUserOfTheTenantCannotBeAdded() throws Exception {
+        UUID tenant = seedTenant();
+        UUID team = createTeam(tenant);
+        UUID deletedUser = createUser(tenant);
+        jdbc.update("UPDATE users SET deleted_at = now() WHERE id = :id", new MapSqlParameterSource("id", deletedUser));
+
+        HttpResponse<String> resp = putTeam(tenant, team,
+                "{\"name\":\"team-%s\",\"serviceIds\":[],\"memberIds\":[\"%s\"]}".formatted(team, deletedUser));
+
+        assertThat(resp.statusCode()).isEqualTo(404);
+        assertThat(members(tenant, team)).isEmpty();
+    }
+
+    @Test
+    void addMemberEndpointRejectsAnotherTenantsUser() throws Exception {
+        UUID tenant = seedTenant();
+        UUID team = createTeam(tenant);
+        UUID foreignUser = createUser(seedTenant());
+
+        HttpResponse<String> resp = HTTP.send(HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + "/api/v1/registry/teams/" + team + "/members"))
+                .header("Content-Type", "application/json")
+                .header("X-Tenant-Id", tenant.toString())
+                .header("X-User-Roles", "ADMIN")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"userId\":\"%s\"}".formatted(foreignUser)))
+                .build(), HttpResponse.BodyHandlers.ofString());
+
+        assertThat(resp.statusCode()).isEqualTo(404);
+        assertThat(members(tenant, team)).isEmpty();
+    }
+
+    @Test
     void nonAdminCannotTakeAnOrphanAndNothingIsSaved() throws Exception {
         UUID tenant = seedTenant();
         UUID team = createTeam(tenant);
@@ -227,10 +275,11 @@ class TeamSaveIT {
             bigOldMembers.add(oldMember);
         }
         Set<UUID> bigNewMembers = Stream.concat(Stream.of(actorId),
-                Stream.generate(UUID::randomUUID).limit(5)).collect(Collectors.toSet());
+                Stream.generate(() -> createUser(tenant)).limit(5)).collect(Collectors.toSet());
 
+        UUID smallNewMember = createUser(tenant);
         int small = SqlStatementCounter.count(() -> teamService.update(tenant, actor, smallTeam, "small-" + smallTeam,
-                Set.of(smallTaken), Set.of(actorId, UUID.randomUUID())));
+                Set.of(smallTaken), Set.of(actorId, smallNewMember)));
         int big = SqlStatementCounter.count(() -> teamService.update(tenant, actor, bigTeam, "big-" + bigTeam,
                 Set.copyOf(bigTaken), bigNewMembers));
 
@@ -261,6 +310,14 @@ class TeamSaveIT {
                         .addValue("tenantId", tenantId)
                         .addValue("name", "team-" + teamId));
         return teamId;
+    }
+
+    private UUID createUser(UUID tenantId) {
+        return jdbc.queryForObject("""
+                INSERT INTO users (tenant_id, email, auth_provider, roles)
+                VALUES (:tenantId, :email, 'local', '{MEMBER}') RETURNING id
+                """, new MapSqlParameterSource("tenantId", tenantId)
+                .addValue("email", UUID.randomUUID() + "@test.invalid"), UUID.class);
     }
 
     private void addMember(UUID tenantId, UUID teamId, UUID userId) {
