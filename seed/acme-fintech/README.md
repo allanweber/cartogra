@@ -28,9 +28,9 @@ in separate traces, so Cartogra joins them on the topic name) and `"kind": "db"`
 `db.system=postgresql`, `db.namespace=ledger-db`; `ledger-db` is a catalog service that makes no calls). Both are declared
 with protocol `KAFKA`/`DB`, so they add `kafka`/`db` edges without extra drift or cycles.
 
-## In-cluster (public demo)
+## In-cluster (production)
 
-On the demo host Acme is not set up by hand: the `infra/helm/acme` chart runs the 21 services (from
+On the production host Acme is not set up by hand: the `infra/helm/acme` chart runs the 21 services (from
 `infra/helm/acme/files/services.json`) and a hook Job that runs `pnpm acme bootstrap`. The tenant comes from the
 gateway's startup bootstrap (`BOOTSTRAP_*`), since signup is off. See `docs/runbooks/deployment.md`. The steps
 below are the local (kind) setup.
@@ -316,7 +316,7 @@ Clean up the scratch namespaces: `kubectl delete namespace no-tenant late-adopte
 | `ACME_GITHUB_ORG` | | `repos --provider github`; `bootstrap` connects it when `ACME_GITHUB_TOKEN` is set |
 | `ACME_GITHUB_TOKEN` | | read-only token for the SCM connection (`bootstrap`) |
 | `ACME_SECRETS_DIR` | | directory of files named after variables (a mounted Secret); used when the variable is unset |
-| `ACME_CLUSTER_NAME`, `ACME_K8S_API`, `ACME_K8S_TOKEN_FILE`, `ACME_K8S_CA_FILE` | `demo`, `https://kubernetes.default.svc`, `/var/run/acme-reader/{token,ca.crt}` | `bootstrap` |
+| `ACME_CLUSTER_NAME`, `ACME_K8S_API`, `ACME_K8S_TOKEN_FILE`, `ACME_K8S_CA_FILE` | `production`, `https://kubernetes.default.svc`, `/var/run/acme-reader/{token,ca.crt}` | `bootstrap` |
 | `ACME_BOOTSTRAP_TIMEOUT_MS` | `900000` | `bootstrap`: login and discovery wait |
 
 ## How the simulation works

@@ -157,7 +157,7 @@ kubectl -n acme-system get secret acme-bootstrap >/dev/null 2>&1 \
 
 step "Install cartogra (gateway creates the tenant and admin)"
 helm upgrade --install cartogra infra/helm/cartogra -n cartogra \
-  -f infra/helm/cartogra/values-demo.yaml \
+  -f infra/helm/cartogra/values-production.yaml \
   --set global.imageRegistry= \
   --set global.imageTag=k3d \
   --set global.host=localhost \

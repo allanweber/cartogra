@@ -1,5 +1,5 @@
-# Production-shaped defaults (HA per .claude/rules/infra.md). The public demo overrides these
-# with values-demo.yaml (single node, ADR-0030).
+# Production-shaped defaults (HA per .claude/rules/infra.md). The production host overrides these
+# with values-production.yaml (single node, ADR-0032).
 
 global:
   environment: prod
@@ -21,8 +21,9 @@ ingress:
 alerting:
   enabled: false
 
-# Nightly pg_dump to S3-compatible object storage (Hetzner Object Storage in the demo).
-# Secret `backup.secretName` keys: S3_ACCESS_KEY, S3_SECRET_KEY. Retention = a bucket lifecycle rule.
+# Nightly pg_dump to S3-compatible object storage (Hetzner Object Storage in production).
+# Secret `backup.secretName` keys: S3_ACCESS_KEY, S3_SECRET_KEY. Writes <prefix>/daily/ nightly and <prefix>/monthly/ on the 1st;
+# retention = bucket lifecycle rules (30d daily, 365d monthly) + object lock (plans/025).
 backup:
   enabled: false
   schedule: "0 2 * * *"

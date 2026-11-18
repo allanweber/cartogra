@@ -1,6 +1,6 @@
 name: Images
 
-# Multi-arch (amd64 + arm64) image builds; the public demo runs on an ARM VM (ADR-0030).
+# Multi-arch (amd64 + arm64) image builds; production runs on an ARM VM (ADR-0032).
 # Builder stages run on the runner's platform (jars and JS bundles are arch-independent),
 # so only runtime stages run under QEMU. Pushes ghcr.io/<owner>/cartogra-<image>:<commit sha>;
 # deploy.yml installs a given sha. Every image is rebuilt on each push so one sha tags a full set.

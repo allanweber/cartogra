@@ -199,20 +199,20 @@ finish() {
 # the whole file before the first prompt, so an edit mid-run can't break it.
 # ──────────────────────────────────────────────────────────────────────────
 
-# Cartogra demo host: walks docs/runbooks/deployment.md §1–8 interactively.
-# Run with bash (not sh): bash infra/k8s/demo-host-wizard.sh
-# Values persist in ~/.config/cartogra-demo/demo.env (0600); re-runs skip finished stages.
+# Cartogra production host: walks docs/runbooks/deployment.md §1–8 interactively.
+# Run with bash (not sh): bash infra/k8s/production-host-wizard.sh
+# Values persist in ~/.config/cartogra-production/production.env (0600); re-runs skip finished stages.
 # BRANCH: the ref images.yml/deploy.yml run on.
 
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")" && git rev-parse --show-toplevel)
 BRANCH=main
 GH_REPO=allanweber/cartogra
 DOMAIN=cartogra.dev
-CONF_DIR="$HOME/.config/cartogra-demo"
+CONF_DIR="$HOME/.config/cartogra-production"
 S3=https://fsn1.your-objectstorage.com
-BUCKET=cartogra-demo-backups
+BUCKET=cartogra-production-backups
 IMAGES=(gateway registry topology contract ingestion frontend acme)
-export KUBECONFIG="$HOME/.kube/cartogra-demo"
+export KUBECONFIG="$HOME/.kube/cartogra-production"
 
 # run CMD... echoes a command, then runs it.
 run() { printf '  %s$ %s%s\n' "$DIM" "$*" "$RESET" >&2; "$@"; }
@@ -237,12 +237,12 @@ run_wizard() {
 
 TOTAL_STAGES=19
 mkdir -p "$CONF_DIR" && chmod 700 "$CONF_DIR"
-ENV_FILE="$CONF_DIR/demo.env"
+ENV_FILE="$CONF_DIR/production.env"
 # shellcheck disable=SC1090
 [[ -f "$ENV_FILE" ]] && { set -a; . "$ENV_FILE"; set +a; }
 cd "$REPO"
 
-banner "Cartogra demo host (plan 021 · 7b)"
+banner "Cartogra production host (plan 021 · 7b)"
 
 # ──────────────────────────────────────────────────────────────────────────
 stage "Tools and repo"
@@ -266,7 +266,7 @@ pause
 stage "Hetzner Cloud: API token and SSH key"
 if begin hcloud; then
   open_url "https://console.hetzner.cloud/projects"
-  step "Open (or create) the project for the demo."
+  step "Open (or create) the project for production."
   step "Security → API tokens → Generate API token, permission Read & Write."
   step "hcloud asks for the token next; paste it there."
   hcloud context list -o noheader -o columns=name | grep -qx cartogra || run hcloud context create cartogra
@@ -276,8 +276,8 @@ if begin hcloud; then
   SSH_PUBKEY="${SSH_PUBKEY/#\~/$HOME}"
   [[ -f "$SSH_PUBKEY" ]] || { warn "no such file: $SSH_PUBKEY"; exit 1; }
   write_env SSH_PUBKEY "$SSH_PUBKEY"
-  hcloud ssh-key describe cartogra-demo >/dev/null 2>&1 \
-    || run hcloud ssh-key create --name cartogra-demo --public-key-from-file "$SSH_PUBKEY"
+  hcloud ssh-key describe cartogra-production >/dev/null 2>&1 \
+    || run hcloud ssh-key create --name cartogra-production --public-key-from-file "$SSH_PUBKEY"
   finished hcloud
 fi
 
@@ -295,11 +295,15 @@ if begin s3; then
   if aws s3api head-bucket --bucket "$BUCKET" --endpoint-url "$S3" >/dev/null 2>&1; then
     say "Bucket $BUCKET already exists."
   else
-    run aws s3 mb "s3://$BUCKET" --endpoint-url "$S3" \
-      || { warn "Name taken? Change backup.s3.bucket in values-demo.yaml + deployment.md §10, then re-run."; exit 1; }
+    run aws s3api create-bucket --bucket "$BUCKET" --object-lock-enabled-for-bucket --endpoint-url "$S3" \
+      || { warn "Name taken? Change backup.s3.bucket in values-production.yaml + deployment.md §10, then re-run."; exit 1; }
   fi
-  run aws s3api put-bucket-lifecycle-configuration --bucket "$BUCKET" --endpoint-url "$S3" \
-    --lifecycle-configuration '{"Rules":[{"ID":"expire","Status":"Enabled","Filter":{"Prefix":"postgres/"},"Expiration":{"Days":7}}]}'
+  run aws s3api put-object-lock-configuration --bucket "$BUCKET" --endpoint-url "$S3" \
+    --object-lock-configuration '{"ObjectLockEnabled":"Enabled","Rule":{"DefaultRetention":{"Mode":"GOVERNANCE","Days":30}}}'
+  run aws s3api put-bucket-lifecycle-configuration --bucket "$BUCKET" --endpoint-url "$S3" --lifecycle-configuration '{"Rules":[
+    {"ID":"daily","Status":"Enabled","Filter":{"Prefix":"postgres/daily/"},"Expiration":{"Days":30},"NoncurrentVersionExpiration":{"NoncurrentDays":1}},
+    {"ID":"monthly","Status":"Enabled","Filter":{"Prefix":"postgres/monthly/"},"Expiration":{"Days":365},"NoncurrentVersionExpiration":{"NoncurrentDays":1}},
+    {"ID":"delete-markers","Status":"Enabled","Filter":{"Prefix":"postgres/"},"Expiration":{"ExpiredObjectDeleteMarker":true}}]}'
   finished s3
 fi
 
@@ -333,12 +337,12 @@ if begin mirror; then
 fi
 
 # ──────────────────────────────────────────────────────────────────────────
-stage "GitHub mirror: read-only token for the demo"
+stage "GitHub mirror: read-only token for production"
 if begin token; then
   open_url "https://github.com/settings/personal-access-tokens/new"
   step "Resource owner: $ACME_GITHUB_ORG"
   step "Repository access: Public repositories (read-only). No other permissions."
-  step "Never a personal token: the demo tenant is publicly readable."
+  step "Never a personal token: the guest tenant is publicly readable."
   ask_secret ACME_GITHUB_TOKEN "Paste the token (github_pat_...):"
   write_env ACME_GITHUB_TOKEN "$ACME_GITHUB_TOKEN"
   n=$(curl -sf -H "Authorization: Bearer $ACME_GITHUB_TOKEN" "https://api.github.com/orgs/$ACME_GITHUB_ORG/repos?per_page=100" | jq length) \
@@ -354,25 +358,25 @@ if begin vm; then
   ask MY_IP "Your IP for SSH (port 22):"
   [[ -n "$MY_IP" ]] || MY_IP="$myip"
   write_env MY_IP "$MY_IP"
-  if ! hcloud firewall describe cartogra-demo >/dev/null 2>&1; then
-    run hcloud firewall create --name cartogra-demo
-    run hcloud firewall add-rule cartogra-demo --direction in --protocol tcp --port 22   --source-ips "$MY_IP/32"
+  if ! hcloud firewall describe cartogra-production >/dev/null 2>&1; then
+    run hcloud firewall create --name cartogra-production
+    run hcloud firewall add-rule cartogra-production --direction in --protocol tcp --port 22   --source-ips "$MY_IP/32"
     for p in 80 443 6443; do
-      run hcloud firewall add-rule cartogra-demo --direction in --protocol tcp --port $p --source-ips 0.0.0.0/0 --source-ips ::/0
+      run hcloud firewall add-rule cartogra-production --direction in --protocol tcp --port $p --source-ips 0.0.0.0/0 --source-ips ::/0
     done
   else
     note "Firewall exists. If your IP changed, update the port 22 rule in the console."
   fi
-  if ! hcloud server describe cartogra-demo >/dev/null 2>&1; then
-    confirm "Create CAX21 server cartogra-demo (fsn1, else nbg1, else hel1; billed hourly)?" || exit 1
+  if ! hcloud server describe cartogra-production >/dev/null 2>&1; then
+    confirm "Create CAX21 server cartogra-production (fsn1, else nbg1, else hel1; billed hourly)?" || exit 1
     note "CAX21 is often out of stock. Retrying every 5 min until one location has it."
     note "Enter = retry now · Ctrl-C = stop (re-run resumes here)."
     attempt=0
-    until hcloud server describe cartogra-demo >/dev/null 2>&1; do
+    until hcloud server describe cartogra-production >/dev/null 2>&1; do
       attempt=$((attempt + 1))
       for loc in fsn1 nbg1 hel1; do
-        if out=$(hcloud server create --name cartogra-demo --type cax21 --image ubuntu-24.04 --location "$loc" \
-              --ssh-key cartogra-demo --firewall cartogra-demo 2>&1); then
+        if out=$(hcloud server create --name cartogra-production --type cax21 --image ubuntu-24.04 --location "$loc" \
+              --ssh-key cartogra-production --firewall cartogra-production 2>&1); then
           printf '  %s✓ created%s in %s on attempt %s\n' "$GREEN" "$RESET" "$loc" "$attempt"
           command -v notify-send >/dev/null 2>&1 && notify-send "Cartogra wizard" "CAX21 created in $loc" || true
           break 2
@@ -385,30 +389,30 @@ if begin vm; then
       read -r -t 300 _ || true
     done
   fi
-  write_env DEMO_IP "$(hcloud server ip cartogra-demo)"
-  say "Server IP: $DEMO_IP"
+  write_env HOST_IP "$(hcloud server ip cartogra-production)"
+  say "Server IP: $HOST_IP"
   finished vm
 fi
-DEMO_IP=$(_existing DEMO_IP || true)
+HOST_IP=$(_existing HOST_IP || true)
 
 # ──────────────────────────────────────────────────────────────────────────
-stage "DNS: $DOMAIN → $DEMO_IP"
-step "At your DNS provider: A record for $DOMAIN → $DEMO_IP (remove any other A/AAAA for it)."
-until [[ "$(dig +short "$DOMAIN" | tail -n1)" == "$DEMO_IP" ]]; do
+stage "DNS: $DOMAIN → $HOST_IP"
+step "At your DNS provider: A record for $DOMAIN → $HOST_IP (remove any other A/AAAA for it)."
+until [[ "$(dig +short "$DOMAIN" | tail -n1)" == "$HOST_IP" ]]; do
   note "dig says: $(dig +short "$DOMAIN" | tr '\n' ' ')"
   pause "Not yet. Press Enter to check again"
 done
-say "$DOMAIN resolves to $DEMO_IP."
+say "$DOMAIN resolves to $HOST_IP."
 
 # ──────────────────────────────────────────────────────────────────────────
 stage "k3s and admin kubeconfig"
 if begin k3s; then
   if ! kubectl get nodes >/dev/null 2>&1; then
-    run ssh -o StrictHostKeyChecking=accept-new "root@$DEMO_IP" \
-      "curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC='--tls-san $DEMO_IP --tls-san $DOMAIN' sh -"
+    run ssh -o StrictHostKeyChecking=accept-new "root@$HOST_IP" \
+      "curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC='--tls-san $HOST_IP --tls-san $DOMAIN' sh -"
     mkdir -p "$HOME/.kube"
-    run scp "root@$DEMO_IP:/etc/rancher/k3s/k3s.yaml" "$KUBECONFIG"
-    sed -i "s/127.0.0.1/$DEMO_IP/" "$KUBECONFIG" && chmod 600 "$KUBECONFIG"
+    run scp "root@$HOST_IP:/etc/rancher/k3s/k3s.yaml" "$KUBECONFIG"
+    sed -i "s/127.0.0.1/$HOST_IP/" "$KUBECONFIG" && chmod 600 "$KUBECONFIG"
   fi
   run kubectl get nodes
   note "Admin kubeconfig: $KUBECONFIG. It stays on this machine, never in CI."
@@ -504,7 +508,7 @@ if begin commit; then
   run git status --short infra/k8s/sealed/
   if confirm "Commit infra/k8s/sealed/ on $BRANCH and push?"; then
     run git add infra/k8s/sealed/
-    git diff --cached --quiet || run git commit -s -m "chore(infra): sealed secrets for the demo host (#129)" \
+    git diff --cached --quiet || run git commit -s -m "chore(infra): sealed secrets for the production host (#129)" \
       -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
     run git push origin "$BRANCH"
   fi
@@ -549,7 +553,7 @@ say "All 6 packages are public."
 pause
 
 # ──────────────────────────────────────────────────────────────────────────
-stage "CI access: deployer kubeconfig, demo environment"
+stage "CI access: deployer kubeconfig, production environment"
 if begin ci; then
   ask ALERT_EMAIL "Who receives alert emails:"
   write_env ALERT_EMAIL "$ALERT_EMAIL"
@@ -557,11 +561,11 @@ if begin ci; then
   tmpd=$(mktemp -d); CI="$tmpd/config"
   token=$(kubectl -n ci-deploy get secret deployer-token -o jsonpath='{.data.token}' | base64 -d)
   kubectl -n ci-deploy get secret deployer-token -o jsonpath='{.data.ca\.crt}' | base64 -d > "$tmpd/ca.crt"
-  kubectl --kubeconfig "$CI" config set-cluster demo --server="https://$DEMO_IP:6443" \
+  kubectl --kubeconfig "$CI" config set-cluster production --server="https://$HOST_IP:6443" \
     --certificate-authority="$tmpd/ca.crt" --embed-certs=true >/dev/null
   kubectl --kubeconfig "$CI" config set-credentials deployer --token="$token" >/dev/null
-  kubectl --kubeconfig "$CI" config set-context demo --cluster=demo --user=deployer --namespace=cartogra >/dev/null
-  kubectl --kubeconfig "$CI" config use-context demo >/dev/null
+  kubectl --kubeconfig "$CI" config set-context production --cluster=production --user=deployer --namespace=cartogra >/dev/null
+  kubectl --kubeconfig "$CI" config use-context production >/dev/null
   say "can-i list pods -n cartogra:        $(kubectl --kubeconfig "$CI" auth can-i list pods -n cartogra || true)   (expect yes)"
   say "can-i get secrets -n kube-system:   $(kubectl --kubeconfig "$CI" auth can-i get secrets -n kube-system || true)   (expect no)"
   pause
@@ -573,7 +577,7 @@ JSON
   gh variable set ACME_GITHUB_ORG --repo "$GH_REPO" --env production --body "$ACME_GITHUB_ORG"
   gh variable set ALERT_EMAIL --repo "$GH_REPO" --env production --body "$ALERT_EMAIL"
   rm -rf "$tmpd"
-  say "Set demo secret KUBECONFIG, variables ACME_GITHUB_ORG and ALERT_EMAIL."
+  say "Set production secret KUBECONFIG, variables ACME_GITHUB_ORG and ALERT_EMAIL."
   finished ci
 fi
 
@@ -589,7 +593,7 @@ if begin deploy; then
     [[ -n "$rid" ]] || read -r -t 5 _ || true
   done
   open_url "https://github.com/$GH_REPO/actions/runs/$rid"
-  step "Click Review deployments → demo → Approve and deploy."
+  step "Click Review deployments → production → Approve and deploy."
   note "Takes up to ~35 min (cartogra 15m + acme bootstrap 20m)."
   run gh run watch --repo "$GH_REPO" "$rid" --exit-status \
     || { warn "Deploy failed. Logs: gh run view $rid --log-failed; kubectl -n cartogra get pods"; exit 1; }

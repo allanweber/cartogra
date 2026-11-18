@@ -1,6 +1,6 @@
 # Test on a local cluster
 
-`infra/helm/local-test.sh` installs `infra/helm/cartogra` and `infra/helm/acme` on a k3d cluster (`cartogra-local`, http://localhost:8088) with demo values. The gateway creates the Acme tenant and the bootstrap Job seeds it. The script then checks the Acme pods, guest access, the ownership flow, a team save, a team member accepting a drift (the registry access check) and alerting, and stops at the first failure. On k3d it turns on `RESEND_TEST_MODE` (the invite token is read from the gateway log) and sets the drift sweep to 15s.
+`infra/helm/local-test.sh` installs `infra/helm/cartogra` and `infra/helm/acme` on a k3d cluster (`cartogra-local`, http://localhost:8088) with production values. The gateway creates the Acme tenant and the bootstrap Job seeds it. The script then checks the Acme pods, guest access, the ownership flow, a team save, a team member accepting a drift (the registry access check) and alerting, and stops at the first failure. On k3d it turns on `RESEND_TEST_MODE` (the invite token is read from the gateway log) and sets the drift sweep to 15s.
 
 ```bash
 sh infra/helm/local-test.sh              # delete the cluster if it exists, build images, install, seed, check

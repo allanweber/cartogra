@@ -1,9 +1,9 @@
 # Runbook: Deployment
 
-The only running environment is the **public demo**: one Hetzner ARM VM with single-node k3s
-([ADR-0030](../adr/0030-demo-on-single-node-k3s.md)). This runbook builds it from nothing and doubles as the
+The only running environment is **production** (cartogra.dev): one Hetzner ARM VM with single-node k3s
+([ADR-0032](../adr/0032-production-on-single-node-k3s.md)). This runbook builds it from nothing and doubles as the
 rebuild procedure (section 11). Charts: `infra/helm/cartogra` (the product) and `infra/helm/acme` (Acme Fintech,
-the simulated customer the demo shows).
+the simulated customer that production shows to guests).
 
 ```
 push to main ─▶ images.yml: ghcr.io/<owner>/cartogra-<image>:<sha> (amd64 + arm64)
@@ -26,8 +26,8 @@ Let's Encrypt, GHCR, `deploy.yml`, the S3 backup and alert email delivery. On a 
 restore (section 10), restoring the Sealed Secrets key, and the CI identity's denials. **Never run on the host:**
 rollback (section 9), restore (section 10) and rebuild (section 11).
 
-**Wizard.** `bash infra/k8s/demo-host-wizard.sh` walks sections 1–8 interactively: it opens each console page, saves
-values to `~/.config/cartogra-demo/demo.env` (outside the repo), and skips finished stages on a re-run. It retries
+**Wizard.** `bash infra/k8s/production-host-wizard.sh` walks sections 1–8 interactively: it opens each console page, saves
+values to `~/.config/cartogra-production/production.env` (outside the repo), and skips finished stages on a re-run. It retries
 CAX21 creation across fsn1, nbg1 and hel1 every 5 minutes while the type is out of stock.
 
 ## 1. Before you start
@@ -61,26 +61,35 @@ Do these first; section 4 seals the results. Keep every value in your password m
 
 ```bash
 hcloud context create cartogra
-hcloud ssh-key create --name cartogra-demo --public-key-from-file ~/.ssh/id_ed25519.pub
+hcloud ssh-key create --name cartogra-production --public-key-from-file ~/.ssh/id_ed25519.pub
 ```
 
 **Hetzner Object Storage.** Console → Security → S3 credentials → generate; note the access and secret keys. Then
-create the bucket with a 7-day expiry. Bucket names are global: if this one is taken, change `backup.s3.bucket` in
-`values-demo.yaml` and section 10.
+create the bucket with object lock (you can set it only at creation), a 30-day governance retention, and lifecycle
+rules: `postgres/daily/` 30 days, `postgres/monthly/` 365 days. Bucket names are global: if this one is taken, change
+`backup.s3.bucket` in `values-production.yaml` and section 10.
 
 ```bash
 export AWS_ACCESS_KEY_ID=<access key> AWS_SECRET_ACCESS_KEY=<secret key> AWS_DEFAULT_REGION=fsn1
-S3=https://fsn1.your-objectstorage.com
-aws s3 mb s3://cartogra-demo-backups --endpoint-url $S3
-aws s3api put-bucket-lifecycle-configuration --bucket cartogra-demo-backups --endpoint-url $S3 \
-  --lifecycle-configuration '{"Rules":[{"ID":"expire","Status":"Enabled","Filter":{"Prefix":"postgres/"},"Expiration":{"Days":7}}]}'
+S3=https://fsn1.your-objectstorage.com B=cartogra-production-backups
+aws s3api create-bucket --bucket $B --object-lock-enabled-for-bucket --endpoint-url $S3
+aws s3api put-object-lock-configuration --bucket $B --endpoint-url $S3 \
+  --object-lock-configuration '{"ObjectLockEnabled":"Enabled","Rule":{"DefaultRetention":{"Mode":"GOVERNANCE","Days":30}}}'
+aws s3api put-bucket-lifecycle-configuration --bucket $B --endpoint-url $S3 --lifecycle-configuration '{"Rules":[
+  {"ID":"daily","Status":"Enabled","Filter":{"Prefix":"postgres/daily/"},"Expiration":{"Days":30},"NoncurrentVersionExpiration":{"NoncurrentDays":1}},
+  {"ID":"monthly","Status":"Enabled","Filter":{"Prefix":"postgres/monthly/"},"Expiration":{"Days":365},"NoncurrentVersionExpiration":{"NoncurrentDays":1}},
+  {"ID":"delete-markers","Status":"Enabled","Filter":{"Prefix":"postgres/"},"Expiration":{"ExpiredObjectDeleteMarker":true}}]}'
 ```
+
+Check the lock: a delete of a version (`aws s3api delete-object --version-id <id>`, ID from `head-object`) must fail with
+`forbidden by object lock`. A delete without `--version-id` only adds a delete marker; remove the marker by its version
+ID to restore the file.
 
 **Resend.** [resend.com/domains](https://resend.com/domains) → add `cartogra.dev`, create the DNS records it lists in
 the domain's DNS zone (Cloudflare for `cartogra.dev`), wait for **Verified**. Then API Keys → create one with **Sending access**, limited to that domain. This is
 `RESEND_API_KEY`; alerts come from `alerts@cartogra.dev`.
 
-**GitHub mirror.** The demo scans a public GitHub copy of Acme's 21 repos (the seed keeps Azure DevOps for local
+**GitHub mirror.** Production scans a public GitHub copy of Acme's 21 repos (the seed keeps Azure DevOps for local
 runs).
 
 1. Create a public organization at [github.com/organizations/new](https://github.com/organizations/new).
@@ -95,7 +104,7 @@ runs).
 
 3. Create a [fine-grained token](https://github.com/settings/personal-access-tokens/new): resource owner = that
    org, repository access **Public repositories (read-only)**, no other permissions. This is `ACME_GITHUB_TOKEN`.
-   Never reuse a personal token here: the demo tenant is publicly readable.
+   Never reuse a personal token here: the guest tenant is publicly readable.
 
 The Acme tenant holds only fabricated data (ADR-0019 §9): the bootstrap admin is `admin@acme-fintech.invalid`
 (reserved TLD, no mail delivered; recover a lost password by re-sealing `BOOTSTRAP_ADMIN_PASSWORD` and resetting the
@@ -104,14 +113,14 @@ hash in the database), and nobody is invited into the tenant.
 ## 2. VM and k3s
 
 ```bash
-hcloud firewall create --name cartogra-demo
-hcloud firewall add-rule cartogra-demo --direction in --protocol tcp --port 22   --source-ips <your-ip>/32
-hcloud firewall add-rule cartogra-demo --direction in --protocol tcp --port 80   --source-ips 0.0.0.0/0 --source-ips ::/0
-hcloud firewall add-rule cartogra-demo --direction in --protocol tcp --port 443  --source-ips 0.0.0.0/0 --source-ips ::/0
-hcloud firewall add-rule cartogra-demo --direction in --protocol tcp --port 6443 --source-ips 0.0.0.0/0 --source-ips ::/0
-hcloud server create --name cartogra-demo --type cax21 --image ubuntu-24.04 --location fsn1 \
-  --ssh-key cartogra-demo --firewall cartogra-demo
-IP=$(hcloud server ip cartogra-demo); echo "$IP"
+hcloud firewall create --name cartogra-production
+hcloud firewall add-rule cartogra-production --direction in --protocol tcp --port 22   --source-ips <your-ip>/32
+hcloud firewall add-rule cartogra-production --direction in --protocol tcp --port 80   --source-ips 0.0.0.0/0 --source-ips ::/0
+hcloud firewall add-rule cartogra-production --direction in --protocol tcp --port 443  --source-ips 0.0.0.0/0 --source-ips ::/0
+hcloud firewall add-rule cartogra-production --direction in --protocol tcp --port 6443 --source-ips 0.0.0.0/0 --source-ips ::/0
+hcloud server create --name cartogra-production --type cax21 --image ubuntu-24.04 --location fsn1 \
+  --ssh-key cartogra-production --firewall cartogra-production
+IP=$(hcloud server ip cartogra-production); echo "$IP"
 ```
 
 CAX (ARM) is often out of stock ("Limited availability" in the console). Try `nbg1` and `hel1` too, or let the wizard
@@ -136,9 +145,9 @@ Install k3s and fetch the admin kubeconfig. It stays on your machine, never in C
 ssh -o StrictHostKeyChecking=accept-new root@$IP \
   "curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC='--tls-san $IP --tls-san cartogra.dev' sh -"
 mkdir -p ~/.kube
-scp root@$IP:/etc/rancher/k3s/k3s.yaml ~/.kube/cartogra-demo
-sed -i "s/127.0.0.1/$IP/" ~/.kube/cartogra-demo && chmod 600 ~/.kube/cartogra-demo
-export KUBECONFIG=~/.kube/cartogra-demo
+scp root@$IP:/etc/rancher/k3s/k3s.yaml ~/.kube/cartogra-production
+sed -i "s/127.0.0.1/$IP/" ~/.kube/cartogra-production && chmod 600 ~/.kube/cartogra-production
+export KUBECONFIG=~/.kube/cartogra-production
 kubectl get nodes   # Ready
 ```
 
@@ -153,9 +162,9 @@ policies would be ignored without any error.
 needs the server powered off, so expect a few minutes of downtime. Keep the disk size, so you can resize back down.
 
 ```bash
-hcloud server shutdown cartogra-demo
-hcloud server change-type --keep-disk cartogra-demo cax31
-hcloud server poweron cartogra-demo
+hcloud server shutdown cartogra-production
+hcloud server change-type --keep-disk cartogra-production cax31
+hcloud server poweron cartogra-production
 ```
 
 ## 3. Cluster add-ons
@@ -251,7 +260,7 @@ read -rsp 'S3_ACCESS_KEY: ' S3_ACCESS_KEY; echo
 read -rsp 'S3_SECRET_KEY: ' S3_SECRET_KEY; echo
 ```
 
-Seal and apply. OAuth login is off in the demo, so its two secrets only need a placeholder:
+Seal and apply. OAuth login is off in production, so its two secrets only need a placeholder:
 
 ```bash
 mkdir -p infra/k8s/sealed
@@ -283,8 +292,8 @@ Commit the encrypted files. On an open phase branch (the first build), commit th
 protected, so through a PR:
 
 ```bash
-git switch -c chore/demo-sealed-secrets
-git add infra/k8s/sealed/ && git commit -m "chore(infra): sealed secrets for the demo host"
+git switch -c chore/production-sealed-secrets
+git add infra/k8s/sealed/ && git commit -m "chore(infra): sealed secrets for the production host"
 git push -u origin HEAD && gh pr create --fill && gh pr merge --squash --auto
 ```
 
@@ -328,13 +337,13 @@ key), other namespaces or the node.
 
 ```bash
 TOKEN=$(kubectl -n ci-deploy get secret deployer-token -o jsonpath='{.data.token}' | base64 -d)
-kubectl -n ci-deploy get secret deployer-token -o jsonpath='{.data.ca\.crt}' | base64 -d > /tmp/demo-ca.crt
+kubectl -n ci-deploy get secret deployer-token -o jsonpath='{.data.ca\.crt}' | base64 -d > /tmp/production-ca.crt
 CI=$(mktemp)
-kubectl --kubeconfig "$CI" config set-cluster demo --server="https://$IP:6443" \
-  --certificate-authority=/tmp/demo-ca.crt --embed-certs=true
+kubectl --kubeconfig "$CI" config set-cluster production --server="https://$IP:6443" \
+  --certificate-authority=/tmp/production-ca.crt --embed-certs=true
 kubectl --kubeconfig "$CI" config set-credentials deployer --token="$TOKEN"
-kubectl --kubeconfig "$CI" config set-context demo --cluster=demo --user=deployer --namespace=cartogra
-kubectl --kubeconfig "$CI" config use-context demo
+kubectl --kubeconfig "$CI" config set-context production --cluster=production --user=deployer --namespace=cartogra
+kubectl --kubeconfig "$CI" config use-context production
 kubectl --kubeconfig "$CI" auth can-i list pods -n cartogra        # yes
 kubectl --kubeconfig "$CI" auth can-i get secrets -n kube-system   # no
 
@@ -345,7 +354,7 @@ gh api -X POST repos/allanweber/cartogra/environments/production/deployment-bran
 gh secret set KUBECONFIG --repo allanweber/cartogra --env production < "$CI"
 gh variable set ACME_GITHUB_ORG --repo allanweber/cartogra --env production --body <org>
 gh variable set ALERT_EMAIL --repo allanweber/cartogra --env production --body <who receives alerts>
-rm -f "$CI" /tmp/demo-ca.crt
+rm -f "$CI" /tmp/production-ca.crt
 ```
 
 To rotate the token: `kubectl -n ci-deploy delete secret deployer-token`, re-apply `cluster-setup.yaml`, repeat the
@@ -367,7 +376,7 @@ By hand, the same commands:
 
 ```bash
 helm upgrade --install cartogra infra/helm/cartogra -n cartogra \
-  -f infra/helm/cartogra/values-demo.yaml --set global.imageTag=$SHA \
+  -f infra/helm/cartogra/values-production.yaml --set global.imageTag=$SHA \
   --set alerting.email.to=<alert email> --wait --timeout 15m
 helm upgrade --install acme infra/helm/acme -n acme-system \
   --set image.tag=$SHA --set bootstrap.githubOrg=<org> --wait --timeout 20m
@@ -375,7 +384,7 @@ helm upgrade --install acme infra/helm/acme -n acme-system \
 
 What happens on a fresh install:
 
-1. Registry runs Flyway; the gateway's tenant bootstrap (`BOOTSTRAP_*` in `values-demo.yaml`) creates the Acme
+1. Registry runs Flyway; the gateway's tenant bootstrap (`BOOTSTRAP_*` in `values-production.yaml`) creates the Acme
    tenant (fixed UUID, business plan) and its verified admin once the tables exist (`tenant_bootstrap.created`
    in the gateway log). Registry, topology and ingestion may restart once while Postgres comes up.
 2. The `acme` release adopts the `acme-fintech` namespace and creates the 21 fake services and the read-only
@@ -455,14 +464,15 @@ Same for `acme` in `acme-system`. Then re-run **Deploy**.
 
 ## 10. Backups and restore
 
-`postgres-backup` (`values-demo.yaml` → `backup`) dumps the database nightly at 02:00 UTC to
-`s3://cartogra-demo-backups/postgres/cartogra-<timestamp>.dump`. The bucket's lifecycle rule (section 1) expires files
-after 7 days. Run one now:
+`postgres-backup` (`values-production.yaml` → `backup`) dumps the database nightly at 02:00 UTC to
+`s3://cartogra-production-backups/postgres/daily/cartogra-<timestamp>.dump`, and on the 1st of the month also to
+`postgres/monthly/`. Lifecycle rules (section 1) keep daily files 30 days and monthly files 365 days; object lock blocks
+deletes for 30 days. Run one now:
 
 ```bash
 kubectl -n cartogra create job --from=cronjob/postgres-backup backup-manual
 kubectl -n cartogra logs -f job/backup-manual -c upload
-aws s3 ls s3://cartogra-demo-backups/postgres/ --endpoint-url https://fsn1.your-objectstorage.com
+aws s3 ls s3://cartogra-production-backups/postgres/daily/ --endpoint-url https://fsn1.your-objectstorage.com
 kubectl -n cartogra delete job backup-manual
 ```
 
@@ -470,7 +480,7 @@ Restore (needs the `AWS_*` variables from section 1). Scaling down also stops th
 
 ```bash
 kubectl -n cartogra scale deploy --all --replicas=0
-aws s3 cp s3://cartogra-demo-backups/postgres/<file>.dump restore.dump --endpoint-url https://fsn1.your-objectstorage.com
+aws s3 cp s3://cartogra-production-backups/postgres/daily/<file>.dump restore.dump --endpoint-url https://fsn1.your-objectstorage.com
 kubectl -n cartogra cp restore.dump postgres-0:/tmp/restore.dump
 kubectl -n cartogra exec postgres-0 -- sh -c 'pg_restore --clean --if-exists -U "$(cat /etc/cartogra/secrets/DB_USERNAME)" -d cartogra /tmp/restore.dump'
 kubectl -n cartogra exec postgres-0 -- rm /tmp/restore.dump

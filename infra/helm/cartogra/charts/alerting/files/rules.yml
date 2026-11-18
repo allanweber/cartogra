@@ -55,7 +55,7 @@ groups:
         annotations:
           summary: "{{ $labels.namespace }}/{{ $labels.pod }} {{ $labels.container }} above 90% of its memory limit for 15 minutes"
           runbook: Raise that container's memory limit in the chart values; resize the VM if the node has no room
-      # cAdvisor's OOM counter stays 0 on k3s (checked on the demo host), so restarts are the signal: a restart
+      # cAdvisor's OOM counter stays 0 on k3s (checked on the production host), so restarts are the signal: a restart
       # gives the container a new start time. Covers OOM kills and crash loops; a rollout makes new pods instead.
       - alert: ContainerRestarted
         expr: changes(max by (namespace, pod, container) (container_start_time_seconds{container!=""})[30m:1m]) > 0
