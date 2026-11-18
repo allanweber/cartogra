@@ -20,6 +20,7 @@ ALL_SERVICES=(
   gateway=http://localhost:8080/actuator
   registry=http://localhost:8081/api/v1/registry/actuator
   topology=http://localhost:8082/api/v1/topology/actuator
+  contract=http://localhost:8083/api/v1/contracts/actuator
   ingestion=http://localhost:8085/api/v1/ingestion/actuator
 )
 COMPOSE_FILE_PATH=${COMPOSE_FILE_PATH:-$(dirname "$0")/../docker-compose/docker-compose.yml}
