@@ -18,13 +18,15 @@ image:
 # Where the fake services send spans (the cartogra release's collector).
 otlpEndpoint: http://collector.cartogra.svc.cluster.local:4318
 
+# Each fake service is a small Node.js process (~40Mi). The heap cap keeps it inside the limit.
+nodeOptions: "--max-old-space-size=24"
 resources:
   requests:
     cpu: 25m
-    memory: 96Mi
+    memory: 48Mi
   limits:
     cpu: 50m
-    memory: 96Mi
+    memory: 48Mi
 
 # Read-only identity Cartogra uses to discover the Services (get/list/watch only).
 reader:

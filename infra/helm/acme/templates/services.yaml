@@ -46,6 +46,8 @@ spec:
           env:
             - name: SERVICE_NAME
               value: {{ .name }}
+            - name: NODE_OPTIONS
+              value: {{ $.Values.nodeOptions | quote }}
             - name: ACME_NAMESPACE
               value: {{ $ns }}
             - name: ACME_TENANT_ID

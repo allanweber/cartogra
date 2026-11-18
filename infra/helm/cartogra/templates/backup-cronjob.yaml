@@ -50,19 +50,24 @@ spec:
                 - { name: backup, mountPath: /backup }
                 - { name: postgres-secrets, mountPath: /secrets/postgres, readOnly: true }
                 - { name: tmp, mountPath: /tmp }
-          containers:
+            # Hetzner first, then the R2 copy (backup.offsite). A failure stops the job, so the heartbeat is not sent.
             - name: upload
               image: {{ $b.uploader.image }}
               command: ["sh", "-c"]
               args:
                 - >-
-                  export AWS_ACCESS_KEY_ID="$(cat /secrets/s3/S3_ACCESS_KEY)"
-                  AWS_SECRET_ACCESS_KEY="$(cat /secrets/s3/S3_SECRET_KEY)" &&
                   FILE="cartogra-$(date -u +%Y-%m-%dT%H%MZ).dump" &&
-                  BASE="s3://{{ required "backup.s3.bucket is required" $b.s3.bucket }}/{{ $b.s3.prefix }}" &&
-                  S3="--endpoint-url {{ required "backup.s3.endpoint is required" $b.s3.endpoint }} --region {{ required "backup.s3.region is required" $b.s3.region }} --checksum-algorithm CRC32" &&
-                  aws s3 cp /backup/cartogra.dump "$BASE/daily/$FILE" $S3 &&
-                  if [ "$(date -u +%d)" = "01" ]; then aws s3 cp /backup/cartogra.dump "$BASE/monthly/$FILE" $S3; fi
+                  MONTHLY="$([ "$(date -u +%d%H)" = "0100" ] && echo yes || true)" &&
+                  put() { aws s3 cp /backup/cartogra.dump "$1/daily/$FILE" $2 &&
+                  if [ -n "$MONTHLY" ]; then aws s3 cp /backup/cartogra.dump "$1/monthly/$FILE" $2; fi; } &&
+                  export AWS_ACCESS_KEY_ID="$(cat /secrets/s3/S3_ACCESS_KEY)" AWS_SECRET_ACCESS_KEY="$(cat /secrets/s3/S3_SECRET_KEY)" &&
+                  put "s3://{{ required "backup.s3.bucket is required" $b.s3.bucket }}/{{ $b.s3.prefix }}"
+                  "--endpoint-url {{ required "backup.s3.endpoint is required" $b.s3.endpoint }} --region {{ required "backup.s3.region is required" $b.s3.region }} --checksum-algorithm CRC32"
+                  {{- if $b.offsite.enabled }} &&
+                  export AWS_ACCESS_KEY_ID="$(cat /secrets/offsite/R2_ACCESS_KEY)" AWS_SECRET_ACCESS_KEY="$(cat /secrets/offsite/R2_SECRET_KEY)" &&
+                  put "s3://{{ required "backup.offsite.bucket is required" $b.offsite.bucket }}/{{ $b.s3.prefix }}"
+                  "--endpoint-url $(cat /secrets/offsite/R2_ENDPOINT) --region auto --checksum-algorithm CRC32"
+                  {{- end }}
               env:
                 - name: HOME
                   value: /tmp
@@ -76,7 +81,30 @@ spec:
               volumeMounts:
                 - { name: backup, mountPath: /backup, readOnly: true }
                 - { name: s3-secrets, mountPath: /secrets/s3, readOnly: true }
+                {{- if $b.offsite.enabled }}
+                - { name: offsite-secrets, mountPath: /secrets/offsite, readOnly: true }
+                {{- end }}
                 - { name: tmp, mountPath: /tmp }
+          containers:
+            # Runs only after both uploads succeeded. A late ping makes healthchecks.io send an email.
+            - name: heartbeat
+              image: {{ $b.heartbeat.image }}
+              command: ["sh", "-c"]
+              args:
+                - >-
+                  if [ -f /secrets/heartbeat/BACKUP_URL ]; then
+                  curl -fsS -m 10 --retry 3 -o /dev/null "$(cat /secrets/heartbeat/BACKUP_URL)" && echo "heartbeat sent";
+                  else echo "no heartbeat secret: {{ $b.heartbeat.secretName }}"; fi
+              resources:
+                requests: { cpu: 10m, memory: 16Mi }
+                limits: { cpu: 50m, memory: 16Mi }
+              securityContext:
+                readOnlyRootFilesystem: true
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: [ALL]
+              volumeMounts:
+                - { name: heartbeat-secrets, mountPath: /secrets/heartbeat, readOnly: true }
           volumes:
             - name: backup
               emptyDir: {}
@@ -88,4 +116,13 @@ spec:
             - name: s3-secrets
               secret:
                 secretName: {{ $b.secretName }}
+            {{- if $b.offsite.enabled }}
+            - name: offsite-secrets
+              secret:
+                secretName: {{ $b.offsite.secretName }}
+            {{- end }}
+            - name: heartbeat-secrets
+              secret:
+                secretName: {{ $b.heartbeat.secretName }}
+                optional: true
 {{- end }}

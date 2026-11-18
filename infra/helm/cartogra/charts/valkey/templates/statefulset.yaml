@@ -39,7 +39,7 @@ spec:
         - name: valkey
           image: {{ include "common.image" . }}
           imagePullPolicy: IfNotPresent
-          args: ["valkey-server", "--dir", "/data", "--maxmemory", "96mb", "--maxmemory-policy", "allkeys-lru"]
+          args: ["valkey-server", "--dir", "/data", "--maxmemory", {{ .Values.maxmemory | quote }}, "--maxmemory-policy", "allkeys-lru"]
           ports:
             - name: valkey
               containerPort: 6379

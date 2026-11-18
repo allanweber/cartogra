@@ -1,0 +1,129 @@
+{{- if and .Values.backup.enabled .Values.backup.verify.enabled }}
+{{- $b := .Values.backup }}
+{{- $labels := dict "app" "postgres-backup-verify" "version" (.Values.global.imageTag | default .Chart.AppVersion) "environment" .Values.global.environment "team" .Values.global.team }}
+# Weekly restore test: the newest daily dump goes into a throwaway Postgres in an emptyDir, then row checks run.
+# The job has no access to the live database. Success sends the second heartbeat (VERIFY_URL).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup-verify
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+spec:
+  schedule: {{ $b.verify.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            {{- toYaml $labels | nindent 12 }}
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            - name: download
+              image: {{ $b.uploader.image }}
+              command: ["sh", "-c"]
+              args:
+                - >-
+                  export AWS_ACCESS_KEY_ID="$(cat /secrets/s3/S3_ACCESS_KEY)" AWS_SECRET_ACCESS_KEY="$(cat /secrets/s3/S3_SECRET_KEY)" &&
+                  S3="--endpoint-url {{ $b.s3.endpoint }} --region {{ $b.s3.region }}" &&
+                  BASE="s3://{{ $b.s3.bucket }}/{{ $b.s3.prefix }}/daily/" &&
+                  LATEST="$(aws s3 ls "$BASE" $S3 | awk '{print $4}' | grep '\.dump$' | sort | tail -n 1)" &&
+                  test -n "$LATEST" && echo "newest dump: $LATEST" &&
+                  aws s3 cp "$BASE$LATEST" /work/latest.dump $S3
+              env:
+                - name: HOME
+                  value: /tmp
+              resources:
+                {{- toYaml $b.resources | nindent 16 }}
+              securityContext:
+                readOnlyRootFilesystem: true
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: [ALL]
+              volumeMounts:
+                - { name: work, mountPath: /work }
+                - { name: s3-secrets, mountPath: /secrets/s3, readOnly: true }
+                - { name: tmp, mountPath: /tmp }
+            - name: restore
+              image: {{ $b.postgres.image }}
+              command: ["sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  export PGHOST=/work/run PGUSER=verify
+                  mkdir -p /work/run
+                  initdb -D /work/pg -U verify --auth=trust --no-locale -E UTF8 >/dev/null
+                  pg_ctl -D /work/pg -w -l /work/pg.log -o "-c listen_addresses='' -k /work/run -c shared_buffers=32MB -c fsync=off" start
+                  createdb cartogra
+                  pg_restore -d cartogra --no-owner --no-acl --exit-on-error /work/latest.dump
+                  psql -d cartogra -tA -c "select schemaname||'.'||relname||' '||n_live_tup from pg_stat_user_tables order by 1" || true
+                  fail=0
+                  for t in {{ join " " $b.verify.requiredTables }}; do
+                    n=$(psql -d cartogra -tA -c "select count(*) from $t")
+                    echo "check $t: $n rows"
+                    [ "$n" -gt 0 ] || { echo "FAIL: $t is empty"; fail=1; }
+                  done
+                  pg_ctl -D /work/pg -m fast stop
+                  [ "$fail" = 0 ] && touch /work/ok
+              resources:
+                {{- toYaml $b.verify.resources | nindent 16 }}
+              # initdb needs a user that exists in /etc/passwd: `postgres` is uid 70 in the alpine image.
+              securityContext:
+                runAsUser: 70
+                runAsGroup: 70
+                readOnlyRootFilesystem: true
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: [ALL]
+              volumeMounts:
+                - { name: work, mountPath: /work }
+                - { name: tmp, mountPath: /tmp }
+          containers:
+            - name: heartbeat
+              image: {{ $b.heartbeat.image }}
+              command: ["sh", "-c"]
+              args:
+                - >-
+                  test -f /work/ok &&
+                  if [ -f /secrets/heartbeat/VERIFY_URL ]; then
+                  curl -fsS -m 10 --retry 3 -o /dev/null "$(cat /secrets/heartbeat/VERIFY_URL)" && echo "heartbeat sent";
+                  else echo "no heartbeat secret: {{ $b.heartbeat.secretName }}"; fi
+              resources:
+                requests: { cpu: 10m, memory: 16Mi }
+                limits: { cpu: 50m, memory: 16Mi }
+              securityContext:
+                readOnlyRootFilesystem: true
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: [ALL]
+              volumeMounts:
+                - { name: work, mountPath: /work, readOnly: true }
+                - { name: heartbeat-secrets, mountPath: /secrets/heartbeat, readOnly: true }
+          volumes:
+            - name: work
+              emptyDir:
+                sizeLimit: 2Gi
+            - name: tmp
+              emptyDir: {}
+            - name: s3-secrets
+              secret:
+                secretName: {{ $b.secretName }}
+            - name: heartbeat-secrets
+              secret:
+                secretName: {{ $b.heartbeat.secretName }}
+                optional: true
+{{- end }}

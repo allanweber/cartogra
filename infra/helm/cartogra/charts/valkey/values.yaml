@@ -9,6 +9,9 @@ persistence:
   size: 1Gi
   storageClass: ""
 
+# Keep below the memory limit (eviction policy: allkeys-lru).
+maxmemory: 96mb
+
 resources:
   requests:
     cpu: 50m
