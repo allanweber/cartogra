@@ -54,9 +54,10 @@ test('contract list, version timeline and side-by-side diff', async ({ page }) =
   })
   expect(published.status()).toBe(201)
 
-  await page.goto(`/contracts?q=${encodeURIComponent(name)}`)
+  // A full page load opens the onboarding wizard again (its dismissal is React state only), so skip it each time.
   await expect(async () => {
-    await page.reload()
+    await page.goto(`/contracts?q=${encodeURIComponent(name)}`)
+    await page.getByRole('button', { name: 'Skip setup' }).click({ timeout: 5_000 })
     await expect(page.getByRole('link', { name })).toBeVisible({ timeout: 2_000 })
   }).toPass({ timeout: 20_000 })
   await expect(page.getByText('v2 · 1.1.0')).toBeVisible()
