@@ -2,7 +2,9 @@ package io.cartogra.contract.infrastructure.registry;
 
 import io.cartogra.contract.config.RegistryClientProperties;
 import io.cartogra.web.client.ServiceCallRetry;
+import io.cartogra.web.client.ServiceTokenRequestInterceptor;
 import io.cartogra.web.client.TraceparentRequestInterceptor;
+import io.cartogra.web.security.InternalTokenCodec;
 import io.github.resilience4j.retry.Retry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,13 +27,15 @@ public class RegistryNameClient {
     private final Retry retry;
 
     public RegistryNameClient(RegistryClientProperties props,
-                              TraceparentRequestInterceptor traceparentRequestInterceptor) {
+                              TraceparentRequestInterceptor traceparentRequestInterceptor,
+            InternalTokenCodec internalTokenCodec) {
         var factory = new JdkClientHttpRequestFactory(HttpClient.newBuilder().connectTimeout(props.timeout()).build());
         factory.setReadTimeout(props.timeout());
         this.restClient = RestClient.builder()
                 .baseUrl(props.baseUrl())
                 .requestFactory(factory)
                 .requestInterceptor(traceparentRequestInterceptor)
+                .requestInterceptor(new ServiceTokenRequestInterceptor(internalTokenCodec, "contract", "registry"))
                 .build();
         this.retry = ServiceCallRetry.threeAttempts("registry-service-names", log);
     }
@@ -40,6 +44,7 @@ public class RegistryNameClient {
     public Map<UUID, String> findNames(UUID tenantId, Collection<UUID> serviceIds) {
         NamesEnvelope envelope = retry.executeSupplier(() -> restClient.post()
                 .uri("/internal/services/names")
+                .header("X-Tenant-Id", tenantId.toString())
                 .body(new NamesRequest(tenantId, serviceIds))
                 .retrieve()
                 .body(NamesEnvelope.class));

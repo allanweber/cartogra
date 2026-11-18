@@ -1,5 +1,6 @@
 package io.cartogra.registry;
 
+import io.cartogra.web.security.InternalTokens;
 import io.cartogra.test.OpenApiContractValidator;
 import io.cartogra.test.KafkaTestSupport;
 import io.cartogra.test.PostgresTestSupport;
@@ -169,7 +170,7 @@ class RegistryEnvelopeContractTest {
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", TENANT.toString())
-                .header("X-User-Roles", "ADMIN")
+                .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, "ADMIN"))
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
     }
@@ -178,6 +179,7 @@ class RegistryEnvelopeContractTest {
         return HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("X-Tenant-Id", TENANT.toString())
+                .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, ""))
                 .GET()
                 .build();
     }

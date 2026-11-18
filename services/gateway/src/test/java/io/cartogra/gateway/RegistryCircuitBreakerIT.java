@@ -76,6 +76,7 @@ class RegistryCircuitBreakerIT {
                         "--spring.data.redis.port=" + REDIS.getMappedPort(6379),
                         "--REGISTRY_URI=" + wireMock.baseUrl(),
                         "--app.jwt.secret=test-secret-32-bytes-padding-here!",
+                        "--app.internal-token.key=" + io.cartogra.web.security.InternalTokens.KEY,
                         "--app.jwt.access-token-expiry-seconds=900",
                         "--app.jwt.refresh-token-expiry-seconds=2592000",
                         "--app.frontend.base-url=http://localhost:3000",

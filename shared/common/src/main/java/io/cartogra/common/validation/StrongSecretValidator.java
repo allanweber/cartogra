@@ -1,4 +1,4 @@
-package io.cartogra.gateway.config;
+package io.cartogra.common.validation;
 
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;

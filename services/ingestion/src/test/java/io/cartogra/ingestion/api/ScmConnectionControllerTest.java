@@ -1,5 +1,6 @@
 package io.cartogra.ingestion.api;
 
+import io.cartogra.web.security.InternalTokens;
 import io.cartogra.common.identity.Actor;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.ingestion.domain.ScmConnection;
@@ -47,7 +48,7 @@ class ScmConnectionControllerTest {
         var validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
         mockMvc = withInternalAuth(MockMvcBuilders
-                .standaloneSetup(new ScmConnectionController(scmConnectionService)))
+                .standaloneSetup(new ScmConnectionController(scmConnectionService)), "ingestion")
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setValidator(validator)
                 .build();
@@ -59,6 +60,7 @@ class ScmConnectionControllerTest {
 
         mockMvc.perform(post("/scm-connections")
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"provider":"github","config":"{\\"token\\":\\"ghp_test\\"}"}"""))
@@ -72,6 +74,7 @@ class ScmConnectionControllerTest {
     void createWithInvalidProviderReturns400() throws Exception {
         mockMvc.perform(post("/scm-connections")
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"provider":"bitbucket","config":"{}"}"""))
@@ -83,6 +86,7 @@ class ScmConnectionControllerTest {
     void createWithProviderExceedingMaxLengthReturns400() throws Exception {
         mockMvc.perform(post("/scm-connections")
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"provider":"%s","config":"{}"}""".formatted("x".repeat(51))))
@@ -108,6 +112,7 @@ class ScmConnectionControllerTest {
 
         mockMvc.perform(post("/scm-connections")
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"provider":"github","config":"{\\"token\\":\\"secret\\"}"}"""))
@@ -123,7 +128,8 @@ class ScmConnectionControllerTest {
         when(scmConnectionService.list(TENANT, 20, 0)).thenReturn(page);
 
         mockMvc.perform(get("/scm-connections")
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, "")))
                 .andExpect(status().isOk())
                 .andExpect(header().exists("X-Trace-Id"))
                 .andExpect(jsonPath("$.data.total").value(2))
@@ -136,6 +142,7 @@ class ScmConnectionControllerTest {
 
         mockMvc.perform(get("/scm-connections")
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, ""))
                         .param("limit", "5")
                         .param("offset", "10"))
                 .andExpect(status().isOk());
@@ -149,7 +156,8 @@ class ScmConnectionControllerTest {
         when(scmConnectionService.get(TENANT, id)).thenReturn(connection());
 
         mockMvc.perform(get("/scm-connections/{id}", id)
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, "")))
                 .andExpect(status().isOk())
                 .andExpect(header().exists("X-Trace-Id"))
                 .andExpect(jsonPath("$.data.provider").exists())
@@ -162,7 +170,8 @@ class ScmConnectionControllerTest {
         when(scmConnectionService.get(TENANT, id)).thenThrow(new ScmConnectionNotFoundException(id));
 
         mockMvc.perform(get("/scm-connections/{id}", id)
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, "")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("NOT_FOUND"));
     }
@@ -174,6 +183,7 @@ class ScmConnectionControllerTest {
 
         mockMvc.perform(put("/scm-connections/{id}", id)
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"pollIntervalMinutes":30}"""))
@@ -190,6 +200,7 @@ class ScmConnectionControllerTest {
 
         mockMvc.perform(put("/scm-connections/{id}", id)
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"pollIntervalMinutes":30}"""))
@@ -203,6 +214,7 @@ class ScmConnectionControllerTest {
 
         mockMvc.perform(put("/scm-connections/{id}", id)
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"pollIntervalMinutes":9999}"""))
@@ -215,7 +227,8 @@ class ScmConnectionControllerTest {
         UUID id = UUID.randomUUID();
 
         mockMvc.perform(delete("/scm-connections/{id}", id)
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, "")))
                 .andExpect(status().isNoContent())
                 .andExpect(header().exists("X-Trace-Id"));
 
@@ -229,7 +242,8 @@ class ScmConnectionControllerTest {
                 .when(scmConnectionService).delete(TENANT, Actor.ANONYMOUS, id);
 
         mockMvc.perform(delete("/scm-connections/{id}", id)
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, "")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("NOT_FOUND"));
     }
@@ -239,7 +253,8 @@ class ScmConnectionControllerTest {
         UUID id = UUID.randomUUID();
 
         mockMvc.perform(post("/scm-connections/{id}/sync", id)
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, "")))
                 .andExpect(status().isAccepted())
                 .andExpect(header().exists("X-Trace-Id"));
 
@@ -253,7 +268,8 @@ class ScmConnectionControllerTest {
                 .when(scmConnectionService).triggerSync(TENANT, id);
 
         mockMvc.perform(post("/scm-connections/{id}/sync", id)
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, "")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("NOT_FOUND"));
     }

@@ -54,6 +54,8 @@ class GracefulShutdownIT {
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + "/api/v1/registry/test/slow"))
+                .header(io.cartogra.web.security.InternalTokens.HEADER,
+                        io.cartogra.web.security.InternalTokens.user("registry", java.util.UUID.randomUUID(), "VIEWER"))
                 .GET()
                 .build();
 

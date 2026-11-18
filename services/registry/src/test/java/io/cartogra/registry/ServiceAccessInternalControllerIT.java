@@ -1,5 +1,6 @@
 package io.cartogra.registry;
 
+import io.cartogra.web.security.InternalTokens;
 import io.cartogra.registry.domain.ServiceService;
 import io.cartogra.test.KafkaTestSupport;
 import io.cartogra.test.PostgresTestSupport;
@@ -105,7 +106,7 @@ class ServiceAccessInternalControllerIT {
                         .uri(URI.create("http://localhost:" + port + "/api/v1/registry/services"))
                         .header("Content-Type", "application/json")
                         .header("X-Tenant-Id", tenantId.toString())
-                        .header("X-User-Roles", "ADMIN")
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", tenantId, null, "ADMIN"))
                         .POST(HttpRequest.BodyPublishers.ofString(body))
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
@@ -134,6 +135,8 @@ class ServiceAccessInternalControllerIT {
                 HttpRequest.newBuilder()
                         .uri(URI.create("http://localhost:" + port + "/api/v1/registry/internal/services/access"))
                         .header("Content-Type", "application/json")
+                        .header("X-Tenant-Id", tenantId.toString())
+                        .header(InternalTokens.HEADER, InternalTokens.service("registry", tenantId))
                         .POST(HttpRequest.BodyPublishers.ofString(body))
                         .build(),
                 HttpResponse.BodyHandlers.ofString());

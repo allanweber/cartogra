@@ -1,5 +1,5 @@
 # registry — Service registry: services, teams, ownership, audit trail.
-# Secret keys (files under secret.mountPath): DB_USERNAME, DB_PASSWORD
+# Secret keys (files under secret.mountPath): DB_USERNAME, DB_PASSWORD, INTERNAL_TOKEN_KEY
 
 # Plain (non-secret) env, rendered into a ConfigMap; values go through `tpl`.
 env:

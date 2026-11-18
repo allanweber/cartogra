@@ -1,5 +1,6 @@
 package io.cartogra.ingestion.api;
 
+import io.cartogra.web.security.InternalTokens;
 import io.cartogra.ingestion.infrastructure.k8s.ClusterWorkerManager;
 import io.cartogra.ingestion.infrastructure.kafka.SyncCommandConsumer;
 import io.cartogra.ingestion.infrastructure.kafka.SyncResultProducer;
@@ -172,7 +173,7 @@ class KubernetesClusterControllerIT {
                 .uri(URI.create("http://localhost:" + port + "/api/v1/ingestion" + path))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", TENANT.toString())
-                .header("X-User-Roles", "ADMIN")
+                .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, "ADMIN"))
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
         return http.send(req, HttpResponse.BodyHandlers.ofString());

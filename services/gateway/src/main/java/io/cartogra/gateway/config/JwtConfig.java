@@ -1,5 +1,6 @@
 package io.cartogra.gateway.config;
 
+import io.cartogra.common.validation.StrongSecret;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Positive;
 import org.springframework.boot.context.properties.ConfigurationProperties;

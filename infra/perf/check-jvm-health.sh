@@ -8,8 +8,9 @@
 # Usage: check-jvm-health.sh [<service>=<actuator base url> ...]
 # With no arguments it checks every JVM service (ALL_SERVICES below) and first fails if
 # docker-compose.yml builds a service missing from that list, so CI never silently skips one.
-# Containers are looked up as ${CONTAINER_PREFIX}<service>. COOKIE_JAR (from login.sh) is sent
-# with every metrics call — the gateway's actuator metrics need an authenticated session.
+# Containers are looked up as ${CONTAINER_PREFIX}<service>. The services publish no port, so their actuator
+# is read through the gateway route of each service. COOKIE_JAR (from login.sh) is sent with every call:
+# the gateway needs an authenticated session, and it signs the internal token that the services require.
 set -uo pipefail
 
 MAX_LIVE_DATA_PCT=${MAX_LIVE_DATA_PCT:-60}
@@ -18,10 +19,10 @@ COOKIE_JAR=${COOKIE_JAR:-}
 
 ALL_SERVICES=(
   gateway=http://localhost:8080/actuator
-  registry=http://localhost:8081/api/v1/registry/actuator
-  topology=http://localhost:8082/api/v1/topology/actuator
-  contract=http://localhost:8083/api/v1/contracts/actuator
-  ingestion=http://localhost:8085/api/v1/ingestion/actuator
+  registry=http://localhost:8080/api/v1/registry/actuator
+  topology=http://localhost:8080/api/v1/topology/actuator
+  contract=http://localhost:8080/api/v1/contracts/actuator
+  ingestion=http://localhost:8080/api/v1/ingestion/actuator
 )
 COMPOSE_FILE_PATH=${COMPOSE_FILE_PATH:-$(dirname "$0")/../docker-compose/docker-compose.yml}
 

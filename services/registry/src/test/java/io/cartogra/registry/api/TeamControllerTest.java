@@ -1,5 +1,6 @@
 package io.cartogra.registry.api;
 
+import io.cartogra.web.security.InternalTokens;
 import io.cartogra.common.identity.Actor;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.registry.domain.Team;
@@ -41,7 +42,7 @@ class TeamControllerTest {
         var validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
         mockMvc = withInternalAuth(MockMvcBuilders
-                .standaloneSetup(new TeamController(teamService)))
+                .standaloneSetup(new TeamController(teamService)), "registry")
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setValidator(validator)
                 .build();
@@ -53,6 +54,7 @@ class TeamControllerTest {
 
         mockMvc.perform(post("/teams")
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"platform"}"""))
@@ -66,6 +68,7 @@ class TeamControllerTest {
     void createWithBlankNameReturns400WithValidationError() throws Exception {
         mockMvc.perform(post("/teams")
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":""}"""))
@@ -88,7 +91,8 @@ class TeamControllerTest {
         when(teamService.get(TENANT, id)).thenReturn(team("platform"));
 
         mockMvc.perform(get("/teams/{id}", id)
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, "")))
                 .andExpect(status().isOk())
                 .andExpect(header().exists("X-Trace-Id"))
                 .andExpect(jsonPath("$.data.name").value("platform"));
@@ -100,7 +104,8 @@ class TeamControllerTest {
         when(teamService.get(TENANT, id)).thenThrow(new TeamNotFoundException(id));
 
         mockMvc.perform(get("/teams/{id}", id)
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, "")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("NOT_FOUND"));
     }
@@ -111,7 +116,8 @@ class TeamControllerTest {
         when(teamService.list(TENANT, 20, 0)).thenReturn(page);
 
         mockMvc.perform(get("/teams")
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, "")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(2))
                 .andExpect(jsonPath("$.data.items").isArray());
@@ -123,6 +129,7 @@ class TeamControllerTest {
 
         mockMvc.perform(get("/teams")
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, ""))
                         .param("limit", "10")
                         .param("offset", "5"))
                 .andExpect(status().isOk());
@@ -140,6 +147,7 @@ class TeamControllerTest {
 
         mockMvc.perform(put("/teams/{id}", id)
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"platform-eng","serviceIds":["%s"],"memberIds":["%s"]}""".formatted(svc, member)))
@@ -154,6 +162,7 @@ class TeamControllerTest {
 
         mockMvc.perform(put("/teams/{id}", id)
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"x","serviceIds":[],"memberIds":[]}"""))
@@ -164,6 +173,7 @@ class TeamControllerTest {
     void updateWithoutServiceIdsReturns400() throws Exception {
         mockMvc.perform(put("/teams/{id}", UUID.randomUUID())
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"x","memberIds":[]}"""))
@@ -175,6 +185,7 @@ class TeamControllerTest {
     void updateWithoutMemberIdsReturns400() throws Exception {
         mockMvc.perform(put("/teams/{id}", UUID.randomUUID())
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"x","serviceIds":[]}"""))
@@ -188,6 +199,7 @@ class TeamControllerTest {
                 .limit(1001).collect(java.util.stream.Collectors.joining(","));
         mockMvc.perform(put("/teams/{id}", UUID.randomUUID())
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"x\",\"serviceIds\":[" + ids + "],\"memberIds\":[]}"))
                 .andExpect(status().isBadRequest());
@@ -200,6 +212,7 @@ class TeamControllerTest {
                 .limit(1001).collect(java.util.stream.Collectors.joining(","));
         mockMvc.perform(put("/teams/{id}", UUID.randomUUID())
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"x\",\"serviceIds\":[],\"memberIds\":[" + ids + "]}"))
                 .andExpect(status().isBadRequest());
@@ -213,6 +226,7 @@ class TeamControllerTest {
 
         mockMvc.perform(put("/teams/{id}", id)
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"x","serviceIds":[],"memberIds":[]}"""))
@@ -224,7 +238,8 @@ class TeamControllerTest {
         UUID id = UUID.randomUUID();
 
         mockMvc.perform(delete("/teams/{id}", id)
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, "")))
                 .andExpect(status().isNoContent())
                 .andExpect(header().exists("X-Trace-Id"));
 
@@ -237,7 +252,8 @@ class TeamControllerTest {
         doThrow(new TeamNotFoundException(id)).when(teamService).delete(TENANT, Actor.ANONYMOUS, id);
 
         mockMvc.perform(delete("/teams/{id}", id)
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, "")))
                 .andExpect(status().isNotFound());
     }
 

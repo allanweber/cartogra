@@ -1,5 +1,6 @@
 package io.cartogra.topology.api;
 
+import io.cartogra.web.security.InternalTokens;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import io.cartogra.test.KafkaTestSupport;
@@ -116,10 +117,7 @@ class DriftControllerIT {
                 .uri(URI.create("http://localhost:" + port + "/api/v1/topology/drifts" + path))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", tenantId.toString())
-                .header("X-User-Id", UUID.randomUUID().toString());
-        if (roles != null) {
-            builder.header("X-User-Roles", roles);
-        }
+                .header(InternalTokens.HEADER, InternalTokens.token("topology", tenantId, UUID.randomUUID(), roles));
         HttpRequest request = "POST".equals(method)
                 ? builder.POST(HttpRequest.BodyPublishers.ofString(body)).build()
                 : builder.GET().build();

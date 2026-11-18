@@ -1,5 +1,6 @@
 package io.cartogra.registry;
 
+import io.cartogra.web.security.InternalTokens;
 import io.cartogra.test.KafkaTestSupport;
 import io.cartogra.test.PostgresTestSupport;
 import org.junit.jupiter.api.Test;
@@ -72,7 +73,7 @@ class ServiceNamesInternalControllerIT {
 
     private HttpResponse<String> names(UUID tenantId, UUID... serviceIds) throws Exception {
         String ids = Arrays.stream(serviceIds).map(id -> "\"" + id + "\"").collect(Collectors.joining(","));
-        return send("POST", "/api/v1/registry/internal/services/names", null, """
+        return send("POST", "/api/v1/registry/internal/services/names", tenantId, """
                 {"tenantId":"%s","serviceIds":[%s]}
                 """.formatted(tenantId, ids));
     }
@@ -92,7 +93,10 @@ class ServiceNamesInternalControllerIT {
                 .method(method, body == null ? HttpRequest.BodyPublishers.noBody()
                         : HttpRequest.BodyPublishers.ofString(body));
         if (tenantId != null) {
-            builder.header("X-Tenant-Id", tenantId.toString()).header("X-User-Roles", "ADMIN");
+            String token = path.startsWith("/api/v1/registry/internal/")
+                    ? InternalTokens.service("registry", tenantId)
+                    : InternalTokens.user("registry", tenantId, "ADMIN");
+            builder.header("X-Tenant-Id", tenantId.toString()).header(InternalTokens.HEADER, token);
         }
         return HTTP.send(builder.build(), HttpResponse.BodyHandlers.ofString());
     }
