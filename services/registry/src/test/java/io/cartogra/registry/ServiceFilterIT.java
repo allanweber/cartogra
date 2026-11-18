@@ -1,5 +1,6 @@
 package io.cartogra.registry;
 
+import io.cartogra.web.security.InternalTokens;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import io.cartogra.registry.infrastructure.kafka.ServiceLifecycleEventProducer;
@@ -204,7 +205,7 @@ class ServiceFilterIT {
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", TENANT.toString())
-                .header("X-User-Roles", "ADMIN")
+                .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, "ADMIN"))
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
     }
@@ -213,7 +214,7 @@ class ServiceFilterIT {
         return HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("X-Tenant-Id", TENANT.toString())
-                .header("X-User-Roles", "ADMIN")
+                .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, "ADMIN"))
                 .GET()
                 .build();
     }
@@ -257,7 +258,7 @@ class ServiceFilterIT {
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", TENANT.toString())
-                .header("X-User-Roles", "ADMIN")
+                .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, "ADMIN"))
                 .PUT(HttpRequest.BodyPublishers.ofString(body))
                 .build();
     }
@@ -267,7 +268,7 @@ class ServiceFilterIT {
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", TENANT.toString())
-                .header("X-User-Roles", "ADMIN")
+                .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, "ADMIN"))
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
     }

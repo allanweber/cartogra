@@ -1,5 +1,6 @@
 package io.cartogra.topology.api;
 
+import io.cartogra.web.security.InternalTokens;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import io.cartogra.test.KafkaTestSupport;
@@ -106,13 +107,8 @@ class DependencyControllerIT {
         var builder = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + "/api/v1/topology/dependencies" + path))
                 .header("Content-Type", "application/json")
-                .header("X-Tenant-Id", tenantId.toString());
-        if (userId != null) {
-            builder.header("X-User-Id", userId.toString());
-        }
-        if (roles != null) {
-            builder.header("X-User-Roles", roles);
-        }
+                .header("X-Tenant-Id", tenantId.toString())
+                .header(InternalTokens.HEADER, InternalTokens.token("topology", tenantId, userId, roles));
         HttpRequest request = switch (method) {
             case "POST" -> builder.POST(HttpRequest.BodyPublishers.ofString(body)).build();
             case "PUT" -> builder.PUT(HttpRequest.BodyPublishers.ofString(body)).build();

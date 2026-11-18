@@ -1,5 +1,6 @@
 package io.cartogra.contract;
 
+import io.cartogra.web.security.InternalTokens;
 import tools.jackson.databind.ObjectMapper;
 
 import java.net.URI;
@@ -57,8 +58,7 @@ public final class ContractHttp {
                 .uri(URI.create("http://localhost:" + port + "/api/v1/contracts" + path))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", tenantId.toString())
-                .header("X-User-Id", UUID.randomUUID().toString())
-                .header("X-User-Roles", role);
+                .header(InternalTokens.HEADER, InternalTokens.token("contract", tenantId, UUID.randomUUID(), role));
     }
 
     private static HttpResponse<String> send(HttpRequest request) {

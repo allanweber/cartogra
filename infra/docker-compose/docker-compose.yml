@@ -136,6 +136,8 @@ services:
       REGISTRY_URI: http://registry:8081
       TOPOLOGY_URI: http://topology:8082
       CONTRACT_URI: http://contract:8083
+      INGESTION_URI: http://ingestion:8085
+      INTERNAL_TOKEN_KEY: ${INTERNAL_TOKEN_KEY:?Set INTERNAL_TOKEN_KEY to at least 32 random bytes (openssl rand -base64 48)}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET to at least 32 random bytes (openssl rand -base64 48)}
       RESEND_API_KEY: ${RESEND_API_KEY:-re_placeholder}
       RESEND_FROM: ${RESEND_FROM:-noreply@cartogra.dev}
@@ -184,13 +186,12 @@ services:
         limits:
           memory: 768M
           cpus: "1.0"
-    ports:
-      - "8081:8081"
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/cartogra?currentSchema=registry
       DB_USERNAME: cartogra
       DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD (see infra/docker-compose/.env.example)}
       SPRING_FLYWAY_TABLE: flyway_schema_history_registry
+      INTERNAL_TOKEN_KEY: ${INTERNAL_TOKEN_KEY:?Set INTERNAL_TOKEN_KEY to at least 32 random bytes (openssl rand -base64 48)}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
@@ -221,13 +222,13 @@ services:
         limits:
           memory: 1G
           cpus: "1.0"
-    ports:
-      - "8082:8082"
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/cartogra?currentSchema=topology
       DB_USERNAME: cartogra
       DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD (see infra/docker-compose/.env.example)}
       SPRING_FLYWAY_TABLE: flyway_schema_history_topology
+      INTERNAL_TOKEN_KEY: ${INTERNAL_TOKEN_KEY:?Set INTERNAL_TOKEN_KEY to at least 32 random bytes (openssl rand -base64 48)}
+      REGISTRY_URI: http://registry:8081
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
@@ -258,13 +259,12 @@ services:
         limits:
           memory: 768M
           cpus: "1.0"
-    ports:
-      - "8083:8083"
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/cartogra?currentSchema=contract
       DB_USERNAME: cartogra
       DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD (see infra/docker-compose/.env.example)}
       SPRING_FLYWAY_TABLE: flyway_schema_history_contract
+      INTERNAL_TOKEN_KEY: ${INTERNAL_TOKEN_KEY:?Set INTERNAL_TOKEN_KEY to at least 32 random bytes (openssl rand -base64 48)}
       REGISTRY_URI: http://registry:8081
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info
@@ -296,13 +296,13 @@ services:
         limits:
           memory: 768M
           cpus: "1.0"
-    ports:
-      - "8085:8085"
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/cartogra?currentSchema=ingestion
       DB_USERNAME: cartogra
       DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD (see infra/docker-compose/.env.example)}
       SPRING_FLYWAY_TABLE: flyway_schema_history_ingestion
+      INTERNAL_TOKEN_KEY: ${INTERNAL_TOKEN_KEY:?Set INTERNAL_TOKEN_KEY to at least 32 random bytes (openssl rand -base64 48)}
+      REGISTRY_URI: http://registry:8081
       CLUSTER_CREDENTIALS_KEY: ${CLUSTER_CREDENTIALS_KEY:?Set CLUSTER_CREDENTIALS_KEY (openssl rand -base64 32)}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info

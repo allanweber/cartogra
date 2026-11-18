@@ -10,6 +10,8 @@ public final class Roles {
 
     public static final String GUEST = "GUEST";
 
+    public static final String SERVICE = "SERVICE";
+
     public static final String CAN_WRITE = "hasAnyRole('ADMIN', 'MEMBER', 'TEAM_OWNER')";
 
     public static final String ADMIN_ONLY = "hasRole('ADMIN')";

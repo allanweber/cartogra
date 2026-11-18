@@ -239,19 +239,22 @@ only the encrypted files are committed.
 
 | Namespace | Secret | Keys |
 |---|---|---|
-| `cartogra` | `gateway-secrets` | `DB_USERNAME` `DB_PASSWORD` `JWT_SECRET` `RESEND_API_KEY` `GOOGLE_CLIENT_SECRET` `GITHUB_CLIENT_SECRET` `BOOTSTRAP_ADMIN_PASSWORD` |
-| `cartogra` | `registry-secrets`, `topology-secrets` | `DB_USERNAME` `DB_PASSWORD` |
-| `cartogra` | `ingestion-secrets` | `DB_USERNAME` `DB_PASSWORD` `CLUSTER_CREDENTIALS_KEY` |
+| `cartogra` | `gateway-secrets` | `DB_USERNAME` `DB_PASSWORD` `JWT_SECRET` `INTERNAL_TOKEN_KEY` `RESEND_API_KEY` `GOOGLE_CLIENT_SECRET` `GITHUB_CLIENT_SECRET` `BOOTSTRAP_ADMIN_PASSWORD` |
+| `cartogra` | `registry-secrets`, `topology-secrets`, `contract-secrets` | `DB_USERNAME` `DB_PASSWORD` `INTERNAL_TOKEN_KEY` |
+| `cartogra` | `ingestion-secrets` | `DB_USERNAME` `DB_PASSWORD` `INTERNAL_TOKEN_KEY` `CLUSTER_CREDENTIALS_KEY` |
 | `cartogra` | `postgres-secrets` | `DB_USERNAME` `DB_PASSWORD` (same values) |
 | `cartogra` | `backup-secrets` | `S3_ACCESS_KEY` `S3_SECRET_KEY` |
 | `acme-system` | `acme-bootstrap` | `ACME_PASSWORD` (= `BOOTSTRAP_ADMIN_PASSWORD`), `ACME_GITHUB_TOKEN` |
 
 Generate the values. Save all of them in your password manager; only the ciphertext is recoverable from git.
 `CLUSTER_CREDENTIALS_KEY` must stay the same for as long as the database lives, because it decrypts stored credentials.
+`INTERNAL_TOKEN_KEY` must have the same value in the five service Secrets, because it signs and verifies the internal
+tokens between the gateway and the services.
 
 ```bash
 DB_PASSWORD=$(openssl rand -hex 24)
 JWT_SECRET=$(openssl rand -base64 48)
+INTERNAL_TOKEN_KEY=$(openssl rand -base64 48)
 ADMIN_PASSWORD=$(openssl rand -hex 16)
 CLUSTER_CREDENTIALS_KEY=$(openssl rand -base64 32)
 read -rsp 'RESEND_API_KEY: ' RESEND_API_KEY; echo
@@ -270,21 +273,23 @@ seal() {
     | kubeseal --format yaml > "infra/k8s/sealed/$name.yaml"
 }
 DB=(--from-literal=DB_USERNAME=cartogra --from-literal=DB_PASSWORD="$DB_PASSWORD")
-seal cartogra gateway-secrets "${DB[@]}" \
+ITK=(--from-literal=INTERNAL_TOKEN_KEY="$INTERNAL_TOKEN_KEY")
+seal cartogra gateway-secrets "${DB[@]}" "${ITK[@]}" \
   --from-literal=JWT_SECRET="$JWT_SECRET" \
   --from-literal=RESEND_API_KEY="$RESEND_API_KEY" \
   --from-literal=GOOGLE_CLIENT_SECRET=unset \
   --from-literal=GITHUB_CLIENT_SECRET=unset \
   --from-literal=BOOTSTRAP_ADMIN_PASSWORD="$ADMIN_PASSWORD"
-seal cartogra registry-secrets "${DB[@]}"
-seal cartogra topology-secrets "${DB[@]}"
+seal cartogra registry-secrets "${DB[@]}" "${ITK[@]}"
+seal cartogra topology-secrets "${DB[@]}" "${ITK[@]}"
+seal cartogra contract-secrets "${DB[@]}" "${ITK[@]}"
 seal cartogra postgres-secrets "${DB[@]}"
-seal cartogra ingestion-secrets "${DB[@]}" --from-literal=CLUSTER_CREDENTIALS_KEY="$CLUSTER_CREDENTIALS_KEY"
+seal cartogra ingestion-secrets "${DB[@]}" "${ITK[@]}" --from-literal=CLUSTER_CREDENTIALS_KEY="$CLUSTER_CREDENTIALS_KEY"
 seal cartogra backup-secrets --from-literal=S3_ACCESS_KEY="$S3_ACCESS_KEY" --from-literal=S3_SECRET_KEY="$S3_SECRET_KEY"
 seal acme-system acme-bootstrap --from-literal=ACME_PASSWORD="$ADMIN_PASSWORD" --from-literal=ACME_GITHUB_TOKEN="$ACME_GITHUB_TOKEN"
 
 kubectl apply -f infra/k8s/sealed/
-kubectl -n cartogra get secrets      # 6 secrets, created by the controller
+kubectl -n cartogra get secrets      # 7 secrets, created by the controller
 kubectl -n acme-system get secrets   # acme-bootstrap
 ```
 
@@ -305,6 +310,20 @@ printf '%s' '<new value>' | kubectl -n cartogra create secret generic gateway-se
   | kubeseal --format yaml --merge-into infra/k8s/sealed/gateway-secrets.yaml
 kubectl apply -f infra/k8s/sealed/gateway-secrets.yaml
 kubectl -n cartogra rollout restart deploy/gateway
+```
+
+`INTERNAL_TOKEN_KEY` is in five Secrets. Merge the same new value into each of them, apply all five, then restart
+the five services together. Until all five run with the new key, calls between them get 401.
+
+```bash
+key=$(openssl rand -base64 48)
+for s in gateway registry topology contract ingestion; do
+  printf '%s' "$key" | kubectl -n cartogra create secret generic "$s-secrets" --dry-run=client -o yaml \
+      --from-file=INTERNAL_TOKEN_KEY=/dev/stdin \
+    | kubeseal --format yaml --merge-into "infra/k8s/sealed/$s-secrets.yaml"
+  kubectl apply -f "infra/k8s/sealed/$s-secrets.yaml"
+done
+kubectl -n cartogra rollout restart deploy/gateway deploy/registry deploy/topology deploy/contract deploy/ingestion
 ```
 
 `RESEND_API_KEY` is also read by `deploy/alerting`. `BOOTSTRAP_ADMIN_PASSWORD` is only used when the admin is first

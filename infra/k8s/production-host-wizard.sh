@@ -469,9 +469,10 @@ stage "Secrets: generate, seal, apply"
 if begin seal; then
   gen DB_PASSWORD openssl rand -hex 24
   gen JWT_SECRET openssl rand -base64 48
+  gen INTERNAL_TOKEN_KEY openssl rand -base64 48
   gen ADMIN_PASSWORD openssl rand -hex 16
   gen CLUSTER_CREDENTIALS_KEY openssl rand -base64 32
-  warn "Store DB_PASSWORD, JWT_SECRET, ADMIN_PASSWORD, CLUSTER_CREDENTIALS_KEY in your password manager."
+  warn "Store DB_PASSWORD, JWT_SECRET, INTERNAL_TOKEN_KEY, ADMIN_PASSWORD, CLUSTER_CREDENTIALS_KEY in your password manager."
   note "CLUSTER_CREDENTIALS_KEY must never change while the database lives."
   note "They are in $ENV_FILE."
   pause "Press Enter once stored"
@@ -483,17 +484,18 @@ if begin seal; then
     printf '  %s✓ sealed%s %s/%s\n' "$GREEN" "$RESET" "$ns" "$name"
   }
   DB=(--from-literal=DB_USERNAME=cartogra --from-literal=DB_PASSWORD="$DB_PASSWORD")
-  seal cartogra gateway-secrets "${DB[@]}" \
+  ITK=(--from-literal=INTERNAL_TOKEN_KEY="$INTERNAL_TOKEN_KEY")
+  seal cartogra gateway-secrets "${DB[@]}" "${ITK[@]}" \
     --from-literal=JWT_SECRET="$JWT_SECRET" \
     --from-literal=RESEND_API_KEY="$RESEND_API_KEY" \
     --from-literal=GOOGLE_CLIENT_SECRET=unset \
     --from-literal=GITHUB_CLIENT_SECRET=unset \
     --from-literal=BOOTSTRAP_ADMIN_PASSWORD="$ADMIN_PASSWORD"
-  seal cartogra registry-secrets "${DB[@]}"
-  seal cartogra topology-secrets "${DB[@]}"
-  seal cartogra contract-secrets "${DB[@]}"
+  seal cartogra registry-secrets "${DB[@]}" "${ITK[@]}"
+  seal cartogra topology-secrets "${DB[@]}" "${ITK[@]}"
+  seal cartogra contract-secrets "${DB[@]}" "${ITK[@]}"
   seal cartogra postgres-secrets "${DB[@]}"
-  seal cartogra ingestion-secrets "${DB[@]}" --from-literal=CLUSTER_CREDENTIALS_KEY="$CLUSTER_CREDENTIALS_KEY"
+  seal cartogra ingestion-secrets "${DB[@]}" "${ITK[@]}" --from-literal=CLUSTER_CREDENTIALS_KEY="$CLUSTER_CREDENTIALS_KEY"
   seal cartogra backup-secrets --from-literal=S3_ACCESS_KEY="$S3_ACCESS_KEY" --from-literal=S3_SECRET_KEY="$S3_SECRET_KEY"
   seal acme-system acme-bootstrap --from-literal=ACME_PASSWORD="$ADMIN_PASSWORD" --from-literal=ACME_GITHUB_TOKEN="$ACME_GITHUB_TOKEN"
   run kubectl apply -f infra/k8s/sealed/

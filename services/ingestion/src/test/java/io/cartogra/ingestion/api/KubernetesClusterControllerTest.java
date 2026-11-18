@@ -1,5 +1,6 @@
 package io.cartogra.ingestion.api;
 
+import io.cartogra.web.security.InternalTokens;
 import io.cartogra.common.identity.Actor;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.ingestion.domain.Cluster;
@@ -49,7 +50,7 @@ class KubernetesClusterControllerTest {
         var validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
         mockMvc = withInternalAuth(MockMvcBuilders
-                .standaloneSetup(new KubernetesClusterController(clusterService)))
+                .standaloneSetup(new KubernetesClusterController(clusterService)), "ingestion")
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setValidator(validator)
                 .build();
@@ -61,6 +62,7 @@ class KubernetesClusterControllerTest {
 
         mockMvc.perform(post("/k8s/clusters")
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"prod","source":"MANUAL","apiServerUrl":"https://1.2.3.4:6443"}"""))
@@ -74,6 +76,7 @@ class KubernetesClusterControllerTest {
     void createWithBlankNameReturns400ValidationError() throws Exception {
         mockMvc.perform(post("/k8s/clusters")
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"","source":"MANUAL","apiServerUrl":"https://1.2.3.4:6443"}"""))
@@ -85,6 +88,7 @@ class KubernetesClusterControllerTest {
     void createWithInvalidSourceEnumReturns400() throws Exception {
         mockMvc.perform(post("/k8s/clusters")
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"prod","source":"UNKNOWN","apiServerUrl":"https://1.2.3.4:6443"}"""))
@@ -108,6 +112,7 @@ class KubernetesClusterControllerTest {
 
         mockMvc.perform(post("/k8s/clusters")
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"prod","source":"MANUAL"}"""))
@@ -121,7 +126,8 @@ class KubernetesClusterControllerTest {
         when(clusterService.list(TENANT, 20, 0)).thenReturn(page);
 
         mockMvc.perform(get("/k8s/clusters")
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, "")))
                 .andExpect(status().isOk())
                 .andExpect(header().exists("X-Trace-Id"))
                 .andExpect(jsonPath("$.data.total").value(2))
@@ -134,6 +140,7 @@ class KubernetesClusterControllerTest {
 
         mockMvc.perform(get("/k8s/clusters")
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, ""))
                         .param("limit", "10")
                         .param("offset", "5"))
                 .andExpect(status().isOk());
@@ -147,7 +154,8 @@ class KubernetesClusterControllerTest {
         when(clusterService.get(TENANT, id)).thenReturn(cluster("prod"));
 
         mockMvc.perform(get("/k8s/clusters/{id}", id)
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, "")))
                 .andExpect(status().isOk())
                 .andExpect(header().exists("X-Trace-Id"))
                 .andExpect(jsonPath("$.data.name").value("prod"))
@@ -160,7 +168,8 @@ class KubernetesClusterControllerTest {
         when(clusterService.get(TENANT, id)).thenThrow(new ClusterNotFoundException(id));
 
         mockMvc.perform(get("/k8s/clusters/{id}", id)
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, "")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("NOT_FOUND"));
     }
@@ -170,7 +179,8 @@ class KubernetesClusterControllerTest {
         UUID id = UUID.randomUUID();
 
         mockMvc.perform(delete("/k8s/clusters/{id}", id)
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, "")))
                 .andExpect(status().isNoContent());
 
         verify(clusterService).delete(TENANT, Actor.ANONYMOUS, id);
@@ -183,7 +193,8 @@ class KubernetesClusterControllerTest {
                 .when(clusterService).delete(TENANT, Actor.ANONYMOUS, id);
 
         mockMvc.perform(delete("/k8s/clusters/{id}", id)
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, "")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("NOT_FOUND"));
     }
@@ -195,6 +206,7 @@ class KubernetesClusterControllerTest {
 
         mockMvc.perform(put("/k8s/clusters/{id}", id)
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"prod-updated","source":"MANUAL","apiServerUrl":"https://1.2.3.4:6443"}"""))
@@ -212,6 +224,7 @@ class KubernetesClusterControllerTest {
 
         mockMvc.perform(put("/k8s/clusters/{id}", id)
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"prod","source":"MANUAL","apiServerUrl":"https://1.2.3.4:6443"}"""))
@@ -227,6 +240,7 @@ class KubernetesClusterControllerTest {
 
         mockMvc.perform(put("/k8s/clusters/{id}", id)
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"prod","source":"KUBECONFIG","kubeconfig":"kind: Config"}"""))
@@ -251,7 +265,8 @@ class KubernetesClusterControllerTest {
         when(clusterService.get(TENANT, id)).thenReturn(cluster("prod"));
 
         mockMvc.perform(get("/k8s/clusters/{id}", id)
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("ingestion", TENANT, null, "")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.caCertPem").doesNotExist())
                 .andExpect(jsonPath("$.data.saToken").doesNotExist());

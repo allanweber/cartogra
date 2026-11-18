@@ -1,5 +1,6 @@
 package io.cartogra.registry;
 
+import io.cartogra.web.security.InternalTokens;
 import io.cartogra.registry.infrastructure.kafka.ServiceLifecycleEventProducer;
 import io.cartogra.registry.infrastructure.kafka.TeamLifecycleEventProducer;
 import io.cartogra.test.PostgresTestSupport;
@@ -125,8 +126,7 @@ class GuestRedactionIT {
                 .uri(URI.create("http://localhost:" + port + "/api/v1/registry" + path))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", tenantId.toString())
-                .header("X-User-Id", ("GUEST".equals(roles) ? UUID.randomUUID() : adminId).toString())
-                .header("X-User-Roles", roles)
+                .header(InternalTokens.HEADER, InternalTokens.token("registry", tenantId, ("GUEST".equals(roles) ? UUID.randomUUID() : adminId), roles))
                 .method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body));
         HttpResponse<String> response = HTTP.send(builder.build(), HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).as(method + " " + path + ": " + response.body()).isLessThan(300);

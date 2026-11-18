@@ -1,6 +1,8 @@
 package io.cartogra.ingestion.api;
 
+import io.cartogra.web.security.InternalTokens;
 import io.cartogra.web.security.WriteRoutes;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,6 +11,7 @@ import io.cartogra.test.PostgresTestSupport;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.context.WebApplicationContext;
@@ -48,10 +51,10 @@ class WriteAuthorizationIT {
 
         List<String> notForbidden = new ArrayList<>();
         for (var route : routes) {
+            UUID tenant = UUID.randomUUID();
             int status = mvc.perform(request(route.method(), route.path())
-                    .header("X-Tenant-Id", UUID.randomUUID().toString())
-                    .header("X-User-Id", UUID.randomUUID().toString())
-                    .header("X-User-Roles", role)
+                    .header("X-Tenant-Id", tenant.toString())
+                    .header(InternalTokens.HEADER, InternalTokens.token("ingestion", tenant, UUID.randomUUID(), role))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("{}"))
                 .andReturn().getResponse().getStatus();
@@ -60,5 +63,30 @@ class WriteAuthorizationIT {
             }
         }
         assertThat(notForbidden).isEmpty();
+    }
+
+    @Test
+    void requestWithoutTokenIsUnauthorizedForReadAndWrite() throws Exception {
+        MockMvc mvc = webAppContextSetup(context).apply(springSecurity()).build();
+        UUID tenant = UUID.randomUUID();
+        for (var method : List.of(HttpMethod.GET, HttpMethod.POST)) {
+            int status = mvc.perform(request(method, "/scm-connections")
+                    .header("X-Tenant-Id", tenant.toString())
+                    .header("X-User-Roles", "ADMIN")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{}"))
+                .andReturn().getResponse().getStatus();
+            assertThat(status).as(method + " /scm-connections").isEqualTo(401);
+        }
+    }
+
+    @Test
+    void tokenForAnotherTenantIsUnauthorized() throws Exception {
+        MockMvc mvc = webAppContextSetup(context).apply(springSecurity()).build();
+        int status = mvc.perform(request(HttpMethod.GET, "/scm-connections")
+                .header("X-Tenant-Id", UUID.randomUUID().toString())
+                .header(InternalTokens.HEADER, InternalTokens.token("ingestion", UUID.randomUUID(), UUID.randomUUID(), "ADMIN")))
+            .andReturn().getResponse().getStatus();
+        assertThat(status).isEqualTo(401);
     }
 }

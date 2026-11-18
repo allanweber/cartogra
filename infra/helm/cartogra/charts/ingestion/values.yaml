@@ -1,5 +1,5 @@
 # ingestion — SCM and Kubernetes discovery, webhooks.
-# Secret keys (files under secret.mountPath): DB_USERNAME, DB_PASSWORD, CLUSTER_CREDENTIALS_KEY
+# Secret keys (files under secret.mountPath): DB_USERNAME, DB_PASSWORD, INTERNAL_TOKEN_KEY, CLUSTER_CREDENTIALS_KEY
 
 # Plain (non-secret) env, rendered into a ConfigMap; values go through `tpl`.
 env:

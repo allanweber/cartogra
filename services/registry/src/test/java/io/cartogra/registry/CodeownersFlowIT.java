@@ -1,5 +1,6 @@
 package io.cartogra.registry;
 
+import io.cartogra.web.security.InternalTokens;
 import io.cartogra.common.event.EventEnvelope;
 import io.cartogra.registry.domain.event.OwnershipResolvedPayload;
 import io.cartogra.test.KafkaTestSupport;
@@ -145,7 +146,7 @@ class CodeownersFlowIT {
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", tenantId.toString())
-                .header("X-User-Roles", "ADMIN")
+                .header(InternalTokens.HEADER, InternalTokens.token("registry", tenantId, null, "ADMIN"))
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
     }
@@ -154,6 +155,7 @@ class CodeownersFlowIT {
         return HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("X-Tenant-Id", tenantId.toString())
+                .header(InternalTokens.HEADER, InternalTokens.token("registry", tenantId, null, ""))
                 .GET()
                 .build();
     }

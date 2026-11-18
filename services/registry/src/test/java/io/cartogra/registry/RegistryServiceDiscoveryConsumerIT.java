@@ -1,5 +1,6 @@
 package io.cartogra.registry;
 
+import io.cartogra.web.security.InternalTokens;
 import io.cartogra.common.event.EventEnvelope;
 import io.cartogra.registry.domain.ServiceService;
 import io.cartogra.registry.repository.ServiceHistoryRepository;
@@ -263,6 +264,7 @@ class RegistryServiceDiscoveryConsumerIT {
                             HttpRequest.newBuilder()
                                     .uri(URI.create("http://localhost:" + port + "/api/v1/registry/services?source=azuredevops&limit=50"))
                                     .header("X-Tenant-Id", tenantId.toString())
+                                    .header(InternalTokens.HEADER, InternalTokens.token("registry", tenantId, null, ""))
                                     .GET()
                                     .build(),
                             HttpResponse.BodyHandlers.ofString());

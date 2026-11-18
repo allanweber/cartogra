@@ -19,16 +19,18 @@ The chart creates no Secrets. Each one is mounted read-only at `/etc/cartogra/se
 
 | Secret | Keys |
 |---|---|
-| `gateway-secrets` | `DB_USERNAME` `DB_PASSWORD` `JWT_SECRET` `RESEND_API_KEY` `GOOGLE_CLIENT_SECRET` `GITHUB_CLIENT_SECRET`, plus `BOOTSTRAP_ADMIN_PASSWORD` when `BOOTSTRAP_TENANT_ID` is set (production) |
-| `registry-secrets`, `topology-secrets`, `contract-secrets` | `DB_USERNAME` `DB_PASSWORD` |
-| `ingestion-secrets` | `DB_USERNAME` `DB_PASSWORD` `CLUSTER_CREDENTIALS_KEY` |
+| `gateway-secrets` | `DB_USERNAME` `DB_PASSWORD` `JWT_SECRET` `INTERNAL_TOKEN_KEY` `RESEND_API_KEY` `GOOGLE_CLIENT_SECRET` `GITHUB_CLIENT_SECRET`, plus `BOOTSTRAP_ADMIN_PASSWORD` when `BOOTSTRAP_TENANT_ID` is set (production) |
+| `registry-secrets`, `topology-secrets`, `contract-secrets` | `DB_USERNAME` `DB_PASSWORD` `INTERNAL_TOKEN_KEY` |
+| `ingestion-secrets` | `DB_USERNAME` `DB_PASSWORD` `INTERNAL_TOKEN_KEY` `CLUSTER_CREDENTIALS_KEY` |
 | `postgres-secrets` | `DB_USERNAME` `DB_PASSWORD` (same values the services use) |
+
+`INTERNAL_TOKEN_KEY` must have the same value in the five service Secrets. It signs the token that the gateway and the services attach to each internal call. Use 32 or more random bytes (`openssl rand -base64 48`), not the value of `JWT_SECRET`.
 
 ## Exposure
 
 The ingress routes `/api` to the gateway and everything else to the frontend. The collector's OTLP ports stay ClusterIP-only: `cartogra.tenant.id` is unauthenticated until roadmap 5.9. Its metrics port (8889) is ClusterIP-only too.
 
-`registry`, `topology`, `contract` and `ingestion` trust the gateway's `X-Tenant-Id` / `X-User-*` headers, so each gets a `NetworkPolicy` (`networkPolicy.allowFrom` in its values) that admits only the listed `app` labels on its app port: `registry` ← gateway, ingestion, topology; `topology`, `contract` and `ingestion` ← gateway. The gateway and frontend stay open for the ingress controller. A CNI that does not enforce NetworkPolicy ignores these silently; k3s enforces them.
+`registry`, `topology`, `contract` and `ingestion` trust only a signed `X-Internal-Token` (from the gateway, or a `SERVICE` token from another service). As a second layer, each gets a `NetworkPolicy` (`networkPolicy.allowFrom` in its values) that admits only the listed `app` labels on its app port: `registry` ← gateway, ingestion, topology; `topology`, `contract` and `ingestion` ← gateway. The gateway and frontend stay open for the ingress controller. A CNI that does not enforce NetworkPolicy ignores these silently; k3s enforces them.
 
 ## Alerting
 

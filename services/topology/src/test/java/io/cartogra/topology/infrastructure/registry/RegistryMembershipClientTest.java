@@ -4,6 +4,7 @@ import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import io.cartogra.topology.config.RegistryClientProperties;
 import io.cartogra.web.client.TraceparentRequestInterceptor;
+import io.cartogra.web.security.InternalTokens;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -16,11 +17,14 @@ import java.util.Map;
 import java.util.UUID;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.matching;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static com.github.tomakehurst.wiremock.stubbing.Scenario.STARTED;
 import static org.assertj.core.api.Assertions.assertThat;
+import java.time.Clock;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RegistryMembershipClientTest {
@@ -46,7 +50,8 @@ class RegistryMembershipClientTest {
     private RegistryMembershipClient client() {
         return new RegistryMembershipClient(
                 new RegistryClientProperties("http://localhost:" + WIRE_MOCK.port(), Duration.ofSeconds(3)),
-                new TraceparentRequestInterceptor());
+                new TraceparentRequestInterceptor(),
+                InternalTokens.codec(Clock.systemUTC()));
     }
 
     @Test
@@ -64,7 +69,9 @@ class RegistryMembershipClientTest {
         Map<UUID, Boolean> result = client().checkAccess(tenantId, userId, List.of(serviceId));
 
         assertThat(result).containsEntry(serviceId, true);
-        WIRE_MOCK.verify(postRequestedFor(urlPathEqualTo("/internal/services/access")));
+        WIRE_MOCK.verify(postRequestedFor(urlPathEqualTo("/internal/services/access"))
+                .withHeader("X-Tenant-Id", equalTo(tenantId.toString()))
+                .withHeader(InternalTokens.HEADER, matching("[^.]+\\.[^.]+\\.[^.]+")));
     }
 
     @Test

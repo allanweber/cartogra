@@ -2,7 +2,9 @@ package io.cartogra.topology.infrastructure.registry;
 
 import io.cartogra.topology.config.RegistryClientProperties;
 import io.cartogra.web.client.ServiceCallRetry;
+import io.cartogra.web.client.ServiceTokenRequestInterceptor;
 import io.cartogra.web.client.TraceparentRequestInterceptor;
+import io.cartogra.web.security.InternalTokenCodec;
 import io.github.resilience4j.retry.Retry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +33,8 @@ public class RegistryMembershipClient {
     private final Retry retry;
 
     public RegistryMembershipClient(RegistryClientProperties props,
-            TraceparentRequestInterceptor traceparentRequestInterceptor) {
+            TraceparentRequestInterceptor traceparentRequestInterceptor,
+            InternalTokenCodec internalTokenCodec) {
         var httpClient = HttpClient.newBuilder()
                 .connectTimeout(props.timeout())
                 .build();
@@ -41,6 +44,7 @@ public class RegistryMembershipClient {
                 .baseUrl(props.baseUrl())
                 .requestFactory(factory)
                 .requestInterceptor(traceparentRequestInterceptor)
+                .requestInterceptor(new ServiceTokenRequestInterceptor(internalTokenCodec, "topology", "registry"))
                 .build();
         this.retry = ServiceCallRetry.threeAttempts("registry-membership-check", log);
     }
@@ -52,6 +56,7 @@ public class RegistryMembershipClient {
     public Map<UUID, Boolean> checkAccess(UUID tenantId, UUID userId, List<UUID> serviceIds) {
         AccessEnvelope envelope = retry.executeSupplier(() -> restClient.post()
                 .uri("/internal/services/access")
+                .header("X-Tenant-Id", tenantId.toString())
                 .body(new AccessRequest(tenantId, userId, serviceIds))
                 .retrieve()
                 .body(AccessEnvelope.class));

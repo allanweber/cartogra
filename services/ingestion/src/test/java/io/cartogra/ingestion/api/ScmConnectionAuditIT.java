@@ -1,5 +1,6 @@
 package io.cartogra.ingestion.api;
 
+import io.cartogra.web.security.InternalTokens;
 import io.cartogra.ingestion.infrastructure.kafka.SyncCommandConsumer;
 import io.cartogra.ingestion.infrastructure.kafka.SyncCommandProducer;
 import io.cartogra.ingestion.infrastructure.registry.RegistryPlanLimitClient;
@@ -75,8 +76,7 @@ class ScmConnectionAuditIT {
                     .uri(URI.create("http://localhost:" + port + "/api/v1/ingestion/scm-connections"))
                     .header("Content-Type", "application/json")
                     .header("X-Tenant-Id", tenantId.toString())
-                    .header("X-User-Id", userId.toString())
-                    .header("X-User-Roles", "ADMIN")
+                    .header(InternalTokens.HEADER, InternalTokens.token("ingestion", tenantId, userId, "ADMIN"))
                     .POST(HttpRequest.BodyPublishers.ofString("""
                             {"provider":"github","config":"{\\"org\\":\\"acme\\",\\"token\\":\\"ghp_supersecret\\"}"}
                             """))

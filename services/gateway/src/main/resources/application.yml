@@ -135,6 +135,9 @@ resilience4j:
         base-config: default
 
 app:
+  internal-token:
+    key: ${INTERNAL_TOKEN_KEY}
+    ttl: ${INTERNAL_TOKEN_TTL:60s}
   frontend:
     base-url: ${FRONTEND_BASE_URL:http://localhost:3006}
   cors:

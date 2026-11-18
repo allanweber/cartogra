@@ -79,3 +79,8 @@ management:
     metrics:
       export:
         url: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/metrics
+
+app:
+  internal-token:
+    key: ${INTERNAL_TOKEN_KEY}
+    ttl: ${INTERNAL_TOKEN_TTL:60s}

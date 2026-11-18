@@ -1,5 +1,6 @@
 package io.cartogra.registry;
 
+import io.cartogra.web.security.InternalTokens;
 import io.cartogra.registry.infrastructure.kafka.ServiceLifecycleEventProducer;
 import io.cartogra.registry.infrastructure.kafka.TeamLifecycleEventProducer;
 import io.cartogra.test.PostgresTestSupport;
@@ -66,6 +67,7 @@ class ServiceConnectionCountsIT {
                 HttpRequest.newBuilder()
                         .uri(URI.create("http://localhost:" + port + "/api/v1/registry/services/counts-by-connection"))
                         .header("X-Tenant-Id", tenantId.toString())
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", tenantId, null, ""))
                         .GET().build(),
                 HttpResponse.BodyHandlers.ofString());
 
@@ -94,6 +96,7 @@ class ServiceConnectionCountsIT {
                 HttpRequest.newBuilder()
                         .uri(URI.create("http://localhost:" + port + "/api/v1/registry/services/counts-by-connection"))
                         .header("X-Tenant-Id", tenantId.toString())
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", tenantId, null, ""))
                         .GET().build(),
                 HttpResponse.BodyHandlers.ofString());
 
@@ -115,6 +118,7 @@ class ServiceConnectionCountsIT {
                 HttpRequest.newBuilder()
                         .uri(URI.create("http://localhost:" + port + "/api/v1/registry/services/counts-by-connection"))
                         .header("X-Tenant-Id", tenant1.toString())
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", tenant1, null, ""))
                         .GET().build(),
                 HttpResponse.BodyHandlers.ofString());
 
@@ -131,6 +135,7 @@ class ServiceConnectionCountsIT {
                 HttpRequest.newBuilder()
                         .uri(URI.create("http://localhost:" + port + "/api/v1/registry/services/counts-by-connection"))
                         .header("X-Tenant-Id", tenantId.toString())
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", tenantId, null, ""))
                         .GET().build(),
                 HttpResponse.BodyHandlers.ofString());
 

@@ -1,5 +1,6 @@
 package io.cartogra.registry;
 
+import io.cartogra.web.security.InternalTokens;
 import io.cartogra.common.audit.ActorKind;
 import io.cartogra.common.audit.AuditKind;
 import io.cartogra.common.identity.Actor;
@@ -174,8 +175,7 @@ class AuditEventIT {
                 .uri(URI.create("http://localhost:" + port + "/api/v1/registry/services"))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", tenantId.toString())
-                .header("X-User-Id", userId.toString())
-                .header("X-User-Roles", "MEMBER")
+                .header(InternalTokens.HEADER, InternalTokens.token("registry", tenantId, userId, "MEMBER"))
                 .POST(HttpRequest.BodyPublishers.ofString(
                         "{\"name\":\"audited-svc\",\"teamId\":\"%s\"}".formatted(teamId)))
                 .build(), HttpResponse.BodyHandlers.ofString());
@@ -206,7 +206,7 @@ class AuditEventIT {
         var response = HTTP.send(HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + "/api/v1/registry/audit-events" + query))
                 .header("X-Tenant-Id", tenantId.toString())
-                .header("X-User-Roles", roles)
+                .header(InternalTokens.HEADER, InternalTokens.token("registry", tenantId, null, roles))
                 .GET().build(), HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(200);
         return objectMapper.readTree(response.body()).get("data");

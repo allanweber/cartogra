@@ -4,6 +4,7 @@ import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import io.cartogra.contract.config.RegistryClientProperties;
 import io.cartogra.web.client.TraceparentRequestInterceptor;
+import io.cartogra.web.security.InternalTokens;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -16,11 +17,14 @@ import java.util.Map;
 import java.util.UUID;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalToJson;
+import static com.github.tomakehurst.wiremock.client.WireMock.matching;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
+import java.time.Clock;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RegistryNameClientTest {
@@ -47,7 +51,8 @@ class RegistryNameClientTest {
     private RegistryNameClient client() {
         return new RegistryNameClient(
                 new RegistryClientProperties("http://localhost:" + WIRE_MOCK.port(), Duration.ofSeconds(3)),
-                new TraceparentRequestInterceptor());
+                new TraceparentRequestInterceptor(),
+                InternalTokens.codec(Clock.systemUTC()));
     }
 
     @Test
@@ -62,7 +67,10 @@ class RegistryNameClientTest {
                         """.formatted(a))));
 
         assertThat(client().findNames(tenant, List.of(a, b))).containsExactlyEntriesOf(Map.of(a, "ledger"));
-        WIRE_MOCK.verify(1, postRequestedFor(urlPathEqualTo(PATH)).withRequestBody(equalToJson("""
+        WIRE_MOCK.verify(1, postRequestedFor(urlPathEqualTo(PATH))
+                .withHeader("X-Tenant-Id", equalTo(tenant.toString()))
+                .withHeader(InternalTokens.HEADER, matching("[^.]+\\.[^.]+\\.[^.]+"))
+                .withRequestBody(equalToJson("""
                 {"tenantId":"%s","serviceIds":["%s","%s"]}
                 """.formatted(tenant, a, b))));
     }
