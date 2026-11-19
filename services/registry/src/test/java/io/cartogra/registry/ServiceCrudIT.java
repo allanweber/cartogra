@@ -27,6 +27,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -233,7 +234,7 @@ class ServiceCrudIT {
     private void assertTraceparent(ConsumerRecord<String, String> record) {
         var header = record.headers().lastHeader("traceparent");
         assertThat(header).as("traceparent header must be present").isNotNull();
-        assertThat(new String(header.value())).matches("00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}");
+        assertThat(new String(header.value(), StandardCharsets.UTF_8)).matches("00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}");
     }
 
     private HttpRequest post(String path, String body) {

@@ -73,9 +73,9 @@ class ServiceDiscoveryFlowIT {
 
         String pomContent = java.util.Base64.getEncoder().encodeToString(
                 "<project><dependency><artifactId>spring-boot-starter-web</artifactId></dependency></project>"
-                        .getBytes());
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
         String dockerfileContent = java.util.Base64.getEncoder().encodeToString(
-                "FROM eclipse-temurin:25-jre-jammy".getBytes());
+                "FROM eclipse-temurin:25-jre-jammy".getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
         wireMock.stubFor(get(urlPathMatching("/orgs/test-org/repos.*"))
                 .willReturn(okJson("""
