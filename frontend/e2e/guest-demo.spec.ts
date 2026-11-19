@@ -67,7 +67,8 @@ async function seedDemoTenant(upstream: string, downstream: string) {
 }
 
 test.describe('guest demo', () => {
-  test.use({ storageState: { cookies: [], origins: [] } })
+  // Reduced motion gives the graph its synchronous layout, so it is settled at once, also on a slow CI runner.
+  test.use({ storageState: { cookies: [], origins: [] }, reducedMotion: 'reduce' })
 
   test('a stranger reads the demo tenant but cannot change it', async ({ page }) => {
     const upstream = uniqueName('demo-checkout')
@@ -87,7 +88,7 @@ test.describe('guest demo', () => {
       await page.getByRole('link', { name: 'Dashboard', exact: true }).click()
       await page.getByRole('link', { name: 'Graph', exact: true }).click()
       const node = page.getByRole('button', { name: new RegExp(`^${downstream},`) })
-      await waitForGraphSettled(page, 5_000)
+      await waitForGraphSettled(page)
       await node.locator('circle.graph-node-hit').click({ timeout: 2_000 })
       await expect(page.getByRole('tabpanel').getByText(upstream).first()).toBeVisible({ timeout: 2_000 })
     }).toPass({ timeout: 60_000, intervals: [2_000] })
