@@ -1,6 +1,7 @@
 -- Test schema for gateway integration tests.
 -- Mirrors the registry Flyway migrations (V001, V002, V003, V008, V009, V010, V011, V012, V013, V014, V015, V016, V017).
--- Used instead of Flyway since the gateway has no migrations of its own.
+-- Used instead of Flyway since the gateway has no migrations of its own. AbstractGatewayIT runs it
+-- with psql as the superuser; the application connects as cartogra_app.
 
 CREATE TABLE IF NOT EXISTS billing_plans (
     id                    UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -135,3 +136,39 @@ CREATE TABLE IF NOT EXISTS audit_events (
     occurred_at TIMESTAMPTZ NOT NULL,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- RLS as in registry V019: the ITs connect as cartogra_app, so the policies apply.
+GRANT USAGE ON SCHEMA public TO cartogra_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO cartogra_app;
+ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tenants FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON tenants;
+CREATE POLICY tenant_isolation ON tenants USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid OR current_setting('app.rls_bypass', true) = 'on');
+ALTER TABLE teams ENABLE ROW LEVEL SECURITY;
+ALTER TABLE teams FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON teams;
+CREATE POLICY tenant_isolation ON teams USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid OR current_setting('app.rls_bypass', true) = 'on');
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE users FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON users;
+CREATE POLICY tenant_isolation ON users USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid OR current_setting('app.rls_bypass', true) = 'on');
+ALTER TABLE team_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE team_members FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON team_members;
+CREATE POLICY tenant_isolation ON team_members USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid OR current_setting('app.rls_bypass', true) = 'on');
+ALTER TABLE refresh_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE refresh_tokens FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON refresh_tokens;
+CREATE POLICY tenant_isolation ON refresh_tokens USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid OR current_setting('app.rls_bypass', true) = 'on');
+ALTER TABLE invitations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE invitations FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON invitations;
+CREATE POLICY tenant_isolation ON invitations USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid OR current_setting('app.rls_bypass', true) = 'on');
+ALTER TABLE tenant_oidc_configs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tenant_oidc_configs FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON tenant_oidc_configs;
+CREATE POLICY tenant_isolation ON tenant_oidc_configs USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid OR current_setting('app.rls_bypass', true) = 'on');
+ALTER TABLE audit_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON audit_events;
+CREATE POLICY tenant_isolation ON audit_events USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid OR current_setting('app.rls_bypass', true) = 'on');

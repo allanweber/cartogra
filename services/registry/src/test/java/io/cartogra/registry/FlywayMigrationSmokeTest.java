@@ -1,5 +1,6 @@
 package io.cartogra.registry;
 
+import org.flywaydb.core.Flyway;
 import io.cartogra.test.PostgresTestSupport;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,19 +18,24 @@ class FlywayMigrationSmokeTest {
     static void datasourceProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url",
                 () -> PostgresTestSupport.POSTGRES.getJdbcUrl() + "&currentSchema=registry");
-        registry.add("spring.datasource.username", PostgresTestSupport.POSTGRES::getUsername);
-        registry.add("spring.datasource.password", PostgresTestSupport.POSTGRES::getPassword);
+        registry.add("spring.datasource.username", () -> PostgresTestSupport.APP_USER);
+        registry.add("spring.datasource.password", () -> PostgresTestSupport.APP_PASSWORD);
+        registry.add("spring.flyway.user", () -> PostgresTestSupport.OWNER_USER);
+        registry.add("spring.flyway.password", () -> PostgresTestSupport.OWNER_PASSWORD);
     }
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private Flyway flyway;
+
+    /** The app role cannot read the history table, so the check uses Flyway, which connects as the owner. */
     @Test
     void allMigrationsApplyCleanly() {
-        Integer failedCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM registry.flyway_schema_history WHERE success = false",
-                Integer.class);
-        assertThat(failedCount).isZero();
+        assertThat(flyway.info().applied()).isNotEmpty()
+                .allSatisfy(migration -> assertThat(migration.getState().isFailed()).isFalse());
+        assertThat(flyway.info().pending()).isEmpty();
     }
 
     @Test

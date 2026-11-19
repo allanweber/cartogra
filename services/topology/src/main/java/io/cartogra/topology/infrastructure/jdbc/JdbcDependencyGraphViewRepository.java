@@ -39,7 +39,7 @@ public class JdbcDependencyGraphViewRepository implements DependencyGraphViewRep
 
     @Override
     public void refresh() {
-        jdbc.execute("REFRESH MATERIALIZED VIEW CONCURRENTLY dependency_graph_edges");
+        jdbc.execute("SELECT refresh_dependency_graph_edges()");
     }
 
     @Override

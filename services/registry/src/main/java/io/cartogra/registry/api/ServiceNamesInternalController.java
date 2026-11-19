@@ -1,5 +1,6 @@
 package io.cartogra.registry.api;
 
+import io.cartogra.web.tenant.TenantContext;
 import io.cartogra.common.api.ApiResponse;
 import io.cartogra.registry.api.dto.ServiceNamesRequest;
 import io.cartogra.registry.domain.ServiceService;
@@ -30,6 +31,7 @@ public class ServiceNamesInternalController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<Map<UUID, String>>> names(@Valid @RequestBody ServiceNamesRequest request) {
-        return TracedResponse.ok(service.findNames(request.tenantId(), request.serviceIds()));
+        return TracedResponse.ok(TenantContext.callAs(request.tenantId(),
+                () -> service.findNames(request.tenantId(), request.serviceIds())));
     }
 }

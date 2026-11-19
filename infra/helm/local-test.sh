@@ -158,19 +158,28 @@ k3d image import -c "$CLUSTER" $images
 step "Namespaces, RBAC and secrets"
 kubectl apply -f infra/k8s/cluster-setup.yaml
 key=$(head -c32 /dev/urandom | base64)
-# Per secret, so a reused cluster picks up a service added since it was created.
+# Per secret, so a reused cluster picks up a service added since it was created. A secret from before the
+# RLS roles (no CARTOGRA_APP_PASSWORD / FLYWAY_USERNAME key) is created again.
 internal_token_key=k3d-internal-token-key-at-least-32-bytes
 for s in gateway registry topology contract ingestion postgres; do
-  if kubectl -n cartogra get secret "$s-secrets" >/dev/null 2>&1; then
+  key_check=FLYWAY_USERNAME
+  db_user=cartogra_app db_pw=k3d-app-pw
+  if [ "$s" = postgres ]; then key_check=CARTOGRA_APP_PASSWORD db_user=cartogra db_pw="$DB_PASSWORD"; fi
+  if kubectl -n cartogra get secret "$s-secrets" -o "jsonpath={.data.$key_check}" 2>/dev/null | grep -q .; then
     # A cluster created before INTERNAL_TOKEN_KEY existed gets the key added.
     kubectl -n cartogra get secret "$s-secrets" -o jsonpath='{.data.INTERNAL_TOKEN_KEY}' | grep -q . \
       || kubectl -n cartogra patch secret "$s-secrets" --type merge \
         -p "{\"stringData\":{\"INTERNAL_TOKEN_KEY\":\"$internal_token_key\"}}"
     continue
   fi
+  kubectl -n cartogra delete secret "$s-secrets" --ignore-not-found >/dev/null
   kubectl -n cartogra create secret generic "$s-secrets" \
-    --from-literal=DB_USERNAME=cartogra \
-    --from-literal=DB_PASSWORD="$DB_PASSWORD" \
+    --from-literal=DB_USERNAME="$db_user" \
+    --from-literal=DB_PASSWORD="$db_pw" \
+    --from-literal=FLYWAY_USERNAME=cartogra_owner \
+    --from-literal=FLYWAY_PASSWORD=k3d-owner-pw \
+    --from-literal=CARTOGRA_OWNER_PASSWORD=k3d-owner-pw \
+    --from-literal=CARTOGRA_APP_PASSWORD=k3d-app-pw \
     --from-literal=JWT_SECRET=k3d-test-secret-at-least-32-bytes-long \
     --from-literal=INTERNAL_TOKEN_KEY="$internal_token_key" \
     --from-literal=RESEND_API_KEY=re_placeholder \
@@ -181,6 +190,14 @@ for s in gateway registry topology contract ingestion postgres; do
 done
 kubectl -n acme-system get secret acme-bootstrap >/dev/null 2>&1 \
   || kubectl -n acme-system create secret generic acme-bootstrap --from-literal=ACME_PASSWORD="$ADMIN_PASSWORD"
+
+# A reused cluster keeps its Postgres volume, and the init script runs only on an empty volume.
+if kubectl -n cartogra get pod postgres-0 >/dev/null 2>&1; then
+  step "Create the database roles on the existing volume"
+  kubectl -n cartogra exec -i postgres-0 -- sh -c 'psql -v ON_ERROR_STOP=1 -U "$(cat /etc/cartogra/secrets/DB_USERNAME)" -d cartogra \
+    -v owner_password=k3d-owner-pw -v app_password=k3d-app-pw -f -' \
+    < infra/helm/cartogra/charts/postgres/files/bootstrap-roles.sql
+fi
 
 step "Install cartogra (gateway creates the tenant and admin)"
 helm upgrade --install cartogra infra/helm/cartogra -n cartogra \

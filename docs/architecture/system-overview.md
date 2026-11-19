@@ -76,8 +76,20 @@ Cartogra is a **multi-tenant service intelligence platform**. It auto-discovers 
 
 - Every domain table carries `tenant_id UUID NOT NULL`.
 - Gateway strips client-supplied `X-Tenant-Id` and re-injects from the validated JWT (`tid` claim).
-- PostgreSQL RLS policy on all tenant tables as defence-in-depth.
+- PostgreSQL RLS policy on all tenant tables as defence-in-depth. See "Row-level security" below.
 - Redis keys: `tenant:{tenantId}:...`
+
+#### Row-level security
+
+Each table with `tenant_id` has `ENABLE` and `FORCE ROW LEVEL SECURITY` and one policy, `tenant_isolation`. A row is visible when its `tenant_id` equals the session setting `app.current_tenant_id`, or when `app.rls_bypass` is `on`.
+
+- Roles: the services connect as `cartogra_app` (not the owner, `NOBYPASSRLS`). Flyway connects as `cartogra_owner` (`spring.flyway.user`). `infra/helm/cartogra/charts/postgres/files/bootstrap-roles.sql` creates both roles.
+- Connection scope: each service sets `spring.datasource.type: io.cartogra.web.tenant.TenantAwareDataSource`. This Hikari pool writes the current scope to each connection at checkout. Do not remove this setting: without it, each connection has an empty tenant, and no query returns rows.
+- Tenant scope: `InternalTokenFilter` binds `TenantContext` from the tenant of the verified `X-Internal-Token`. The gateway binds it from the JWT in `TenantInjectionFilter`. Kafka listeners bind it from the `tenant_id` of the envelope (`TenantContext.runAs`).
+- System scope: code that must read more than one tenant (schedulers), or that runs before the tenant is known (login, token refresh, webhook lookup), runs in `TenantDb.asSystem` / `TenantDb.runAsSystem`. Search for these calls to see each bypass.
+- Set the scope before a transaction starts. A transaction holds its connection, so a later change of scope cannot apply. `TenantContext` throws if you try.
+- No scope is fail-closed: the queries return no rows, and inserts fail.
+- Known gap: RLS does not apply to the materialized view `topology.dependency_graph_edges`. Its reads filter by `tenant_id` in the code. The app refreshes it through `refresh_dependency_graph_edges()`, a function that runs as the owner and sets `app.rls_bypass` to `on` for the refresh only.
 
 ### Authentication
 

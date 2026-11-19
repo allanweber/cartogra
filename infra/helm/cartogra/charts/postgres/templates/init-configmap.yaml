@@ -1,0 +1,19 @@
+{{- $name := include "common.name" . -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-init
+  labels:
+    {{- include "common.labels" . | nindent 4 }}
+data:
+  # Runs once, when the data volume is empty. For an existing volume, run bootstrap-roles.sql manually
+  # (README, "Database roles").
+  01-roles.sh: |
+    #!/bin/sh
+    set -eu
+    psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+      -v owner_password="$(cat /etc/cartogra/secrets/CARTOGRA_OWNER_PASSWORD)" \
+      -v app_password="$(cat /etc/cartogra/secrets/CARTOGRA_APP_PASSWORD)" \
+      -f /etc/cartogra/init/bootstrap-roles.sql
+  bootstrap-roles.sql: |
+{{ .Files.Get "files/bootstrap-roles.sql" | indent 4 }}

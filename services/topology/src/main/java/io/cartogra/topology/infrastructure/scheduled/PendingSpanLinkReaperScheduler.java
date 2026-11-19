@@ -1,6 +1,7 @@
 package io.cartogra.topology.infrastructure.scheduled;
 
 import io.cartogra.topology.repository.PendingSpanLinkRepository;
+import io.cartogra.web.tenant.TenantDb;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -21,7 +22,7 @@ public class PendingSpanLinkReaperScheduler {
 
     @Scheduled(fixedDelayString = "${topology.span-links.reap-interval:PT1M}")
     public void reap() {
-        int deleted = pendingSpanLinkRepository.deleteExpired(Instant.now());
+        int deleted = TenantDb.asSystem(() -> pendingSpanLinkRepository.deleteExpired(Instant.now()));
         if (deleted > 0) {
             log.info("Reaped {} expired pending_span_links rows", deleted);
         }

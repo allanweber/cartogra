@@ -1,5 +1,6 @@
 package io.cartogra.registry.api;
 
+import io.cartogra.web.tenant.TenantContext;
 import io.cartogra.common.api.ApiResponse;
 import io.cartogra.registry.api.dto.ServiceAccessRequest;
 import io.cartogra.registry.domain.ServiceService;
@@ -33,6 +34,7 @@ public class ServiceAccessInternalController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<Map<UUID, Boolean>>> checkAccess(@Valid @RequestBody ServiceAccessRequest request) {
-        return TracedResponse.ok(service.checkAccess(request.tenantId(), request.userId(), request.serviceIds()));
+        return TracedResponse.ok(TenantContext.callAs(request.tenantId(),
+                () -> service.checkAccess(request.tenantId(), request.userId(), request.serviceIds())));
     }
 }

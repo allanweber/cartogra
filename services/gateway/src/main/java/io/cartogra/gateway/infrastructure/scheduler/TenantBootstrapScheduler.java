@@ -2,6 +2,7 @@ package io.cartogra.gateway.infrastructure.scheduler;
 
 import io.cartogra.gateway.config.TenantBootstrapProperties;
 import io.cartogra.gateway.domain.TenantBootstrapService;
+import io.cartogra.web.tenant.TenantDb;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -31,7 +32,7 @@ public class TenantBootstrapScheduler {
             return;
         }
         try {
-            tenantBootstrapService.ensureExists();
+            TenantDb.runAsSystem(tenantBootstrapService::ensureExists);
             done = true;
         } catch (RuntimeException ex) {
             log.warn("tenant_bootstrap.bootstrap_failed, retrying: {}", ex.getMessage());

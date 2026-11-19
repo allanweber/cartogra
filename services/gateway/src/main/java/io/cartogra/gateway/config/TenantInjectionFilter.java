@@ -3,6 +3,7 @@ package io.cartogra.gateway.config;
 import io.cartogra.gateway.infrastructure.security.JwtAuthentication;
 import io.cartogra.web.security.InternalClaims;
 import io.cartogra.web.security.InternalTokenCodec;
+import io.cartogra.web.tenant.TenantContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -25,7 +26,8 @@ import java.util.Set;
 /**
  * Removes the identity headers from each inbound request, then sets them again from the validated JWT. For a
  * request to a proxied service, it also adds an {@code X-Internal-Token} signed for that service, which is the
- * only identity the services trust.
+ * only identity the services trust. For an authenticated request, it binds {@link TenantContext} to the JWT
+ * tenant for the rest of the chain (RLS).
  */
 @Component
 public class TenantInjectionFilter extends OncePerRequestFilter {
@@ -49,16 +51,28 @@ public class TenantInjectionFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
         Map<String, String> headers = new HashMap<>();
-        if (SecurityContextHolder.getContext().getAuthentication() instanceof JwtAuthentication jwtAuth) {
-            List<String> roles = jwtAuth.getClaims().roles();
-            headers.put("X-Tenant-Id", jwtAuth.getTenantId().toString());
-            headers.put("X-User-Id", jwtAuth.getUserId().toString());
-            headers.put("X-User-Roles", String.join(",", roles));
-            audienceOf(request.getRequestURI()).ifPresent(audience -> headers.put(InternalTokenCodec.HEADER,
-                    internalTokenCodec.sign(new InternalClaims(jwtAuth.getTenantId(),
-                            jwtAuth.getUserId().toString(), roles), audience)));
+        if (!(SecurityContextHolder.getContext().getAuthentication() instanceof JwtAuthentication jwtAuth)) {
+            filterChain.doFilter(new ManagedHeadersRequestWrapper(request, headers), response);
+            return;
         }
-        filterChain.doFilter(new ManagedHeadersRequestWrapper(request, headers), response);
+        List<String> roles = jwtAuth.getClaims().roles();
+        headers.put("X-Tenant-Id", jwtAuth.getTenantId().toString());
+        headers.put("X-User-Id", jwtAuth.getUserId().toString());
+        headers.put("X-User-Roles", String.join(",", roles));
+        audienceOf(request.getRequestURI()).ifPresent(audience -> headers.put(InternalTokenCodec.HEADER,
+                internalTokenCodec.sign(new InternalClaims(jwtAuth.getTenantId(),
+                        jwtAuth.getUserId().toString(), roles), audience)));
+        var wrapped = new ManagedHeadersRequestWrapper(request, headers);
+        try {
+            TenantContext.callAs(jwtAuth.getTenantId(), () -> {
+                filterChain.doFilter(wrapped, response);
+                return null;
+            });
+        } catch (IOException | ServletException | RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ServletException(e);
+        }
     }
 
     public static Optional<String> audienceOf(String path) {

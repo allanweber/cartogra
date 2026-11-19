@@ -10,8 +10,13 @@ spring:
     url: ${DB_URL:jdbc:postgresql://localhost:5436/cartogra?currentSchema=registry}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+    type: io.cartogra.web.tenant.TenantAwareDataSource
   flyway:
     enabled: true
+    url: ${spring.datasource.url}
+    user: ${FLYWAY_USERNAME:${DB_USERNAME}}
+    password: ${FLYWAY_PASSWORD:${DB_PASSWORD}}
+    init-sqls: SET app.rls_bypass = 'on'
     create-schemas: true
     schemas: registry
     default-schema: registry
