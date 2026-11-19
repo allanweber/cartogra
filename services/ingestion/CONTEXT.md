@@ -31,7 +31,7 @@ Ingestion is Cartogra's bridge between the external world (SCM providers, Kubern
 ## Core Responsibilities
 
 1. **SCM sync** — on receiving a Sync Command, start a Sync Job, list repositories via the appropriate Provider, detect tech stack, emit `service.discovered` per repo, emit `ownership.resolved` per CODEOWNERS result
-2. **Kubernetes watch** — continuously watch namespaces labeled `cartogra.io/tenant-id=<UUID>`; the label only opts in, and must equal the tenant that owns the cluster (mismatch → skipped). The tenant written is always the cluster's; emit `service.discovered` on Service ADD/MODIFY; derive health from Endpoints
+2. **Kubernetes watch** — continuously watch namespaces labeled `cartogra.io/tenant-id=<UUID>`; the label only opts in, and must equal the tenant that owns the cluster (mismatch → skipped). The tenant written is always the cluster's; emit `service.discovered` on Service ADD/MODIFY and `service.removed` on DELETE; derive health from Endpoints; after each full resync emit `service.resynced` with the set of present Services (no set when a list call fails)
 3. **Sync Job tracking** — persist lifecycle state; idempotency guard (drop command if a RUNNING job exists for the same connection)
 4. **Stale job reaper** — periodic task that marks RUNNING jobs older than 30 min as FAILED
 5. **Result notification** — emit `sync.completed` after every job (success or failure)
@@ -77,7 +77,7 @@ SyncJob  ──  (tenant_id, connection_id, provider_type, status, counters)
 | `ExecuteSyncUseCaseImpl` | Kafka `sync.command` | Creates SyncJob; iterates repos; emits `service.discovered` + `ownership.resolved` per repo; emits `sync.completed` |
 | `TechStackDetector` | Called inside `ExecuteSync` per repo | Returns detected tech stack set from file-presence heuristics |
 | `StaleJobReaperScheduler` | `@Scheduled` every minute | Marks RUNNING jobs > 30 min old as FAILED |
-| `KubernetesWorker` | Fabric8 watch events | Emits `service.discovered` on K8s Service ADD/MODIFY |
+| `KubernetesWorker` | Fabric8 watch events | Emits `service.discovered` on K8s Service ADD/MODIFY, `service.removed` on DELETE, `service.resynced` after each full resync |
 
 ---
 
@@ -96,7 +96,7 @@ No HTTP endpoints for domain operations. The `GlobalExceptionHandler` exists onl
 
 | Topic | Trigger | Key payload fields |
 |---|---|---|
-| `cartogra.ingestion.service.discovered` | Per non-archived repo (SCM) or K8s Service ADD/MODIFY | `externalId`, `tenantId`, `connectionId`, `name`, `repositoryUrl`, `techStack`, `healthStatus`, `source` |
+| `cartogra.ingestion.service.changed` | `service.discovered`: per non-archived repo (SCM) or K8s Service ADD/MODIFY. `service.removed`: K8s Service DELETE. `service.resynced`: after a K8s resync, or with an empty set on a cluster delete/rename | discovered: `externalId`, `tenantId`, `connectionId`, `name`, `repositoryUrl`, `techStack`, `healthStatus`, `source`. removed: `tenantId`, `k8sCluster`, `k8sNamespace`, `name`. resynced: `tenantId`, `k8sCluster`, `observedAt`, `services[]` |
 | `cartogra.ingestion.ownership.resolved` | Per repo after CODEOWNERS resolution | `externalId`, `tenantId`, `connectionId`, `ownerTeams[]` (bare team names — provider handle syntax stripped by `CodeownersHandles`), `pathOwners{}` (raw handles) |
 | `cartogra.ingestion.sync.completed` | After each Sync Job completes | `connectionId`, `tenantId`, `status`, `repositoriesSynced`, `errorMessage` |
 

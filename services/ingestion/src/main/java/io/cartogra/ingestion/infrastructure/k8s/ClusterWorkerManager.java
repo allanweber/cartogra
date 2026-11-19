@@ -2,7 +2,7 @@ package io.cartogra.ingestion.infrastructure.k8s;
 
 import io.cartogra.ingestion.domain.Cluster;
 import io.cartogra.ingestion.domain.ClusterStatus;
-import io.cartogra.ingestion.infrastructure.kafka.ServiceDiscoveredProducer;
+import io.cartogra.ingestion.infrastructure.kafka.ServiceChangedProducer;
 import io.cartogra.ingestion.repository.ClusterRepository;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientBuilder;
@@ -27,13 +27,13 @@ public class ClusterWorkerManager {
 
     private final ClusterRepository clusterRepository;
     private final CredentialEncryptor encryptor;
-    private final ServiceDiscoveredProducer producer;
+    private final ServiceChangedProducer producer;
     private final int connectionTimeoutMs;
     private final ConcurrentHashMap<UUID, KubernetesWorker> workers = new ConcurrentHashMap<>();
 
     public ClusterWorkerManager(ClusterRepository clusterRepository,
                                 CredentialEncryptor encryptor,
-                                ServiceDiscoveredProducer producer,
+                                ServiceChangedProducer producer,
                                 @Value("${ingestion.k8s.connection-timeout-ms:10000}") int connectionTimeoutMs) {
         this.clusterRepository = clusterRepository;
         this.encryptor = encryptor;

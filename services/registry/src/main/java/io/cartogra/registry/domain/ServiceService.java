@@ -17,6 +17,8 @@ import io.cartogra.registry.repository.ServiceHistoryRepository;
 import io.cartogra.registry.repository.ServiceRepository;
 import io.cartogra.registry.repository.TeamRepository;
 import io.cartogra.registry.domain.event.OwnershipResolvedPayload;
+import io.cartogra.registry.domain.event.ServiceRemovedPayload;
+import io.cartogra.registry.domain.event.ServiceResyncedPayload;
 import io.cartogra.registry.domain.exception.DuplicateServiceNameException;
 import io.cartogra.registry.domain.exception.PlanLimitExceededException;
 import io.cartogra.registry.domain.exception.ServiceNotFoundException;
@@ -36,6 +38,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -496,6 +499,55 @@ public class ServiceService {
             auditFields(saved, "discovered", Actor.SYSTEM);
             eventProducer.publishRegistered(saved);
         }
+    }
+
+    @Transactional
+    public void removeFromCluster(ServiceRemovedPayload payload) {
+        serviceRepository.findByK8sIdentity(
+                        payload.tenantId(), payload.k8sCluster(), payload.k8sNamespace(), payload.name())
+                .ifPresent(this::clearK8sFields);
+    }
+
+    /**
+     * Removes the cluster from each of its rows that is not in the resync set. A row that changed at or after
+     * {@code observedAt} is kept: a Service created after the resync listed the cluster is not in the set.
+     */
+    @Transactional
+    public void reconcileCluster(ServiceResyncedPayload payload) {
+        Set<String> present = payload.services().stream()
+                .map(s -> k8sKey(s.namespace(), s.name()))
+                .collect(Collectors.toSet());
+        List<Service> gone = serviceRepository
+                .findByK8sCluster(payload.tenantId(), payload.k8sCluster(), payload.observedAt()).stream()
+                .filter(s -> !present.contains(k8sKey(s.k8sNamespace(), s.name())))
+                .toList();
+        gone.forEach(this::clearK8sFields);
+        if (!gone.isEmpty()) {
+            log.info("service.resynced: removed cluster={} from {} service(s) tenant={}",
+                    payload.k8sCluster(), gone.size(), payload.tenantId());
+        }
+    }
+
+    private static String k8sKey(@Nullable String namespace, String name) {
+        return namespace + "/" + name.toLowerCase(Locale.ROOT);
+    }
+
+    private void clearK8sFields(Service current) {
+        var cleared = new Service(
+                current.id(), current.tenantId(), current.name(),
+                current.description(), current.teamId(), current.repositoryUrl(), current.techStack(),
+                current.metadata(), ServiceHealthStatus.UNKNOWN, current.lastDeployedAt(), current.createdAt(),
+                Instant.now(), null,
+                current.externalId(), current.connectionId(), current.source(),
+                current.repositoryRef(), null, null, null,
+                null, current.lastCommitAt(), current.lastCommitSha(), current.healthCheckedAt(),
+                current.tier(), current.tags(), current.slaTarget(),
+                current.documentationUrl(), current.runbookUrl()
+        );
+        Service saved = serviceRepository.save(cleared);
+        historyRepository.save(snapshot(saved, Actor.SYSTEM));
+        auditChanges(current, saved, "discovery_removed", Actor.SYSTEM);
+        eventProducer.publishUpdated(saved);
     }
 
     /**

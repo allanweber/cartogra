@@ -52,6 +52,9 @@ public interface ServiceRepository {
     /** Looks up by the K8s cluster/namespace/name triple — the stable identity for kubernetes-sourced services. */
     Optional<Service> findByK8sIdentity(UUID tenantId, String k8sCluster, String k8sNamespace, String name);
 
+    /** Rows of one K8s cluster that did not change at or after {@code updatedBefore}. */
+    List<Service> findByK8sCluster(UUID tenantId, String k8sCluster, Instant updatedBefore);
+
     /**
      * Name fallback for first-contact K8s discovery. Only matches rows that have NOT yet been
      * claimed by any K8s identity (source != 'kubernetes' OR k8s_cluster IS NULL), preventing

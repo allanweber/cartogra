@@ -122,7 +122,7 @@ class ServiceDiscoveryFlowIT {
         syncExecutionService.execute(payload);
 
         List<ConsumerRecord<String, String>> messages = pollTopic(
-                "cartogra.ingestion.service.discovered", bootstrapServers, "test-org/payments-service");
+                "cartogra.ingestion.service.changed", bootstrapServers, "test-org/payments-service");
 
         await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
                 assertThat(messages).isNotEmpty()

@@ -10,6 +10,7 @@ import io.cartogra.test.PostgresTestSupport;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -20,6 +21,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest(properties = "spring.kafka.bootstrap-servers=localhost:9092")
 class ClusterRepositoryIT {
@@ -84,11 +86,33 @@ class ClusterRepositoryIT {
     @Test
     void count_excludesOtherTenants() {
         UUID tenantId = UUID.randomUUID();
-        repository.save(newCluster(tenantId));
-        repository.save(newCluster(tenantId));
+        repository.save(newCluster(tenantId, "a"));
+        repository.save(newCluster(tenantId, "b"));
         repository.save(newCluster(UUID.randomUUID()));
 
         assertThat(repository.count(tenantId)).isEqualTo(2);
+    }
+
+    @Test
+    void existsByName_ignoresCaseExcludedIdAndDeletedRows() {
+        UUID tenantId = UUID.randomUUID();
+        Cluster saved = repository.save(newCluster(tenantId, "Prod-EU"));
+
+        assertThat(repository.existsByName(tenantId, "prod-eu", null)).isTrue();
+        assertThat(repository.existsByName(tenantId, "prod-eu", saved.id())).isFalse();
+        assertThat(repository.existsByName(UUID.randomUUID(), "prod-eu", null)).isFalse();
+
+        repository.softDelete(tenantId, saved.id());
+        assertThat(repository.existsByName(tenantId, "prod-eu", null)).isFalse();
+    }
+
+    @Test
+    void save_duplicateNameInTenant_isRejectedByTheDatabase() {
+        UUID tenantId = UUID.randomUUID();
+        repository.save(newCluster(tenantId, "edge"));
+
+        assertThatThrownBy(() -> repository.save(newCluster(tenantId, "EDGE")))
+                .isInstanceOf(DuplicateKeyException.class);
     }
 
     @Test

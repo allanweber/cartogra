@@ -165,6 +165,19 @@ class KubernetesClusterControllerIT {
         assertThat(res.headers().firstValue("X-Trace-Id")).isPresent();
     }
 
+    @Test
+    void post_duplicateNameIgnoringCase_returns409() throws Exception {
+        String first = "{\"name\":\"dup-cluster\",\"source\":\"MANUAL\",\"apiServerUrl\":\"https://127.0.0.1:6443\",\"saToken\":\"t\"}";
+        String second = "{\"name\":\"DUP-cluster\",\"source\":\"MANUAL\",\"apiServerUrl\":\"https://127.0.0.1:6443\",\"saToken\":\"t\"}";
+
+        assertThat(post("/k8s/clusters", first).statusCode()).isEqualTo(201);
+        var res = post("/k8s/clusters", second);
+
+        assertThat(res.statusCode()).isEqualTo(409);
+        assertThat(res.body()).contains("\"code\":\"CONFLICT\"");
+        assertThat(res.headers().firstValue("X-Trace-Id")).isPresent();
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private HttpResponse<String> post(String path, String body) throws Exception {

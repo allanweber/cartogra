@@ -19,7 +19,7 @@ not the domain descriptions below, which can drift again — re-run that grep be
 | Domain | Real topics today | Notes |
 | ------ | ------------------ | ----- |
 | Registry | 2 (`service.changed`, `team.changed`) | `service.changed` consumed by Topology; `team.changed` has no consumer |
-| Ingestion | 4 (`service.discovered`, `ownership.resolved`, `sync.completed`, `sync.command`) | `service.discovered` and `ownership.resolved` are consumed by Registry; `sync.completed` has no consumer; `sync.command` is produced *and* consumed inside Ingestion itself despite its `registry.` prefix — see below |
+| Ingestion | 4 (`service.changed`, `ownership.resolved`, `sync.completed`, `sync.command`) | `service.changed` and `ownership.resolved` are consumed by Registry; `sync.completed` has no consumer; `sync.command` is produced *and* consumed inside Ingestion itself despite its `registry.` prefix — see below |
 | Topology | 0 | Service has schema + CI + IT harness only (Phase 0); no service class, controller, producer, or consumer exists |
 | Contract | 0 | Consumes `registry.service.changed` (`service.deleted`); produces only `platform.audit.recorded` |
 | Intelligence | 0 | Empty directory — no code at all |
@@ -43,7 +43,7 @@ removed — "No producer, no consumer, no module. Violates the project's own no-
 
 | Topic | Producer | Consumers today | Description |
 | ----- | -------- | ---------------- | ----------- |
-| `cartogra.ingestion.service.discovered` | Ingestion (`ServiceDiscoveredProducer`) | Registry (`RegistryServiceDiscoveryConsumer`) | Repo or K8s Service warrants a catalog entry |
+| `cartogra.ingestion.service.changed` | Ingestion (`ServiceChangedProducer`) | Registry (`RegistryServiceDiscoveryConsumer`) | Discovered services. `event_type` `service.discovered`: a repo or K8s Service is present (key = external id, or `cluster/namespace/name`). `service.removed`: a K8s Service was deleted (key = `cluster/namespace/name`). `service.resynced`: the full set of tenant Services in one cluster at `observedAt` (key = cluster name); Registry removes the cluster from rows not in the set. An empty set is sent when a cluster is deleted or renamed |
 | `cartogra.ingestion.ownership.resolved` | Ingestion (`OwnershipResolvedProducer`) | Registry (`OwnershipResolvedConsumer`) | CODEOWNERS/K8s-label ownership resolved for a repo |
 | `cartogra.ingestion.sync.completed` | Ingestion (`SyncResultProducer`) | none (tests subscribe directly; no production consumer) | A Sync Job finished (success or failure) |
 | `cartogra.registry.sync.command` | Ingestion (`SyncCommandProducer`) | Ingestion (`SyncCommandConsumer`) | **Not** a Registry→Ingestion handoff despite the `registry.` prefix. `ScmConnectionService`/`WebhookService`/`ScheduledSyncService` in Ingestion publish this to queue a sync job for its own `SyncCommandConsumer`; the name is a leftover from before SCM Connections moved from Registry to Ingestion (see `services/registry/CONTEXT.md`) |
@@ -61,7 +61,7 @@ handling configured (`{registry,topology,contract}/config/KafkaConfig.java`, a `
 recovery). The DLQ topic is the source topic with a `.dlq` suffix — **not** the `cartogra.dlq.{suffix}` prefix
 pattern this document used to describe:
 
-- `cartogra.ingestion.service.discovered.dlq`
+- `cartogra.ingestion.service.changed.dlq`
 - `cartogra.ingestion.ownership.resolved.dlq`
 - `cartogra.registry.service.changed.dlq` — shared by Topology's and Contract's consumers; each lands its own poison records there
 

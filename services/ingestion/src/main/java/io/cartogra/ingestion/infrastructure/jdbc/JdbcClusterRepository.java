@@ -7,6 +7,7 @@ import io.cartogra.ingestion.repository.ClusterRepository;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
@@ -80,6 +81,23 @@ public class JdbcClusterRepository implements ClusterRepository {
         String sql = "SELECT COUNT(*) FROM k8s_clusters WHERE tenant_id = :tenantId AND deleted_at IS NULL";
         Long result = jdbc.queryForObject(sql, new MapSqlParameterSource("tenantId", tenantId), Long.class);
         return result != null ? result : 0L;
+    }
+
+    @Override
+    public boolean existsByName(UUID tenantId, String name, @Nullable UUID excludeId) {
+        String sql = """
+                SELECT EXISTS (
+                    SELECT 1 FROM k8s_clusters
+                    WHERE tenant_id = :tenantId
+                      AND lower(name) = lower(:name)
+                      AND (CAST(:excludeId AS UUID) IS NULL OR id <> :excludeId)
+                      AND deleted_at IS NULL)
+                """;
+        Boolean result = jdbc.queryForObject(sql, new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("name", name)
+                .addValue("excludeId", excludeId), Boolean.class);
+        return Boolean.TRUE.equals(result);
     }
 
     @Override

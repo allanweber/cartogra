@@ -4,22 +4,29 @@ import io.cartogra.common.identity.Actor;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.ingestion.api.dto.KubernetesClusterRequest;
 import io.cartogra.ingestion.domain.exception.ClusterNotFoundException;
+import io.cartogra.ingestion.domain.exception.DuplicateClusterNameException;
 import io.cartogra.ingestion.domain.exception.PlanLimitExceededException;
 import io.cartogra.ingestion.infrastructure.k8s.ClusterWorkerManager;
 import io.cartogra.ingestion.infrastructure.k8s.CredentialEncryptor;
 import io.cartogra.ingestion.infrastructure.k8s.KubeconfigParser;
+import io.cartogra.ingestion.infrastructure.kafka.ServiceChangedProducer;
 import io.cartogra.ingestion.infrastructure.registry.RegistryPlanLimitClient;
 import io.cartogra.ingestion.infrastructure.registry.RegistryPlanLimits;
 import io.cartogra.ingestion.repository.ClusterRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Service
 public class ClusterService {
+
+    private static final Logger log = LoggerFactory.getLogger(ClusterService.class);
 
     private final ClusterRepository repository;
     private final ClusterWorkerManager workerManager;
@@ -27,19 +34,22 @@ public class ClusterService {
     private final KubeconfigParser kubeconfigParser;
     private final RegistryPlanLimitClient planLimitClient;
     private final IngestionAuditRecorder auditRecorder;
+    private final ServiceChangedProducer serviceChangedProducer;
 
     public ClusterService(ClusterRepository repository,
                           ClusterWorkerManager workerManager,
                           CredentialEncryptor encryptor,
                           KubeconfigParser kubeconfigParser,
                           RegistryPlanLimitClient planLimitClient,
-                          IngestionAuditRecorder auditRecorder) {
+                          IngestionAuditRecorder auditRecorder,
+                          ServiceChangedProducer serviceChangedProducer) {
         this.repository = repository;
         this.workerManager = workerManager;
         this.encryptor = encryptor;
         this.kubeconfigParser = kubeconfigParser;
         this.planLimitClient = planLimitClient;
         this.auditRecorder = auditRecorder;
+        this.serviceChangedProducer = serviceChangedProducer;
     }
 
     @PreAuthorize("hasRole('ADMIN')")
@@ -50,6 +60,9 @@ public class ClusterService {
         }
         if (req.source() == null) {
             throw new IllegalArgumentException("source is required");
+        }
+        if (repository.existsByName(tenantId, req.name(), null)) {
+            throw new DuplicateClusterNameException(req.name());
         }
         int maxK8sClusters = planLimitClient.fetchLimits(tenantId)
                 .map(RegistryPlanLimits::maxK8sClusters)
@@ -138,6 +151,9 @@ public class ClusterService {
         }
 
         String name = (req.name() != null && !req.name().isBlank()) ? req.name() : existing.name();
+        if (!name.equalsIgnoreCase(existing.name()) && repository.existsByName(tenantId, name, id)) {
+            throw new DuplicateClusterNameException(name);
+        }
 
         Cluster updated = repository.save(new Cluster(
                 existing.id(), existing.tenantId(), name, existing.source(),
@@ -149,6 +165,9 @@ public class ClusterService {
 
         auditRecorder.clusterUpdated(actor, existing, updated);
         workerManager.stop(id);
+        if (!name.equals(existing.name())) {
+            releaseServices(existing);
+        }
         workerManager.start(updated);
         return updated;
     }
@@ -174,5 +193,20 @@ public class ClusterService {
         repository.softDelete(tenantId, id);
         auditRecorder.clusterDeleted(actor, existing);
         workerManager.stop(id);
+        releaseServices(existing);
+    }
+
+    /**
+     * An empty snapshot under the old name makes the registry remove that cluster from all its services. A Kafka
+     * failure must not undo the cluster change, so it is logged and the services keep the old cluster name.
+     */
+    private void releaseServices(Cluster cluster) {
+        try {
+            serviceChangedProducer.publishResynced(
+                    new ServiceResyncedPayload(cluster.tenantId(), cluster.name(), Instant.now(), List.of()));
+        } catch (RuntimeException ex) {
+            log.warn("Could not release services of cluster '{}' ({}) tenant={}: {}",
+                    cluster.name(), cluster.id(), cluster.tenantId(), ex.getMessage());
+        }
     }
 }

@@ -2,6 +2,7 @@ package io.cartogra.ingestion.repository;
 
 import io.cartogra.ingestion.domain.Cluster;
 import io.cartogra.ingestion.domain.ClusterStatus;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.Optional;
@@ -16,6 +17,8 @@ public interface ClusterRepository {
     List<Cluster> findAll(UUID tenantId, int limit, int offset);
 
     long count(UUID tenantId);
+
+    boolean existsByName(UUID tenantId, String name, @Nullable UUID excludeId);
 
     void softDelete(UUID tenantId, UUID id);
 

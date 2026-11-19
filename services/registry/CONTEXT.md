@@ -143,7 +143,7 @@ SCM Connection created/synced there. See `docs/architecture/kafka-topics.md`.
 
 | Topic | Consumer class | Method invoked |
 |---|---|---|
-| `cartogra.ingestion.service.discovered` | `RegistryServiceDiscoveryConsumer` | `ServiceService.upsertDiscovered` |
+| `cartogra.ingestion.service.changed` | `RegistryServiceDiscoveryConsumer` | By `event_type`: `service.discovered` → `ServiceService.upsertDiscovered`; `service.removed` → `removeFromCluster`; `service.resynced` → `reconcileCluster` (rows of the cluster not in the set and not changed after `observedAt` lose `k8s_cluster`/`k8s_namespace`/`k8s_deployment`/`health_endpoint`, health becomes `UNKNOWN`; the row and its owner stay) |
 | `cartogra.ingestion.ownership.resolved` | `OwnershipResolvedConsumer` | `ServiceService.resolveOwnership` (service by external id, else repo-URL suffix; handles matched to teams by slug; assign when exactly one distinct team matches; never overrides an existing owner) |
 | `cartogra.platform.audit.recorded` | `AuditRecordedConsumer` | `AuditEventService.recordPublished` (insert into `audit_events`, ignored on a repeated `event_id`) |
 

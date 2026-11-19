@@ -1,7 +1,10 @@
 package io.cartogra.ingestion;
 
 import io.cartogra.ingestion.infrastructure.k8s.KubernetesWorker;
-import io.cartogra.ingestion.infrastructure.kafka.ServiceDiscoveredProducer;
+import io.cartogra.ingestion.domain.PresentService;
+import io.cartogra.ingestion.domain.ServiceRemovedPayload;
+import io.cartogra.ingestion.domain.ServiceResyncedPayload;
+import io.cartogra.ingestion.infrastructure.kafka.ServiceChangedProducer;
 import io.cartogra.test.KafkaTestSupport;
 import io.cartogra.test.PostgresTestSupport;
 import io.fabric8.kubernetes.api.model.EndpointAddress;
@@ -32,6 +35,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -64,7 +68,7 @@ class KubernetesWorkerIT {
     String bootstrapServers;
 
     @Autowired
-    ServiceDiscoveredProducer serviceDiscoveredProducer;
+    ServiceChangedProducer serviceChangedProducer;
 
     @Autowired
     ObjectMapper objectMapper;
@@ -115,22 +119,52 @@ class KubernetesWorkerIT {
         doReturn(svcResource).when(svcNsOps).withName(SVC_NAME);
         doReturn(svc).when(svcResource).get();
 
-        KubernetesWorker worker = new KubernetesWorker(kubernetesClient, serviceDiscoveredProducer, "test-cluster", TENANT_ID);
+        KubernetesWorker worker = new KubernetesWorker(kubernetesClient, serviceChangedProducer, "test-cluster", TENANT_ID);
         worker.handleServiceEvent(NS, SVC_NAME);
 
         // K8s key is cluster/namespace/name (externalId is null for K8s sources).
         String expectedKey = "test-cluster/" + NS + "/" + SVC_NAME;
         List<ConsumerRecord<String, String>> messages = pollTopic(
-                "cartogra.ingestion.service.discovered", bootstrapServers, expectedKey);
+                "cartogra.ingestion.service.changed", bootstrapServers, expectedKey);
 
         assertThat(messages).isNotEmpty();
         JsonNode envelope = objectMapper.readTree(messages.get(0).value());
         JsonNode payload = envelope.get("payload");
+        assertThat(envelope.get("eventType").asString()).isEqualTo("service.discovered");
         assertThat(objectMapper.treeToValue(payload.get("source"), String.class)).isEqualTo("kubernetes");
         assertThat(objectMapper.treeToValue(payload.get("healthStatus"), String.class)).isEqualTo("HEALTHY");
         assertThat(objectMapper.treeToValue(payload.get("tenantId"), String.class)).isEqualTo(TENANT_ID.toString());
         // K8s worker no longer sets externalId — identity is the k8sCluster/k8sNamespace/name triple.
         assertThat(payload.get("externalId").isNull()).isTrue();
+    }
+
+    @Test
+    void publishRemoved_usesTheServiceKeyAndEventType() throws Exception {
+        serviceChangedProducer.publishRemoved(new ServiceRemovedPayload(TENANT_ID, "removal-cluster", NS, SVC_NAME));
+
+        List<ConsumerRecord<String, String>> messages = pollTopic(
+                "cartogra.ingestion.service.changed", bootstrapServers, "removal-cluster/" + NS + "/" + SVC_NAME);
+
+        assertThat(messages).isNotEmpty();
+        JsonNode envelope = objectMapper.readTree(messages.get(0).value());
+        assertThat(envelope.get("eventType").asString()).isEqualTo("service.removed");
+        assertThat(envelope.get("payload").get("k8sNamespace").asString()).isEqualTo(NS);
+    }
+
+    @Test
+    void publishResynced_usesTheClusterKeyAndEventType() throws Exception {
+        serviceChangedProducer.publishResynced(new ServiceResyncedPayload(TENANT_ID, "resync-cluster", Instant.now(),
+                List.of(new PresentService(NS, SVC_NAME))));
+
+        List<ConsumerRecord<String, String>> messages = pollTopic(
+                "cartogra.ingestion.service.changed", bootstrapServers, "resync-cluster");
+
+        assertThat(messages).isNotEmpty();
+        JsonNode envelope = objectMapper.readTree(messages.get(0).value());
+        assertThat(envelope.get("eventType").asString()).isEqualTo("service.resynced");
+        JsonNode services = envelope.get("payload").get("services");
+        assertThat(services).hasSize(1);
+        assertThat(services.get(0).get("name").asString()).isEqualTo(SVC_NAME);
     }
 
     private List<ConsumerRecord<String, String>> pollTopic(String topic, String servers, String key) {

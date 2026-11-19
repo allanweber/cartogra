@@ -3,7 +3,7 @@ package io.cartogra.ingestion.infrastructure.k8s;
 import io.cartogra.ingestion.domain.Cluster;
 import io.cartogra.ingestion.domain.ClusterSource;
 import io.cartogra.ingestion.domain.ClusterStatus;
-import io.cartogra.ingestion.infrastructure.kafka.ServiceDiscoveredProducer;
+import io.cartogra.ingestion.infrastructure.kafka.ServiceChangedProducer;
 import io.cartogra.ingestion.repository.ClusterRepository;
 import io.fabric8.kubernetes.api.model.NamespaceBuilder;
 import io.fabric8.kubernetes.api.model.ServiceBuilder;
@@ -35,13 +35,13 @@ class ClusterWorkerManagerTest {
 
     private ClusterRepository repository;
     private CredentialEncryptor encryptor;
-    private ServiceDiscoveredProducer producer;
+    private ServiceChangedProducer producer;
 
     @BeforeEach
     void setUp() {
         repository = mock(ClusterRepository.class);
         encryptor = mock(CredentialEncryptor.class);
-        producer = mock(ServiceDiscoveredProducer.class);
+        producer = mock(ServiceChangedProducer.class);
         when(repository.findAllActive()).thenReturn(List.of());
     }
 
@@ -102,7 +102,7 @@ class ClusterWorkerManagerTest {
         manager.start(cluster);
 
         await().atMost(5, TimeUnit.SECONDS).untilAsserted(() ->
-                verify(producer, atLeastOnce()).publish(argThat(p ->
+                verify(producer, atLeastOnce()).publishDiscovered(argThat(p ->
                         "my-svc".equals(p.name()) && "my-ns".equals(p.k8sNamespace())
                                 && tenantId.equals(p.tenantId())))
         );
@@ -126,9 +126,9 @@ class ClusterWorkerManagerTest {
         await().atMost(5, TimeUnit.SECONDS).untilAsserted(() ->
                 verify(repository).updateStatus(eq(cluster.id()), eq(ClusterStatus.ACTIVE), isNull())
         );
-        verify(producer, atLeastOnce()).publish(argThat(p -> "own-svc".equals(p.name())));
-        verify(producer, never()).publish(argThat(p -> !ownerTenant.equals(p.tenantId())));
-        verify(producer, never()).publish(argThat(p ->
+        verify(producer, atLeastOnce()).publishDiscovered(argThat(p -> "own-svc".equals(p.name())));
+        verify(producer, never()).publishDiscovered(argThat(p -> !ownerTenant.equals(p.tenantId())));
+        verify(producer, never()).publishDiscovered(argThat(p ->
                 "foreign-ns".equals(p.k8sNamespace()) || "garbage-ns".equals(p.k8sNamespace())));
 
         manager.stopAll();

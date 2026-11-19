@@ -5,7 +5,11 @@ import io.cartogra.registry.domain.ServiceService;
 import io.cartogra.registry.repository.ServiceHistoryRepository;
 import io.cartogra.registry.repository.ServiceRepository;
 import io.cartogra.registry.domain.Service;
+import io.cartogra.registry.domain.ServiceHealthStatus;
 import io.cartogra.registry.domain.event.ServiceDiscoveredPayload;
+import io.cartogra.registry.domain.event.ServiceRemovedPayload;
+import io.cartogra.registry.domain.event.ServiceResyncedPayload;
+import io.cartogra.registry.domain.event.ServiceResyncedPayload.PresentService;
 import io.cartogra.registry.repository.ServiceDiscoveryCommand;
 import io.cartogra.test.KafkaTestSupport;
 import io.cartogra.test.PostgresTestSupport;
@@ -164,7 +168,7 @@ class RegistryServiceDiscoveryConsumerIT {
                     ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
                     ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class));
             var template = new KafkaTemplate<>(producerFactory);
-            template.send(new ProducerRecord<>("cartogra.ingestion.service.discovered", externalId, json));
+            template.send(new ProducerRecord<>("cartogra.ingestion.service.changed", externalId, json));
             template.flush();
 
             AtomicReference<Service> savedService = new AtomicReference<>();
@@ -219,7 +223,7 @@ class RegistryServiceDiscoveryConsumerIT {
                     null, null, null, List.of("go"), "UNKNOWN",
                     null, null, "sha-" + i);
             var envelope = EventEnvelope.of("service.discovered", connectionId, tenantId, 1, payload);
-            template.send(new ProducerRecord<>("cartogra.ingestion.service.discovered",
+            template.send(new ProducerRecord<>("cartogra.ingestion.service.changed",
                     externalId, objectMapper.writeValueAsString(envelope)));
         }
         template.flush();
@@ -232,6 +236,89 @@ class RegistryServiceDiscoveryConsumerIT {
                     assertThat(found).isPresent();
                     assertThat(found.get().lastCommitSha()).isEqualTo("sha-1");
                 });
+    }
+
+    @Test
+    void k8sServiceRemovedThenRediscoveredThenGoneFromResync() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        String cluster = "prod-" + UUID.randomUUID();
+        String key = cluster + "/shop/cart";
+
+        sendIngestionEvent(key, "service.discovered", tenantId, k8sDiscovered(tenantId, cluster, "shop", "cart"));
+        Service discovered = awaitK8sService(tenantId, cluster, "shop", "cart");
+        assertThat(discovered.healthStatus()).isEqualTo(ServiceHealthStatus.HEALTHY);
+
+        sendIngestionEvent(key, "service.removed", tenantId,
+                new ServiceRemovedPayload(tenantId, cluster, "shop", "cart"));
+        Awaitility.await().atMost(Duration.ofSeconds(15)).pollInterval(Duration.ofMillis(300)).untilAsserted(() -> {
+            Service svc = serviceRepository.findById(tenantId, discovered.id()).orElseThrow();
+            assertThat(svc.k8sCluster()).isNull();
+            assertThat(svc.k8sNamespace()).isNull();
+            assertThat(svc.k8sDeployment()).isNull();
+            assertThat(svc.healthEndpoint()).isNull();
+            assertThat(svc.healthStatus()).isEqualTo(ServiceHealthStatus.UNKNOWN);
+            assertThat(svc.source()).isEqualTo("kubernetes");
+        });
+
+        sendIngestionEvent(key, "service.discovered", tenantId, k8sDiscovered(tenantId, cluster, "shop", "cart"));
+        Service rediscovered = awaitK8sService(tenantId, cluster, "shop", "cart");
+        assertThat(rediscovered.id()).as("a Service created again claims its old row").isEqualTo(discovered.id());
+
+        Instant tooEarly = rediscovered.updatedAt().minusSeconds(60);
+        sendIngestionEvent(cluster, "service.resynced", tenantId,
+                new ServiceResyncedPayload(tenantId, cluster, tooEarly, List.of()));
+        Instant observedAt = Instant.now().plusSeconds(1);
+        sendIngestionEvent(cluster, "service.resynced", tenantId,
+                new ServiceResyncedPayload(tenantId, cluster, observedAt, List.of(
+                        new PresentService("shop", "other"))));
+
+        Awaitility.await().atMost(Duration.ofSeconds(15)).pollInterval(Duration.ofMillis(300)).untilAsserted(() ->
+                assertThat(serviceRepository.findById(tenantId, discovered.id()).orElseThrow().k8sCluster()).isNull());
+    }
+
+    @Test
+    void k8sResyncKeepsServicesInTheSet() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        String cluster = "prod-" + UUID.randomUUID();
+
+        sendIngestionEvent(cluster + "/shop/cart", "service.discovered", tenantId,
+                k8sDiscovered(tenantId, cluster, "shop", "cart"));
+        Service present = awaitK8sService(tenantId, cluster, "shop", "cart");
+
+        sendIngestionEvent(cluster, "service.resynced", tenantId,
+                new ServiceResyncedPayload(tenantId, cluster,
+                        Instant.now().plusSeconds(1), List.of(
+                        new PresentService("shop", "cart"))));
+        sendIngestionEvent(cluster + "/shop/marker", "service.discovered", tenantId,
+                k8sDiscovered(tenantId, cluster, "shop", "marker"));
+        awaitK8sService(tenantId, cluster, "shop", "marker");
+
+        assertThat(serviceRepository.findById(tenantId, present.id()).orElseThrow().k8sCluster()).isEqualTo(cluster);
+    }
+
+    private static ServiceDiscoveredPayload k8sDiscovered(UUID tenantId, String cluster, String namespace, String name) {
+        return new ServiceDiscoveredPayload(
+                tenantId, null, "kubernetes", null, name, null, null, null,
+                cluster, namespace, name, List.of(), "HEALTHY",
+                "http://" + name + "." + namespace + ".svc.cluster.local:8080/health", null, null);
+    }
+
+    private void sendIngestionEvent(String key, String eventType, UUID tenantId, Object payload) throws Exception {
+        var envelope = EventEnvelope.of(eventType, tenantId, tenantId, 1, payload);
+        stringKafkaTemplate()
+                .send(new ProducerRecord<>("cartogra.ingestion.service.changed", key,
+                        objectMapper.writeValueAsString(envelope)))
+                .get();
+    }
+
+    private Service awaitK8sService(UUID tenantId, String cluster, String namespace, String name) {
+        AtomicReference<Service> found = new AtomicReference<>();
+        Awaitility.await().atMost(Duration.ofSeconds(15)).pollInterval(Duration.ofMillis(300)).untilAsserted(() -> {
+            Optional<Service> svc = serviceRepository.findByK8sIdentity(tenantId, cluster, namespace, name);
+            assertThat(svc).isPresent();
+            found.set(svc.get());
+        });
+        return found.get();
     }
 
     @Test
@@ -251,7 +338,7 @@ class RegistryServiceDiscoveryConsumerIT {
                 ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
                 ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class));
         var template = new KafkaTemplate<>(producerFactory);
-        template.send(new ProducerRecord<>("cartogra.ingestion.service.discovered",
+        template.send(new ProducerRecord<>("cartogra.ingestion.service.changed",
                 externalId, objectMapper.writeValueAsString(envelope)));
         template.flush();
 
@@ -294,9 +381,9 @@ class RegistryServiceDiscoveryConsumerIT {
         // addNotRetryableExceptions(JacksonException.class) wiring is otherwise unit-testable
         // only by inspecting the DefaultErrorHandler bean, which is a weaker guarantee than
         // this end-to-end proof that malformed input is recoverable at all.
-        try (KafkaConsumer<String, String> dlq = newRawConsumer("cartogra.ingestion.service.discovered.dlq")) {
+        try (KafkaConsumer<String, String> dlq = newRawConsumer("cartogra.ingestion.service.changed.dlq")) {
             stringKafkaTemplate()
-                    .send(new ProducerRecord<>("cartogra.ingestion.service.discovered", key, malformedJson))
+                    .send(new ProducerRecord<>("cartogra.ingestion.service.changed", key, malformedJson))
                     .get();
 
             ConsumerRecord<String, String> dlqRecord = pollForRecord(dlq, key, Duration.ofSeconds(15));
@@ -331,7 +418,7 @@ class RegistryServiceDiscoveryConsumerIT {
                 null, null, null, List.of("java"), "UNKNOWN", null, null, "sha-retry");
         var envelope = EventEnvelope.of("service.discovered", connectionId, tenantId, 1, payload);
         stringKafkaTemplate()
-                .send(new ProducerRecord<>("cartogra.ingestion.service.discovered",
+                .send(new ProducerRecord<>("cartogra.ingestion.service.changed",
                         externalId, objectMapper.writeValueAsString(envelope)))
                 .get();
 
@@ -366,9 +453,9 @@ class RegistryServiceDiscoveryConsumerIT {
         var envelope = EventEnvelope.of("service.discovered", connectionId, tenantId, 1, payload);
         String json = objectMapper.writeValueAsString(envelope);
 
-        try (KafkaConsumer<String, String> dlq = newRawConsumer("cartogra.ingestion.service.discovered.dlq")) {
+        try (KafkaConsumer<String, String> dlq = newRawConsumer("cartogra.ingestion.service.changed.dlq")) {
             stringKafkaTemplate()
-                    .send(new ProducerRecord<>("cartogra.ingestion.service.discovered", externalId, json))
+                    .send(new ProducerRecord<>("cartogra.ingestion.service.changed", externalId, json))
                     .get();
 
             ConsumerRecord<String, String> dlqRecord = pollForRecord(dlq, externalId, Duration.ofSeconds(20));

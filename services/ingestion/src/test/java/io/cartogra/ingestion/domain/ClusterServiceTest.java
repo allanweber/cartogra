@@ -3,12 +3,15 @@ package io.cartogra.ingestion.domain;
 import io.cartogra.common.identity.Actor;
 import io.cartogra.ingestion.api.dto.KubernetesClusterRequest;
 import io.cartogra.ingestion.domain.exception.ClusterNotFoundException;
+import io.cartogra.ingestion.domain.exception.DuplicateClusterNameException;
 import io.cartogra.ingestion.infrastructure.k8s.ClusterWorkerManager;
 import io.cartogra.ingestion.infrastructure.k8s.CredentialEncryptor;
 import io.cartogra.ingestion.infrastructure.k8s.KubeconfigParser;
+import io.cartogra.ingestion.infrastructure.kafka.ServiceChangedProducer;
 import io.cartogra.ingestion.infrastructure.registry.RegistryPlanLimitClient;
 import io.cartogra.ingestion.repository.ClusterRepository;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -26,9 +29,11 @@ class ClusterServiceTest {
     private final CredentialEncryptor encryptor = mock(CredentialEncryptor.class);
     private final KubeconfigParser kubeconfigParser = mock(KubeconfigParser.class);
     private final RegistryPlanLimitClient planLimitClient = mock(RegistryPlanLimitClient.class);
+    private final ServiceChangedProducer serviceChangedProducer = mock(ServiceChangedProducer.class);
     private final ClusterService service =
             new ClusterService(repository, workerManager, encryptor, kubeconfigParser, planLimitClient,
-                    new IngestionAuditRecorder(_ -> { }, new tools.jackson.databind.ObjectMapper()));
+                    new IngestionAuditRecorder(_ -> { }, new tools.jackson.databind.ObjectMapper()),
+                    serviceChangedProducer);
 
     private static final UUID TENANT_ID = UUID.randomUUID();
 
@@ -158,6 +163,45 @@ class ClusterServiceTest {
         assertThat(result.status()).isEqualTo(ClusterStatus.CONNECTING);
         verify(workerManager).stop(existing.id());
         verify(workerManager).start(result);
+        assertReleased("prod");
+    }
+
+    @Test
+    void update_sameName_doesNotReleaseServices() {
+        Cluster existing = cluster(TENANT_ID);
+        when(repository.findById(TENANT_ID, existing.id())).thenReturn(Optional.of(existing));
+        when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var req = new KubernetesClusterRequest("prod", ClusterSource.MANUAL,
+                null, "https://5.6.7.8:6443", null, null, null);
+        service.update(TENANT_ID, Actor.ANONYMOUS, existing.id(), req);
+
+        verify(serviceChangedProducer, never()).publishResynced(any());
+    }
+
+    @Test
+    void update_duplicateName_throws() {
+        Cluster existing = cluster(TENANT_ID);
+        when(repository.findById(TENANT_ID, existing.id())).thenReturn(Optional.of(existing));
+        when(repository.existsByName(TENANT_ID, "staging", existing.id())).thenReturn(true);
+
+        var req = new KubernetesClusterRequest("staging", ClusterSource.MANUAL, null, null, null, null, null);
+
+        assertThatThrownBy(() -> service.update(TENANT_ID, Actor.ANONYMOUS, existing.id(), req))
+                .isInstanceOf(DuplicateClusterNameException.class);
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void create_duplicateName_throws() {
+        when(repository.existsByName(TENANT_ID, "prod", null)).thenReturn(true);
+
+        var req = new KubernetesClusterRequest("prod", ClusterSource.MANUAL,
+                null, "https://1.2.3.4:6443", null, "token", false);
+
+        assertThatThrownBy(() -> service.create(TENANT_ID, Actor.ANONYMOUS, req))
+                .isInstanceOf(DuplicateClusterNameException.class);
+        verify(repository, never()).save(any());
     }
 
     @Test
@@ -277,6 +321,19 @@ class ClusterServiceTest {
 
         verify(repository).softDelete(TENANT_ID, cluster.id());
         verify(workerManager).stop(cluster.id());
+        assertReleased("prod");
+    }
+
+    @Test
+    void delete_whenKafkaFails_stillDeletes() {
+        Cluster cluster = cluster(TENANT_ID);
+        when(repository.findById(TENANT_ID, cluster.id())).thenReturn(Optional.of(cluster));
+        doThrow(new IllegalStateException("broker down")).when(serviceChangedProducer).publishResynced(any());
+
+        service.delete(TENANT_ID, Actor.ANONYMOUS, cluster.id());
+
+        verify(repository).softDelete(TENANT_ID, cluster.id());
+        verify(workerManager).stop(cluster.id());
     }
 
     @Test
@@ -289,6 +346,14 @@ class ClusterServiceTest {
 
         verify(repository, never()).softDelete(any(), any());
         verify(workerManager, never()).stop(any());
+    }
+
+    private void assertReleased(String clusterName) {
+        var captor = ArgumentCaptor.forClass(ServiceResyncedPayload.class);
+        verify(serviceChangedProducer).publishResynced(captor.capture());
+        assertThat(captor.getValue().tenantId()).isEqualTo(TENANT_ID);
+        assertThat(captor.getValue().k8sCluster()).isEqualTo(clusterName);
+        assertThat(captor.getValue().services()).isEmpty();
     }
 
     private static Cluster cluster(UUID tenantId) {

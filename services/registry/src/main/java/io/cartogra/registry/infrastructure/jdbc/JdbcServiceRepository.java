@@ -318,6 +318,22 @@ public class JdbcServiceRepository implements ServiceRepository {
     }
 
     @Override
+    public List<Service> findByK8sCluster(UUID tenantId, String k8sCluster, Instant updatedBefore) {
+        String sql = """
+                SELECT * FROM services
+                WHERE tenant_id = :tenantId
+                  AND k8s_cluster = :k8sCluster
+                  AND updated_at < :updatedBefore
+                  AND deleted_at IS NULL
+                """;
+        var params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("k8sCluster", k8sCluster)
+                .addValue("updatedBefore", java.sql.Timestamp.from(updatedBefore));
+        return jdbc.query(sql, params, SERVICE_MAPPER);
+    }
+
+    @Override
     public Optional<Service> findByNameForK8sClaim(UUID tenantId, String name) {
         String sql = """
                 SELECT * FROM services

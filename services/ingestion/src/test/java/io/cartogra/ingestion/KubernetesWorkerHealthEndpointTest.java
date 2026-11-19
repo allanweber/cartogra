@@ -2,7 +2,7 @@ package io.cartogra.ingestion;
 
 import io.cartogra.ingestion.domain.ServiceDiscoveredPayload;
 import io.cartogra.ingestion.infrastructure.k8s.KubernetesWorker;
-import io.cartogra.ingestion.infrastructure.kafka.ServiceDiscoveredProducer;
+import io.cartogra.ingestion.infrastructure.kafka.ServiceChangedProducer;
 import io.fabric8.kubernetes.api.model.ContainerBuilder;
 import io.fabric8.kubernetes.api.model.ContainerPortBuilder;
 import io.fabric8.kubernetes.api.model.EndpointAddress;
@@ -40,12 +40,12 @@ class KubernetesWorkerHealthEndpointTest {
     // Injected by @EnableKubernetesMockClient
     KubernetesClient client;
 
-    ServiceDiscoveredProducer producer;
+    ServiceChangedProducer producer;
     KubernetesWorker worker;
 
     @BeforeEach
     void setUp() {
-        producer = mock(ServiceDiscoveredProducer.class);
+        producer = mock(ServiceChangedProducer.class);
         worker = new KubernetesWorker(client, producer, "test-cluster", TENANT_ID);
 
         client.namespaces().resource(new NamespaceBuilder()
@@ -176,7 +176,7 @@ class KubernetesWorkerHealthEndpointTest {
     private ServiceDiscoveredPayload capturePayload() {
         ArgumentCaptor<ServiceDiscoveredPayload> captor = ArgumentCaptor.forClass(ServiceDiscoveredPayload.class);
         worker.handleServiceEvent(NS, SVC_NAME);
-        verify(producer).publish(captor.capture());
+        verify(producer).publishDiscovered(captor.capture());
         return captor.getValue();
     }
 }

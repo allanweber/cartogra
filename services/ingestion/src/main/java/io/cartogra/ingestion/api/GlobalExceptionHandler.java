@@ -4,6 +4,7 @@ import io.cartogra.common.api.ApiError;
 import io.cartogra.common.api.ApiErrorResponse;
 import io.cartogra.common.api.ErrorCodes;
 import io.cartogra.ingestion.domain.exception.ClusterNotFoundException;
+import io.cartogra.ingestion.domain.exception.DuplicateClusterNameException;
 import io.cartogra.ingestion.domain.exception.PlanLimitExceededException;
 import io.cartogra.ingestion.domain.exception.ScmConnectionNotFoundException;
 import io.cartogra.ingestion.domain.exception.WebhookConnectionNotFoundException;
@@ -62,6 +63,14 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .header("X-Trace-Id", traceId)
                 .body(new ApiErrorResponse(ApiError.of(ErrorCodes.WEBHOOK_SIGNATURE_INVALID, ex.getMessage()), traceId));
+    }
+
+    @ExceptionHandler(DuplicateClusterNameException.class)
+    public ResponseEntity<ApiErrorResponse> handleDuplicateClusterName(DuplicateClusterNameException ex) {
+        String traceId = Span.current().getSpanContext().getTraceId();
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .header("X-Trace-Id", traceId)
+                .body(new ApiErrorResponse(ApiError.of(ErrorCodes.CONFLICT, ex.getMessage()), traceId));
     }
 
     @ExceptionHandler(PlanLimitExceededException.class)
