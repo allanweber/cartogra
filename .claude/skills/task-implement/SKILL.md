@@ -8,7 +8,8 @@ Turns an approved plan into code and tests. It does not commit. `task-run` owns 
 ## Input
 
 - The plan: `plans/NNN-<slug>.md`. It is the scope. Implement each step of "Implementation steps" and nothing more.
-- Optional: a red `task-eval` report (`build/task-eval/<N.M>-report.md`). If you get one, fix only its failures and findings, then stop.
+- Optional: a red `task-eval` report (`build/task-eval/<N.M>-report.md`), or a list of PR review comments. If you get one, fix only its items, then stop.
+- The worktree path. When `task-run` starts you as a subagent, work only in that worktree. The user does not see you, so report scope drift in your output and stop. Do not ask the user.
 
 ## Before the first edit
 
@@ -26,7 +27,7 @@ Done with a step when its test passes and the code follows the rules files. Done
 
 ## Scope drift
 
-If a step needs work that the plan does not cover (a missing column, an event from a later story), stop and report it to the user. Do not widen the scope. A gap that a later story covers stays for that story.
+If a step needs work that the plan does not cover (a missing column, an event from a later story), stop and report it as **scope drift**, with the step and the missing item. Keep the scope of the plan. A gap that a later story covers stays for that story.
 
 ## Output
 
