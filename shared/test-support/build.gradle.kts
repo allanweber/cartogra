@@ -2,6 +2,7 @@ plugins { id("java-library") }
 
 dependencies {
     api(project(":shared:common"))
+    api(project(":shared:web"))
     api("org.testcontainers:testcontainers-postgresql")
     api("org.testcontainers:testcontainers-kafka")
     api("org.testcontainers:testcontainers-junit-jupiter")
@@ -10,6 +11,15 @@ dependencies {
     api("org.assertj:assertj-core:3.26.3")
     api("com.atlassian.oai:swagger-request-validator-core:2.46.0")
     runtimeOnly("org.junit.jupiter:junit-jupiter-engine")
+}
+
+// PostgresTestSupport runs the same role script as the compose and Helm init.
+sourceSets {
+    main {
+        resources {
+            srcDir(rootProject.file("infra/helm/cartogra/charts/postgres/files"))
+        }
+    }
 }
 
 dependencies {

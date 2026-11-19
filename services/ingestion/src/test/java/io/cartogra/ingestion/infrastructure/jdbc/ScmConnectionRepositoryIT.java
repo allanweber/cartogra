@@ -56,8 +56,10 @@ class ScmConnectionRepositoryIT {
         PostgresTestSupport.POSTGRES.start();
         registry.add("spring.datasource.url",
                 () -> PostgresTestSupport.POSTGRES.getJdbcUrl() + "&currentSchema=ingestion");
-        registry.add("spring.datasource.username", PostgresTestSupport.POSTGRES::getUsername);
-        registry.add("spring.datasource.password", PostgresTestSupport.POSTGRES::getPassword);
+        registry.add("spring.datasource.username", () -> PostgresTestSupport.APP_USER);
+        registry.add("spring.datasource.password", () -> PostgresTestSupport.APP_PASSWORD);
+        registry.add("spring.flyway.user", () -> PostgresTestSupport.OWNER_USER);
+        registry.add("spring.flyway.password", () -> PostgresTestSupport.OWNER_PASSWORD);
         registry.add("ingestion.k8s.credentials-key", () -> CREDENTIALS_KEY);
         registry.add("ingestion.k8s.connection-timeout-ms", () -> "200");
         // This class needs its own credentials-key value (to exercise real AES encryption), so it

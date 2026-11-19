@@ -44,8 +44,10 @@ public abstract class AbstractContractIT {
     static void props(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url",
                 () -> PostgresTestSupport.POSTGRES.getJdbcUrl() + "&currentSchema=contract");
-        registry.add("spring.datasource.username", PostgresTestSupport.POSTGRES::getUsername);
-        registry.add("spring.datasource.password", PostgresTestSupport.POSTGRES::getPassword);
+        registry.add("spring.datasource.username", () -> PostgresTestSupport.APP_USER);
+        registry.add("spring.datasource.password", () -> PostgresTestSupport.APP_PASSWORD);
+        registry.add("spring.flyway.user", () -> PostgresTestSupport.OWNER_USER);
+        registry.add("spring.flyway.password", () -> PostgresTestSupport.OWNER_PASSWORD);
         registry.add("spring.kafka.bootstrap-servers", KafkaTestSupport.KAFKA::getBootstrapServers);
         registry.add("spring.kafka.consumer.group-id", () -> "contract-it-" + UUID.randomUUID());
     }

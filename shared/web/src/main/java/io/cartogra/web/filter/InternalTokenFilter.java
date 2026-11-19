@@ -4,6 +4,7 @@ import io.cartogra.common.identity.Actor;
 import io.cartogra.web.security.InternalClaims;
 import io.cartogra.web.security.InternalTokenCodec;
 import io.cartogra.web.security.JsonUnauthorizedEntryPoint;
+import io.cartogra.web.tenant.TenantContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,6 +22,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * Seeds the {@code SecurityContext} from the signed {@code X-Internal-Token} only; plain identity headers are
  * never trusted. A present but invalid token, or an {@code X-Tenant-Id} that differs from the token tenant,
  * gets 401 at once. A request with no token continues unauthenticated, so the authorization rules decide.
+ * A valid token binds {@link TenantContext} to the token tenant for the rest of the chain (RLS).
  * Not a {@code @Component}: each service declares it as a {@code @Bean} with its own audience.
  */
 public class InternalTokenFilter extends OncePerRequestFilter {
@@ -47,7 +49,16 @@ public class InternalTokenFilter extends OncePerRequestFilter {
             return;
         }
         authenticate(claims.get());
-        filterChain.doFilter(request, response);
+        try {
+            TenantContext.callAs(claims.get().tenantId(), () -> {
+                filterChain.doFilter(request, response);
+                return null;
+            });
+        } catch (IOException | ServletException | RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ServletException(e);
+        }
     }
 
     private static boolean tenantHeaderMatches(HttpServletRequest request, UUID tenantId) {

@@ -45,8 +45,10 @@ class GracefulShutdownIT {
                         "server.port=0",
                         "spring.flyway.enabled=false",
                         "spring.datasource.url=" + PostgresTestSupport.POSTGRES.getJdbcUrl(),
-                        "spring.datasource.username=" + PostgresTestSupport.POSTGRES.getUsername(),
-                        "spring.datasource.password=" + PostgresTestSupport.POSTGRES.getPassword())
+                        "spring.datasource.username=" + PostgresTestSupport.APP_USER,
+                        "spring.datasource.password=" + PostgresTestSupport.APP_PASSWORD,
+                        "spring.flyway.user=" + PostgresTestSupport.OWNER_USER,
+                        "spring.flyway.password=" + PostgresTestSupport.OWNER_PASSWORD)
                 .run();
 
         int port = ((WebServerApplicationContext) context).getWebServer().getPort();

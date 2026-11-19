@@ -40,8 +40,10 @@ class BlastRadiusControllerIT {
     static void props(org.springframework.test.context.DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url",
                 () -> io.cartogra.test.PostgresTestSupport.POSTGRES.getJdbcUrl() + "&currentSchema=topology");
-        registry.add("spring.datasource.username", io.cartogra.test.PostgresTestSupport.POSTGRES::getUsername);
-        registry.add("spring.datasource.password", io.cartogra.test.PostgresTestSupport.POSTGRES::getPassword);
+        registry.add("spring.datasource.username", () -> io.cartogra.test.PostgresTestSupport.APP_USER);
+        registry.add("spring.datasource.password", () -> io.cartogra.test.PostgresTestSupport.APP_PASSWORD);
+        registry.add("spring.flyway.user", () -> io.cartogra.test.PostgresTestSupport.OWNER_USER);
+        registry.add("spring.flyway.password", () -> io.cartogra.test.PostgresTestSupport.OWNER_PASSWORD);
         registry.add("spring.kafka.bootstrap-servers", io.cartogra.test.KafkaTestSupport.KAFKA::getBootstrapServers);
         registry.add("spring.kafka.consumer.group-id", () -> "blast-radius-controller-it-" + UUID.randomUUID());
     }

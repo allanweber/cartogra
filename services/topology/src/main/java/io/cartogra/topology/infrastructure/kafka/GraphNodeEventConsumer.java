@@ -3,6 +3,7 @@ package io.cartogra.topology.infrastructure.kafka;
 import io.cartogra.common.event.EventEnvelope;
 import io.cartogra.topology.domain.GraphNodeService;
 import io.cartogra.topology.domain.event.ServiceLifecyclePayload;
+import io.cartogra.web.tenant.TenantContext;
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
@@ -71,7 +72,7 @@ public class GraphNodeEventConsumer {
             EventEnvelope<ServiceLifecyclePayload> envelope = objectMapper.readValue(
                     record.value(),
                     new TypeReference<EventEnvelope<ServiceLifecyclePayload>>() {});
-            graphNodeService.applyLifecycleEvent(envelope);
+            TenantContext.runAs(envelope.tenantId(), () -> graphNodeService.applyLifecycleEvent(envelope));
             log.info("Applied {} eventId={} serviceId={} tenant={}",
                     envelope.eventType(), envelope.eventId(), envelope.payload().id(), envelope.tenantId());
             ack.acknowledge();

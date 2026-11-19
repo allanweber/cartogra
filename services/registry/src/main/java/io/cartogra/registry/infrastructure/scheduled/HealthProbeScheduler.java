@@ -1,5 +1,6 @@
 package io.cartogra.registry.infrastructure.scheduled;
 
+import io.cartogra.web.tenant.TenantDb;
 import io.cartogra.registry.domain.ServiceHealthService;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -15,6 +16,6 @@ public class HealthProbeScheduler {
 
     @Scheduled(fixedDelayString = "${registry.health.probe-interval:PT60S}")
     public void probe() {
-        serviceHealthService.probeAll();
+        TenantDb.runAsSystem(serviceHealthService::probeAll);
     }
 }

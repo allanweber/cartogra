@@ -15,6 +15,8 @@ dependencies {
     compileOnly("org.springframework.boot:spring-boot")
     compileOnly("org.springframework:spring-context")
     compileOnly("jakarta.servlet:jakarta.servlet-api")
+    // TenantAwareDataSource extends the Hikari pool; each service has Hikari through its JDBC starter.
+    compileOnly("com.zaxxer:HikariCP")
     compileOnly("org.springframework.security:spring-security-web")
     // Only KafkaAuditEventAdapter needs it; services that use that adapter bring spring-kafka themselves.
     compileOnly("org.springframework.kafka:spring-kafka")
@@ -26,6 +28,7 @@ dependencies {
     testFixturesCompileOnly("org.springframework.boot:spring-boot")
 
     testImplementation("jakarta.servlet:jakarta.servlet-api")
+    testImplementation("com.zaxxer:HikariCP")
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("org.mockito:mockito-core")
     testImplementation("org.assertj:assertj-core")

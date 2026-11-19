@@ -45,8 +45,10 @@ class ServiceDiscoveryFlowIT {
         PostgresTestSupport.POSTGRES.start();
         registry.add("spring.datasource.url",
                 () -> PostgresTestSupport.POSTGRES.getJdbcUrl() + "&currentSchema=ingestion");
-        registry.add("spring.datasource.username", PostgresTestSupport.POSTGRES::getUsername);
-        registry.add("spring.datasource.password", PostgresTestSupport.POSTGRES::getPassword);
+        registry.add("spring.datasource.username", () -> PostgresTestSupport.APP_USER);
+        registry.add("spring.datasource.password", () -> PostgresTestSupport.APP_PASSWORD);
+        registry.add("spring.flyway.user", () -> PostgresTestSupport.OWNER_USER);
+        registry.add("spring.flyway.password", () -> PostgresTestSupport.OWNER_PASSWORD);
         registry.add("spring.flyway.schemas", () -> "ingestion");
         registry.add("spring.flyway.default-schema", () -> "ingestion");
         registry.add("spring.kafka.bootstrap-servers", KafkaTestSupport.KAFKA::getBootstrapServers);
@@ -71,9 +73,9 @@ class ServiceDiscoveryFlowIT {
 
         String pomContent = java.util.Base64.getEncoder().encodeToString(
                 "<project><dependency><artifactId>spring-boot-starter-web</artifactId></dependency></project>"
-                        .getBytes());
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
         String dockerfileContent = java.util.Base64.getEncoder().encodeToString(
-                "FROM eclipse-temurin:25-jre-jammy".getBytes());
+                "FROM eclipse-temurin:25-jre-jammy".getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
         wireMock.stubFor(get(urlPathMatching("/orgs/test-org/repos.*"))
                 .willReturn(okJson("""

@@ -1,5 +1,6 @@
 package io.cartogra.topology.infrastructure.jdbc;
 
+import io.cartogra.web.tenant.TenantContext;
 import io.cartogra.topology.AbstractTopologyIT;
 import io.cartogra.topology.domain.DependencyProtocol;
 import io.cartogra.topology.domain.SpanKind;
@@ -104,17 +105,19 @@ class JdbcPendingSpanLinkRepositoryIT extends AbstractTopologyIT {
         CountDownLatch parked = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
 
-        CompletableFuture<Void> clientSide = CompletableFuture.runAsync(() -> transactions.executeWithoutResult(_ -> {
-            assertThat(repository.takeServerPartner(tenant, trace, "c1")).isEmpty();
-            repository.park(tenant, List.of(link(tenant, trace, "c1", null, SpanKind.CLIENT,
-                    Instant.now().plusSeconds(60))));
-            parked.countDown();
-            await(release);
-        }));
+        CompletableFuture<Void> clientSide = CompletableFuture.runAsync(() -> TenantContext.runAs(tenant,
+                () -> transactions.executeWithoutResult(_ -> {
+                    assertThat(repository.takeServerPartner(tenant, trace, "c1")).isEmpty();
+                    repository.park(tenant, List.of(link(tenant, trace, "c1", null, SpanKind.CLIENT,
+                            Instant.now().plusSeconds(60))));
+                    parked.countDown();
+                    await(release);
+                })));
         assertThat(parked.await(10, TimeUnit.SECONDS)).isTrue();
 
         CompletableFuture<Optional<PendingSpanLink>> serverSide = CompletableFuture.supplyAsync(
-                () -> transactions.execute(_ -> repository.takeClientPartner(tenant, trace, "c1")));
+                () -> TenantContext.callAs(tenant,
+                        () -> transactions.execute(_ -> repository.takeClientPartner(tenant, trace, "c1"))));
         Thread.sleep(300);
         assertThat(serverSide).isNotDone();
 

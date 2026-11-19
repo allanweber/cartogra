@@ -7,6 +7,14 @@ public final class PostgresTestSupport {
 
     public static final PostgreSQLContainer POSTGRES;
 
+    /** The application role: not the owner, NOBYPASSRLS. Use it for {@code spring.datasource}. */
+    public static final String APP_USER = PostgresRoles.APP_USER;
+    public static final String APP_PASSWORD = PostgresRoles.APP_PASSWORD;
+
+    /** The owner of the schemas. Use it for {@code spring.flyway}. */
+    public static final String OWNER_USER = PostgresRoles.OWNER_USER;
+    public static final String OWNER_PASSWORD = PostgresRoles.OWNER_PASSWORD;
+
     static {
         PostgreSQLContainer container = new PostgreSQLContainer("postgres:16-alpine");
         container.withDatabaseName("cartogra_test");
@@ -21,6 +29,7 @@ public final class PostgresTestSupport {
         // clients already") well before any single pool is near its own limit.
         container.withCommand("postgres", "-c", "max_connections=300");
         container.start();
+        PostgresRoles.create(container);
         POSTGRES = container;
     }
 }

@@ -2,6 +2,7 @@ package io.cartogra.gateway.api;
 
 import com.jayway.jsonpath.JsonPath;
 import io.cartogra.gateway.AbstractGatewayIT;
+import io.cartogra.test.NoTenantScope;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -20,13 +21,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+/** Runs without the test scope: each request runs with the scope that the gateway itself sets. */
+@NoTenantScope
 class AuthControllerIT extends AbstractGatewayIT {
 
     // Must match application-integration-test.yml app.rate-limit.auth-burst-capacity
     private static final int AUTH_BURST_CAPACITY = 5;
 
-    @Autowired
-    private NamedParameterJdbcTemplate jdbcTemplate;
+    private final NamedParameterJdbcTemplate jdbcTemplate = superuserJdbc();
 
     @Autowired
     private PasswordEncoder passwordEncoder;

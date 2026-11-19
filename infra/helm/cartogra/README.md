@@ -19,10 +19,25 @@ The chart creates no Secrets. Each one is mounted read-only at `/etc/cartogra/se
 
 | Secret | Keys |
 |---|---|
-| `gateway-secrets` | `DB_USERNAME` `DB_PASSWORD` `JWT_SECRET` `INTERNAL_TOKEN_KEY` `RESEND_API_KEY` `GOOGLE_CLIENT_SECRET` `GITHUB_CLIENT_SECRET`, plus `BOOTSTRAP_ADMIN_PASSWORD` when `BOOTSTRAP_TENANT_ID` is set (production) |
-| `registry-secrets`, `topology-secrets`, `contract-secrets` | `DB_USERNAME` `DB_PASSWORD` `INTERNAL_TOKEN_KEY` |
-| `ingestion-secrets` | `DB_USERNAME` `DB_PASSWORD` `INTERNAL_TOKEN_KEY` `CLUSTER_CREDENTIALS_KEY` |
-| `postgres-secrets` | `DB_USERNAME` `DB_PASSWORD` (same values the services use) |
+| `gateway-secrets` | `DB_USERNAME` `DB_PASSWORD` `FLYWAY_USERNAME` `FLYWAY_PASSWORD` `JWT_SECRET` `INTERNAL_TOKEN_KEY` `RESEND_API_KEY` `GOOGLE_CLIENT_SECRET` `GITHUB_CLIENT_SECRET`, plus `BOOTSTRAP_ADMIN_PASSWORD` when `BOOTSTRAP_TENANT_ID` is set (production) |
+| `registry-secrets`, `topology-secrets`, `contract-secrets` | `DB_USERNAME` `DB_PASSWORD` `FLYWAY_USERNAME` `FLYWAY_PASSWORD` `INTERNAL_TOKEN_KEY` |
+| `ingestion-secrets` | `DB_USERNAME` `DB_PASSWORD` `FLYWAY_USERNAME` `FLYWAY_PASSWORD` `INTERNAL_TOKEN_KEY` `CLUSTER_CREDENTIALS_KEY` |
+| `postgres-secrets` | `DB_USERNAME` `DB_PASSWORD` (the superuser), `CARTOGRA_OWNER_PASSWORD` `CARTOGRA_APP_PASSWORD` |
+
+In the service secrets, `DB_USERNAME` is `cartogra_app` and `FLYWAY_USERNAME` is `cartogra_owner`, with the passwords from `postgres-secrets`.
+
+## Database roles
+
+Postgres RLS isolates the tenants. The `tenant_isolation` policies apply only to a role that is not a superuser and has `NOBYPASSRLS`, so the services use two roles:
+
+| Role | Use |
+|---|---|
+| `cartogra_owner` | Owns the schemas and tables. Flyway connects with it. |
+| `cartogra_app` | The services connect with it. DML grants only; the policies always apply. |
+
+`charts/postgres/files/bootstrap-roles.sql` creates both roles. The postgres pod runs it at init, on an empty volume only. For an existing volume, run it one time as the superuser before the services start: it also gives the existing schemas to `cartogra_owner`. On the production host, use `infra/k8s/activate-rls-wizard.sh`. The services set `app.current_tenant_id` (or `app.rls_bypass` for system work) on each connection; see "Row-level security" in [`docs/architecture/system-overview.md`](../../../docs/architecture/system-overview.md).
+
+Known gap: RLS does not apply to the materialized view `topology.dependency_graph_edges`. Its reads filter by `tenant_id` in the code.
 
 `INTERNAL_TOKEN_KEY` must have the same value in the five service Secrets. It signs the token that the gateway and the services attach to each internal call. Use 32 or more random bytes (`openssl rand -base64 48`), not the value of `JWT_SECRET`.
 

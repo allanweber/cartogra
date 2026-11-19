@@ -16,6 +16,7 @@ import io.cartogra.gateway.infrastructure.jwt.JwtClaims;
 import io.cartogra.gateway.infrastructure.jwt.JwtTokenProvider;
 import io.cartogra.gateway.infrastructure.oauth.OAuthProfile;
 import io.cartogra.gateway.infrastructure.oauth.OAuthProvider;
+import io.cartogra.web.tenant.TenantDb;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -74,6 +75,10 @@ public class OAuthService {
     }
 
     public TokenResponse handleCallback(String provider, String code, String state) {
+        return TenantDb.asSystem(() -> runHandleCallback(provider, code, state));
+    }
+
+    private TokenResponse runHandleCallback(String provider, String code, String state) {
         String stateKey = "oauth:state:" + state;
         String stateValue = redis.opsForValue().getAndDelete(stateKey);
         if (stateValue == null) {

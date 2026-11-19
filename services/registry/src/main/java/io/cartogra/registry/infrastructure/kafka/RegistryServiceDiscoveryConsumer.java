@@ -1,5 +1,6 @@
 package io.cartogra.registry.infrastructure.kafka;
 
+import io.cartogra.web.tenant.TenantContext;
 import io.cartogra.common.event.EventEnvelope;
 import io.cartogra.registry.repository.ServiceDiscoveryCommand;
 import io.cartogra.registry.domain.ServiceService;
@@ -85,7 +86,7 @@ public class RegistryServiceDiscoveryConsumer {
                     payload.lastCommitAt(),
                     payload.lastCommitSha()
             );
-            serviceService.upsertDiscovered(command);
+            TenantContext.runAs(envelope.tenantId(), () -> serviceService.upsertDiscovered(command));
             log.info("Upserted discovered service externalId={} source={} health={} tenant={}",
                     payload.externalId(), payload.source(), payload.healthStatus(), payload.tenantId());
             ack.acknowledge();

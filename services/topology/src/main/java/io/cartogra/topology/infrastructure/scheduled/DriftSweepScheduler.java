@@ -2,6 +2,7 @@ package io.cartogra.topology.infrastructure.scheduled;
 
 import io.cartogra.topology.domain.DriftService;
 import io.cartogra.web.lock.AdvisoryLockRepository;
+import io.cartogra.web.tenant.TenantDb;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -28,7 +29,7 @@ public class DriftSweepScheduler {
             return;
         }
         try {
-            driftService.sweepAll(Instant.now());
+            TenantDb.runAsSystem(() -> driftService.sweepAll(Instant.now()));
         } finally {
             lockRepository.releaseLock(LOCK_KEY);
         }
