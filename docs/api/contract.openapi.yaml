@@ -1,11 +1,12 @@
 openapi: "3.1.0"
 info:
   title: Cartogra Contract API
-  version: "0.3.0"
+  version: "0.4.0"
   description: |
     Store each service's OpenAPI contract and its immutable versions (roadmap 5.1); list contracts, their
-    version timeline and a structured diff of each version against the previous one (5.2).
-    The breaking-change engine (5.3) and the CI check (5.5) are not built yet.
+    version timeline and a structured diff of each version against the previous one (5.2); classify each
+    version as breaking or compatible against the previous one, and filter the list by that verdict (5.3).
+    The CI check (5.5) is not built yet.
 
     **Authentication:** JWT cookie or Bearer token (Gateway-issued). Gateway injects `X-Tenant-Id`.
     Writes need ADMIN or MEMBER; GUEST and VIEWER get 403.
@@ -49,6 +50,15 @@ paths:
           description: Case-insensitive substring of the service name
           schema:
             type: string
+        - name: status
+          in: query
+          required: false
+          description: |
+            Keep the contracts whose latest version is `breaking` or `compatible`. An unchecked latest version
+            (stored before 5.3, `breaking: null`) matches neither. Another value returns 400 `VALIDATION_ERROR`.
+          schema:
+            type: string
+            enum: [breaking, compatible]
         - $ref: "#/components/parameters/LimitParam"
         - $ref: "#/components/parameters/OffsetParam"
       responses:
@@ -207,6 +217,8 @@ paths:
         `changes` is a structural diff of the two JSON trees (objects key by key, arrays by index), each change
         located by an RFC 6901 pointer. `lines` aligns the two specs rendered as YAML with sorted keys, row by row,
         for a side-by-side view. Version 1 is diffed against an empty spec: `from` is null and every line is added.
+        `compatibility` is the breaking-change engine's verdict, computed on each request, so a version stored
+        before 5.3 gets one too.
       operationId: diffContractVersion
       tags: [contracts]
       security:
@@ -299,7 +311,7 @@ components:
 
     ContractVersion:
       type: object
-      required: [id, contractId, versionNumber, specHash, createdAt]
+      required: [id, contractId, versionNumber, specHash, breaking, createdAt]
       properties:
         id:
           type: string
@@ -317,6 +329,11 @@ components:
           type: string
           pattern: "^[0-9a-f]{64}$"
           description: SHA-256 of the canonical spec
+        breaking:
+          type: [boolean, "null"]
+          description: |
+            The breaking-change engine's verdict against the previous version, stored at publish. Version 1 is
+            `false`. Null means unchecked: the version was stored before 5.3.
         createdAt:
           type: string
           format: date-time
@@ -460,9 +477,71 @@ components:
         right:
           type: [string, "null"]
 
+    CompatibilityChange:
+      type: object
+      required: [rule, breaking, direction, method, path, location, message]
+      properties:
+        rule:
+          type: string
+          enum:
+            - path-removed
+            - path-added
+            - operation-removed
+            - operation-added
+            - response-field-removed
+            - response-field-added
+            - response-field-type-changed
+            - response-enum-value-added
+            - response-enum-value-removed
+            - request-field-type-changed
+            - request-field-required-added
+            - request-field-optional-added
+            - request-field-removed
+            - request-field-required-removed
+            - request-enum-value-removed
+            - request-enum-value-added
+            - parameter-type-changed
+            - parameter-required-added
+            - parameter-optional-added
+            - parameter-required-removed
+            - parameter-enum-value-removed
+            - parameter-enum-value-added
+        breaking:
+          type: boolean
+          description: Fixed per rule
+        direction:
+          type: string
+          enum: [request, response, operation]
+        method:
+          type: [string, "null"]
+          description: Upper-case HTTP method; null for a path rule
+        path:
+          type: string
+          description: The path template, from the new spec (from the old one when removed)
+        location:
+          type: [string, "null"]
+          description: |
+            Null for a path or operation rule. Else a field path: `requestBody.items[].sku`, `responses.200.id`,
+            or a parameter as `<in>.<name>` (for example `query.currency`)
+        message:
+          type: string
+
+    Compatibility:
+      type: object
+      required: [isBreaking, changes]
+      properties:
+        isBreaking:
+          type: boolean
+          description: True when at least one change is breaking
+        changes:
+          type: array
+          description: The rule hits; empty when no rule matched (for example, only description edits)
+          items:
+            $ref: "#/components/schemas/CompatibilityChange"
+
     VersionDiff:
       type: object
-      required: [from, to, changes, lines]
+      required: [from, to, changes, lines, compatibility]
       properties:
         from:
           description: The previous version; null for version 1
@@ -479,6 +558,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/DiffLine"
+        compatibility:
+          $ref: "#/components/schemas/Compatibility"
 
     VersionDiffEnvelope:
       type: object
@@ -510,7 +591,8 @@ components:
   responses:
     BadRequest:
       description: |
-        `VALIDATION_ERROR` — blank spec, spec over 1 MiB, missing `serviceId` on create, or malformed body.
+        `VALIDATION_ERROR` — blank spec, spec over 1 MiB, missing `serviceId` on create, malformed body, or an
+        unknown `status` filter.
         `BAD_REQUEST` — malformed path id or missing header.
       headers:
         X-Trace-Id:

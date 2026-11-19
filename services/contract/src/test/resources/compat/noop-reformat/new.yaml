@@ -1,0 +1,5 @@
+{"paths": {"/entries": {"post": {"responses": {"200": {"description": "ok"}},
+  "requestBody": {"content": {"application/json": {"schema": {
+    "properties": {"kind": {"enum": ["debit", "credit"], "type": "string"}, "amount": {"type": "integer"}},
+    "required": ["amount"], "type": "object"}}}}}}},
+ "info": {"version": "1.0.0", "title": "Ledger"}, "openapi": "3.0.3"}

@@ -1,0 +1,4 @@
+{"isBreaking": true, "changes": [
+  {"rule": "request-field-type-changed", "breaking": true, "direction": "request", "method": "POST", "path": "/payments", "location": "requestBody.amount"},
+  {"rule": "response-field-type-changed", "breaking": true, "direction": "response", "method": "POST", "path": "/payments", "location": "responses.200.amount"}
+]}

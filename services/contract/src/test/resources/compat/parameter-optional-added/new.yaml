@@ -1,0 +1,12 @@
+openapi: 3.0.3
+info: {title: Golden, version: 1.0.0}
+paths:
+  /accounts/{id}/entries:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+    get:
+      parameters:
+        - {name: limit, in: query, schema: {type: integer}}
+        - {name: X-Request-Id, in: header, schema: {type: string}}
+      responses:
+        '200': {description: ok}

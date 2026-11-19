@@ -1,0 +1,38 @@
+openapi: 3.0.3
+info: {title: Golden, version: 1.0.0}
+paths:
+  /payments:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Payment'}
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Payment'}
+  /payments/{id}:
+    get:
+      parameters:
+        - {$ref: '#/components/parameters/PaymentId'}
+      responses:
+        '200':
+          $ref: '#/components/responses/PaymentFound'
+components:
+  parameters:
+    PaymentId: {name: id, in: path, required: true, schema: {type: string}}
+  responses:
+    PaymentFound:
+      description: ok
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Payment'}
+  schemas:
+    Payment:
+      type: object
+      properties:
+        id: {type: string}
+        amount: {type: integer}
+        memo: {type: string}

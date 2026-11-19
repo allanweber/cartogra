@@ -39,6 +39,7 @@ public class ContractService {
     private final ServiceProjectionService serviceProjectionService;
     private final SpecParser specParser;
     private final SpecDiffer specDiffer;
+    private final BreakingChangeEngine engine;
     private final AuditEventPort auditEventPort;
     private final TransactionTemplate transactionTemplate;
 
@@ -48,6 +49,7 @@ public class ContractService {
                            ServiceProjectionService serviceProjectionService,
                            SpecParser specParser,
                            SpecDiffer specDiffer,
+                           BreakingChangeEngine engine,
                            AuditEventPort auditEventPort,
                            PlatformTransactionManager transactionManager) {
         this.contractRepository = contractRepository;
@@ -56,6 +58,7 @@ public class ContractService {
         this.serviceProjectionService = serviceProjectionService;
         this.specParser = specParser;
         this.specDiffer = specDiffer;
+        this.engine = engine;
         this.auditEventPort = auditEventPort;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
@@ -79,7 +82,8 @@ public class ContractService {
                 var contract = new ApiContract(UUID.randomUUID(), tenantId, serviceId, ApiContract.OPENAPI,
                         now, now, null);
                 contractRepository.insert(contract);
-                ContractVersion version = newVersion(contract, 1, request.spec(), parsed, now);
+                ContractVersion version = newVersion(contract, 1, request.spec(), parsed,
+                        engine.compare(null, parsed.canonical()).isBreaking(), now);
                 versionRepository.insert(version);
                 audit(contract, "created", actor, version);
                 return new PublishedContract(contract, version, null);
@@ -108,7 +112,9 @@ public class ContractService {
                 return new VersionPublication(latest, false);
             }
             Instant now = Instant.now();
-            ContractVersion version = newVersion(contract, latest.versionNumber() + 1, request.spec(), parsed, now);
+            boolean breaking = engine.compare(latest.specCanonical(), parsed.canonical()).isBreaking();
+            ContractVersion version = newVersion(contract, latest.versionNumber() + 1, request.spec(), parsed,
+                    breaking, now);
             versionRepository.insert(version);
             contractRepository.touch(tenantId, contractId, now);
             audit(contract, "version_published", actor, version);
@@ -125,12 +131,14 @@ public class ContractService {
                 serviceProjectionService.nameOf(tenantId, contract.serviceId()).orElse(null));
     }
 
-    public PageResult<ContractSummary> list(UUID tenantId, @Nullable String q, int limit, int offset) {
+    /** {@code breaking}, when set, keeps the contracts whose latest version has that verdict. */
+    public PageResult<ContractSummary> list(UUID tenantId, @Nullable String q, @Nullable Boolean breaking, int limit,
+                                            int offset) {
         int size = clampLimit(limit);
         int from = Math.max(offset, 0);
         serviceProjectionService.fillMissingNames(tenantId);
-        return PageResult.of(contractRepository.listLive(tenantId, q, size, from),
-                contractRepository.countLive(tenantId, q), size, from);
+        return PageResult.of(contractRepository.listLive(tenantId, q, breaking, size, from),
+                contractRepository.countLive(tenantId, q, breaking), size, from);
     }
 
     public PageResult<VersionHeader> listVersions(UUID tenantId, UUID contractId, int limit, int offset) {
@@ -182,9 +190,9 @@ public class ContractService {
     }
 
     private static ContractVersion newVersion(ApiContract contract, int number, String raw, ParsedSpec parsed,
-                                              Instant now) {
+                                              boolean breaking, Instant now) {
         return new ContractVersion(UUID.randomUUID(), contract.tenantId(), contract.id(), number, parsed.label(),
-                raw, parsed.canonical(), parsed.hash(), now);
+                raw, parsed.canonical(), parsed.hash(), breaking, now);
     }
 
     private void audit(ApiContract contract, String action, Actor actor, ContractVersion version) {

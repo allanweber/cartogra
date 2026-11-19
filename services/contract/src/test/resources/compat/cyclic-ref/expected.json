@@ -1,0 +1,3 @@
+{"isBreaking": true, "changes": [
+  {"rule": "response-field-removed", "breaking": true, "direction": "response", "method": "GET", "path": "/tree", "location": "responses.200.label"}
+]}

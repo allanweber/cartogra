@@ -12,9 +12,11 @@ public record VersionHeader(
         int versionNumber,
         @Nullable String label,
         String specHash,
+        @Nullable Boolean breaking,
         Instant createdAt
 ) {
     public static VersionHeader of(ContractVersion v) {
-        return new VersionHeader(v.id(), v.contractId(), v.versionNumber(), v.label(), v.specHash(), v.createdAt());
+        return new VersionHeader(v.id(), v.contractId(), v.versionNumber(), v.label(), v.specHash(), v.breaking(),
+                v.createdAt());
     }
 }

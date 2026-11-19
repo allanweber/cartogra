@@ -18,7 +18,7 @@ class SpecDifferTest {
 
     private static final ObjectMapper JSON = JsonMapper.builder().build();
 
-    private final SpecDiffer differ = new SpecDiffer();
+    private final SpecDiffer differ = new SpecDiffer(new BreakingChangeEngine());
     private final SpecParser parser = new SpecParser();
 
     @Test
@@ -122,12 +122,15 @@ class SpecDifferTest {
                 .allMatch(l -> l.kind() == Kind.ADDED);
         assertThat(diff.lines()).filteredOn(l -> l.kind() == Kind.ADDED)
                 .extracting(DiffLine::right).anyMatch(r -> r.contains("/accounts/{id}"));
+        assertThat(diff.compatibility().isBreaking()).isFalse();
+        assertThat(diff.compatibility().changes()).extracting(CompatibilityChange::rule)
+                .containsExactly(CompatibilityRule.PATH_ADDED);
     }
 
     private ContractVersion version(int number, String spec) {
         ParsedSpec parsed = parser.parse(spec);
         return new ContractVersion(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), number, parsed.label(),
-                spec, parsed.canonical(), parsed.hash(), Instant.now());
+                spec, parsed.canonical(), parsed.hash(), null, Instant.now());
     }
 
     private static JsonNode tree(String json) {

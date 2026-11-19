@@ -13,15 +13,16 @@ public record ContractVersionResponse(
         int versionNumber,
         @Nullable String label,
         String specHash,
+        @Nullable Boolean breaking,
         Instant createdAt
 ) {
     public static ContractVersionResponse from(ContractVersion v) {
         return new ContractVersionResponse(v.id(), v.contractId(), v.versionNumber(), v.label(), v.specHash(),
-                v.createdAt());
+                v.breaking(), v.createdAt());
     }
 
     public static ContractVersionResponse from(VersionHeader v) {
         return new ContractVersionResponse(v.id(), v.contractId(), v.versionNumber(), v.label(), v.specHash(),
-                v.createdAt());
+                v.breaking(), v.createdAt());
     }
 }

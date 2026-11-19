@@ -1,0 +1,21 @@
+# Ledger
+openapi: 3.0.3
+info:
+  title: Ledger API
+  description: Entries of the ledger
+  version: 1.0.0
+paths:
+  /entries:
+    post:
+      summary: Store an entry
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount: {type: integer, description: Amount in cents}
+                kind: {type: string, enum: [debit, credit]}
+      responses:
+        '200': {description: The ledger entry was stored}

@@ -139,6 +139,24 @@ class ContractControllerIT extends AbstractContractIT {
     }
 
     @Test
+    void versionOneIsCompatibleAndARemovedPathIsBreaking() {
+        HttpResponse<String> created = http.create(tenant, UUID.randomUUID(), V1);
+        String id = id(created);
+        assertThat(data(created).get("latestVersion").get("breaking").booleanValue()).isFalse();
+
+        String noEntries = V1.replace("/entries:", "/balances:");
+        HttpResponse<String> v2 = http.publish(tenant, id, noEntries);
+
+        assertThat(v2.statusCode()).isEqualTo(201);
+        assertThat(data(v2).get("breaking").booleanValue()).isTrue();
+        assertThat(jdbc.queryForObject("""
+                SELECT is_breaking FROM contract_versions WHERE tenant_id = :t AND contract_id = :c
+                AND version_number = 2
+                """, new MapSqlParameterSource().addValue("t", tenant).addValue("c", UUID.fromString(id)),
+                Boolean.class)).isTrue();
+    }
+
+    @Test
     void sameSpecInJsonWithReorderedKeysIsTheLatestVersion() {
         HttpResponse<String> created = http.create(tenant, UUID.randomUUID(), V1);
         String id = id(created);
