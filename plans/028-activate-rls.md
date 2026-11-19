@@ -1,4 +1,5 @@
 # Activate Postgres RLS (security audit F7)
+Status: **Done**, 2026-11-19. Merged in #235 (`feat/activate-rls`) and active on production (activate-rls-wizard.sh, stages 1–5).
 Branch: `docs/security-plans` (plan only)  ·  Issue: security audit F7 (`docs/security-audit/`), no GitHub issue yet
 
 ## Context
@@ -72,11 +73,21 @@ Risk: SQL injection could set the flag. Today, the code has no string-concatenat
 7. Run all tests (needs Testcontainers: ask first). Verify on k3d `cartogra-local` (ask first).
 
 ## Acceptance criteria
-- [ ] A query without `WHERE tenant_id` that runs as the app role returns only the rows of the current tenant (an IT in each service).
-- [ ] All tables with `tenant_id` have RLS and FORCE (the IT of D6).
-- [ ] Flyway and the app use different roles. The app role has `NOSUPERUSER NOBYPASSRLS`.
-- [ ] Schedulers, login, refresh, invitations and webhooks continue to work (existing ITs pass).
-- [ ] `invitations` has RLS.
+- [x] A query without `WHERE tenant_id` that runs as the app role returns only the rows of the current tenant (an IT in each service).
+- [x] All tables with `tenant_id` have RLS and FORCE (the IT of D6).
+- [x] Flyway and the app use different roles. The app role has `NOSUPERUSER NOBYPASSRLS`.
+- [x] Schedulers, login, refresh, invitations and webhooks continue to work (existing ITs pass).
+- [x] `invitations` has RLS.
+
+## Changes from the plan
+- `spring.datasource.type: io.cartogra.web.tenant.TenantAwareDataSource` (a Hikari subclass) replaces the `BeanPostProcessor` of step 1.
+- `spring.flyway.url` is set to the datasource URL. Without it, Boot cannot derive the Flyway datasource from `TenantAwareDataSource`.
+- The policy uses `NULLIF(current_setting('app.current_tenant_id', true), '')`, because a connection without a tenant has an empty setting.
+- No `RESET ALL` when a connection goes back to the pool: each checkout writes both settings again.
+- The matview refresh runs through `refresh_dependency_graph_edges()` (`SECURITY DEFINER`). It sets `app.rls_bypass` in its body, because Postgres 16 does not let a non-superuser attach a custom setting to a function.
+- `InternalTokenFilter` (plan 029, merged first) binds the tenant from the verified token, not `InternalAuthFilter` from the header.
+- Test support: `TenantScopeExtension` runs the test code in system scope (`@NoTenantScope` turns it off), and it makes Awaitility poll on the test thread.
+- Stage 4 of the wizard: merge first (the deploy starts by itself), then apply the secrets and restart the services.
 
 ## Out of scope
 - RLS on `dependency_graph_view` (Postgres does not support it).
