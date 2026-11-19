@@ -126,4 +126,4 @@ Facts found:
 - `ClusterService` catches a Kafka failure when it sends the empty snapshot. A Kafka failure must not stop a cluster delete or update. The failure is logged, and the services keep the old cluster name.
 - `frontend/src/lib/audit-format.ts`: new label for `discovery_removed` ("removed from the cluster"). Without it, the audit feed shows the raw action name.
 - `ClusterRepositoryIT.count_excludesOtherTenants` used two clusters named "prod" in one tenant. V006 rejects this, so the test now uses two names.
-- `infra/helm/acme/values.yaml`: Acme memory 48Mi → 64Mi. At 48Mi (commit `703f001`), the Acme pods got `OOMKilled` at start, and the k3d "Check pods" step failed. Cost: about 0.3Gi for the 21 pods.
+- `infra/helm/acme/values.yaml`: the k3d run failed because the Acme pods got `OOMKilled` at 48Mi. `main` fixed this in #232 (64Mi), and the merge took that version.

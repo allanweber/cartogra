@@ -31,6 +31,7 @@ Copy `.env.example` to `.env`. The following variables are required to start all
 | `POSTGRES_PASSWORD` | Local Postgres superuser password |
 | `REDIS_PASSWORD` | Local Redis auth password |
 | `JWT_SECRET` | 256-bit secret for gateway JWT signing |
+| `INTERNAL_TOKEN_KEY` | 256-bit key that signs the internal tokens. The gateway and all four services need the same value. |
 | `RESEND_API_KEY` | Resend API key for OTP emails (`re_...`) |
 | `GITHUB_PAT` | GitHub Personal Access Token with `repo` scope (for SCM ingestion) |
 | `AZDO_PAT` | Azure DevOps Personal Access Token (for SCM ingestion) |

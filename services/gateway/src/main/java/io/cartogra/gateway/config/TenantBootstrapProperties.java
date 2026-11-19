@@ -1,5 +1,6 @@
 package io.cartogra.gateway.config;
 
+import io.cartogra.common.validation.StrongSecret;
 import jakarta.validation.constraints.Email;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;

@@ -140,12 +140,20 @@ step "Namespaces, RBAC and secrets"
 kubectl apply -f infra/k8s/cluster-setup.yaml
 key=$(head -c32 /dev/urandom | base64)
 # Per secret, so a reused cluster picks up a service added since it was created.
+internal_token_key=k3d-internal-token-key-at-least-32-bytes
 for s in gateway registry topology contract ingestion postgres; do
-  kubectl -n cartogra get secret "$s-secrets" >/dev/null 2>&1 && continue
+  if kubectl -n cartogra get secret "$s-secrets" >/dev/null 2>&1; then
+    # A cluster created before INTERNAL_TOKEN_KEY existed gets the key added.
+    kubectl -n cartogra get secret "$s-secrets" -o jsonpath='{.data.INTERNAL_TOKEN_KEY}' | grep -q . \
+      || kubectl -n cartogra patch secret "$s-secrets" --type merge \
+        -p "{\"stringData\":{\"INTERNAL_TOKEN_KEY\":\"$internal_token_key\"}}"
+    continue
+  fi
   kubectl -n cartogra create secret generic "$s-secrets" \
     --from-literal=DB_USERNAME=cartogra \
     --from-literal=DB_PASSWORD=k3d-test-pw \
     --from-literal=JWT_SECRET=k3d-test-secret-at-least-32-bytes-long \
+    --from-literal=INTERNAL_TOKEN_KEY="$internal_token_key" \
     --from-literal=RESEND_API_KEY=re_placeholder \
     --from-literal=GOOGLE_CLIENT_SECRET=x \
     --from-literal=GITHUB_CLIENT_SECRET=x \

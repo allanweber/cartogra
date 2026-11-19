@@ -1,5 +1,6 @@
 package io.cartogra.registry;
 
+import io.cartogra.web.security.InternalTokens;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import io.cartogra.registry.infrastructure.kafka.ServiceLifecycleEventProducer;
@@ -119,7 +120,7 @@ class OrphanDetectionIT {
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", TENANT.toString())
-                .header("X-User-Roles", "ADMIN")
+                .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, "ADMIN"))
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
     }
@@ -128,6 +129,7 @@ class OrphanDetectionIT {
         return HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("X-Tenant-Id", TENANT.toString())
+                .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, ""))
                 .GET()
                 .build();
     }
@@ -137,7 +139,7 @@ class OrphanDetectionIT {
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", TENANT.toString())
-                .header("X-User-Roles", "ADMIN")
+                .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, "ADMIN"))
                 .method("PATCH", HttpRequest.BodyPublishers.ofString(body))
                 .build();
     }

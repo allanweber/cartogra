@@ -1,5 +1,6 @@
 package io.cartogra.registry.api;
 
+import io.cartogra.web.security.InternalTokens;
 import io.cartogra.common.identity.Actor;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.registry.domain.Service;
@@ -46,7 +47,7 @@ class ServiceControllerTest {
         var validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
         mockMvc = withInternalAuth(MockMvcBuilders
-                .standaloneSetup(new ServiceController(serviceService)))
+                .standaloneSetup(new ServiceController(serviceService)), "registry")
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setValidator(validator)
                 .build();
@@ -59,6 +60,7 @@ class ServiceControllerTest {
 
         mockMvc.perform(post("/services")
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"payments"}"""))
@@ -75,8 +77,7 @@ class ServiceControllerTest {
 
         mockMvc.perform(post("/services")
                         .header("X-Tenant-Id", TENANT)
-                        .header("X-User-Id", userId)
-                        .header("X-User-Roles", "MEMBER")
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, userId, "MEMBER"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"payments"}"""))
@@ -89,6 +90,7 @@ class ServiceControllerTest {
     void createWithBlankNameReturns400WithValidationError() throws Exception {
         mockMvc.perform(post("/services")
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":""}"""))
@@ -106,6 +108,7 @@ class ServiceControllerTest {
     void updateWithNonHttpUrlReturns400(String field, String url) throws Exception {
         mockMvc.perform(put("/services/{id}", UUID.randomUUID())
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"svc\",\"%s\":\"%s\"}".formatted(field, url)))
                 .andExpect(status().isBadRequest())
@@ -117,6 +120,7 @@ class ServiceControllerTest {
     void createWithJavascriptRepositoryUrlReturns400() throws Exception {
         mockMvc.perform(post("/services")
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"svc","repositoryUrl":"javascript:alert(1)"}"""))
@@ -131,6 +135,7 @@ class ServiceControllerTest {
 
         mockMvc.perform(put("/services/{id}", id)
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"svc","repositoryUrl":"https://github.com/o/r",
@@ -153,7 +158,8 @@ class ServiceControllerTest {
         when(serviceService.get(TENANT, id)).thenReturn(service("payments"));
 
         mockMvc.perform(get("/services/{id}", id)
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, "")))
                 .andExpect(status().isOk())
                 .andExpect(header().exists("X-Trace-Id"))
                 .andExpect(jsonPath("$.data.name").value("payments"));
@@ -165,7 +171,8 @@ class ServiceControllerTest {
         when(serviceService.get(TENANT, id)).thenThrow(new ServiceNotFoundException(id));
 
         mockMvc.perform(get("/services/{id}", id)
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, "")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("NOT_FOUND"));
     }
@@ -176,7 +183,8 @@ class ServiceControllerTest {
         when(serviceService.list(eq(TENANT), any(ServiceFilter.class), eq(20), eq(0))).thenReturn(page);
 
         mockMvc.perform(get("/services")
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, "")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(2))
                 .andExpect(jsonPath("$.data.items").isArray());
@@ -190,6 +198,7 @@ class ServiceControllerTest {
 
         mockMvc.perform(get("/services")
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, ""))
                         .param("teamId", teamId.toString())
                         .param("health", "healthy")
                         .param("limit", "10")
@@ -206,7 +215,8 @@ class ServiceControllerTest {
         when(serviceService.detectOrphans(TENANT, 20, 0)).thenReturn(page);
 
         mockMvc.perform(get("/services/orphaned")
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, "")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(1));
     }
@@ -218,6 +228,7 @@ class ServiceControllerTest {
 
         mockMvc.perform(put("/services/{id}", id)
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"updated-svc"}"""))
@@ -230,7 +241,8 @@ class ServiceControllerTest {
         UUID id = UUID.randomUUID();
 
         mockMvc.perform(delete("/services/{id}", id)
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, "")))
                 .andExpect(status().isNoContent())
                 .andExpect(header().exists("X-Trace-Id"));
 
@@ -244,8 +256,7 @@ class ServiceControllerTest {
 
         mockMvc.perform(delete("/services/{id}", id)
                         .header("X-Tenant-Id", TENANT)
-                        .header("X-User-Id", userId)
-                        .header("X-User-Roles", "MEMBER"))
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, userId, "MEMBER")))
                 .andExpect(status().isNoContent());
 
         verify(serviceService).delete(eq(TENANT), eq(Actor.user(userId)), eq(id));
@@ -260,8 +271,7 @@ class ServiceControllerTest {
 
         mockMvc.perform(delete("/services/{id}", id)
                         .header("X-Tenant-Id", TENANT)
-                        .header("X-User-Id", userId)
-                        .header("X-User-Roles", "MEMBER"))
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, userId, "MEMBER")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
     }
@@ -274,6 +284,7 @@ class ServiceControllerTest {
 
         mockMvc.perform(patch("/services/{id}/owner", id)
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, ""))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"teamId":"%s"}""".formatted(teamId)))
@@ -287,7 +298,8 @@ class ServiceControllerTest {
         when(serviceService.assignOwner(eq(TENANT), eq(Actor.ANONYMOUS), eq(id), isNull())).thenReturn(service("payments"));
 
         mockMvc.perform(delete("/services/{id}/owner", id)
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, "")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.name").value("payments"));
 
@@ -303,8 +315,7 @@ class ServiceControllerTest {
 
         mockMvc.perform(patch("/services/{id}/owner", id)
                         .header("X-Tenant-Id", TENANT)
-                        .header("X-User-Id", userId)
-                        .header("X-User-Roles", "MEMBER")
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, userId, "MEMBER"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"teamId":"%s"}""".formatted(teamId)))
@@ -324,8 +335,7 @@ class ServiceControllerTest {
 
         mockMvc.perform(patch("/services/{id}/owner", id)
                         .header("X-Tenant-Id", TENANT)
-                        .header("X-User-Id", userId)
-                        .header("X-User-Roles", "MEMBER")
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, userId, "MEMBER"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"teamId":"%s"}""".formatted(teamId)))
@@ -340,6 +350,7 @@ class ServiceControllerTest {
 
         mockMvc.perform(get("/services")
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, ""))
                         .param("unowned", "true"))
                 .andExpect(status().isOk());
 
@@ -353,7 +364,8 @@ class ServiceControllerTest {
         when(serviceService.history(eq(TENANT), eq(id), eq(20), eq(0))).thenReturn(page);
 
         mockMvc.perform(get("/services/{id}/history", id)
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, "")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(1))
                 .andExpect(jsonPath("$.data.items").isArray());
@@ -367,6 +379,7 @@ class ServiceControllerTest {
 
         mockMvc.perform(get("/services/{id}/history", id)
                         .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, ""))
                         .param("at", "2024-01-01T00:00:00Z"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].serviceId").value(id.toString()));
@@ -378,7 +391,8 @@ class ServiceControllerTest {
         when(serviceService.countByConnectionId(TENANT)).thenReturn(Map.of(connId, 3L));
 
         mockMvc.perform(get("/services/counts-by-connection")
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, "")))
                 .andExpect(status().isOk())
                 .andExpect(header().exists("X-Trace-Id"))
                 .andExpect(jsonPath("$.traceId").exists())
@@ -390,7 +404,8 @@ class ServiceControllerTest {
         when(serviceService.countByConnectionId(TENANT)).thenReturn(Map.of());
 
         mockMvc.perform(get("/services/counts-by-connection")
-                        .header("X-Tenant-Id", TENANT))
+                        .header("X-Tenant-Id", TENANT)
+                        .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, "")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.counts").isMap());
     }

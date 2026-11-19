@@ -1,5 +1,6 @@
 package io.cartogra.topology.api;
 
+import io.cartogra.web.security.InternalTokens;
 import io.cartogra.topology.domain.Dependency;
 import io.cartogra.topology.domain.DependencyProtocol;
 import io.cartogra.topology.domain.DependencyType;
@@ -76,6 +77,7 @@ class BlastRadiusControllerIT {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + "/api/v1/topology/blast-radius/" + serviceId + query))
                 .header("X-Tenant-Id", tenantId.toString())
+                .header(InternalTokens.HEADER, InternalTokens.token("topology", tenantId, null, ""))
                 .GET()
                 .build();
         return HTTP.send(request, HttpResponse.BodyHandlers.ofString());

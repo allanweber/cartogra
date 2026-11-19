@@ -1,5 +1,6 @@
 package io.cartogra.registry;
 
+import io.cartogra.web.security.InternalTokens;
 import tools.jackson.databind.ObjectMapper;
 import io.cartogra.registry.infrastructure.kafka.ServiceLifecycleEventProducer;
 import io.cartogra.test.PostgresTestSupport;
@@ -118,6 +119,7 @@ class ServiceValidationIT {
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + "/api/v1/registry/services"))
                 .header("Content-Type", "application/json")
+                .header(InternalTokens.HEADER, InternalTokens.user("registry", TENANT, "ADMIN"))
                 .GET()
                 .build();
         HttpResponse<String> resp = HTTP.send(req, HttpResponse.BodyHandlers.ofString());
@@ -140,7 +142,7 @@ class ServiceValidationIT {
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", TENANT.toString())
-                .header("X-User-Roles", "ADMIN")
+                .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, "ADMIN"))
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
     }
@@ -150,7 +152,7 @@ class ServiceValidationIT {
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", TENANT.toString())
-                .header("X-User-Roles", "ADMIN")
+                .header(InternalTokens.HEADER, InternalTokens.token("registry", TENANT, null, "ADMIN"))
                 .PUT(HttpRequest.BodyPublishers.ofString(body))
                 .build();
     }

@@ -4,6 +4,7 @@ import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import io.cartogra.ingestion.config.RegistryClientProperties;
 import io.cartogra.web.client.TraceparentRequestInterceptor;
+import io.cartogra.web.security.InternalTokens;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanContext;
 import io.opentelemetry.api.trace.TraceFlags;
@@ -23,6 +24,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.matching;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
 import static org.assertj.core.api.Assertions.assertThat;
+import java.time.Clock;
 
 class RegistryPlanLimitClientTest {
 
@@ -54,7 +56,8 @@ class RegistryPlanLimitClientTest {
 
         var client = new RegistryPlanLimitClient(
                 new RegistryClientProperties("http://localhost:" + WIRE_MOCK.port()),
-                new TraceparentRequestInterceptor());
+                new TraceparentRequestInterceptor(),
+                InternalTokens.codec(Clock.systemUTC()));
 
         SpanContext spanContext = SpanContext.create(
                 "0123456789abcdef0123456789abcdef", "0123456789abcdef",
@@ -68,6 +71,7 @@ class RegistryPlanLimitClientTest {
 
         assertThat(limits).contains(new RegistryPlanLimits(5, 3));
         WIRE_MOCK.verify(getRequestedFor(urlPathMatching("/internal/plan-limits/.*"))
-                .withHeader("traceparent", matching("00-0123456789abcdef0123456789abcdef-0123456789abcdef-01")));
+                .withHeader("traceparent", matching("00-0123456789abcdef0123456789abcdef-0123456789abcdef-01"))
+                .withHeader(InternalTokens.HEADER, matching("[^.]+\\.[^.]+\\.[^.]+")));
     }
 }

@@ -1,5 +1,6 @@
 package io.cartogra.registry;
 
+import io.cartogra.web.security.InternalTokens;
 import io.cartogra.common.identity.Actor;
 import io.cartogra.registry.domain.TeamService;
 import io.cartogra.test.KafkaTestSupport;
@@ -79,8 +80,7 @@ class TeamSaveIT {
                 .uri(URI.create("http://localhost:" + port + "/api/v1/registry/teams/" + team))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", tenant.toString())
-                .header("X-User-Id", UUID.randomUUID().toString())
-                .header("X-User-Roles", "ADMIN")
+                .header(InternalTokens.HEADER, InternalTokens.token("registry", tenant, UUID.randomUUID(), "ADMIN"))
                 .PUT(HttpRequest.BodyPublishers.ofString("""
                         {"name":"renamed-%s","serviceIds":["%s","%s","%s"],"memberIds":["%s","%s"]}
                         """.formatted(team, kept, orphan1, orphan2, keptMember, newMember)))
@@ -202,7 +202,7 @@ class TeamSaveIT {
                 .uri(URI.create("http://localhost:" + port + "/api/v1/registry/teams/" + team + "/members"))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", tenant.toString())
-                .header("X-User-Roles", "ADMIN")
+                .header(InternalTokens.HEADER, InternalTokens.token("registry", tenant, null, "ADMIN"))
                 .POST(HttpRequest.BodyPublishers.ofString("{\"userId\":\"%s\"}".formatted(foreignUser)))
                 .build(), HttpResponse.BodyHandlers.ofString());
 
@@ -222,8 +222,7 @@ class TeamSaveIT {
                 .uri(URI.create("http://localhost:" + port + "/api/v1/registry/teams/" + team))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", tenant.toString())
-                .header("X-User-Id", userId.toString())
-                .header("X-User-Roles", "MEMBER")
+                .header(InternalTokens.HEADER, InternalTokens.token("registry", tenant, userId, "MEMBER"))
                 .PUT(HttpRequest.BodyPublishers.ofString(
                         "{\"name\":\"renamed-%s\",\"serviceIds\":[\"%s\"],\"memberIds\":[\"%s\"]}"
                                 .formatted(team, orphan, userId)))
@@ -240,7 +239,7 @@ class TeamSaveIT {
                 .uri(URI.create("http://localhost:" + port + "/api/v1/registry/teams/" + teamId))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", tenantId.toString())
-                .header("X-User-Roles", "ADMIN")
+                .header(InternalTokens.HEADER, InternalTokens.token("registry", tenantId, null, "ADMIN"))
                 .PUT(HttpRequest.BodyPublishers.ofString(body))
                 .build(), HttpResponse.BodyHandlers.ofString());
     }
@@ -336,7 +335,7 @@ class TeamSaveIT {
                 .uri(URI.create("http://localhost:" + port + "/api/v1/registry/services"))
                 .header("Content-Type", "application/json")
                 .header("X-Tenant-Id", tenantId.toString())
-                .header("X-User-Roles", "ADMIN")
+                .header(InternalTokens.HEADER, InternalTokens.token("registry", tenantId, null, "ADMIN"))
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertThat(resp.statusCode()).isEqualTo(201);

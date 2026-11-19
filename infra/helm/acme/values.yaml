@@ -18,7 +18,7 @@ image:
 # Where the fake services send spans (the cartogra release's collector).
 otlpEndpoint: http://collector.cartogra.svc.cluster.local:4318
 
-# Each fake service is a small Node.js process (~40Mi, more at start). The heap cap limits only the heap. 48Mi gave OOMKilled at start.
+# Each fake service is a small Node.js process (~30-50Mi; more at start). 48Mi was OOMKilled at start (2026-11-18).
 nodeOptions: "--max-old-space-size=24"
 resources:
   requests:

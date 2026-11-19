@@ -2,7 +2,9 @@ package io.cartogra.ingestion.infrastructure.registry;
 
 import io.cartogra.ingestion.config.RegistryClientProperties;
 import io.cartogra.web.client.ServiceCallRetry;
+import io.cartogra.web.client.ServiceTokenRequestInterceptor;
 import io.cartogra.web.client.TraceparentRequestInterceptor;
+import io.cartogra.web.security.InternalTokenCodec;
 import io.github.resilience4j.retry.Retry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,9 +17,7 @@ import java.util.UUID;
 
 /**
  * Direct service-to-service call to registry's internal plan-limits endpoint (bypasses the
- * Gateway — see ADR discussion: registry's own SecurityConfig permits all traffic and relies
- * on the ClusterIP network boundary, so this call carries the same trust level as any other
- * request registry accepts today).
+ * Gateway). Each call carries a signed {@code SERVICE} token for the tenant of the call.
  */
 @Component
 public class RegistryPlanLimitClient {
@@ -28,10 +28,12 @@ public class RegistryPlanLimitClient {
     private final Retry retry;
 
     public RegistryPlanLimitClient(RegistryClientProperties props,
-            TraceparentRequestInterceptor traceparentRequestInterceptor) {
+            TraceparentRequestInterceptor traceparentRequestInterceptor,
+            InternalTokenCodec internalTokenCodec) {
         this.restClient = RestClient.builder()
                 .baseUrl(props.baseUrl())
                 .requestInterceptor(traceparentRequestInterceptor)
+                .requestInterceptor(new ServiceTokenRequestInterceptor(internalTokenCodec, "ingestion", "registry"))
                 .build();
         this.retry = ServiceCallRetry.threeAttempts("registry-plan-limits-fetch", log);
     }
@@ -44,6 +46,7 @@ public class RegistryPlanLimitClient {
         try {
             PlanLimitsEnvelope envelope = retry.executeSupplier(() -> restClient.get()
                     .uri("/internal/plan-limits/{tenantId}", tenantId)
+                .header("X-Tenant-Id", tenantId.toString())
                     .retrieve()
                     .body(PlanLimitsEnvelope.class));
             return Optional.ofNullable(envelope).map(PlanLimitsEnvelope::data);

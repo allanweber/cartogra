@@ -1,5 +1,5 @@
 # gateway — API gateway: auth, JWT issuing, routing to backend services.
-# Secret keys (files under secret.mountPath): DB_USERNAME, DB_PASSWORD, JWT_SECRET, RESEND_API_KEY, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_SECRET,
+# Secret keys (files under secret.mountPath): DB_USERNAME, DB_PASSWORD, JWT_SECRET, INTERNAL_TOKEN_KEY, RESEND_API_KEY, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_SECRET,
 # BOOTSTRAP_ADMIN_PASSWORD (only when BOOTSTRAP_TENANT_ID is set)
 
 # Plain (non-secret) env, rendered into a ConfigMap; values go through `tpl`.

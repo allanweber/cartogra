@@ -4,6 +4,8 @@ import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.OctetSequenceKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
+import io.cartogra.web.security.InternalTokenCodec;
+import io.cartogra.web.security.InternalTokenProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,10 +19,11 @@ import org.springframework.web.client.RestClient;
 
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 
 @Configuration
 @EnableScheduling
-@EnableConfigurationProperties({JwtConfig.class, ResendConfig.class, OAuthConfig.class, RateLimitProperties.class, CorsProperties.class, FrontendProperties.class, GuestProperties.class, SignupProperties.class, TenantBootstrapProperties.class})
+@EnableConfigurationProperties({JwtConfig.class, ResendConfig.class, OAuthConfig.class, RateLimitProperties.class, CorsProperties.class, FrontendProperties.class, GuestProperties.class, SignupProperties.class, TenantBootstrapProperties.class, InternalTokenProperties.class})
 public class AppConfig {
 
     @Bean
@@ -38,6 +41,11 @@ public class AppConfig {
         return NimbusJwtDecoder.withSecretKey(new SecretKeySpec(keyBytes, "HmacSHA256"))
             .macAlgorithm(MacAlgorithm.HS256)
             .build();
+    }
+
+    @Bean
+    public InternalTokenCodec internalTokenCodec(InternalTokenProperties properties) {
+        return new InternalTokenCodec(properties, Clock.systemUTC());
     }
 
     @Bean
