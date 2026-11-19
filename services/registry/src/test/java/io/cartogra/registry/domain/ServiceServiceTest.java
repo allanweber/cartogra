@@ -5,6 +5,8 @@ import io.cartogra.common.identity.Actor;
 import io.cartogra.registry.api.dto.CreateServiceRequest;
 import io.cartogra.registry.api.dto.UpdateServiceRequest;
 import io.cartogra.registry.domain.event.OwnershipResolvedPayload;
+import io.cartogra.registry.domain.event.ServiceRemovedPayload;
+import io.cartogra.registry.domain.event.ServiceResyncedPayload;
 import io.cartogra.registry.domain.exception.DuplicateServiceNameException;
 import io.cartogra.registry.domain.exception.ServiceNotFoundException;
 import io.cartogra.registry.domain.exception.TeamNotFoundException;
@@ -1002,6 +1004,88 @@ class ServiceServiceTest {
         verify(serviceRepository).findAccessible(tenantId, userId, List.of(a, b, c));
         verifyNoMoreInteractions(serviceRepository);
         verifyNoInteractions(teamRepository);
+    }
+
+    // ── K8s removal ───────────────────────────────────────────────────────────
+
+    @Test
+    void removeFromClusterClearsK8sFieldsAndKeepsTheRow() {
+        UUID tenantId = UUID.randomUUID();
+        UUID teamId = UUID.randomUUID();
+        Service k8sSvc = k8sService(tenantId, "cart", "shop", teamId);
+        when(serviceRepository.findByK8sIdentity(tenantId, "prod", "shop", "cart")).thenReturn(Optional.of(k8sSvc));
+        when(serviceRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        serviceService.removeFromCluster(new ServiceRemovedPayload(tenantId, "prod", "shop", "cart"));
+
+        var captor = ArgumentCaptor.forClass(Service.class);
+        verify(serviceRepository).save(captor.capture());
+        Service saved = captor.getValue();
+        assertThat(saved.id()).isEqualTo(k8sSvc.id());
+        assertThat(saved.teamId()).isEqualTo(teamId);
+        assertThat(saved.source()).isEqualTo("kubernetes");
+        assertThat(saved.k8sCluster()).isNull();
+        assertThat(saved.k8sNamespace()).isNull();
+        assertThat(saved.k8sDeployment()).isNull();
+        assertThat(saved.healthEndpoint()).isNull();
+        assertThat(saved.healthStatus()).isEqualTo(ServiceHealthStatus.UNKNOWN);
+        assertThat(saved.updatedAt()).isAfter(k8sSvc.updatedAt());
+        verify(historyRepository).save(any());
+        verify(eventProducer).publishUpdated(saved);
+        assertThat(audits).singleElement().extracting(AuditEvent::action).isEqualTo("discovery_removed");
+    }
+
+    @Test
+    void removeFromClusterWithNoMatchingRowDoesNothing() {
+        UUID tenantId = UUID.randomUUID();
+        when(serviceRepository.findByK8sIdentity(tenantId, "prod", "shop", "gone")).thenReturn(Optional.empty());
+
+        serviceService.removeFromCluster(new ServiceRemovedPayload(tenantId, "prod", "shop", "gone"));
+
+        verify(serviceRepository, never()).save(any());
+        verifyNoInteractions(eventProducer, historyRepository);
+    }
+
+    @Test
+    void reconcileClusterClearsOnlyRowsNotInTheSet() {
+        UUID tenantId = UUID.randomUUID();
+        Instant observedAt = Instant.now();
+        Service present = k8sService(tenantId, "cart", "shop", null);
+        Service sameNameOtherNamespace = k8sService(tenantId, "cart", "staging", null);
+        Service gone = k8sService(tenantId, "checkout", "shop", null);
+        when(serviceRepository.findByK8sCluster(tenantId, "prod", observedAt))
+                .thenReturn(List.of(present, sameNameOtherNamespace, gone));
+        when(serviceRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        serviceService.reconcileCluster(new ServiceResyncedPayload(tenantId, "prod", observedAt,
+                List.of(new ServiceResyncedPayload.PresentService("shop", "cart"))));
+
+        var captor = ArgumentCaptor.forClass(Service.class);
+        verify(serviceRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).extracting(Service::id)
+                .containsExactlyInAnyOrder(sameNameOtherNamespace.id(), gone.id());
+        assertThat(captor.getAllValues()).allSatisfy(s -> assertThat(s.k8sCluster()).isNull());
+    }
+
+    @Test
+    void reconcileClusterUsesObservedAtAsTheGuard() {
+        UUID tenantId = UUID.randomUUID();
+        Instant observedAt = Instant.parse("2026-11-18T10:00:00Z");
+        when(serviceRepository.findByK8sCluster(tenantId, "prod", observedAt)).thenReturn(List.of());
+
+        serviceService.reconcileCluster(new ServiceResyncedPayload(tenantId, "prod", observedAt, List.of()));
+
+        verify(serviceRepository).findByK8sCluster(tenantId, "prod", observedAt);
+        verify(serviceRepository, never()).save(any());
+    }
+
+    private Service k8sService(UUID tenantId, String name, String namespace, UUID teamId) {
+        Instant earlier = Instant.now().minusSeconds(600);
+        return new Service(UUID.randomUUID(), tenantId, name, null, teamId, null, null, null,
+                ServiceHealthStatus.HEALTHY, null, earlier, earlier, null,
+                null, null, "kubernetes", null, "prod", namespace, name + "-deploy",
+                "http://" + name + "." + namespace + ".svc.cluster.local:8080/health", null, null, null,
+                null, null, null, null, null);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

@@ -41,6 +41,7 @@ const ACTION_LABELS: Record<string, string> = {
   removed: 'removed',
   discovered: 'discovered',
   discovery_merged: 'updated by discovery',
+  discovery_removed: 'removed from the cluster',
   owner_changed: 'ownership changed',
   member_added: 'member added',
   member_removed: 'member removed',

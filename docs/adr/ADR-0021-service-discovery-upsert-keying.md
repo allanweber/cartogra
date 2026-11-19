@@ -37,3 +37,10 @@ enforces uniqueness. The upsert implementation uses find-then-update-or-insert r
 
 **Neutral**
 - `externalId` is opaque to users and not exposed in the public API response.
+
+## Update — K8s identity and removal (2026-11-18, #234)
+
+- Kubernetes rows do not use `externalId`. Their identity is the triple `(k8s_cluster, k8s_namespace, name)`, and the cluster name is unique in each tenant (ingestion `V006`).
+- Discovery events moved to `cartogra.ingestion.service.changed`. A Service that is deleted sends `service.removed`. Each full resync sends `service.resynced` with the set of present Services.
+- The registry keeps the row of a Service that is gone. It sets the K8s fields to NULL and the health to `UNKNOWN`. Thus `k8s_cluster IS NOT NULL` means "in the cluster now".
+- The registry changes only rows with `updated_at < observedAt`. This prevents a race with a Service that was created after the resync list.

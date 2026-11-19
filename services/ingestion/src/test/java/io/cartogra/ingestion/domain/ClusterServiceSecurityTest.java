@@ -3,6 +3,7 @@ package io.cartogra.ingestion.domain;
 import io.cartogra.common.identity.Actor;
 import io.cartogra.ingestion.api.dto.KubernetesClusterRequest;
 import io.cartogra.ingestion.infrastructure.kafka.SyncCommandConsumer;
+import io.cartogra.ingestion.infrastructure.kafka.ServiceChangedProducer;
 import io.cartogra.ingestion.infrastructure.kafka.SyncResultProducer;
 import io.cartogra.ingestion.infrastructure.k8s.ClusterWorkerManager;
 import io.cartogra.ingestion.infrastructure.k8s.CredentialEncryptor;
@@ -36,6 +37,7 @@ class ClusterServiceSecurityTest {
     @MockitoBean CredentialEncryptor credentialEncryptor;
     @MockitoBean KubeconfigParser kubeconfigParser;
     @MockitoBean SyncResultProducer syncResultProducer;
+    @MockitoBean ServiceChangedProducer serviceChangedProducer;
     @MockitoBean SyncCommandConsumer syncCommandConsumer;
 
     @DynamicPropertySource

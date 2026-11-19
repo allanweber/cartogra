@@ -241,7 +241,7 @@ sweep: start Topology with `TOPOLOGY_DRIFT_SWEEP_INTERVAL=PT15S TOPOLOGY_DRIFT_M
 ## Discovery behaviour checks
 
 What `k8s-discovery-test.md` used to cover, now against the Acme namespace. Watch Kafka UI
-(`http://localhost:8086`, topic `cartogra.ingestion.service.discovered`).
+(`http://localhost:8086`, topic `cartogra.ingestion.service.changed`).
 
 **Bootstrap**: after registering the cluster, one message per Service (21), with `source: kubernetes`,
 `externalId: acme-fintech/<name>`.

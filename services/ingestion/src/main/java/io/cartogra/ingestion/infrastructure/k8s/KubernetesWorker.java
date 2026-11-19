@@ -1,7 +1,10 @@
 package io.cartogra.ingestion.infrastructure.k8s;
 
+import io.cartogra.ingestion.domain.PresentService;
 import io.cartogra.ingestion.domain.ServiceDiscoveredPayload;
-import io.cartogra.ingestion.infrastructure.kafka.ServiceDiscoveredProducer;
+import io.cartogra.ingestion.domain.ServiceRemovedPayload;
+import io.cartogra.ingestion.domain.ServiceResyncedPayload;
+import io.cartogra.ingestion.infrastructure.kafka.ServiceChangedProducer;
 import io.fabric8.kubernetes.api.model.Container;
 import io.fabric8.kubernetes.api.model.ContainerPort;
 import io.fabric8.kubernetes.api.model.Endpoints;
@@ -20,6 +23,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -30,7 +35,7 @@ public class KubernetesWorker {
     private static final String TENANT_LABEL = "cartogra.io/tenant-id";
 
     private final KubernetesClient kubernetesClient;
-    private final ServiceDiscoveredProducer serviceDiscoveredProducer;
+    private final ServiceChangedProducer serviceChangedProducer;
     private final String clusterName;
     private final UUID tenantId;
     private Closeable serviceWatch;
@@ -38,11 +43,11 @@ public class KubernetesWorker {
     private Closeable namespaceWatch;
 
     public KubernetesWorker(KubernetesClient kubernetesClient,
-                             ServiceDiscoveredProducer serviceDiscoveredProducer,
+                             ServiceChangedProducer serviceChangedProducer,
                              String clusterName,
                              UUID tenantId) {
         this.kubernetesClient = kubernetesClient;
-        this.serviceDiscoveredProducer = serviceDiscoveredProducer;
+        this.serviceChangedProducer = serviceChangedProducer;
         this.clusterName = clusterName;
         this.tenantId = tenantId;
     }
@@ -54,10 +59,14 @@ public class KubernetesWorker {
         serviceWatch = kubernetesClient.services().inAnyNamespace().watch(new Watcher<>() {
             @Override
             public void eventReceived(Action action, Service service) {
-                if (action != Action.ADDED && action != Action.MODIFIED) return;
                 String namespace = service.getMetadata().getNamespace();
                 String name = service.getMetadata().getName();
                 try {
+                    if (action == Action.DELETED) {
+                        handleServiceDeleted(namespace, name);
+                        return;
+                    }
+                    if (action != Action.ADDED && action != Action.MODIFIED) return;
                     handleServiceEvent(namespace, name, service, null);
                 } catch (Exception ex) {
                     log.warn("Error handling K8s service event ns={} name={}: {}", namespace, name, ex.getMessage());
@@ -122,24 +131,40 @@ public class KubernetesWorker {
         closeQuietly(namespaceWatch, "namespace");
     }
 
-    /** Periodic full resync — re-evaluates every service in every tenant namespace. */
+    /**
+     * Full resync: re-evaluates each Service in each tenant namespace, then sends the set of present Services so
+     * the registry can find the ones that are gone. A failed list call throws before the set is sent, because a
+     * partial set would remove Services that are still in the cluster.
+     */
     public void resync() {
         log.debug("K8s resync starting for cluster '{}'", clusterName);
+        Instant observedAt = Instant.now();
+        List<PresentService> present = new ArrayList<>();
         kubernetesClient.namespaces().list().getItems().stream()
                 .filter(this::belongsToTenant)
                 .forEach(ns -> {
                     String namespace = ns.getMetadata().getName();
                     kubernetesClient.services().inNamespace(namespace).list().getItems()
                             .forEach(svc -> {
+                                String name = svc.getMetadata().getName();
+                                present.add(new PresentService(namespace, name));
                                 try {
-                                    handleServiceEvent(namespace, svc.getMetadata().getName(), svc, null);
+                                    handleServiceEvent(namespace, name, svc, null);
                                 } catch (Exception ex) {
-                                    log.warn("Resync error ns={} svc={}: {}",
-                                            namespace, svc.getMetadata().getName(), ex.getMessage());
+                                    log.warn("Resync error ns={} svc={}: {}", namespace, name, ex.getMessage());
                                 }
                             });
                 });
-        log.debug("K8s resync complete for cluster '{}'", clusterName);
+        serviceChangedProducer.publishResynced(
+                new ServiceResyncedPayload(tenantId, clusterName, observedAt, present));
+        log.debug("K8s resync complete for cluster '{}': {} service(s) present", clusterName, present.size());
+    }
+
+    private void handleServiceDeleted(String namespace, String name) {
+        Namespace ns = kubernetesClient.namespaces().withName(namespace).get();
+        if (ns != null && !belongsToTenant(ns)) return;
+        serviceChangedProducer.publishRemoved(new ServiceRemovedPayload(tenantId, clusterName, namespace, name));
+        log.info("Published service.removed ns={} name={} cluster={} tenant={}", namespace, name, clusterName, tenantId);
     }
 
     public void handleServiceEvent(String namespace, String name) {
@@ -186,7 +211,7 @@ public class KubernetesWorker {
                 null
         );
 
-        serviceDiscoveredProducer.publish(payload);
+        serviceChangedProducer.publishDiscovered(payload);
         log.info("Published service.discovered ns={} name={} cluster={} deployment={} health={} tenant={}",
                 namespace, name, clusterName, deployment, healthStatus, tenantId);
     }

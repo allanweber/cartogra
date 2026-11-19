@@ -290,6 +290,8 @@ ACME_ADMIN_EMAIL=admin@acme-fintech.invalid
 SERVICES_API="$URL/api/v1/registry/services"
 # A cluster re-sync can take this long if the watch misses the new Service.
 DISCOVERY_TIMEOUT=360
+# The watch removes it in seconds; a missed DELETE waits for the next re-sync.
+REMOVAL_TIMEOUT=360
 RISK_TIMEOUT=60
 REGISTRY_TIMEOUT=10
 
@@ -336,6 +338,11 @@ in_orphan_list() { page_has_id "$SERVICES_API/orphaned?limit=200" "$service_id";
 
 has_orphan_risk() { page_has_id "$URL/api/v1/topology/risks?limit=1000" "orphan:$service_id"; }
 
+not_in_cluster() {
+  body=$(admin "$SERVICES_API/$service_id") || return 2
+  case "$body" in *'"k8sCluster":"'*) return 1 ;; *) return 0 ;; esac
+}
+
 on_exit remove_check_service
 # An earlier run killed by a signal skips the EXIT trap.
 remove_check_service
@@ -364,6 +371,15 @@ owner=$(owner_of_service) || fail "read service"
 pass "team removal saved after reload"
 wait_for "unowned service back in orphan list" "$REGISTRY_TIMEOUT" in_orphan_list
 wait_for "unowned service back in risks" "$RISK_TIMEOUT" has_orphan_risk
+
+# A Service deleted from the cluster keeps its catalog row and owner, but loses its cluster.
+admin -X PATCH -H 'Content-Type: application/json' -d "{\"teamId\":\"$team_id\"}" \
+  "$SERVICES_API/$service_id/owner" >/dev/null || fail "assign team before removal"
+kubectl -n "$CHECK_NAMESPACE" delete service "$CHECK_SERVICE" >/dev/null
+wait_for "removed Service has no cluster" "$REMOVAL_TIMEOUT" not_in_cluster
+owner=$(owner_of_service) || fail "read service after removal"
+[ "$owner" = "$team_id" ] || fail "after removal from the cluster owner is $owner, expected $team_id"
+pass "removed Service keeps its row and owner"
 
 remove_check_service
 wait_for "check service removed from catalog" "$REGISTRY_TIMEOUT" absent in_orphan_list

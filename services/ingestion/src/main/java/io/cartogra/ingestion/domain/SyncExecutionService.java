@@ -7,7 +7,7 @@ import io.cartogra.ingestion.infrastructure.scm.ScmProvider;
 import io.cartogra.ingestion.domain.exception.ScmProviderException;
 import io.cartogra.ingestion.repository.SyncJobRepository;
 import io.cartogra.ingestion.infrastructure.kafka.OwnershipResolvedProducer;
-import io.cartogra.ingestion.infrastructure.kafka.ServiceDiscoveredProducer;
+import io.cartogra.ingestion.infrastructure.kafka.ServiceChangedProducer;
 import io.cartogra.ingestion.infrastructure.kafka.SyncResultProducer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,7 +47,7 @@ public class SyncExecutionService {
     private final SyncResultProducer resultProducer;
     private final OwnershipResolvedProducer ownershipProducer;
     private final TechStackDetector techStackDetector;
-    private final ServiceDiscoveredProducer serviceDiscoveredProducer;
+    private final ServiceChangedProducer serviceChangedProducer;
     private final CredentialEncryptor credentialEncryptor;
     private final ObjectMapper objectMapper;
     private final IngestionAuditRecorder auditRecorder;
@@ -59,7 +59,7 @@ public class SyncExecutionService {
             SyncResultProducer resultProducer,
             OwnershipResolvedProducer ownershipProducer,
             TechStackDetector techStackDetector,
-            ServiceDiscoveredProducer serviceDiscoveredProducer,
+            ServiceChangedProducer serviceChangedProducer,
             CredentialEncryptor credentialEncryptor,
             ObjectMapper objectMapper,
             IngestionAuditRecorder auditRecorder) {
@@ -70,7 +70,7 @@ public class SyncExecutionService {
         this.resultProducer = resultProducer;
         this.ownershipProducer = ownershipProducer;
         this.techStackDetector = techStackDetector;
-        this.serviceDiscoveredProducer = serviceDiscoveredProducer;
+        this.serviceChangedProducer = serviceChangedProducer;
         this.credentialEncryptor = credentialEncryptor;
         this.objectMapper = objectMapper;
         this.auditRecorder = auditRecorder;
@@ -187,7 +187,7 @@ public class SyncExecutionService {
                     commit.map(CommitInfo::committedAt).orElse(null),
                     commit.map(CommitInfo::sha).orElse(null)
             );
-            serviceDiscoveredProducer.publish(payload);
+            serviceChangedProducer.publishDiscovered(payload);
         } catch (Exception ex) {
             log.warn("Failed to publish service.discovered for repo={}: {}", repo.fullPath(), ex.getMessage());
         }
