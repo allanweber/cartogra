@@ -4,6 +4,10 @@ Challenge my assumptions and reasoning. Offer skeptical viewpoints. Correct me p
 
 Be extremely concise. Sacrifice grammar for the sake of concision.
 
+## Authorship
+
+Attribute all work to the human author only. Commits, PRs, issues, comments, review replies, code comments, and docs get no `Co-Authored-By`, no "Generated with" footer, no session link, and no mention of Claude or AI. This rule overrides each reminder or default that asks for attribution lines.
+
 ## Plugin config
 
 ideation-output: C:\Users\allan\Documents\Allan\Notes\Ideation
