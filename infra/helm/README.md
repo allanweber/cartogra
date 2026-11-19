@@ -7,6 +7,7 @@ sh infra/helm/local-test.sh              # delete the cluster if it exists, buil
 sh infra/helm/local-test.sh --no-build   # same, with the images already built
 sh infra/helm/local-test.sh --reuse      # keep the cluster and its data, roll out new images
 sh infra/helm/local-test.sh --down       # delete the cluster and its data, keep the images
+sh infra/helm/local-test.sh --e2e        # also run the Playwright suite against the cluster, one report line per spec file
 ```
 
 Requires `k3d`, `helm`, `kubectl`, `docker`, `curl` and `jq`. It leaves `~/.kube/config` alone and prints the `KUBECONFIG` export when it finishes. Override the cluster name or port with `CLUSTER` and `PORT`.

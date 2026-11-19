@@ -6,6 +6,7 @@
 #   sh infra/helm/local-test.sh --reuse      keeps the cluster and its data, rolls out the new images
 #   sh infra/helm/local-test.sh --no-build   skips docker build, uses the images already built (combines with --reuse)
 #   sh infra/helm/local-test.sh --down       deletes the cluster and its data, leaves the docker images
+#   sh infra/helm/local-test.sh --e2e        also runs the Playwright suite against the cluster, one report line per spec file
 #
 # Not covered: GHCR push, deploy.yml, sealed secrets, TLS, S3 upload, GitHub mirror scan, alert email delivery, sizing on the 8GB VM.
 set -eu
@@ -14,14 +15,17 @@ CLUSTER="${CLUSTER:-cartogra-local}"
 PORT="${PORT:-8088}"
 URL="http://localhost:$PORT"
 ADMIN_PASSWORD=k3d-Admin-pw1
+DB_PASSWORD=k3d-test-pw
 SERVICES="gateway registry topology contract ingestion frontend"
 
 REUSE=false
 BUILD=true
 DOWN=false
+E2E=false
 for arg in "$@"; do
   case "$arg" in
     --reuse) REUSE=true ;;
+    --e2e) E2E=true ;;
     --no-build) BUILD=false ;;
     --down) DOWN=true ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
@@ -29,6 +33,21 @@ for arg in "$@"; do
 done
 
 cd "$(dirname "$0")/../.."
+
+# One run at a time on this machine: every worktree shares CLUSTER, PORT and the cartogra-<svc>:k3d image tags,
+# and a fresh run deletes CLUSTER first. The lock lives in the git dir that all worktrees share and is released
+# when this shell exits. A caller that already holds it (.claude/skills/task-eval/k3d-run.sh) sets CARTOGRA_K3D_LOCKED=1.
+if [ "${CARTOGRA_K3D_LOCKED:-}" != 1 ]; then
+  command -v flock >/dev/null || { echo "flock is required" >&2; exit 2; }
+  LOCK="$(git rev-parse --path-format=absolute --git-common-dir)/cartogra-k3d.lock"
+  exec 9>"$LOCK"
+  if ! flock -n 9; then
+    echo "waiting for the k3d lock, held by: $(cat "$LOCK.owner" 2>/dev/null || echo unknown)"
+    flock 9
+  fi
+  printf '%s %s %s\n' "$(git branch --show-current)" "$(pwd)" "$(date -Is)" >"$LOCK.owner"
+  export CARTOGRA_K3D_LOCKED=1
+fi
 
 REPORT="${REPORT:-build/local-test-report.html}"
 CHECK_LOG="$REPORT.log"
@@ -151,7 +170,7 @@ for s in gateway registry topology contract ingestion postgres; do
   fi
   kubectl -n cartogra create secret generic "$s-secrets" \
     --from-literal=DB_USERNAME=cartogra \
-    --from-literal=DB_PASSWORD=k3d-test-pw \
+    --from-literal=DB_PASSWORD="$DB_PASSWORD" \
     --from-literal=JWT_SECRET=k3d-test-secret-at-least-32-bytes-long \
     --from-literal=INTERNAL_TOKEN_KEY="$internal_token_key" \
     --from-literal=RESEND_API_KEY=re_placeholder \
@@ -469,5 +488,53 @@ until prom 'ALERTS%7Balertname%3D%22ContainerRestarted%22%2Cpod%3D%22oom-check%2
 done
 kubectl -n cartogra delete pod oom-check --wait=false >/dev/null
 pass "ContainerRestarted fired for an OOM-killed pod"
+
+if [ "$E2E" = true ]; then
+  step "E2E Playwright"
+  # The suite signs up its own tenant, and the production values turn sign-up off. Guest mode was checked
+  # above with sign-up off, so turn it on only now, for the suite.
+  kubectl -n cartogra set env deploy/gateway SIGNUP_ENABLED=true >/dev/null
+  kubectl -n cartogra rollout status deploy/gateway --timeout=5m >/dev/null || fail "gateway did not roll out with sign-up on"
+  # The old pod keeps getting requests for a few seconds while it stops.
+  tries=0
+  until curl -fs "$URL/api/auth/features" | grep -q '"signupEnabled":true'; do
+    tries=$((tries + 1))
+    [ "$tries" -lt 30 ] || fail "sign-up still off for the e2e suite: $(curl -s "$URL/api/auth/features")"
+    sleep 2
+  done
+  pass "sign-up on for the e2e suite"
+  # The suite reads verification tokens straight from Postgres: point it at the cluster's database,
+  # never at the persistent dev stack on :5436 / :8080.
+  kubectl -n cartogra port-forward svc/postgres 5437:5432 >/dev/null 2>&1 &
+  pf=$!
+  on_exit "kill $pf 2>/dev/null"
+  # demo-flow posts OTLP spans; 4319, so a compose collector on :4318 is never hit.
+  kubectl -n cartogra port-forward svc/collector 4319:4318 >/dev/null 2>&1 &
+  pf_otlp=$!
+  on_exit "kill $pf_otlp 2>/dev/null"
+  sleep 3
+  results=$(mktemp)
+  on_exit "rm -f '$results'"
+  e2e_rc=0
+  # guest-demo writes activity into the guest tenant, which is Acme on this cluster (values-production.yaml).
+  (cd frontend && E2E_BASE_URL="$URL" E2E_API_BASE_URL="$URL" \
+    E2E_DB_URL="postgresql://cartogra:$DB_PASSWORD@localhost:5437/cartogra" \
+    E2E_OTLP_TRACES_URL=http://localhost:4319/v1/traces \
+    E2E_GUEST_TENANT_ID=a0000000-0000-4000-8000-00000000ac3e \
+    PLAYWRIGHT_JSON_OUTPUT_NAME="$results" PLAYWRIGHT_HTML_OPEN=never \
+    pnpm exec playwright test --reporter=list,html,json) || e2e_rc=$?
+  [ -s "$results" ] || fail "Playwright wrote no results (exit $e2e_rc)"
+  e2e_failed=0
+  for line in $(jq -r '.suites[] | "\(.file)=\([.. | objects | select(has("ok")) | .ok] | all)"' "$results"); do
+    if [ "${line##*=}" = true ]; then
+      pass "e2e ${line%=*}"
+    else
+      printf 'F\t%s\t%s\n' "$(date +%s)" "e2e ${line%=*}" >>"$CHECK_LOG"
+      e2e_failed=$((e2e_failed + 1))
+    fi
+  done
+  [ "$e2e_failed" -gt 0 ] && fail "e2e: $e2e_failed spec file(s) failed, see frontend/playwright-report/index.html"
+  [ "$e2e_rc" -eq 0 ] || fail "e2e: Playwright exited $e2e_rc before or after the specs (global setup or teardown), see the log"
+fi
 
 printf '\nAll checks passed. Open %s/demo\nkubectl: export KUBECONFIG=%s\n' "$URL" "$KUBECONFIG"
