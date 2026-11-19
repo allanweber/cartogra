@@ -1,6 +1,6 @@
 import type { CartograApi } from './api.ts'
 import { loadSeed, type LoadOptions, type LoadSummary } from './load.ts'
-import { historyPath, openapiSpec } from './repos.ts'
+import { breakingLabel, breakingParameterPath, breakingRemovedPath, breakingVersion, historyPath, openapiSpec } from './repos.ts'
 import {
   allCycles, callKey, callKind, declaredCalls, declaredCycles, dormantCalls, edgeKey, externalCalls, silentDeclaredCalls,
   unownedServices, type SeedData,
@@ -58,7 +58,7 @@ export async function verify(api: CartograApi, seed: SeedData, options: VerifyOp
   const absentDeclared = missingDeclared(seed, after)
   add('all declared edges present', absentDeclared.length === 0, absentDeclared.join(', '))
 
-  await verifyContracts(api, seed, second, add)
+  await verifyContracts(api, seed, second, add, options.breaking ?? false)
 
   const graph = await api.graph()
   const nodeId = new Map(graph.nodes.map((n) => [n.name, n.serviceId]))
@@ -123,8 +123,10 @@ async function verifyContracts(
   seed: SeedData,
   loaded: LoadSummary,
   add: (name: string, ok: boolean, detail?: string) => void,
+  breaking: boolean,
 ): Promise<void> {
   const listed = new Map((await api.listContracts()).map((c) => [c.id, c]))
+  const listedBreaking = breaking ? new Set((await api.listContracts(undefined, 'breaking')).map((c) => c.id)) : new Set<string>()
   for (const s of seed.services) {
     const versions = s.contractVersions
     if (versions === undefined) continue
@@ -134,8 +136,10 @@ async function verifyContracts(
       continue
     }
     const latest = (await api.getContract(id)).latestVersion
+    const atBreaking = breaking || latest.label === breakingLabel(s)
+    const expectedVersion = atBreaking ? breakingVersion(s) : versions
     add(`${s.name} contract exists`, true)
-    add(`${s.name} contract at v${versions}`, latest.versionNumber >= versions && latest.label === `1.${versions - 1}.0`,
+    add(`${s.name} contract at v${expectedVersion}`, latest.versionNumber >= expectedVersion && latest.label === `1.${expectedVersion - 1}.0`,
       `v${latest.versionNumber} label ${latest.label}`)
     const row = listed.get(id)
     add(`${s.name} contract listed with its service name`, row?.serviceName === s.name && row.latestVersion.versionNumber === latest.versionNumber,
@@ -148,7 +152,26 @@ async function verifyContracts(
           && diff.changes.some((c) => c.op === 'added' && c.path.length === 2 && c.path[0] === 'paths' && c.path[1] === history)
           && diff.lines.some((l) => l.kind === 'added' && l.right?.includes(history) === true),
         `${diff.changes.length} change(s): ${diff.changes.map((c) => `${c.op} ${c.pointer}`).join(', ')}`)
-      const republished = await api.publishContractVersion(id, openapiSpec(s, versions))
+      const rules = diff.compatibility.changes.map((c) => `${c.rule} ${c.path}`)
+      add(`${s.name} v2 is compatible (path-added)`,
+        diff.to.breaking !== true && diff.compatibility.isBreaking === false
+          && diff.compatibility.changes.some((c) => c.rule === 'path-added' && c.path === history),
+        `breaking ${diff.to.breaking}, rules: ${rules.join(', ')}`)
+    }
+    if (breaking) {
+      const diff = await api.contractDiff(id, latest.versionNumber)
+      const hits = diff.compatibility.changes
+      add(`${s.name} v${latest.versionNumber} is breaking (path-removed, parameter-required-added)`,
+        latest.breaking === true && diff.compatibility.isBreaking
+          && hits.some((c) => c.rule === 'path-removed' && c.path === breakingRemovedPath(s))
+          && hits.some((c) => c.rule === 'parameter-required-added' && c.method === 'GET' && c.path === breakingParameterPath(s)
+            && c.location === 'query.currency'),
+        `breaking ${latest.breaking}, rules: ${hits.map((c) => `${c.rule} ${c.method ?? ''} ${c.path} ${c.location ?? ''}`).join(', ')}`)
+      add(`${s.name} listed with ?status=breaking`, listedBreaking.has(id))
+    }
+    if (versions > 1) {
+      const republished = await api.publishContractVersion(id,
+        atBreaking ? openapiSpec(s, breakingVersion(s), { breaking: true }) : openapiSpec(s, versions))
       add(`${s.name} re-publishing latest spec stores nothing`,
         !republished.created && republished.version.versionNumber === latest.versionNumber
           && republished.version.specHash === latest.specHash)

@@ -6,7 +6,7 @@ import { connectSources, retry } from './bootstrap.ts'
 import { setDrift } from './drift.ts'
 import { loadSeed } from './load.ts'
 import { renderHelmServices, renderManifests } from './manifests.ts'
-import { pushRepos } from './repos.ts'
+import { parseRepoArgs, pushRepos } from './repos.ts'
 import { declaredCalls, declaredCycles, loadSeedFile, unownedServices, withRepoProvider } from './schema.ts'
 import { verify } from './verify.ts'
 
@@ -46,12 +46,10 @@ async function main(): Promise<number> {
     }
 
     case 'repos': {
-      const providerFlag = [arg, ...flags].indexOf('--provider')
-      const provider = providerFlag >= 0 ? [arg, ...flags][providerFlag + 1] : undefined
-      if (provider !== undefined && provider !== 'github' && provider !== 'azure') throw new Error('--provider must be github or azure')
+      const { provider, breaking } = parseRepoArgs([arg, ...flags].filter((a) => a !== undefined))
       const summary = pushRepos(
         provider ? withRepoProvider(seed, provider) : seed,
-        { githubOrg: process.env.ACME_GITHUB_ORG, azureOrg: process.env.ACME_AZURE_ORG, azureProject: process.env.ACME_AZURE_PROJECT },
+        { githubOrg: process.env.ACME_GITHUB_ORG, azureOrg: process.env.ACME_AZURE_ORG, azureProject: process.env.ACME_AZURE_PROJECT, breaking },
         console.log,
       )
       console.log(`${summary.pushed.length} pushed, ${summary.unchanged.length} unchanged`)
@@ -61,14 +59,16 @@ async function main(): Promise<number> {
     case 'load':
     case 'verify': {
       const api = await authenticated()
+      const breaking = [arg, ...flags].includes('--breaking')
       if (command === 'load') {
-        await loadSeed(api, seed, { log: console.log, skipOwners: [arg, ...flags].includes('--skip-owners') })
+        await loadSeed(api, seed, { log: console.log, skipOwners: [arg, ...flags].includes('--skip-owners'), breaking })
         return 0
       }
       const withDrift = flags.includes('--with-drift') || arg === '--with-drift'
       const checks = await verify(api, seed, {
         log: console.log,
         skipObserved: [arg, ...flags].includes('--no-spans'),
+        breaking,
         withDrift: withDrift ? { enable: () => setDrift(seed, true).then(() => {}), disable: () => setDrift(seed, false).then(() => {}) } : undefined,
       })
       for (const c of checks) console.log(`${c.ok ? 'PASS' : 'FAIL'}  ${c.name}${c.detail ? `  (${c.detail})` : ''}`)
@@ -90,7 +90,7 @@ async function main(): Promise<number> {
         github: githubOrg && githubToken ? { org: githubOrg, token: githubToken } : undefined,
         log: console.log,
       })
-      await loadSeed(api, seed, { log: console.log, discoveryTimeoutMs: timeoutMs })
+      await loadSeed(api, seed, { log: console.log, discoveryTimeoutMs: timeoutMs, breaking: [arg, ...flags].includes('--breaking') })
       return 0
     }
 
@@ -101,7 +101,7 @@ async function main(): Promise<number> {
     }
 
     default:
-      console.error('usage: acme <validate|manifests [--helm]|repos [--provider github|azure]|bootstrap|load [--skip-owners]|verify [--with-drift] [--no-spans]|drift on|off>')
+      console.error('usage: acme <validate|manifests [--helm]|repos [--provider github|azure] [--breaking]|bootstrap [--breaking]|load [--skip-owners] [--breaking]|verify [--with-drift] [--no-spans] [--breaking]|drift on|off>')
       return 2
   }
 }

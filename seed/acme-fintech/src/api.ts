@@ -63,6 +63,8 @@ export interface ContractVersion {
   versionNumber: number
   label: string | null
   specHash: string
+  /** Breaking-change verdict against the previous version; null = unchecked (stored before 5.3). */
+  breaking: boolean | null
 }
 
 export interface Contract {
@@ -85,11 +87,27 @@ export interface DiffLine {
   right: string | null
 }
 
+export interface CompatibilityChange {
+  rule: string
+  breaking: boolean
+  direction: 'request' | 'response' | 'operation'
+  method: string | null
+  path: string
+  location: string | null
+  message: string
+}
+
+export interface Compatibility {
+  isBreaking: boolean
+  changes: CompatibilityChange[]
+}
+
 export interface VersionDiff {
   from: ContractVersion | null
   to: ContractVersion
   changes: SpecChange[]
   lines: DiffLine[]
+  compatibility: Compatibility
 }
 
 export interface PublishedVersion {
@@ -132,7 +150,8 @@ export interface CartograApi {
   createContract(serviceId: string, spec: string): Promise<Contract>
   publishContractVersion(contractId: string, spec: string): Promise<PublishedVersion>
   getContract(contractId: string): Promise<Contract>
-  listContracts(): Promise<Contract[]>
+  /** `status` keeps the contracts whose latest version is breaking or compatible. */
+  listContracts(q?: string, status?: 'breaking' | 'compatible'): Promise<Contract[]>
   contractDiff(contractId: string, versionNumber: number): Promise<VersionDiff>
 }
 
@@ -268,8 +287,11 @@ export class HttpCartograApi implements CartograApi, ConnectionsApi {
     return this.request<Contract>('GET', `/api/v1/contracts/${contractId}`)
   }
 
-  listContracts(): Promise<Contract[]> {
-    return this.listAll<Contract>('/api/v1/contracts')
+  listContracts(q?: string, status?: 'breaking' | 'compatible'): Promise<Contract[]> {
+    const params = new URLSearchParams()
+    if (q) params.set('q', q)
+    if (status) params.set('status', status)
+    return this.listAll<Contract>(`/api/v1/contracts${params.size > 0 ? `?${params}` : ''}`)
   }
 
   contractDiff(contractId: string, versionNumber: number): Promise<VersionDiff> {
@@ -311,7 +333,7 @@ export class HttpCartograApi implements CartograApi, ConnectionsApi {
   private async listAll<T>(path: string): Promise<T[]> {
     const all: T[] = []
     for (;;) {
-      const page = await this.request<Page<T>>('GET', `${path}?limit=${PAGE_SIZE}&offset=${all.length}`)
+      const page = await this.request<Page<T>>('GET', `${path}${path.includes('?') ? '&' : '?'}limit=${PAGE_SIZE}&offset=${all.length}`)
       all.push(...page.items)
       if (page.items.length === 0 || all.length >= page.total) return all
     }

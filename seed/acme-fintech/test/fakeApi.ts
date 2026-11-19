@@ -1,5 +1,5 @@
 import {
-  ApiError, type CartograApi, type CatalogService, type Contract, type ContractVersion, type Drift, type Graph, type PublishedVersion, type Risk,
+  ApiError, type CartograApi, type CatalogService, type Compatibility, type CompatibilityChange, type Contract, type ContractVersion, type Drift, type Graph, type PublishedVersion, type Risk,
   type Team, type UnresolvedSpanService, type VersionDiff,
 } from '../src/api.ts'
 import { declaredCycles, type Protocol, type SeedData } from '../src/schema.ts'
@@ -106,7 +106,7 @@ export class FakeApi implements CartograApi {
     const existing = [...this.contracts].find(([, c]) => c.serviceId === serviceId)
     if (existing) throw new ApiError(409, 'CONFLICT', 'exists', 't', { contractId: existing[0] })
     const id = `contract-${++this.seq}`
-    this.contracts.set(id, { serviceId, versions: [fakeVersion(1, spec)] })
+    this.contracts.set(id, { serviceId, versions: [fakeVersion(1, spec, false)] })
     return this.getContract(id)
   }
   async publishContractVersion(contractId: string, spec: string): Promise<PublishedVersion> {
@@ -115,7 +115,7 @@ export class FakeApi implements CartograApi {
     if (!contract) throw new ApiError(404, 'NOT_FOUND', 'unknown contract', 't')
     const latest = contract.versions.at(-1)!
     if (latest.specHash === spec) return { version: latest, created: false }
-    const version = fakeVersion(latest.versionNumber + 1, spec)
+    const version = fakeVersion(latest.versionNumber + 1, spec, fakeCompatibility(latest.specHash, spec).isBreaking)
     contract.versions.push(version)
     return { version, created: true }
   }
@@ -125,8 +125,10 @@ export class FakeApi implements CartograApi {
     const serviceName = this.services.find((s) => s.id === contract.serviceId)?.name ?? null
     return { id: contractId, serviceId: contract.serviceId, serviceName, latestVersion: contract.versions.at(-1)! }
   }
-  async listContracts(): Promise<Contract[]> {
-    return Promise.all([...this.contracts.keys()].map((id) => this.getContract(id)))
+  async listContracts(q?: string, status?: 'breaking' | 'compatible'): Promise<Contract[]> {
+    const all = await Promise.all([...this.contracts.keys()].map((id) => this.getContract(id)))
+    return all.filter((c) => (!q || c.serviceName?.toLowerCase().includes(q.toLowerCase()))
+      && (!status || c.latestVersion.breaking === (status === 'breaking')))
   }
   /** Reports each path key the version adds over the previous one; the spec text is in `specHash`. */
   async contractDiff(contractId: string, versionNumber: number): Promise<VersionDiff> {
@@ -134,18 +136,44 @@ export class FakeApi implements CartograApi {
     const to = contract?.versions[versionNumber - 1]
     if (!contract || !to) throw new ApiError(404, 'NOT_FOUND', 'unknown version', 't')
     const from = contract.versions[versionNumber - 2] ?? null
-    const paths = (spec: string) => [...spec.matchAll(/^ {2}"([^"]+)":$/gm)].map((m) => m[1])
-    const before = new Set(from ? paths(from.specHash) : [])
-    const added = paths(to.specHash).filter((p) => !before.has(p))
+    const before = new Set(from ? specPaths(from.specHash) : [])
+    const added = specPaths(to.specHash).filter((p) => !before.has(p))
     return {
       from,
       to,
       changes: added.map((p) => ({ op: 'added', pointer: `/paths/${p.replaceAll('~', '~0').replaceAll('/', '~1')}`, path: ['paths', p] })),
       lines: added.map((p) => ({ kind: 'added', left: null, right: `  ${p}:` })),
+      compatibility: fakeCompatibility(from?.specHash ?? null, to.specHash),
     }
   }
 }
 
-function fakeVersion(versionNumber: number, spec: string): ContractVersion {
-  return { id: `v-${versionNumber}`, versionNumber, label: /version: "([^"]+)"/.exec(spec)?.[1] ?? null, specHash: spec }
+function specPaths(spec: string): string[] {
+  return [...spec.matchAll(/^ {2}"([^"]+)":$/gm)].map((m) => m[1])
+}
+
+/** Paths whose block declares a `currency` query parameter. */
+function currencyPaths(spec: string): string[] {
+  return spec.split(/^(?= {2}")/m).filter((block) => block.includes('- name: currency')).map((block) => /^ {2}"([^"]+)":/.exec(block)![1])
+}
+
+/** The engine's rules the seed specs can hit: paths added or removed, and a new required `currency` parameter. */
+function fakeCompatibility(fromSpec: string | null, toSpec: string): Compatibility {
+  const before = fromSpec ? specPaths(fromSpec) : []
+  const after = specPaths(toSpec)
+  const hadCurrency = new Set(fromSpec ? currencyPaths(fromSpec) : [])
+  const hit = (rule: string, breaking: boolean, path: string, method: string | null = null, location: string | null = null): CompatibilityChange => ({
+    rule, breaking, direction: method ? 'request' : 'operation', method, path, location, message: rule,
+  })
+  const changes = [
+    ...before.filter((p) => !after.includes(p)).map((p) => hit('path-removed', true, p)),
+    ...after.filter((p) => !before.includes(p)).map((p) => hit('path-added', false, p)),
+    ...currencyPaths(toSpec).filter((p) => before.includes(p) && !hadCurrency.has(p))
+      .map((p) => hit('parameter-required-added', true, p, 'GET', 'query.currency')),
+  ]
+  return { isBreaking: changes.some((c) => c.breaking), changes }
+}
+
+function fakeVersion(versionNumber: number, spec: string, breaking: boolean | null): ContractVersion {
+  return { id: `v-${versionNumber}`, versionNumber, label: /version: "([^"]+)"/.exec(spec)?.[1] ?? null, specHash: spec, breaking }
 }
