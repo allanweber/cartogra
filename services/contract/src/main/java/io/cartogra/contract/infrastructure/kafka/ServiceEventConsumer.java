@@ -3,6 +3,7 @@ package io.cartogra.contract.infrastructure.kafka;
 import io.cartogra.common.event.EventEnvelope;
 import io.cartogra.contract.domain.ContractService;
 import io.cartogra.contract.domain.ServiceProjectionService;
+import io.cartogra.web.tenant.TenantContext;
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
@@ -70,9 +71,11 @@ public class ServiceEventConsumer {
             EventEnvelope<JsonNode> envelope = objectMapper.readValue(
                     record.value(), new TypeReference<EventEnvelope<JsonNode>>() {});
             switch (envelope.eventType()) {
-                case SERVICE_REGISTERED, SERVICE_UPDATED -> serviceProjectionService.recordName(
-                        envelope.tenantId(), envelope.entityId(), envelope.payload().required("name").asString());
-                case SERVICE_DELETED -> contractService.deleteForService(envelope.tenantId(), envelope.entityId());
+                case SERVICE_REGISTERED, SERVICE_UPDATED -> TenantContext.runAs(envelope.tenantId(),
+                        () -> serviceProjectionService.recordName(envelope.tenantId(), envelope.entityId(),
+                                envelope.payload().required("name").asString()));
+                case SERVICE_DELETED -> TenantContext.runAs(envelope.tenantId(),
+                        () -> contractService.deleteForService(envelope.tenantId(), envelope.entityId()));
                 default -> {
                     ack.acknowledge();
                     return;

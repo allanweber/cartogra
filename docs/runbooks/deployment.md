@@ -239,10 +239,10 @@ only the encrypted files are committed.
 
 | Namespace | Secret | Keys |
 |---|---|---|
-| `cartogra` | `gateway-secrets` | `DB_USERNAME` `DB_PASSWORD` `JWT_SECRET` `INTERNAL_TOKEN_KEY` `RESEND_API_KEY` `GOOGLE_CLIENT_SECRET` `GITHUB_CLIENT_SECRET` `BOOTSTRAP_ADMIN_PASSWORD` |
-| `cartogra` | `registry-secrets`, `topology-secrets`, `contract-secrets` | `DB_USERNAME` `DB_PASSWORD` `INTERNAL_TOKEN_KEY` |
-| `cartogra` | `ingestion-secrets` | `DB_USERNAME` `DB_PASSWORD` `INTERNAL_TOKEN_KEY` `CLUSTER_CREDENTIALS_KEY` |
-| `cartogra` | `postgres-secrets` | `DB_USERNAME` `DB_PASSWORD` (same values) |
+| `cartogra` | `gateway-secrets` | `DB_USERNAME` `DB_PASSWORD` `FLYWAY_USERNAME` `FLYWAY_PASSWORD` `JWT_SECRET` `INTERNAL_TOKEN_KEY` `RESEND_API_KEY` `GOOGLE_CLIENT_SECRET` `GITHUB_CLIENT_SECRET` `BOOTSTRAP_ADMIN_PASSWORD` |
+| `cartogra` | `registry-secrets`, `topology-secrets`, `contract-secrets` | `DB_USERNAME` `DB_PASSWORD` `FLYWAY_USERNAME` `FLYWAY_PASSWORD` `INTERNAL_TOKEN_KEY` |
+| `cartogra` | `ingestion-secrets` | `DB_USERNAME` `DB_PASSWORD` `FLYWAY_USERNAME` `FLYWAY_PASSWORD` `INTERNAL_TOKEN_KEY` `CLUSTER_CREDENTIALS_KEY` |
+| `cartogra` | `postgres-secrets` | `DB_USERNAME` `DB_PASSWORD` (superuser) `CARTOGRA_OWNER_PASSWORD` `CARTOGRA_APP_PASSWORD` |
 | `cartogra` | `backup-secrets` | `S3_ACCESS_KEY` `S3_SECRET_KEY` |
 | `acme-system` | `acme-bootstrap` | `ACME_PASSWORD` (= `BOOTSTRAP_ADMIN_PASSWORD`), `ACME_GITHUB_TOKEN` |
 
@@ -253,6 +253,8 @@ tokens between the gateway and the services.
 
 ```bash
 DB_PASSWORD=$(openssl rand -hex 24)
+OWNER_DB_PASSWORD=$(openssl rand -hex 24)
+APP_DB_PASSWORD=$(openssl rand -hex 24)
 JWT_SECRET=$(openssl rand -base64 48)
 INTERNAL_TOKEN_KEY=$(openssl rand -base64 48)
 ADMIN_PASSWORD=$(openssl rand -hex 16)
@@ -272,7 +274,8 @@ seal() {
   kubectl -n "$ns" create secret generic "$name" --dry-run=client -o yaml "$@" \
     | kubeseal --format yaml > "infra/k8s/sealed/$name.yaml"
 }
-DB=(--from-literal=DB_USERNAME=cartogra --from-literal=DB_PASSWORD="$DB_PASSWORD")
+DB=(--from-literal=DB_USERNAME=cartogra_app --from-literal=DB_PASSWORD="$APP_DB_PASSWORD"
+    --from-literal=FLYWAY_USERNAME=cartogra_owner --from-literal=FLYWAY_PASSWORD="$OWNER_DB_PASSWORD")
 ITK=(--from-literal=INTERNAL_TOKEN_KEY="$INTERNAL_TOKEN_KEY")
 seal cartogra gateway-secrets "${DB[@]}" "${ITK[@]}" \
   --from-literal=JWT_SECRET="$JWT_SECRET" \
@@ -283,7 +286,8 @@ seal cartogra gateway-secrets "${DB[@]}" "${ITK[@]}" \
 seal cartogra registry-secrets "${DB[@]}" "${ITK[@]}"
 seal cartogra topology-secrets "${DB[@]}" "${ITK[@]}"
 seal cartogra contract-secrets "${DB[@]}" "${ITK[@]}"
-seal cartogra postgres-secrets "${DB[@]}"
+seal cartogra postgres-secrets --from-literal=DB_USERNAME=cartogra --from-literal=DB_PASSWORD="$DB_PASSWORD" \
+  --from-literal=CARTOGRA_OWNER_PASSWORD="$OWNER_DB_PASSWORD" --from-literal=CARTOGRA_APP_PASSWORD="$APP_DB_PASSWORD"
 seal cartogra ingestion-secrets "${DB[@]}" "${ITK[@]}" --from-literal=CLUSTER_CREDENTIALS_KEY="$CLUSTER_CREDENTIALS_KEY"
 seal cartogra backup-secrets --from-literal=S3_ACCESS_KEY="$S3_ACCESS_KEY" --from-literal=S3_SECRET_KEY="$S3_SECRET_KEY"
 seal acme-system acme-bootstrap --from-literal=ACME_PASSWORD="$ADMIN_PASSWORD" --from-literal=ACME_GITHUB_TOKEN="$ACME_GITHUB_TOKEN"

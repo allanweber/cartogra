@@ -3,6 +3,8 @@ package io.cartogra.ingestion.infrastructure.scheduled;
 import io.cartogra.ingestion.repository.ScmConnectionRepository;
 import io.cartogra.ingestion.domain.ScheduledSyncService;
 import io.cartogra.ingestion.domain.ScmConnection;
+import io.cartogra.web.tenant.TenantContext;
+import io.cartogra.web.tenant.TenantDb;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -35,7 +37,7 @@ public class SyncScheduler {
     public void tick() {
         List<ScmConnection> due;
         try {
-            due = connectionRepository.findDue();
+            due = TenantDb.asSystem(connectionRepository::findDue);
         } catch (Exception ex) {
             log.error("Scheduler: failed to query due connections — skipping tick: {}", ex.getMessage());
             return;
@@ -43,14 +45,18 @@ public class SyncScheduler {
         log.debug("Scheduler tick: {} connection(s) due", due.size());
         for (ScmConnection conn : due) {
             try {
-                scheduledSyncService.attemptForConnection(conn);
-                Instant now = Instant.now();
-                Instant next = now.plus(conn.pollIntervalMinutes(), ChronoUnit.MINUTES);
-                connectionRepository.updateSyncTimestamps(conn.id(), now, next);
-                log.info("Scheduler: triggered sync for connection={} next={}", conn.id(), next);
+                TenantContext.runAs(conn.tenantId(), () -> triggerSync(conn));
             } catch (Exception ex) {
                 log.warn("Scheduler: failed for connection={}: {}", conn.id(), ex.getMessage());
             }
         }
+    }
+
+    private void triggerSync(ScmConnection conn) {
+        scheduledSyncService.attemptForConnection(conn);
+        Instant now = Instant.now();
+        Instant next = now.plus(conn.pollIntervalMinutes(), ChronoUnit.MINUTES);
+        connectionRepository.updateSyncTimestamps(conn.id(), now, next);
+        log.info("Scheduler: triggered sync for connection={} next={}", conn.id(), next);
     }
 }

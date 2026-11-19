@@ -82,6 +82,14 @@ spec:
             - name: secrets
               mountPath: /etc/cartogra/secrets
               readOnly: true
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d/01-roles.sh
+              subPath: 01-roles.sh
+              readOnly: true
+            - name: init
+              mountPath: /etc/cartogra/init/bootstrap-roles.sql
+              subPath: bootstrap-roles.sql
+              readOnly: true
             - name: run
               mountPath: /var/run/postgresql
             - name: tmp
@@ -90,6 +98,9 @@ spec:
         - name: secrets
           secret:
             secretName: {{ .Values.secret.name }}
+        - name: init
+          configMap:
+            name: {{ $name }}-init
         - name: run
           emptyDir: {}
         - name: tmp

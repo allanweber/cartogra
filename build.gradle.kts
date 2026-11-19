@@ -127,6 +127,8 @@ subprojects {
 
     tasks.withType<Test> {
         useJUnitPlatform()
+        // Loads TenantScopeExtension (shared/test-support): test code runs in the RLS system scope.
+        systemProperty("junit.jupiter.extensions.autodetection.enabled", "true")
         testLogging { events(TestLogEvent.PASSED, TestLogEvent.FAILED, TestLogEvent.SKIPPED) }
     }
 

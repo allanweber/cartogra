@@ -5,6 +5,7 @@ import tools.jackson.databind.ObjectMapper;
 import io.cartogra.common.event.EventEnvelope;
 import io.cartogra.common.event.SyncCommandPayload;
 import io.cartogra.ingestion.domain.SyncExecutionService;
+import io.cartogra.web.tenant.TenantContext;
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
@@ -58,7 +59,7 @@ public class SyncCommandConsumer {
             EventEnvelope<SyncCommandPayload> envelope = objectMapper.readValue(
                     record.value(),
                     new TypeReference<>() {});
-            syncExecutionService.execute(envelope.payload());
+            TenantContext.runAs(envelope.tenantId(), () -> syncExecutionService.execute(envelope.payload()));
         } catch (Exception ex) {
             log.error("Failed to process sync command key={}: {}", record.key(), ex.getMessage(), ex);
         } finally {

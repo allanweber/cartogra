@@ -31,7 +31,7 @@ Facts found:
 - **Unique cluster name**: A new ingestion migration adds a unique index on `(tenant_id, lower(name)) WHERE deleted_at IS NULL`. A duplicate name on create or update gives 409 + `ErrorCodes.CONFLICT`. Reason: two clusters with one name would remove the K8s fields of each other at each resync.
 
 ## Implementation steps
-1. **Ingestion migration** → `services/ingestion/src/main/resources/db/migration/V006__unique_k8s_cluster_name.sql`: `CREATE UNIQUE INDEX ... ON k8s_clusters (tenant_id, lower(name)) WHERE deleted_at IS NULL`.
+1. **Ingestion migration** → `services/ingestion/src/main/resources/db/migration/V007__unique_k8s_cluster_name.sql`: `CREATE UNIQUE INDEX ... ON k8s_clusters (tenant_id, lower(name)) WHERE deleted_at IS NULL`.
 2. **Duplicate name** → `domain/exception/DuplicateClusterNameException.java`. `ClusterService.create`/`update` examine the name through a new `ClusterRepository.existsByName(tenantId, name, excludeId)` (impl in `infrastructure/jdbc/JdbcClusterRepository.java`). `api/GlobalExceptionHandler.java` maps it to 409 `CONFLICT`.
 3. **Producer** → rename `infrastructure/kafka/ServiceDiscoveredProducer.java` to `ServiceChangedProducer.java`:
    - `TOPIC = "cartogra.ingestion.service.changed"`.

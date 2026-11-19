@@ -12,11 +12,15 @@ services:
       POSTGRES_DB: cartogra
       POSTGRES_USER: cartogra
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD (see infra/docker-compose/.env.example)}
+      CARTOGRA_OWNER_PASSWORD: ${CARTOGRA_OWNER_PASSWORD:?Set CARTOGRA_OWNER_PASSWORD (see infra/docker-compose/.env.example)}
+      CARTOGRA_APP_PASSWORD: ${CARTOGRA_APP_PASSWORD:?Set CARTOGRA_APP_PASSWORD (see infra/docker-compose/.env.example)}
     # Loopback only: host tools (psql, e2e) reach it; the network does not.
     ports:
       - "127.0.0.1:5436:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+      - ../helm/cartogra/charts/postgres/files/bootstrap-roles.sql:/bootstrap/bootstrap-roles.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U cartogra -d cartogra"]
       interval: 10s
@@ -128,8 +132,10 @@ services:
       - "8080:8080"
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/cartogra?currentSchema=registry
-      DB_USERNAME: cartogra
-      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD (see infra/docker-compose/.env.example)}
+      DB_USERNAME: cartogra_app
+      DB_PASSWORD: ${CARTOGRA_APP_PASSWORD:?Set CARTOGRA_APP_PASSWORD (see infra/docker-compose/.env.example)}
+      FLYWAY_USERNAME: cartogra_owner
+      FLYWAY_PASSWORD: ${CARTOGRA_OWNER_PASSWORD:?Set CARTOGRA_OWNER_PASSWORD (see infra/docker-compose/.env.example)}
       REDIS_HOST: valkey
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD (see infra/docker-compose/.env.example)}
@@ -188,8 +194,10 @@ services:
           cpus: "1.0"
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/cartogra?currentSchema=registry
-      DB_USERNAME: cartogra
-      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD (see infra/docker-compose/.env.example)}
+      DB_USERNAME: cartogra_app
+      DB_PASSWORD: ${CARTOGRA_APP_PASSWORD:?Set CARTOGRA_APP_PASSWORD (see infra/docker-compose/.env.example)}
+      FLYWAY_USERNAME: cartogra_owner
+      FLYWAY_PASSWORD: ${CARTOGRA_OWNER_PASSWORD:?Set CARTOGRA_OWNER_PASSWORD (see infra/docker-compose/.env.example)}
       SPRING_FLYWAY_TABLE: flyway_schema_history_registry
       INTERNAL_TOKEN_KEY: ${INTERNAL_TOKEN_KEY:?Set INTERNAL_TOKEN_KEY to at least 32 random bytes (openssl rand -base64 48)}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
@@ -224,8 +232,10 @@ services:
           cpus: "1.0"
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/cartogra?currentSchema=topology
-      DB_USERNAME: cartogra
-      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD (see infra/docker-compose/.env.example)}
+      DB_USERNAME: cartogra_app
+      DB_PASSWORD: ${CARTOGRA_APP_PASSWORD:?Set CARTOGRA_APP_PASSWORD (see infra/docker-compose/.env.example)}
+      FLYWAY_USERNAME: cartogra_owner
+      FLYWAY_PASSWORD: ${CARTOGRA_OWNER_PASSWORD:?Set CARTOGRA_OWNER_PASSWORD (see infra/docker-compose/.env.example)}
       SPRING_FLYWAY_TABLE: flyway_schema_history_topology
       INTERNAL_TOKEN_KEY: ${INTERNAL_TOKEN_KEY:?Set INTERNAL_TOKEN_KEY to at least 32 random bytes (openssl rand -base64 48)}
       REGISTRY_URI: http://registry:8081
@@ -261,8 +271,10 @@ services:
           cpus: "1.0"
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/cartogra?currentSchema=contract
-      DB_USERNAME: cartogra
-      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD (see infra/docker-compose/.env.example)}
+      DB_USERNAME: cartogra_app
+      DB_PASSWORD: ${CARTOGRA_APP_PASSWORD:?Set CARTOGRA_APP_PASSWORD (see infra/docker-compose/.env.example)}
+      FLYWAY_USERNAME: cartogra_owner
+      FLYWAY_PASSWORD: ${CARTOGRA_OWNER_PASSWORD:?Set CARTOGRA_OWNER_PASSWORD (see infra/docker-compose/.env.example)}
       SPRING_FLYWAY_TABLE: flyway_schema_history_contract
       INTERNAL_TOKEN_KEY: ${INTERNAL_TOKEN_KEY:?Set INTERNAL_TOKEN_KEY to at least 32 random bytes (openssl rand -base64 48)}
       REGISTRY_URI: http://registry:8081
@@ -298,8 +310,10 @@ services:
           cpus: "1.0"
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/cartogra?currentSchema=ingestion
-      DB_USERNAME: cartogra
-      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD (see infra/docker-compose/.env.example)}
+      DB_USERNAME: cartogra_app
+      DB_PASSWORD: ${CARTOGRA_APP_PASSWORD:?Set CARTOGRA_APP_PASSWORD (see infra/docker-compose/.env.example)}
+      FLYWAY_USERNAME: cartogra_owner
+      FLYWAY_PASSWORD: ${CARTOGRA_OWNER_PASSWORD:?Set CARTOGRA_OWNER_PASSWORD (see infra/docker-compose/.env.example)}
       SPRING_FLYWAY_TABLE: flyway_schema_history_ingestion
       INTERNAL_TOKEN_KEY: ${INTERNAL_TOKEN_KEY:?Set INTERNAL_TOKEN_KEY to at least 32 random bytes (openssl rand -base64 48)}
       REGISTRY_URI: http://registry:8081

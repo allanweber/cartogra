@@ -7,6 +7,7 @@ import io.cartogra.gateway.domain.exception.NotFoundException;
 import io.cartogra.gateway.infrastructure.jwt.JwtClaims;
 import io.cartogra.gateway.infrastructure.jwt.JwtTokenProvider;
 import io.cartogra.gateway.repository.TenantRepository;
+import io.cartogra.web.tenant.TenantContext;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
@@ -46,7 +47,8 @@ public class GuestService {
         if (!props.enabled()) {
             return false;
         }
-        boolean sandbox = tenantRepository.findByTenantId(props.tenantId()).map(Tenant::publicSandbox).orElse(false);
+        boolean sandbox = TenantContext.callAs(props.tenantId(),
+            () -> tenantRepository.findByTenantId(props.tenantId()).map(Tenant::publicSandbox).orElse(false));
         if (!sandbox) {
             log.error("guest.tenant_not_public_sandbox tenantId={}, guest mode stays off", props.tenantId());
         }

@@ -1,5 +1,6 @@
 package io.cartogra.registry.infrastructure.kafka;
 
+import io.cartogra.web.tenant.TenantContext;
 import io.cartogra.common.audit.AuditEvent;
 import io.cartogra.common.event.EventEnvelope;
 import io.cartogra.registry.domain.AuditEventService;
@@ -58,7 +59,7 @@ public class AuditRecordedConsumer {
         try (Scope _ = ctx.makeCurrent()) {
             EventEnvelope<AuditEvent> envelope = objectMapper.readValue(
                     record.value(), new TypeReference<EventEnvelope<AuditEvent>>() {});
-            auditEventService.recordPublished(envelope.payload());
+            TenantContext.runAs(envelope.tenantId(), () -> auditEventService.recordPublished(envelope.payload()));
             ack.acknowledge();
         } catch (Exception e) {
             log.error("Failed to process audit.recorded event key={}: {}", record.key(), e.getMessage(), e);

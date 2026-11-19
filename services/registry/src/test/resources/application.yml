@@ -3,11 +3,15 @@ server:
     context-path: /api/v1/registry
 
 spring:
+  flyway:
+    url: ${spring.datasource.url}
+    init-sqls: SET app.rls_bypass = 'on'
   kafka:
     bootstrap-servers: localhost:9092
     listener:
       ack-mode: manual_immediate
   datasource:
+    type: io.cartogra.web.tenant.TenantAwareDataSource
     hikari:
       maximum-pool-size: 2
       minimum-idle: 1

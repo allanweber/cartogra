@@ -26,3 +26,7 @@ management:
 app:
   internal-token:
     key: test-internal-token-key-7f3a9c1e5b2d8f40
+
+spring:
+  datasource:
+    type: io.cartogra.web.tenant.TenantAwareDataSource

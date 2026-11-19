@@ -1,5 +1,6 @@
 package io.cartogra.registry.infrastructure.kafka;
 
+import io.cartogra.web.tenant.TenantContext;
 import io.cartogra.registry.repository.ServiceDiscoveryCommand;
 import io.cartogra.registry.domain.ServiceService;
 import io.cartogra.registry.domain.event.ServiceDiscoveredPayload;
@@ -21,6 +22,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 import java.util.stream.StreamSupport;
 
 @Component
@@ -71,24 +73,29 @@ public class RegistryServiceDiscoveryConsumer {
             JsonNode envelope = objectMapper.readTree(record.value());
             String eventType = envelope.path("eventType").asString();
             JsonNode payload = envelope.path("payload");
-            switch (eventType) {
-                case SERVICE_DISCOVERED -> upsertDiscovered(
-                        objectMapper.treeToValue(payload, ServiceDiscoveredPayload.class));
-                case SERVICE_REMOVED -> {
-                    var removed = objectMapper.treeToValue(payload, ServiceRemovedPayload.class);
-                    serviceService.removeFromCluster(removed);
-                    log.info("Processed service.removed cluster={} ns={} name={} tenant={}",
-                            removed.k8sCluster(), removed.k8sNamespace(), removed.name(), removed.tenantId());
-                }
-                case SERVICE_RESYNCED -> serviceService.reconcileCluster(
-                        objectMapper.treeToValue(payload, ServiceResyncedPayload.class));
-                default -> log.warn("Ignoring unknown ingestion service event type={} key={}", eventType, record.key());
-            }
+            UUID tenantId = UUID.fromString(envelope.path("tenantId").asString());
+            TenantContext.runAs(tenantId, () -> dispatch(eventType, payload, record.key()));
             ack.acknowledge();
         } catch (Exception e) {
             log.warn("Failed to process ingestion service event key={} partition={} offset={}: {}",
                     record.key(), record.partition(), record.offset(), e.getMessage(), e);
             throw e;
+        }
+    }
+
+    private void dispatch(String eventType, JsonNode payload, String key) {
+        switch (eventType) {
+            case SERVICE_DISCOVERED -> upsertDiscovered(
+                    objectMapper.treeToValue(payload, ServiceDiscoveredPayload.class));
+            case SERVICE_REMOVED -> {
+                var removed = objectMapper.treeToValue(payload, ServiceRemovedPayload.class);
+                serviceService.removeFromCluster(removed);
+                log.info("Processed service.removed cluster={} ns={} name={} tenant={}",
+                        removed.k8sCluster(), removed.k8sNamespace(), removed.name(), removed.tenantId());
+            }
+            case SERVICE_RESYNCED -> serviceService.reconcileCluster(
+                    objectMapper.treeToValue(payload, ServiceResyncedPayload.class));
+            default -> log.warn("Ignoring unknown ingestion service event type={} key={}", eventType, key);
         }
     }
 
