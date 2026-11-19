@@ -6,6 +6,8 @@ export interface ContractVersion {
   versionNumber: number
   label: string | null
   specHash: string
+  /** Engine verdict against the previous version; null = unchecked (stored before 5.3). */
+  breaking: boolean | null
   createdAt: string
 }
 
@@ -49,9 +51,31 @@ export interface DiffLine {
   right: string | null
 }
 
+export const COMPATIBILITY_STATUSES = ['breaking', 'compatible'] as const
+
+export type CompatibilityStatus = (typeof COMPATIBILITY_STATUSES)[number]
+
+export interface CompatibilityChange {
+  /** Rule id, e.g. `path-removed`. */
+  rule: string
+  breaking: boolean
+  direction: 'request' | 'response' | 'operation'
+  method: string | null
+  path: string
+  /** Field path such as `requestBody.items[].sku` or `query.currency`; null for path and operation rules. */
+  location: string | null
+  message: string
+}
+
+export interface Compatibility {
+  isBreaking: boolean
+  changes: CompatibilityChange[]
+}
+
 export interface VersionDiff {
   from: ContractVersion | null
   to: ContractVersion
   changes: SpecChange[]
   lines: DiffLine[]
+  compatibility: Compatibility
 }

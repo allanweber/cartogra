@@ -2,18 +2,19 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 
 import { apiFetch } from '#/lib/api'
 
-import type { Contract, ContractsPage, ContractVersionsPage, VersionDiff } from '#/lib/contract-types'
+import type { CompatibilityStatus, Contract, ContractsPage, ContractVersionsPage, VersionDiff } from '#/lib/contract-types'
 
 export const CONTRACTS_PAGE_SIZE = 20
 export const VERSIONS_LIMIT = 100
 
-export function useContracts(q: string, page: number) {
+export function useContracts(q: string, page: number, status?: CompatibilityStatus) {
   return useQuery({
-    queryKey: ['contracts', q, page],
+    queryKey: ['contracts', q, page, status ?? 'all'],
     placeholderData: keepPreviousData,
     queryFn: () => {
       const params = new URLSearchParams({ limit: String(CONTRACTS_PAGE_SIZE), offset: String(page * CONTRACTS_PAGE_SIZE) })
       if (q) params.set('q', q)
+      if (status) params.set('status', status)
       return apiFetch<ContractsPage>(`/v1/contracts?${params}`)
     },
   })

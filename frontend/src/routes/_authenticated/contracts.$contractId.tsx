@@ -4,6 +4,7 @@ import { z } from 'zod'
 
 import { AppLayout } from '#/components/AppLayout'
 import { ContractChangeList } from '#/components/ContractChangeList'
+import { ContractCompatibility } from '#/components/ContractCompatibility'
 import { ContractTimeline } from '#/components/ContractTimeline'
 import { SideBySideDiff } from '#/components/SideBySideDiff'
 import { Alert, AlertDescription } from '#/components/ui/alert'
@@ -85,6 +86,14 @@ function ContractDetailPage() {
                 </>
               ) : (
                 <>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">Compatibility</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ContractCompatibility compatibility={diff.data.compatibility} />
+                    </CardContent>
+                  </Card>
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-sm">
