@@ -4,6 +4,7 @@ import { expect, request, test } from '@playwright/test'
 import { Client } from 'pg'
 
 import { runInfoPath } from './global-setup'
+import { waitForGraphSettled } from './graph'
 
 const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:3016'
 const dbUrl = process.env.E2E_DB_URL ?? 'postgresql://cartogra:cartogra@localhost:5436/cartogra'
@@ -86,9 +87,10 @@ test.describe('guest demo', () => {
       await page.getByRole('link', { name: 'Dashboard', exact: true }).click()
       await page.getByRole('link', { name: 'Graph', exact: true }).click()
       const node = page.getByRole('button', { name: new RegExp(`^${downstream},`) })
+      await waitForGraphSettled(page, 5_000)
       await node.locator('circle.graph-node-hit').click({ timeout: 2_000 })
       await expect(page.getByRole('tabpanel').getByText(upstream).first()).toBeVisible({ timeout: 2_000 })
-    }).toPass({ timeout: 30_000, intervals: [2_000] })
+    }).toPass({ timeout: 60_000, intervals: [2_000] })
 
     await page.getByRole('link', { name: 'Catalog', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Register service' })).toBeDisabled()

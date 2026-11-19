@@ -271,6 +271,8 @@ export function DependencyGraph({
 
     const svg = select(svgEl)
     svg.selectAll('*').remove()
+    // `data-settled` is "true" only while the simulation is stopped, so a test can click a node that does not move.
+    svg.attr('data-settled', 'false')
 
     const root = svg.append('g').attr('class', 'graph-root')
     const linkSelection = root
@@ -429,6 +431,7 @@ export function DependencyGraph({
         else fitToView()
       }
       hasCenteredOnMountRef.current = true
+      svg.attr('data-settled', 'true')
     } else {
       simulation.on('tick', renderTick)
       simulation.on('end', () => {
@@ -437,13 +440,17 @@ export function DependencyGraph({
           else fitToView()
         }
         hasCenteredOnMountRef.current = true
+        svg.attr('data-settled', 'true')
       })
     }
 
     const dragBehavior = drag<SVGGElement, SimNode>()
       .clickDistance(4)
       .on('start', (event: D3DragEvent<SVGGElement, SimNode, SimNode>, node) => {
-        if (!reducedMotionRef.current && !event.active) simulation.alphaTarget(0.3).restart()
+        if (!reducedMotionRef.current && !event.active) {
+          svg.attr('data-settled', 'false')
+          simulation.alphaTarget(0.3).restart()
+        }
         node.fx = node.x
         node.fy = node.y
       })
