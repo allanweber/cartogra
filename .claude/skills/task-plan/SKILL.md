@@ -33,6 +33,7 @@ Map the task as a **design tree**: every decision branches into the decisions th
 2. **Acceptance criteria**: explicit and checkable, per task item. Draft them even when the roadmap has none.
 3. **Unit/integration tests**: what each layer tests.
 4. **E2E coverage**: which user flows need an e2e test, using the repo's existing framework.
+4a. **k3d suite**: which checks the story adds to `infra/helm/local-test.sh` as a `step "Check <N.M> <name>"` block with `pass`/`fail` lines, so they show in `build/local-test-report.html`. Each new endpoint, event, or UI-visible behaviour gets at least one check against the deployed stack. A story with nothing to check on k3d must say why.
 5. **Branch name**: `feat/<name>` or `fix/<name>` per `infra.md`.
 6. **Linked GitHub issue(s)**: the exact `#numbers`. Offer to create one if none exists. Don't create it without a yes.
 7. **Out of scope**: what is explicitly deferred.
@@ -60,7 +61,7 @@ Ordered, file-level steps (path → change). Reuse existing utilities, and name 
 - [ ] checkable criterion …
 
 ## Tests
-Unit / integration / e2e: what is covered where.
+Unit / integration / e2e / k3d suite (`local-test.sh` step and its checks): what is covered where.
 
 ## Verification
 Exact commands to run (./gradlew build, frontend tests, e2e) and manual checks.

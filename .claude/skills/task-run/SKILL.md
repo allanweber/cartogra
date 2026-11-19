@@ -22,6 +22,7 @@ The guardrails stay:
 - For the production cluster (`~/.kube/cartogra-demo`, cartogra.dev), only read. Do not merge the PR. Do not roll back a deploy. These actions stay with the user.
 - Push to the story branch only. Do not use `--no-verify` or `--force`.
 - Write conventional commits signed off with `git commit -s`, per `CONTRIBUTING.md`.
+- Attribute all work to the user only. Commits, PR bodies, issue comments, and review replies get no `Co-Authored-By`, no "Generated with" footer, no session link, and no mention of Claude or AI.
 
 ## State file
 

@@ -23,7 +23,7 @@ Start check 5 first, because it can wait for the k3d lock. Do checks 1–4 and 6
 2. **Frontend**: `cd frontend && pnpm lint && pnpm typecheck && pnpm test`.
 3. **Seed**: `cd seed/acme-fintech && pnpm typecheck && pnpm test`.
 4. **Plan verification**: run each command in the plan's "Verification" section that the checks above do not cover.
-5. **k3d and E2E**: `sh .claude/skills/task-eval/k3d-run.sh`. The script holds the k3d lock that all worktrees share. It builds fresh images, runs `local-test.sh` and the Playwright suite against the k3d stack (gateway and database included), and always tears down the cluster. If it prints `WAIT`, send a `PushNotification`: "<N.M> waits for k3d lock, held by <branch>". As a subagent, you are the only one who sees that line. When it ends, open the two `REPORT` paths that it prints with `xdg-open`. The result is the `K3D` line.
+5. **k3d and E2E**: `sh .claude/skills/task-eval/k3d-run.sh`. The script holds the k3d lock that all worktrees share. It builds fresh images, runs `local-test.sh --e2e` (all k3d checks, then the Playwright suite against the k3d gateway and database, one report line for each spec file), and always tears down the cluster. If it prints `WAIT`, send a `PushNotification`: "<N.M> waits for k3d lock, held by <branch>". As a subagent, you are the only one who sees that line. When it ends, open the two `REPORT` paths that it prints with `xdg-open`. The result is the `K3D` line.
 6. **Docs drift**: for each change in `git diff origin/main...`, the matching doc must change in the same diff:
 
    | Change in the diff | Doc that must change |
@@ -38,6 +38,7 @@ Start check 5 first, because it can wait for the k3d lock. Do checks 1–4 and 6
    Each missing doc is red. Give the file and the change that needs it.
 7. **Code review**: invoke `/code-review` with the diff since `origin/main` and the plan as the spec. Each correctness finding is red, unless the finding is wrong. Write the reason for a wrong finding in the report. The PR will show that reason.
 8. **Security review**: invoke `/security-review` on the same diff. Each finding above informational is red, unless you record it as an accepted risk with its compensating control.
+8a. **k3d suite coverage**: `git diff origin/main... -- infra/helm/local-test.sh` must add the `step "Check <N.M> …"` block that the plan's "Tests" section names. The `build/local-test-report.html` of check 5 must show each of its checks as passed. A missing step or a check missing from the report is red. The exception is a plan that states why the story has nothing to check on k3d.
 9. **Acceptance criteria**: for each `- [ ]` in the plan, give evidence: a test name, a command output, or a `file:line`. A criterion with no evidence is red.
 10. **UI**: if the diff touches `frontend/src/routes` or `frontend/src/components`, run `/impeccable audit` on the changed screens. Record its findings. They do not make the verdict red, because the phase gate owns them.
 
@@ -61,4 +62,4 @@ Write `build/task-eval/<N.M>-report.md`:
 - <a problem in a task-* skill or script, not in the code> — for the task-run retro
 ```
 
-The verdict is green only if checks 1–9 pass. Done when the report exists and each check has a result.
+The verdict is green only if checks 1–9 (8a included) pass. Done when the report exists and each check has a result.

@@ -23,6 +23,8 @@ Turns an approved plan into code and tests. It does not commit. `task-run` owns 
 2. Write the code until the test is green. Run only that module's tests: `./gradlew :services:<svc>:test --tests '<Class>'`, or `cd frontend && pnpm exec vitest run <file>`.
 3. Tick the step in your todo list.
 
+After the last step, add the k3d checks from the plan's "Tests" section to `infra/helm/local-test.sh`. Add one `step "Check <N.M> <name>"` block before the final `printf`. Use the same `curl` + `pass`/`fail` pattern as the existing steps (for example "Check guest mode"). Then each check shows in `build/local-test-report.html`. `task-eval` runs the checks. Do not run k3d yourself.
+
 Done with a step when its test passes and the code follows the rules files. Done with the skill when every step is ticked and each new migration, endpoint, topic, and screen in the plan exists.
 
 ## Scope drift
