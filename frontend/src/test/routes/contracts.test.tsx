@@ -72,6 +72,9 @@ const V1: ContractVersion = {
   specHash: 'a'.repeat(64),
   breaking: false,
   createdAt: '2026-11-01T00:00:00Z',
+  source: 'manual',
+  repositoryFullName: null,
+  filePath: null,
 }
 const V2: ContractVersion = {
   ...V1,

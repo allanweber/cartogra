@@ -9,6 +9,11 @@ export interface ContractVersion {
   /** Engine verdict against the previous version; null = unchecked (stored before 5.3). */
   breaking: boolean | null
   createdAt: string
+  /** `discovery` when spec discovery applied a file from an SCM repository. */
+  source: 'manual' | 'discovery'
+  /** The repository and file of a discovered version; null for a manual version. */
+  repositoryFullName: string | null
+  filePath: string | null
 }
 
 export interface ContractSummary {

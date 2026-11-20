@@ -1,4 +1,5 @@
 import { CompatibilityBadge } from '#/components/CompatibilityBadge'
+import { Badge } from '#/components/ui/badge'
 import { cn } from '#/lib/utils'
 import { relativeTime } from '#/lib/audit-format'
 
@@ -45,6 +46,14 @@ export function ContractTimeline({
               <span className="block text-xs text-muted-foreground">
                 <time dateTime={v.createdAt}>{relativeTime(v.createdAt)}</time>
               </span>
+              {v.source === 'discovery' && v.repositoryFullName && v.filePath && (
+                <Badge
+                  variant="outline"
+                  className="mt-1 h-auto max-w-full whitespace-normal break-all text-left font-mono text-xs font-normal"
+                >
+                  from {v.repositoryFullName}/{v.filePath}
+                </Badge>
+              )}
             </button>
           </li>
         )
