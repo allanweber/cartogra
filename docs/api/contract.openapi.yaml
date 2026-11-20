@@ -311,7 +311,7 @@ components:
 
     ContractVersion:
       type: object
-      required: [id, contractId, versionNumber, specHash, breaking, createdAt]
+      required: [id, contractId, versionNumber, specHash, breaking, createdAt, source]
       properties:
         id:
           type: string
@@ -337,6 +337,16 @@ components:
         createdAt:
           type: string
           format: date-time
+        source:
+          type: string
+          enum: [manual, discovery]
+          description: "`discovery` when spec discovery applied an OpenAPI file from an SCM repository"
+        repositoryFullName:
+          type: [string, "null"]
+          description: The repository of a discovered version; null for a manual version
+        filePath:
+          type: [string, "null"]
+          description: The path of the discovered file in the repository; null for a manual version
 
     Contract:
       type: object

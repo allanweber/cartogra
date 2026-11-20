@@ -7,6 +7,7 @@ import io.cartogra.contract.repository.ServiceProjectionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientException;
 
 import java.time.Instant;
@@ -65,6 +66,30 @@ public class ServiceProjectionService {
             throw new ServiceNotFoundException(serviceId);
         }
         repository.upsertNames(tenantId, names, Instant.now());
+    }
+
+    /** Records the SCM external id from {@code service.registered}/{@code service.updated} or a Registry lookup. */
+    @Transactional
+    public void recordExternalId(UUID tenantId, UUID serviceId, String externalId) {
+        repository.upsertExternalId(tenantId, serviceId, externalId, Instant.now());
+    }
+
+    /** The live projected service with the SCM external id. A tombstoned service is a miss. */
+    public Optional<UUID> findLiveByExternalId(UUID tenantId, String externalId) {
+        return repository.findLiveByExternalId(tenantId, externalId);
+    }
+
+    /**
+     * Asks Registry for the live service with the SCM external id. If Registry is down, the result is empty, as for a
+     * miss.
+     */
+    public Optional<UUID> findInRegistryByExternalId(UUID tenantId, String externalId) {
+        try {
+            return registry.findServiceIdByExternalId(tenantId, externalId);
+        } catch (RestClientException e) {
+            log.warn("Registry external id lookup failed for {}: {}", externalId, e.getMessage());
+            return Optional.empty();
+        }
     }
 
     /** Fetches the names of the tenant's live contracts' services that have none yet, so search and sort see them. */

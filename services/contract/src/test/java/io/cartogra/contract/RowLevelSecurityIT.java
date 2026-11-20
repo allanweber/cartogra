@@ -27,4 +27,12 @@ class RowLevelSecurityIT extends AbstractContractIT {
         RlsChecks.assertIsolatesTenants(jdbc, "services",
                 "INSERT INTO services (tenant_id, service_id, name) VALUES (?, gen_random_uuid(), 'rls')");
     }
+
+    @Test
+    void discoveredSpecsIsolatesTenants() {
+        RlsChecks.assertIsolatesTenants(jdbc, "discovered_specs", """
+                INSERT INTO discovered_specs (tenant_id, repository_full_name, file_path, content_sha256, spec_raw)
+                VALUES (?, 'acme/rls', 'openapi.yaml', repeat('a', 64), 'openapi: 3.0.3')
+                """);
+    }
 }

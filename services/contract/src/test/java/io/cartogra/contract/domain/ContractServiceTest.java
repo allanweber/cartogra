@@ -234,7 +234,7 @@ class ContractServiceTest {
 
     private static ContractVersion version(UUID contractId, int number, ParsedSpec parsed) {
         return new ContractVersion(UUID.randomUUID(), TENANT, contractId, number, parsed.label(), "raw",
-                parsed.canonical(), parsed.hash(), null, Instant.now());
+                parsed.canonical(), parsed.hash(), null, Instant.now(), ContractVersion.SOURCE_MANUAL, null, null, null);
     }
 
     @Test

@@ -23,6 +23,9 @@ export interface VerifyOptions extends LoadOptions {
   skipObserved?: boolean
   observedTimeoutMs?: number
   driftTimeoutMs?: number
+  /** The tenant has an SCM connection, so each sync runs spec discovery (story 5.8). Unset: the check is skipped. */
+  scmConnected?: boolean
+  specDiscoveryTimeoutMs?: number
 }
 
 export async function snapshot(api: CartograApi, seed: SeedData): Promise<Snapshot> {
@@ -59,6 +62,7 @@ export async function verify(api: CartograApi, seed: SeedData, options: VerifyOp
   add('all declared edges present', absentDeclared.length === 0, absentDeclared.join(', '))
 
   await verifyContracts(api, seed, second, add, options.breaking ?? false)
+  await verifySpecDiscovery(api, seed, options, sleep, add)
 
   const graph = await api.graph()
   const nodeId = new Map(graph.nodes.map((n) => [n.name, n.serviceId]))
@@ -177,6 +181,46 @@ async function verifyContracts(
           && republished.version.specHash === latest.specHash)
     }
   }
+}
+
+/**
+ * Spec discovery (5.8): each seed repo has an openapi.yaml, so each seed service gets a contract. A service without
+ * `contractVersions` gets its contract only from discovery, so it must have a `discovery` version. A service that the
+ * load also publishes keeps its manual versions: its repo spec has the same canonical hash as the latest manual
+ * version, and discovery then stores nothing (UNCHANGED).
+ */
+async function verifySpecDiscovery(
+  api: CartograApi,
+  seed: SeedData,
+  options: VerifyOptions,
+  sleep: (ms: number) => Promise<void>,
+  add: (name: string, ok: boolean, detail?: string) => void,
+): Promise<void> {
+  if (!options.scmConnected) {
+    add('spec discovery SKIP (no SCM connection)', true, 'SKIP')
+    return
+  }
+  const missing = async (): Promise<string[]> => {
+    const contracts = new Map((await api.listContracts()).map((c) => [c.serviceName?.toLowerCase(), c]))
+    const absent: string[] = []
+    for (const s of seed.services) {
+      const contract = contracts.get(s.name.toLowerCase())
+      if (!contract) {
+        absent.push(`${s.name}: no contract`)
+      } else if (s.contractVersions === undefined) {
+        const versions = await api.listContractVersions(contract.id)
+        if (!versions.some((v) => v.source === 'discovery')) absent.push(`${s.name}: no discovery version`)
+      }
+    }
+    return absent
+  }
+  const deadline = Date.now() + (options.specDiscoveryTimeoutMs ?? 120_000)
+  let absent = await missing()
+  while (absent.length > 0 && Date.now() < deadline) {
+    await sleep(options.pollMs ?? 3000)
+    absent = await missing()
+  }
+  add(`${seed.services.length} services have a contract from spec discovery`, absent.length === 0, absent.join(', '))
 }
 
 function unresolvedNames(api: CartograApi): () => Promise<Set<string>> {

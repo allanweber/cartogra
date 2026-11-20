@@ -130,6 +130,24 @@ export class FakeApi implements CartograApi {
     return all.filter((c) => (!q || c.serviceName?.toLowerCase().includes(q.toLowerCase()))
       && (!status || c.latestVersion.breaking === (status === 'breaking')))
   }
+  async listContractVersions(contractId: string): Promise<ContractVersion[]> {
+    const contract = this.contracts.get(contractId)
+    if (!contract) throw new ApiError(404, 'NOT_FOUND', 'unknown contract', 't')
+    return [...contract.versions].reverse()
+  }
+  /** What spec discovery does after a sync: a contract with a discovery version for each repo spec. */
+  discoverSpecs(serviceNames: string[]): void {
+    for (const name of serviceNames) {
+      const serviceId = `svc-${name}`
+      const version: ContractVersion = { ...fakeVersion(1, `discovered ${name}`, false), source: 'discovery' }
+      const existing = [...this.contracts.values()].find((c) => c.serviceId === serviceId)
+      if (existing) {
+        existing.versions.push({ ...version, id: `v-d-${name}`, versionNumber: existing.versions.length + 1 })
+      } else {
+        this.contracts.set(`contract-${++this.seq}`, { serviceId, versions: [version] })
+      }
+    }
+  }
   /** Reports each path key the version adds over the previous one; the spec text is in `specHash`. */
   async contractDiff(contractId: string, versionNumber: number): Promise<VersionDiff> {
     const contract = this.contracts.get(contractId)
@@ -175,5 +193,8 @@ function fakeCompatibility(fromSpec: string | null, toSpec: string): Compatibili
 }
 
 function fakeVersion(versionNumber: number, spec: string, breaking: boolean | null): ContractVersion {
-  return { id: `v-${versionNumber}`, versionNumber, label: /version: "([^"]+)"/.exec(spec)?.[1] ?? null, specHash: spec, breaking }
+  return {
+    id: `v-${versionNumber}`, versionNumber, label: /version: "([^"]+)"/.exec(spec)?.[1] ?? null, specHash: spec,
+    breaking, source: 'manual',
+  }
 }

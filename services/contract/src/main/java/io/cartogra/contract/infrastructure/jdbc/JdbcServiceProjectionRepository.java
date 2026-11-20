@@ -70,6 +70,35 @@ public class JdbcServiceProjectionRepository implements ServiceProjectionReposit
                 """, new MapSqlParameterSource().addValue("tenantId", tenantId).addValue("limit", limit), UUID.class);
     }
 
+    @Override
+    public void upsertExternalId(UUID tenantId, UUID serviceId, String externalId, Instant at) {
+        MapSqlParameterSource params = params(tenantId, serviceId)
+                .addValue("externalId", externalId)
+                .addValue("at", Timestamp.from(at));
+        jdbc.update("""
+                UPDATE services SET external_id = NULL, updated_at = :at
+                WHERE tenant_id = :tenantId AND external_id = :externalId AND service_id <> :serviceId
+                  AND deleted_at IS NULL
+                """, params);
+        jdbc.update("""
+                INSERT INTO services (tenant_id, service_id, external_id, updated_at)
+                VALUES (:tenantId, :serviceId, :externalId, :at)
+                ON CONFLICT (tenant_id, service_id) DO UPDATE SET external_id = EXCLUDED.external_id,
+                    updated_at = EXCLUDED.updated_at
+                WHERE services.deleted_at IS NULL
+                """, params);
+    }
+
+    @Override
+    public Optional<UUID> findLiveByExternalId(UUID tenantId, String externalId) {
+        return jdbc.queryForList("""
+                SELECT service_id FROM services
+                WHERE tenant_id = :tenantId AND external_id = :externalId AND deleted_at IS NULL
+                """, new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("externalId", externalId), UUID.class).stream().findFirst();
+    }
+
     private static MapSqlParameterSource params(UUID tenantId, UUID serviceId) {
         return new MapSqlParameterSource()
                 .addValue("tenantId", tenantId)

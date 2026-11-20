@@ -8,7 +8,7 @@ export const AUDIT_CATEGORY_ENTITY_TYPES: Record<AuditCategory, string[]> = {
   team: ['team'],
   dependency: ['dependency'],
   drift: ['drift'],
-  integration: ['scm_connection', 'cluster'],
+  integration: ['scm_connection', 'cluster', 'spec_paths'],
   access: ['user', 'invitation', 'oidc_config'],
 }
 
@@ -28,6 +28,7 @@ const ENTITY_LABELS: Record<string, string> = {
   drift: 'Drift',
   scm_connection: 'SCM connection',
   cluster: 'Cluster',
+  spec_paths: 'Spec discovery paths',
   contract: 'Contract',
   user: 'User',
   invitation: 'Invitation',

@@ -10,6 +10,8 @@ Each service owns its schema entirely. No cross-service joins. Cross-aggregate r
 | Registry — services, services_history, tenant_api_keys | Phase 1 | Planned |
 | Topology — dependencies, dependency_drifts | Phase 2 | Planned |
 | Contract — api_contracts, contract_versions, deleted_services | Phase 5 (5.1) | Implemented |
+| Contract — discovered_specs, services.external_id, contract_versions.source | Phase 5 (5.8) | Implemented |
+| Ingestion — tenant_spec_paths | Phase 5 (5.8) | Implemented |
 | Contract — contract_checks (5.5), inbound-edge projection (5.4) | Phase 5 | Planned |
 | Intelligence — nl_query_logs, health_scores | Phase 4 | Planned |
 
@@ -178,6 +180,30 @@ Immutable. `UNIQUE (contract_id, version_number)`; numbered under `SELECT … FO
 | `is_breaking` | BOOLEAN | 5.3 (V004): breaking-change engine verdict against the previous latest version, set at publish; v1 = `false`; NULL = unchecked (stored before 5.3, no backfill) |
 | `created_at` | TIMESTAMPTZ | |
 | `deleted_at` | TIMESTAMPTZ | Set with the contract's |
+| `source` | TEXT NOT NULL | `manual` (default) \| `discovery` (5.8) |
+| `discovered_spec_id` | UUID | FK `discovered_specs`; set for a `discovery` version |
+
+### `discovered_specs` _(5.8)_
+One row each time the content of a discovered OpenAPI file changes at its repository and path. The row with `is_latest` is the last spec seen there (partial unique index on `(tenant_id, repository_full_name, file_path) WHERE is_latest`). A spec equal to it is skipped while its service is live; a different spec, also a revert, gets a new row. RLS `tenant_isolation`.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `tenant_id` | UUID NOT NULL | |
+| `connection_id` | UUID | SCM connection of the sync, ID ref to ingestion |
+| `repository_full_name` | TEXT NOT NULL | The SCM external id of the service |
+| `file_path` | TEXT NOT NULL | The probe path that matched |
+| `content_sha256` | CHAR(64) NOT NULL | SHA-256 of the file bytes, from ingestion |
+| `spec_raw` | TEXT NOT NULL | The file content, kept so a PENDING spec can be applied later |
+| `status` | TEXT NOT NULL | `PENDING` \| `APPLIED` \| `UNCHANGED` \| `REJECTED` \| `SKIPPED` \| `SUPERSEDED` (a newer spec came before this one was applied) |
+| `is_latest` | BOOLEAN NOT NULL | True for the last spec seen at the repository and path |
+| `service_id` | UUID | The resolved service |
+| `contract_version_id` | UUID | FK `contract_versions`: the version stored, or the latest for `UNCHANGED` |
+| `errors` | JSONB | Parser errors of a `REJECTED` spec |
+| `created_at` / `updated_at` | TIMESTAMPTZ | |
+| `deleted_at` | TIMESTAMPTZ | |
+
+`services` (the Registry projection, 5.2) also has `external_id TEXT` (5.8): unique per tenant among live services with an external id.
 
 ### `deleted_services`
 Tombstone of services Registry deleted; create/publish for one returns 404. PK `(tenant_id, service_id)`.
@@ -190,6 +216,20 @@ Tombstone of services Registry deleted; create/publish for one returns 404. PK `
 
 ### `contract_checks` _(planned, 5.5)_
 Written by the CI check once the 5.3 engine defines `changes[]`.
+
+---
+
+## Ingestion Service (`services/ingestion`)
+
+### `tenant_spec_paths` _(5.8)_
+The custom OpenAPI probe paths of each tenant; a tenant with no row probes only the defaults. RLS `tenant_isolation`.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `tenant_id` | UUID PK | |
+| `paths` | TEXT[] NOT NULL | Custom paths in order, ≤ 10; probed before the 5 defaults |
+| `created_at` / `updated_at` | TIMESTAMPTZ | |
+| `deleted_at` | TIMESTAMPTZ | |
 
 ---
 

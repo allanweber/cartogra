@@ -67,6 +67,7 @@ async function main(): Promise<number> {
       const withDrift = flags.includes('--with-drift') || arg === '--with-drift'
       const checks = await verify(api, seed, {
         log: console.log,
+        scmConnected: (await api.listScmConnections()).length > 0,
         skipObserved: [arg, ...flags].includes('--no-spans'),
         breaking,
         withDrift: withDrift ? { enable: () => setDrift(seed, true).then(() => {}), disable: () => setDrift(seed, false).then(() => {}) } : undefined,

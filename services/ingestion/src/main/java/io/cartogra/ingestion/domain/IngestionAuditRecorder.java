@@ -22,6 +22,7 @@ public class IngestionAuditRecorder {
 
     static final Set<String> SCM_CONNECTION_FIELDS =
             Set.of("provider", "syncScheduler", "pollIntervalMinutes", "webhookEnabled");
+    static final Set<String> SPEC_PATHS_FIELDS = Set.of("custom");
     static final Set<String> CLUSTER_FIELDS = Set.of("name", "source", "apiServerUrl", "skipTlsVerify");
 
     private final AuditEventPort auditEventPort;
@@ -60,6 +61,13 @@ public class IngestionAuditRecorder {
                 succeeded ? repositoriesSynced : truncate(error));
         auditEventPort.record(AuditEvent.of(tenantId, AuditKind.SCM_CONNECTION, connectionId,
                 succeeded ? "sync_completed" : "sync_failed", Actor.SYSTEM, payload));
+    }
+
+    public void specPathsUpdated(Actor actor, UUID tenantId, SpecPaths before, SpecPaths after) {
+        Map<String, Object> payload = AuditPayload.changes(objectMapper, before, after, SPEC_PATHS_FIELDS);
+        if (!payload.isEmpty()) {
+            record(actor, tenantId, AuditKind.SPEC_PATHS, tenantId, "updated", payload);
+        }
     }
 
     public void clusterCreated(Actor actor, Cluster cluster) {

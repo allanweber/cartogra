@@ -25,6 +25,7 @@ public enum AuditKind {
             "repositoriesSynced")),
     CONTRACT("contract", Set.of("serviceId", "versionNumber", "label", "specHash")),
     CLUSTER("cluster", Set.of()),
+    SPEC_PATHS("spec_paths", Set.of()),
     USER("user", Set.of()),
     INVITATION("invitation", Set.of()),
     OIDC_CONFIG("oidc_config", Set.of());

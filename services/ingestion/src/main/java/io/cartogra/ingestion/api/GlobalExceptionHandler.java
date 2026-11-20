@@ -5,6 +5,7 @@ import io.cartogra.common.api.ApiErrorResponse;
 import io.cartogra.common.api.ErrorCodes;
 import io.cartogra.ingestion.domain.exception.ClusterNotFoundException;
 import io.cartogra.ingestion.domain.exception.DuplicateClusterNameException;
+import io.cartogra.ingestion.domain.exception.InvalidSpecPathsException;
 import io.cartogra.ingestion.domain.exception.PlanLimitExceededException;
 import io.cartogra.ingestion.domain.exception.ScmConnectionNotFoundException;
 import io.cartogra.ingestion.domain.exception.WebhookConnectionNotFoundException;
@@ -106,6 +107,14 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest()
                 .header("X-Trace-Id", traceId)
                 .body(new ApiErrorResponse(new ApiError(ErrorCodes.VALIDATION_ERROR, "Validation failed", details), traceId));
+    }
+
+    @ExceptionHandler(InvalidSpecPathsException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidSpecPaths(InvalidSpecPathsException ex) {
+        String traceId = Span.current().getSpanContext().getTraceId();
+        return ResponseEntity.badRequest()
+                .header("X-Trace-Id", traceId)
+                .body(new ApiErrorResponse(new ApiError(ErrorCodes.VALIDATION_ERROR, ex.getMessage(), ex.details()), traceId));
     }
 
     @ExceptionHandler(MissingRequestHeaderException.class)

@@ -49,7 +49,7 @@ class WriteAuthorizationIT {
     void everyWriteRouteForbidsReadOnlyRoles(String role) throws Exception {
         MockMvc mvc = webAppContextSetup(context).apply(springSecurity()).build();
         var routes = WriteRoutes.of(context, "/internal/", "/webhooks/");
-        assertThat(routes).extracting(WriteRoutes.Route::toString).contains("POST /scm-connections");
+        assertThat(routes).extracting(WriteRoutes.Route::toString).contains("POST /scm-connections", "PUT /spec-paths");
 
         List<String> notForbidden = new ArrayList<>();
         for (var route : routes) {

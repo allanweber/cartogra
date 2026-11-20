@@ -32,6 +32,8 @@ servers:
 tags:
   - name: scm-connections
     description: SCM connection CRUD and on-demand sync
+  - name: spec-paths
+    description: The OpenAPI probe paths that spec discovery uses on each sync
   - name: webhooks
     description: Inbound SCM webhook receivers (public, per-provider auth)
 
@@ -109,6 +111,47 @@ paths:
         "202": { description: Sync command published }
         "404": { $ref: "#/components/responses/Error" }
 
+  /ingestion/spec-paths:
+    get:
+      tags: [spec-paths]
+      summary: Get the OpenAPI probe paths of the tenant
+      description: |
+        A sync probes the custom paths first, then the defaults. The first file that is not empty
+        and is 512 KiB or smaller is sent as `spec.discovered`.
+      responses:
+        "200":
+          description: The default and custom probe paths
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SpecPathsEnvelope" }
+    put:
+      tags: [spec-paths]
+      summary: Replace the custom probe paths (ADMIN only)
+      description: |
+        Replaces only the custom list; the defaults always stay. Each path must be relative, have no
+        `..` and no glob characters (`*?[]{}`), have 256 characters or fewer, and not be a default.
+        The list has 10 entries or fewer and no duplicates.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [custom]
+              properties:
+                custom:
+                  type: array
+                  maxItems: 10
+                  items: { type: string, maxLength: 256 }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SpecPathsEnvelope" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
   /ingestion/webhooks/{providerType}/{connectionId}:
     post:
       tags: [webhooks]
@@ -185,6 +228,25 @@ components:
       type: object
       properties:
         data: { $ref: "#/components/schemas/ScmConnection" }
+        traceId: { type: string }
+
+    SpecPaths:
+      type: object
+      required: [defaults, custom]
+      properties:
+        defaults:
+          type: array
+          items: { type: string }
+          description: The built-in probe paths (read-only)
+        custom:
+          type: array
+          items: { type: string }
+          description: The paths that the admin added; probed before the defaults
+
+    SpecPathsEnvelope:
+      type: object
+      properties:
+        data: { $ref: "#/components/schemas/SpecPaths" }
         traceId: { type: string }
 
     ScmConnectionPage:

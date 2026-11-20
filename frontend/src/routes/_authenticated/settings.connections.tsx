@@ -9,6 +9,7 @@ import { KubernetesClusterDialog } from '#/components/KubernetesClusterDialog'
 import type { ScmConnection } from '#/components/ScmConnectionDialog'
 import { ScmConnectionDialog } from '#/components/ScmConnectionDialog'
 import { SettingsTabsLayout } from '#/components/SettingsTabsLayout'
+import { SpecPathsCard } from '#/components/SpecPathsCard'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
@@ -354,6 +355,8 @@ function ConnectionsPage() {
             })}
           </Card>
         )}
+
+        <SpecPathsCard />
       </div>
 
       {dialogProvider && (

@@ -25,6 +25,8 @@ Ingestion is Cartogra's bridge between the external world (SCM providers, Kubern
 | **Stale Job** | A Sync Job that has been in `RUNNING` state for > 30 minutes; reaped to `FAILED` by the stale-job reaper |
 | **K8s Worker** | Optional component that watches Kubernetes Services/Endpoints/Namespaces for Cartogra-labeled tenants |
 | **Sync Command** | Kafka message from Registry instructing Ingestion to start a sync job for a given connection |
+| **Spec Discovered** | A Kafka event emitted when a sync finds an OpenAPI file at a probe path of a repository (5.8) |
+| **Spec Path** | A repository-relative probe path for the OpenAPI file. Five built-in defaults, plus up to 10 custom paths per tenant that an admin adds; custom paths are probed first, the first hit wins |
 
 ---
 
@@ -35,6 +37,7 @@ Ingestion is Cartogra's bridge between the external world (SCM providers, Kubern
 3. **Sync Job tracking** — persist lifecycle state; idempotency guard (drop command if a RUNNING job exists for the same connection)
 4. **Stale job reaper** — periodic task that marks RUNNING jobs older than 30 min as FAILED
 5. **Result notification** — emit `sync.completed` after every job (success or failure)
+6. **Spec discovery** (5.8) — per repo, probe the tenant's spec paths (custom, then defaults: `openapi.yaml`, `openapi.yml`, `openapi.json`, `api/openapi.yaml`, `docs/openapi.yaml`) and emit `spec.discovered` for the first file found. An empty file or one over 512 KiB is skipped with a WARN log and the counter `cartogra.ingestion.spec.skipped` (tag `reason`); a fetch error counts as no file. The probe order is read once per sync
 
 ---
 
@@ -88,7 +91,10 @@ SyncJob  ──  (tenant_id, connection_id, provider_type, status, counters)
 | Kafka | `cartogra.registry.sync.command` | `SyncCommandConsumer` → `ExecuteSyncUseCaseImpl` |
 | K8s API server | Service/Endpoint/Namespace watch | `KubernetesWorker` (enabled via `ENABLE_K8S_WORKER=true`) |
 
-No HTTP endpoints for domain operations. The `GlobalExceptionHandler` exists only for the actuator/health paths.
+| HTTP | `GET /api/v1/ingestion/spec-paths` | `SpecPathController` → `{defaults[], custom[]}` (any role) |
+| HTTP | `PUT /api/v1/ingestion/spec-paths` | `{custom[]}` replaces only the custom list; `Roles.ADMIN_ONLY`, audited `spec_paths.updated`. A path must be relative, have no `..` and no glob characters, have ≤ 256 characters and not be a default; ≤ 10 entries, no duplicates; else 400 `VALIDATION_ERROR` |
+
+Other HTTP endpoints: `/scm-connections`, `/k8s/clusters` and the webhook receivers (see `docs/api/ingestion.openapi.yaml`).
 
 ---
 
@@ -98,11 +104,11 @@ No HTTP endpoints for domain operations. The `GlobalExceptionHandler` exists onl
 |---|---|---|
 | `cartogra.ingestion.service.changed` | `service.discovered`: per non-archived repo (SCM) or K8s Service ADD/MODIFY. `service.removed`: K8s Service DELETE. `service.resynced`: after a K8s resync, or with an empty set on a cluster delete/rename | discovered: `externalId`, `tenantId`, `connectionId`, `name`, `repositoryUrl`, `techStack`, `healthStatus`, `source`. removed: `tenantId`, `k8sCluster`, `k8sNamespace`, `name`. resynced: `tenantId`, `k8sCluster`, `observedAt`, `services[]` |
 | `cartogra.ingestion.ownership.resolved` | Per repo after CODEOWNERS resolution | `externalId`, `tenantId`, `connectionId`, `ownerTeams[]` (bare team names — provider handle syntax stripped by `CodeownersHandles`), `pathOwners{}` (raw handles) |
+| `cartogra.ingestion.spec.discovered` | Per repo with an OpenAPI file at a probe path (5.8) | key = `entityId` = UUIDv5 of `(tenant, repo, path)`; `tenantId`, `connectionId`, `repositoryFullName`, `filePath`, `contentSha256`, `contentB64`. No service id: Contract resolves it (ADR-0018) |
 | `cartogra.ingestion.sync.completed` | After each Sync Job completes | `connectionId`, `tenantId`, `status`, `repositoriesSynced`, `errorMessage` |
 
 Future topics (Phase 2/3):
 - `cartogra.ingestion.dependency.observed` — OTel-derived dependency edges
-- `cartogra.ingestion.spec.updated` — OpenAPI/AsyncAPI spec file changes
 
 ---
 
@@ -112,6 +118,7 @@ Future topics (Phase 2/3):
 |---|---|
 | V001 | Baseline (empty, schema setup) |
 | V002 | `sync_jobs` table |
+| V008 | `tenant_spec_paths` — custom spec probe paths per tenant (`paths TEXT[]`), RLS |
 
 Flyway history table: `flyway_schema_history_ingestion`
 
@@ -123,7 +130,7 @@ Flyway history table: `flyway_schema_history_ingestion`
 |---|---|---|
 | Service Catalog (Registry) | Upstream (Published Language) → Downstream | Registry consumes `service.discovered` and `ownership.resolved` |
 | Service Catalog (Registry) | Downstream (Conformist) ← Upstream | Registry sends `sync.command` to trigger scans |
-| Contract | Upstream → Downstream | Will produce `spec.updated` events (Phase 3) |
+| Contract | Upstream → Downstream | Produces `spec.discovered` (5.8); Contract resolves the repository to a service |
 | Topology | Upstream → Downstream | Will produce `dependency.observed` events (Phase 2) |
 | Shared Kernel | Shared Kernel | `EventEnvelope`, `SyncCommandPayload`, `ErrorCodes` |
 
@@ -150,4 +157,4 @@ Flyway history table: `flyway_schema_history_ingestion`
 - ADR-0002 — SCM Provider abstraction (SPI pattern)
 - ADR-0014 — Sync command idempotency: drop duplicate if RUNNING; stale reaper for hung jobs
 - ADR-0016 — OTel span worker ingestion for observed dependency edges (Phase 2)
-- ADR-0018 — Spec discovery transport: Kafka envelopes from Ingestion to Contract (Phase 3)
+- ADR-0018 — Spec discovery transport: Kafka envelopes from Ingestion to Contract (implemented in 5.8)

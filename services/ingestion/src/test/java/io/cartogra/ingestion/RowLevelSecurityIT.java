@@ -51,4 +51,11 @@ class RowLevelSecurityIT {
                 VALUES (?, 'rls', 'MANUAL', 'https://k8s.invalid')
                 """);
     }
+
+    @Test
+    void tenantSpecPathsIsolatesTenants() {
+        RlsChecks.assertIsolatesTenants(jdbc, "tenant_spec_paths", """
+                INSERT INTO tenant_spec_paths (tenant_id, paths) VALUES (?, ARRAY['spec/openapi.yaml'])
+                """);
+    }
 }

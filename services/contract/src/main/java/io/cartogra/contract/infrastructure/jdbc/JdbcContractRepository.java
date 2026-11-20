@@ -42,17 +42,22 @@ public class JdbcContractRepository implements ContractRepository {
                     rs.getString("label"),
                     rs.getString("spec_hash"),
                     rs.getObject("is_breaking", Boolean.class),
-                    rs.getTimestamp("version_created_at").toInstant()),
+                    rs.getTimestamp("version_created_at").toInstant(),
+                    rs.getString("source"),
+                    rs.getString("repository_full_name"),
+                    rs.getString("file_path")),
             rs.getTimestamp("updated_at").toInstant());
 
     private static final String LIVE_FROM = """
             FROM api_contracts c
             LEFT JOIN services s ON s.tenant_id = c.tenant_id AND s.service_id = c.service_id
             CROSS JOIN LATERAL (
-                SELECT id, version_number, label, spec_hash, is_breaking, created_at FROM contract_versions
+                SELECT id, version_number, label, spec_hash, is_breaking, created_at, source, discovered_spec_id
+                FROM contract_versions
                 WHERE tenant_id = c.tenant_id AND contract_id = c.id AND deleted_at IS NULL
                 ORDER BY version_number DESC LIMIT 1
             ) v
+            LEFT JOIN discovered_specs d ON d.tenant_id = c.tenant_id AND d.id = v.discovered_spec_id
             WHERE c.tenant_id = :tenantId AND c.deleted_at IS NULL
             """;
 
@@ -135,7 +140,7 @@ public class JdbcContractRepository implements ContractRepository {
         return jdbc.query("""
                 SELECT c.id, c.service_id, c.updated_at, s.name AS service_name,
                        v.id AS version_id, v.version_number, v.label, v.spec_hash, v.is_breaking,
-                       v.created_at AS version_created_at
+                       v.created_at AS version_created_at, v.source, d.repository_full_name, d.file_path
                 """ + LIVE_FROM + filterClause(q, breaking) + """
                 ORDER BY c.updated_at DESC, c.id
                 LIMIT :limit OFFSET :offset

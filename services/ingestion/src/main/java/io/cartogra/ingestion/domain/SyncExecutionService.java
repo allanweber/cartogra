@@ -8,7 +8,9 @@ import io.cartogra.ingestion.domain.exception.ScmProviderException;
 import io.cartogra.ingestion.repository.SyncJobRepository;
 import io.cartogra.ingestion.infrastructure.kafka.OwnershipResolvedProducer;
 import io.cartogra.ingestion.infrastructure.kafka.ServiceChangedProducer;
+import io.cartogra.ingestion.infrastructure.kafka.SpecDiscoveredProducer;
 import io.cartogra.ingestion.infrastructure.kafka.SyncResultProducer;
+import io.opentelemetry.context.Context;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -29,7 +31,7 @@ import java.util.stream.Collectors;
 
 /**
  * Executes a sync command end-to-end: list repos, detect tech stack, publish
- * service.discovered + ownership.resolved events, and record the outcome back
+ * service.discovered + spec.discovered + ownership.resolved events, and record the outcome back
  * onto the originating {@code scm_connections} row (closing the feedback loop).
  */
 @Service
@@ -51,6 +53,9 @@ public class SyncExecutionService {
     private final CredentialEncryptor credentialEncryptor;
     private final ObjectMapper objectMapper;
     private final IngestionAuditRecorder auditRecorder;
+    private final SpecPathService specPathService;
+    private final SpecDiscoverer specDiscoverer;
+    private final SpecDiscoveredProducer specDiscoveredProducer;
 
     public SyncExecutionService(
             List<ScmProvider> providers,
@@ -62,7 +67,10 @@ public class SyncExecutionService {
             ServiceChangedProducer serviceChangedProducer,
             CredentialEncryptor credentialEncryptor,
             ObjectMapper objectMapper,
-            IngestionAuditRecorder auditRecorder) {
+            IngestionAuditRecorder auditRecorder,
+            SpecPathService specPathService,
+            SpecDiscoverer specDiscoverer,
+            SpecDiscoveredProducer specDiscoveredProducer) {
         this.providers = providers.stream()
                 .collect(Collectors.toMap(ScmProvider::providerType, Function.identity()));
         this.syncJobRepository = syncJobRepository;
@@ -74,6 +82,9 @@ public class SyncExecutionService {
         this.credentialEncryptor = credentialEncryptor;
         this.objectMapper = objectMapper;
         this.auditRecorder = auditRecorder;
+        this.specPathService = specPathService;
+        this.specDiscoverer = specDiscoverer;
+        this.specDiscoveredProducer = specDiscoveredProducer;
     }
 
     public Optional<SyncJob> execute(SyncCommandPayload command) {
@@ -119,13 +130,15 @@ public class SyncExecutionService {
         try {
             List<ScmRepository> repositories = provider.listRepositories(connectionConfig);
             List<ScmRepository> active = repositories.stream().filter(r -> !r.archived()).toList();
+            List<String> specProbeOrder = specPathService.probeOrder(command.tenantId());
 
             // Each repo does ~10 blocking SCM API calls (tech-stack detection, last commit,
             // CODEOWNERS); virtual threads let a sync of many repos run in parallel instead
             // of paying that cost serially, repo by repo.
             try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
                 List<Future<?>> futures = active.stream()
-                        .<Future<?>>map(repo -> executor.submit(() -> processRepo(command, provider, connectionConfig, repo)))
+                        .<Future<?>>map(repo -> executor.submit(Context.current().wrap(
+                                () -> processRepo(command, provider, connectionConfig, repo, specProbeOrder))))
                         .toList();
                 for (Future<?> future : futures) {
                     try {
@@ -167,7 +180,8 @@ public class SyncExecutionService {
     }
 
     private void processRepo(SyncCommandPayload command, ScmProvider provider,
-                              ScmConnectionConfig connectionConfig, ScmRepository repo) {
+                              ScmConnectionConfig connectionConfig, ScmRepository repo,
+                              List<String> specProbeOrder) {
         try {
             List<String> techStack = techStackDetector.detect(provider, connectionConfig, repo);
             Optional<CommitInfo> commit = provider.getLastCommit(connectionConfig, repo);
@@ -190,6 +204,13 @@ public class SyncExecutionService {
             serviceChangedProducer.publishDiscovered(payload);
         } catch (Exception ex) {
             log.warn("Failed to publish service.discovered for repo={}: {}", repo.fullPath(), ex.getMessage());
+        }
+        try {
+            specDiscoverer.discover(provider, connectionConfig, repo, specProbeOrder)
+                    .ifPresent(spec -> specDiscoveredProducer.publish(
+                            command.tenantId(), command.connectionId(), repo.fullPath(), spec));
+        } catch (Exception ex) {
+            log.warn("Failed to publish spec.discovered for repo={}: {}", repo.fullPath(), ex.getMessage());
         }
         OwnershipMap ownership = provider.resolveOwnership(connectionConfig, repo);
         ownershipProducer.publish(command.tenantId(), command.connectionId(), repo, ownership);
