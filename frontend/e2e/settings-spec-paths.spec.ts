@@ -18,10 +18,10 @@ async function itemCount(response: Response): Promise<number> {
  * dismissal is React state only). Wait for the two queries that the wizard reads. Then close the wizard only when
  * it will open, so no dialog overlay blocks a later click.
  */
-async function openConnections(page: Page) {
+async function openScmConfiguration(page: Page) {
   const connections = page.waitForResponse(isGet('/v1/ingestion/scm-connections'))
   const clusters = page.waitForResponse(isGet('/v1/ingestion/k8s/clusters'))
-  await page.goto('/settings/connections')
+  await page.goto('/settings/scm')
   const [connectionsRes, clustersRes] = await Promise.all([connections, clusters])
   if ((await itemCount(connectionsRes)) === 0 && (await itemCount(clustersRes)) === 0) {
     await page.getByRole('button', { name: 'Skip setup' }).click()
@@ -31,7 +31,7 @@ async function openConnections(page: Page) {
 }
 
 test('an admin adds a custom spec path, sees it after a reload, then removes it', async ({ page }) => {
-  await openConnections(page)
+  await openScmConfiguration(page)
 
   const defaults = page.getByRole('list', { name: 'Default spec paths' })
   await expect(defaults.getByRole('listitem')).toHaveCount(5)
@@ -41,7 +41,7 @@ test('an admin adds a custom spec path, sees it after a reload, then removes it'
   const custom = page.getByRole('list', { name: 'Custom spec paths' })
   await expect(custom.getByText(CUSTOM_PATH)).toBeVisible()
 
-  await openConnections(page)
+  await openScmConfiguration(page)
   await expect(page.getByRole('list', { name: 'Custom spec paths' }).getByText(CUSTOM_PATH)).toBeVisible()
 
   await page.getByRole('button', { name: `Remove ${CUSTOM_PATH}` }).click()

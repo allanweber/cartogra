@@ -31,9 +31,9 @@ describe('ContractTimeline', () => {
     render(<ContractTimeline versions={[DISCOVERED, MANUAL]} selected={2} onSelect={vi.fn()} />)
 
     const items = within(screen.getByRole('list', { name: 'Version timeline' })).getAllByRole('listitem')
-    const badge = within(items[0]).getByText('from acme/ledger/api/openapi.yaml')
-    expect(badge).not.toHaveClass('truncate')
-    expect(badge).not.toHaveAttribute('title')
-    expect(within(items[1]).queryByText(/^from /)).not.toBeInTheDocument()
+    expect(within(items[0]).getByText('acme/ledger')).not.toHaveClass('truncate')
+    expect(within(items[0]).getByText('api/openapi.yaml')).not.toHaveClass('truncate')
+    expect(within(items[0]).getByLabelText('Discovered from')).toBeInTheDocument()
+    expect(within(items[1]).queryByLabelText('Discovered from')).not.toBeInTheDocument()
   })
 })

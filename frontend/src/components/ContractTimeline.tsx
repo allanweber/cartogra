@@ -1,5 +1,7 @@
+import { FileCode } from 'lucide-react'
+import { Fragment } from 'react'
+
 import { CompatibilityBadge } from '#/components/CompatibilityBadge'
-import { Badge } from '#/components/ui/badge'
 import { cn } from '#/lib/utils'
 import { relativeTime } from '#/lib/audit-format'
 
@@ -47,12 +49,13 @@ export function ContractTimeline({
                 <time dateTime={v.createdAt}>{relativeTime(v.createdAt)}</time>
               </span>
               {v.source === 'discovery' && v.repositoryFullName && v.filePath && (
-                <Badge
-                  variant="outline"
-                  className="mt-1 h-auto max-w-full whitespace-normal break-all text-left font-mono text-xs font-normal"
-                >
-                  from {v.repositoryFullName}/{v.filePath}
-                </Badge>
+                <span className="mt-1 flex min-w-0 items-start gap-1.5 text-xs text-muted-foreground">
+                  <FileCode aria-label="Discovered from" className="mt-0.5 size-3 shrink-0" />
+                  <span className="min-w-0 break-words font-mono">
+                    <span className="block">{withSlashBreaks(v.repositoryFullName)}</span>
+                    <span className="block">{withSlashBreaks(v.filePath)}</span>
+                  </span>
+                </span>
               )}
             </button>
           </li>
@@ -60,4 +63,14 @@ export function ContractTimeline({
       })}
     </ol>
   )
+}
+
+function withSlashBreaks(path: string) {
+  return path.split('/').map((part, i) => (
+    <Fragment key={i}>
+      {i > 0 && '/'}
+      {i > 0 && <wbr />}
+      {part}
+    </Fragment>
+  ))
 }

@@ -38,6 +38,7 @@ import { Route as AuthenticatedSettingsApiKeysRouteImport } from './routes/_auth
 import { Route as AuthenticatedSettingsConnectionsRouteImport } from './routes/_authenticated/settings.connections'
 import { Route as AuthenticatedSettingsNotificationsRouteImport } from './routes/_authenticated/settings.notifications'
 import { Route as AuthenticatedSettingsProfileRouteImport } from './routes/_authenticated/settings.profile'
+import { Route as AuthenticatedSettingsScmRouteImport } from './routes/_authenticated/settings.scm'
 import { Route as AuthenticatedSettingsTenantRouteImport } from './routes/_authenticated/settings.tenant'
 import { Route as AuthenticatedSettingsUsersRouteImport } from './routes/_authenticated/settings.users'
 
@@ -195,6 +196,12 @@ const AuthenticatedSettingsProfileRoute =
     path: '/profile',
     getParentRoute: () => AuthenticatedSettingsRoute,
   } as any)
+const AuthenticatedSettingsScmRoute =
+  AuthenticatedSettingsScmRouteImport.update({
+    id: '/scm',
+    path: '/scm',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
 const AuthenticatedSettingsTenantRoute =
   AuthenticatedSettingsTenantRouteImport.update({
     id: '/tenant',
@@ -234,6 +241,7 @@ export interface FileRoutesByFullPath {
   '/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
   '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
   '/settings/profile': typeof AuthenticatedSettingsProfileRoute
+  '/settings/scm': typeof AuthenticatedSettingsScmRoute
   '/settings/tenant': typeof AuthenticatedSettingsTenantRoute
   '/settings/users': typeof AuthenticatedSettingsUsersRoute
   '/catalog/': typeof AuthenticatedCatalogIndexRoute
@@ -263,6 +271,7 @@ export interface FileRoutesByTo {
   '/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
   '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
   '/settings/profile': typeof AuthenticatedSettingsProfileRoute
+  '/settings/scm': typeof AuthenticatedSettingsScmRoute
   '/settings/tenant': typeof AuthenticatedSettingsTenantRoute
   '/settings/users': typeof AuthenticatedSettingsUsersRoute
   '/catalog': typeof AuthenticatedCatalogIndexRoute
@@ -297,6 +306,7 @@ export interface FileRoutesById {
   '/_authenticated/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
   '/_authenticated/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
   '/_authenticated/settings/profile': typeof AuthenticatedSettingsProfileRoute
+  '/_authenticated/settings/scm': typeof AuthenticatedSettingsScmRoute
   '/_authenticated/settings/tenant': typeof AuthenticatedSettingsTenantRoute
   '/_authenticated/settings/users': typeof AuthenticatedSettingsUsersRoute
   '/_authenticated/catalog/': typeof AuthenticatedCatalogIndexRoute
@@ -331,6 +341,7 @@ export interface FileRouteTypes {
     | '/settings/connections'
     | '/settings/notifications'
     | '/settings/profile'
+    | '/settings/scm'
     | '/settings/tenant'
     | '/settings/users'
     | '/catalog/'
@@ -360,6 +371,7 @@ export interface FileRouteTypes {
     | '/settings/connections'
     | '/settings/notifications'
     | '/settings/profile'
+    | '/settings/scm'
     | '/settings/tenant'
     | '/settings/users'
     | '/catalog'
@@ -393,6 +405,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings/connections'
     | '/_authenticated/settings/notifications'
     | '/_authenticated/settings/profile'
+    | '/_authenticated/settings/scm'
     | '/_authenticated/settings/tenant'
     | '/_authenticated/settings/users'
     | '/_authenticated/catalog/'
@@ -618,6 +631,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsProfileRouteImport
       parentRoute: typeof AuthenticatedSettingsRoute
     }
+    '/_authenticated/settings/scm': {
+      id: '/_authenticated/settings/scm'
+      path: '/scm'
+      fullPath: '/settings/scm'
+      preLoaderRoute: typeof AuthenticatedSettingsScmRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
     '/_authenticated/settings/tenant': {
       id: '/_authenticated/settings/tenant'
       path: '/tenant'
@@ -670,6 +690,7 @@ interface AuthenticatedSettingsRouteChildren {
   AuthenticatedSettingsConnectionsRoute: typeof AuthenticatedSettingsConnectionsRoute
   AuthenticatedSettingsNotificationsRoute: typeof AuthenticatedSettingsNotificationsRoute
   AuthenticatedSettingsProfileRoute: typeof AuthenticatedSettingsProfileRoute
+  AuthenticatedSettingsScmRoute: typeof AuthenticatedSettingsScmRoute
   AuthenticatedSettingsTenantRoute: typeof AuthenticatedSettingsTenantRoute
   AuthenticatedSettingsUsersRoute: typeof AuthenticatedSettingsUsersRoute
   AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
@@ -681,6 +702,7 @@ const AuthenticatedSettingsRouteChildren: AuthenticatedSettingsRouteChildren = {
   AuthenticatedSettingsNotificationsRoute:
     AuthenticatedSettingsNotificationsRoute,
   AuthenticatedSettingsProfileRoute: AuthenticatedSettingsProfileRoute,
+  AuthenticatedSettingsScmRoute: AuthenticatedSettingsScmRoute,
   AuthenticatedSettingsTenantRoute: AuthenticatedSettingsTenantRoute,
   AuthenticatedSettingsUsersRoute: AuthenticatedSettingsUsersRoute,
   AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,

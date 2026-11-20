@@ -25,10 +25,6 @@ vi.mock('#/components/SettingsTabsLayout', () => ({
   SettingsTabsLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }))
 
-vi.mock('#/components/SpecPathsCard', () => ({
-  SpecPathsCard: () => <div data-testid="spec-paths-card" />,
-}))
-
 vi.mock('#/components/ScmConnectionDialog', async () => {
   const actual = await vi.importActual<typeof import('#/components/ScmConnectionDialog')>(
     '#/components/ScmConnectionDialog',
@@ -121,10 +117,11 @@ describe('ConnectionsPage', () => {
     expect(screen.getByText('Kubernetes')).toBeInTheDocument()
   })
 
-  it('shows the spec discovery card', async () => {
+  it('does not show the spec discovery card', async () => {
     mockApiFetch(EMPTY_CONNECTIONS)
     renderPage()
-    expect(await screen.findByTestId('spec-paths-card')).toBeInTheDocument()
+    await screen.findByText('GitHub')
+    expect(screen.queryByText('Spec discovery')).not.toBeInTheDocument()
   })
 
   it('shows "Coming soon" badge for inactive providers', async () => {
