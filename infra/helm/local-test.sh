@@ -1,6 +1,6 @@
 #!/bin/sh
 # Installs both charts on a local k3d cluster, seeds Acme, checks NetworkPolicy, guest mode, the ownership flow,
-# team save, the team-member access check, drift accept and alerting. Writes every check to REPORT (build/local-test-report.html).
+# team save, the team-member access check, drift accept, spec discovery and alerting. Writes every check to REPORT (build/local-test-report.html).
 #
 #   sh infra/helm/local-test.sh              fresh cluster: deletes CLUSTER first, tests bootstrap and seed from nothing
 #   sh infra/helm/local-test.sh --reuse      keeps the cluster and its data, rolls out the new images
@@ -582,6 +582,92 @@ until prom 'ALERTS%7Balertname%3D%22ContainerRestarted%22%2Cpod%3D%22oom-check%2
 done
 kubectl -n cartogra delete pod oom-check --wait=false >/dev/null
 pass "ContainerRestarted fired for an OOM-killed pod"
+
+step "Check 5.8 spec discovery"
+SPEC_TIMEOUT=120
+spec_repo="local-test/spec-$(date +%s)-$$"
+spec_tenant=$(admin "$URL/api/auth/tenant" | jq -r '.data.id') || fail "tenant id for spec discovery"
+[ -n "$spec_tenant" ] && [ "$spec_tenant" != null ] || fail "tenant id for spec discovery"
+new_uuid() { cat /proc/sys/kernel/random/uuid; }
+now_iso() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+
+# Sends one record (key|value) to a topic through the broker pod; the JSON has no '|'.
+kafka_send() {
+  printf '%s|%s\n' "$2" "$3" | kubectl -n cartogra exec -i kafka-0 -- /opt/kafka/bin/kafka-console-producer.sh \
+    --bootstrap-server localhost:9092 --topic "$1" --property parse.key=true --property 'key.separator=|' \
+    >/dev/null 2>&1
+}
+
+spec_yaml() {
+  printf 'openapi: 3.0.3\ninfo: {title: spec-check, version: "%s"}\npaths:\n  /v%s:\n    get:\n      responses:\n        "200": {description: ok}\n' "$1" "$2"
+}
+
+send_spec() {
+  content=$(spec_yaml "$1" "$2")
+  sha=$(printf '%s' "$content" | sha256sum | cut -d' ' -f1)
+  b64=$(printf '%s' "$content" | base64 | tr -d '\n')
+  entity=$(new_uuid)
+  kafka_send cartogra.ingestion.spec.discovered "$entity" "$(jq -cn \
+    --arg e "$(new_uuid)" --arg id "$entity" --arg t "$spec_tenant" --arg ts "$(now_iso)" --arg c "$(new_uuid)" \
+    --arg repo "$spec_repo" --arg sha "$sha" --arg b64 "$b64" \
+    '{eventId:$e, eventType:"spec.discovered", entityId:$id, tenantId:$t, timestamp:$ts, version:1, correlationId:$c,
+      payload:{tenantId:$t, connectionId:$c, repositoryFullName:$repo, filePath:"openapi.yaml",
+               contentSha256:$sha, contentB64:$b64}}')" || fail "send spec.discovered"
+}
+
+spec_service_name=$(echo "$spec_repo" | tr '/' '-')
+spec_contract_id() {
+  body=$(admin "$URL/api/v1/contracts?q=$spec_service_name&limit=10") || return 2
+  echo "$body" | jq -r --arg n "$spec_service_name" '.data.items[] | select(.serviceName == $n) | .id' | head -n 1
+}
+spec_versions() {
+  id=$(spec_contract_id) || return 2
+  [ -n "$id" ] || { echo 0; return 0; }
+  admin "$URL/api/v1/contracts/$id/versions?limit=10" | jq -r '.data.total'
+}
+spec_versions_are() { [ "$(spec_versions)" = "$1" ]; }
+
+remove_spec_service() {
+  sid=$(admin "$SERVICES_API?limit=200" | jq -r --arg n "$spec_service_name" '.data.items[] | select(.name == $n) | .id' | head -n 1) || sid=""
+  [ -z "$sid" ] || admin -X DELETE "$SERVICES_API/$sid" >/dev/null || true
+}
+on_exit remove_spec_service
+
+send_spec 1.0.0 1
+kafka_send cartogra.ingestion.service.changed "$spec_repo" "$(jq -cn \
+  --arg e "$(new_uuid)" --arg t "$spec_tenant" --arg ts "$(now_iso)" --arg c "$(new_uuid)" \
+  --arg repo "$spec_repo" --arg name "$spec_service_name" \
+  '{eventId:$e, eventType:"service.discovered", entityId:$c, tenantId:$t, timestamp:$ts, version:1, correlationId:$c,
+    payload:{tenantId:$t, connectionId:$c, source:"github", externalId:$repo, name:$name, techStack:[],
+             healthStatus:"UNKNOWN"}}')" || fail "send service.discovered"
+wait_for "PENDING spec applied as v1 once the service is registered" "$SPEC_TIMEOUT" spec_versions_are 1
+
+send_spec 1.0.0 1
+sleep 10
+spec_versions_are 1 || fail "the same spec sent again changed the version count to $(spec_versions)"
+pass "the same spec sent again stores nothing"
+
+send_spec 2.0.0 2
+wait_for "a changed spec gives v2" "$SPEC_TIMEOUT" spec_versions_are 2
+
+defaults=$(admin "$URL/api/v1/ingestion/spec-paths" | jq -r '.data.defaults | length') || fail "GET spec-paths"
+[ "$defaults" = 5 ] || fail "spec-paths has $defaults defaults, expected 5"
+pass "GET spec-paths returns 5 defaults"
+
+code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+  -X PUT -d '{"custom":["local-test/openapi.yaml"]}' "$URL/api/v1/ingestion/spec-paths")
+[ "$code" = 200 ] || fail "admin PUT spec-paths returned $code, expected 200"
+admin -H 'Content-Type: application/json' -X PUT -d '{"custom":[]}' "$URL/api/v1/ingestion/spec-paths" >/dev/null \
+  || fail "reset spec-paths"
+pass "admin PUT spec-paths 200, then reset"
+
+spec_jar=$(mktemp)
+on_exit 'rm -f "$spec_jar"'
+curl -fs -o /dev/null -c "$spec_jar" -X POST "$URL/api/auth/guest" || fail "guest login for spec-paths"
+code=$(curl -s -o /dev/null -w '%{http_code}' -b "$spec_jar" -H 'Content-Type: application/json' \
+  -X PUT -d '{"custom":["guest/openapi.yaml"]}' "$URL/api/v1/ingestion/spec-paths")
+[ "$code" = 403 ] || fail "guest PUT spec-paths returned $code, expected 403"
+pass "guest PUT spec-paths 403"
 
 if [ "$E2E" = true ]; then
   step "E2E Playwright"
