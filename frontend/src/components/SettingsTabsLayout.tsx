@@ -9,6 +9,7 @@ import { useAuthStore } from '#/stores/useAuthStore'
 
 const TABS = [
   { label: 'Connections', to: '/settings/connections' },
+  { label: 'SCM Configuration', to: '/settings/scm' },
   { label: 'Notifications', to: '/settings/notifications' },
   { label: 'API Keys', to: '/settings/api-keys' },
   { label: 'Users', to: '/settings/users' },

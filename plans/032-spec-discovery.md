@@ -37,7 +37,7 @@ Constraints found during the exploration:
    - Validation (400 `VALIDATION_FAILED`): a relative path, no `..`, no leading `/`, no glob characters (`*?[]{}`), ≤256 characters, ≤10 entries, no duplicates, and not equal to a default.
 7. **Size:** ingestion skips a spec that is over 512 KiB or empty. It writes a WARN log and increments the counter `cartogra.ingestion.spec.skipped` (tag `reason`). A fetch error is the same as no file (the `safeGetFile` pattern).
 8. **UI:**
-   - A "Spec discovery" card on Settings → Connections. It shows the defaults as read-only chips and the custom list as editable (TanStack Form). The card is read-only for non-admins.
+   - A "Spec discovery" card on Settings → SCM Configuration. It shows the defaults as read-only chips and the custom list as editable (TanStack Form). The card is read-only for non-admins.
    - The contract timeline shows a "from `repo`/`path`" badge for versions with `source=discovery`. The version API returns `source`, `repositoryFullName` and `filePath` (nullable).
 9. **Out of scope:** a spec removed from a repo (the contract stays), glob patterns, AsyncAPI and Swagger 2, more than one spec for each repo, and a larger Kafka message size.
 
