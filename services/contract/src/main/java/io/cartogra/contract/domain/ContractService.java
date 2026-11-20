@@ -73,21 +73,8 @@ public class ContractService {
         serviceProjectionService.requireExists(tenantId, serviceId);
         PublishedContract created;
         try {
-            created = transactionTemplate.execute(_ -> {
-                requireLiveService(tenantId, serviceId);
-                contractRepository.findLiveByService(tenantId, serviceId).ifPresent(existing -> {
-                    throw new ContractAlreadyExistsException(serviceId, existing.id());
-                });
-                Instant now = Instant.now();
-                var contract = new ApiContract(UUID.randomUUID(), tenantId, serviceId, ApiContract.OPENAPI,
-                        now, now, null);
-                contractRepository.insert(contract);
-                ContractVersion version = newVersion(contract, 1, request.spec(), parsed,
-                        engine.compare(null, parsed.canonical()).isBreaking(), now);
-                versionRepository.insert(version);
-                audit(contract, "created", actor, version);
-                return new PublishedContract(contract, version, null);
-            });
+            created = transactionTemplate.execute(_ -> createInTx(tenantId, actor, serviceId, request.spec(), parsed,
+                    ContractVersion.SOURCE_MANUAL, null));
         } catch (DuplicateKeyException e) {
             UUID existingId = contractRepository.findLiveByService(tenantId, serviceId)
                     .map(ApiContract::id)
@@ -102,24 +89,49 @@ public class ContractService {
     @PreAuthorize(Roles.CAN_WRITE)
     public VersionPublication publishVersion(UUID tenantId, Actor actor, UUID contractId, ContractRequest request) {
         ParsedSpec parsed = specParser.parse(request.spec());
-        return transactionTemplate.execute(_ -> {
-            ApiContract contract = contractRepository.lockLive(tenantId, contractId)
-                    .orElseThrow(() -> new ContractNotFoundException(contractId));
-            requireLiveService(tenantId, contract.serviceId());
-            ContractVersion latest = versionRepository.findLatest(tenantId, contractId)
-                    .orElseThrow(() -> new IllegalStateException("Contract " + contractId + " has no version"));
-            if (latest.specHash().equals(parsed.hash())) {
-                return new VersionPublication(latest, false);
-            }
-            Instant now = Instant.now();
-            boolean breaking = engine.compare(latest.specCanonical(), parsed.canonical()).isBreaking();
-            ContractVersion version = newVersion(contract, latest.versionNumber() + 1, request.spec(), parsed,
-                    breaking, now);
-            versionRepository.insert(version);
-            contractRepository.touch(tenantId, contractId, now);
-            audit(contract, "version_published", actor, version);
-            return new VersionPublication(version, true);
+        return transactionTemplate.execute(_ -> publishInTx(tenantId, actor, contractId, request.spec(), parsed,
+                ContractVersion.SOURCE_MANUAL, null));
+    }
+
+    /**
+     * Creates the contract and its version 1 in the transaction of the caller. Has no role check: the public
+     * {@link #create} and discovery, which runs as {@link Actor#SYSTEM}, call it.
+     */
+    PublishedContract createInTx(UUID tenantId, Actor actor, UUID serviceId, String raw, ParsedSpec parsed,
+                                 String source, @Nullable UUID discoveredSpecId) {
+        requireLiveService(tenantId, serviceId);
+        contractRepository.findLiveByService(tenantId, serviceId).ifPresent(existing -> {
+            throw new ContractAlreadyExistsException(serviceId, existing.id());
         });
+        Instant now = Instant.now();
+        var contract = new ApiContract(UUID.randomUUID(), tenantId, serviceId, ApiContract.OPENAPI, now, now, null);
+        contractRepository.insert(contract);
+        ContractVersion version = newVersion(contract, 1, raw, parsed,
+                engine.compare(null, parsed.canonical()).isBreaking(), now, source, discoveredSpecId);
+        versionRepository.insert(version);
+        audit(contract, "created", actor, version);
+        return new PublishedContract(contract, version, null);
+    }
+
+    /** Publishes the next version in the transaction of the caller. Has no role check, as {@link #createInTx}. */
+    VersionPublication publishInTx(UUID tenantId, Actor actor, UUID contractId, String raw, ParsedSpec parsed,
+                                   String source, @Nullable UUID discoveredSpecId) {
+        ApiContract contract = contractRepository.lockLive(tenantId, contractId)
+                .orElseThrow(() -> new ContractNotFoundException(contractId));
+        requireLiveService(tenantId, contract.serviceId());
+        ContractVersion latest = versionRepository.findLatest(tenantId, contractId)
+                .orElseThrow(() -> new IllegalStateException("Contract " + contractId + " has no version"));
+        if (latest.specHash().equals(parsed.hash())) {
+            return new VersionPublication(latest, false);
+        }
+        Instant now = Instant.now();
+        boolean breaking = engine.compare(latest.specCanonical(), parsed.canonical()).isBreaking();
+        ContractVersion version = newVersion(contract, latest.versionNumber() + 1, raw, parsed, breaking, now,
+                source, discoveredSpecId);
+        versionRepository.insert(version);
+        contractRepository.touch(tenantId, contractId, now);
+        audit(contract, "version_published", actor, version);
+        return new VersionPublication(version, true);
     }
 
     public PublishedContract get(UUID tenantId, UUID contractId) {
@@ -190,9 +202,10 @@ public class ContractService {
     }
 
     private static ContractVersion newVersion(ApiContract contract, int number, String raw, ParsedSpec parsed,
-                                              boolean breaking, Instant now) {
+                                              boolean breaking, Instant now, String source,
+                                              @Nullable UUID discoveredSpecId) {
         return new ContractVersion(UUID.randomUUID(), contract.tenantId(), contract.id(), number, parsed.label(),
-                raw, parsed.canonical(), parsed.hash(), breaking, now);
+                raw, parsed.canonical(), parsed.hash(), breaking, now, source, discoveredSpecId, null, null);
     }
 
     private void audit(ApiContract contract, String action, Actor actor, ContractVersion version) {

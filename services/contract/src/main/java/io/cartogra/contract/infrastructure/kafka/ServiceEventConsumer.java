@@ -3,6 +3,7 @@ package io.cartogra.contract.infrastructure.kafka;
 import io.cartogra.common.event.EventEnvelope;
 import io.cartogra.contract.domain.ContractService;
 import io.cartogra.contract.domain.ServiceProjectionService;
+import io.cartogra.contract.domain.SpecDiscoveryService;
 import io.cartogra.web.tenant.TenantContext;
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
 import io.opentelemetry.context.Context;
@@ -24,7 +25,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.stream.StreamSupport;
 
 /**
- * Keeps the service-name projection from {@code service.registered}/{@code service.updated} and cascades
+ * Keeps the service-name and external-id projection from {@code service.registered}/{@code service.updated}, applies
+ * the PENDING discovered specs of that repository, and cascades
  * {@code service.deleted} to the service's contract; other event types are acked and ignored.
  */
 @Component
@@ -53,13 +55,26 @@ public class ServiceEventConsumer {
 
     private final ContractService contractService;
     private final ServiceProjectionService serviceProjectionService;
+    private final SpecDiscoveryService specDiscoveryService;
     private final ObjectMapper objectMapper;
 
     public ServiceEventConsumer(ContractService contractService, ServiceProjectionService serviceProjectionService,
-                                ObjectMapper objectMapper) {
+                                SpecDiscoveryService specDiscoveryService, ObjectMapper objectMapper) {
         this.contractService = contractService;
         this.serviceProjectionService = serviceProjectionService;
+        this.specDiscoveryService = specDiscoveryService;
         this.objectMapper = objectMapper;
+    }
+
+    private void applyRegisteredOrUpdated(EventEnvelope<JsonNode> envelope) {
+        serviceProjectionService.recordName(envelope.tenantId(), envelope.entityId(),
+                envelope.payload().required("name").asString());
+        JsonNode externalId = envelope.payload().path("externalId");
+        if (externalId.isString() && !externalId.stringValue().isBlank()) {
+            serviceProjectionService.recordExternalId(envelope.tenantId(), envelope.entityId(),
+                    externalId.stringValue());
+            specDiscoveryService.applyPending(envelope.tenantId(), envelope.entityId(), externalId.stringValue());
+        }
     }
 
     @KafkaListener(id = "serviceEventConsumer", topics = TOPIC, groupId = "${spring.kafka.consumer.group-id}")
@@ -72,8 +87,7 @@ public class ServiceEventConsumer {
                     record.value(), new TypeReference<EventEnvelope<JsonNode>>() {});
             switch (envelope.eventType()) {
                 case SERVICE_REGISTERED, SERVICE_UPDATED -> TenantContext.runAs(envelope.tenantId(),
-                        () -> serviceProjectionService.recordName(envelope.tenantId(), envelope.entityId(),
-                                envelope.payload().required("name").asString()));
+                        () -> applyRegisteredOrUpdated(envelope));
                 case SERVICE_DELETED -> TenantContext.runAs(envelope.tenantId(),
                         () -> contractService.deleteForService(envelope.tenantId(), envelope.entityId()));
                 default -> {

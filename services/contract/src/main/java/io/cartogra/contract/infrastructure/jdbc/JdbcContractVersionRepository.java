@@ -28,7 +28,11 @@ public class JdbcContractVersionRepository implements ContractVersionRepository 
             rs.getString("spec_canonical"),
             rs.getString("spec_hash"),
             rs.getObject("is_breaking", Boolean.class),
-            rs.getTimestamp("created_at").toInstant());
+            rs.getTimestamp("created_at").toInstant(),
+            rs.getString("source"),
+            rs.getObject("discovered_spec_id", UUID.class),
+            rs.getString("repository_full_name"),
+            rs.getString("file_path"));
 
     private static final RowMapper<VersionHeader> HEADER_MAPPER = (rs, _) -> new VersionHeader(
             rs.getObject("id", UUID.class),
@@ -37,7 +41,16 @@ public class JdbcContractVersionRepository implements ContractVersionRepository 
             rs.getString("label"),
             rs.getString("spec_hash"),
             rs.getObject("is_breaking", Boolean.class),
-            rs.getTimestamp("created_at").toInstant());
+            rs.getTimestamp("created_at").toInstant(),
+            rs.getString("source"),
+            rs.getString("repository_full_name"),
+            rs.getString("file_path"));
+
+    private static final String SELECT_FROM = """
+            SELECT v.*, d.repository_full_name, d.file_path
+            FROM contract_versions v
+            LEFT JOIN discovered_specs d ON d.tenant_id = v.tenant_id AND d.id = v.discovered_spec_id
+            """;
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -50,10 +63,10 @@ public class JdbcContractVersionRepository implements ContractVersionRepository 
         jdbc.update("""
                 INSERT INTO contract_versions
                     (id, tenant_id, contract_id, version_number, label, spec_raw, spec_canonical, spec_hash, is_breaking,
-                     created_at)
+                     created_at, source, discovered_spec_id)
                 VALUES
                     (:id, :tenantId, :contractId, :versionNumber, :label, :specRaw, :specCanonical, :specHash,
-                     :isBreaking, :createdAt)
+                     :isBreaking, :createdAt, :source, :discoveredSpecId)
                 """, new MapSqlParameterSource()
                 .addValue("id", version.id())
                 .addValue("tenantId", version.tenantId())
@@ -64,15 +77,16 @@ public class JdbcContractVersionRepository implements ContractVersionRepository 
                 .addValue("specCanonical", version.specCanonical())
                 .addValue("specHash", version.specHash())
                 .addValue("isBreaking", version.breaking())
-                .addValue("createdAt", Timestamp.from(version.createdAt())));
+                .addValue("createdAt", Timestamp.from(version.createdAt()))
+                .addValue("source", version.source())
+                .addValue("discoveredSpecId", version.discoveredSpecId()));
     }
 
     @Override
     public Optional<ContractVersion> findLatest(UUID tenantId, UUID contractId) {
-        return jdbc.query("""
-                SELECT * FROM contract_versions
-                WHERE tenant_id = :tenantId AND contract_id = :contractId AND deleted_at IS NULL
-                ORDER BY version_number DESC
+        return jdbc.query(SELECT_FROM + """
+                WHERE v.tenant_id = :tenantId AND v.contract_id = :contractId AND v.deleted_at IS NULL
+                ORDER BY v.version_number DESC
                 LIMIT 1
                 """, new MapSqlParameterSource()
                 .addValue("tenantId", tenantId)
@@ -95,10 +109,9 @@ public class JdbcContractVersionRepository implements ContractVersionRepository 
 
     @Override
     public Optional<ContractVersion> findByNumber(UUID tenantId, UUID contractId, int versionNumber) {
-        return jdbc.query("""
-                SELECT * FROM contract_versions
-                WHERE tenant_id = :tenantId AND contract_id = :contractId AND version_number = :versionNumber
-                  AND deleted_at IS NULL
+        return jdbc.query(SELECT_FROM + """
+                WHERE v.tenant_id = :tenantId AND v.contract_id = :contractId AND v.version_number = :versionNumber
+                  AND v.deleted_at IS NULL
                 """, params(tenantId, contractId).addValue("versionNumber", versionNumber), MAPPER)
                 .stream().findFirst();
     }
@@ -106,9 +119,12 @@ public class JdbcContractVersionRepository implements ContractVersionRepository 
     @Override
     public List<VersionHeader> list(UUID tenantId, UUID contractId, int limit, int offset) {
         return jdbc.query("""
-                SELECT id, contract_id, version_number, label, spec_hash, is_breaking, created_at FROM contract_versions
-                WHERE tenant_id = :tenantId AND contract_id = :contractId AND deleted_at IS NULL
-                ORDER BY version_number DESC
+                SELECT v.id, v.contract_id, v.version_number, v.label, v.spec_hash, v.is_breaking, v.created_at,
+                       v.source, d.repository_full_name, d.file_path
+                FROM contract_versions v
+                LEFT JOIN discovered_specs d ON d.tenant_id = v.tenant_id AND d.id = v.discovered_spec_id
+                WHERE v.tenant_id = :tenantId AND v.contract_id = :contractId AND v.deleted_at IS NULL
+                ORDER BY v.version_number DESC
                 LIMIT :limit OFFSET :offset
                 """, params(tenantId, contractId).addValue("limit", limit).addValue("offset", offset), HEADER_MAPPER);
     }

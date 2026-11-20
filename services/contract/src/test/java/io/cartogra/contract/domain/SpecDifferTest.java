@@ -130,7 +130,8 @@ class SpecDifferTest {
     private ContractVersion version(int number, String spec) {
         ParsedSpec parsed = parser.parse(spec);
         return new ContractVersion(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), number, parsed.label(),
-                spec, parsed.canonical(), parsed.hash(), null, Instant.now());
+                spec, parsed.canonical(), parsed.hash(), null, Instant.now(), ContractVersion.SOURCE_MANUAL, null, null,
+                null);
     }
 
     private static JsonNode tree(String json) {

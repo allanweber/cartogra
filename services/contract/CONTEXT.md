@@ -1,6 +1,6 @@
 # Contract Context
 
-**Service**: `services/contract` · Port `8083` · Context path `/api/v1/contracts` · Phase 5 · **Live: contract store (5.1), diff + timeline (5.2), breaking-change engine (5.3)**; CI checks, consumers, discovery, alerts planned
+**Service**: `services/contract` · Port `8083` · Context path `/api/v1/contracts` · Phase 5 · **Live: contract store (5.1), diff + timeline (5.2), breaking-change engine (5.3), spec discovery (5.8)**; CI checks, consumers, alerts planned
 
 ---
 
@@ -21,6 +21,8 @@ The Contract context is Cartogra's API compatibility guardian. It stores the Ope
 | **Version Diff** | A version against the previous one: `changes` (structural diff of the canonical trees, RFC 6901 pointers), `lines` (side-by-side rows over the canonical spec rendered as YAML) and `compatibility` (the engine verdict, computed on each read). Version 1 is diffed against an empty spec |
 | **Compatibility Rule** | One rule of the breaking-change engine (`BreakingChangeEngine`), with a fixed verdict: for example `path-removed` (breaking) or `response-field-added` (compatible). The engine compares operation by operation; parameters and request bodies have the request direction, responses the response direction. Local `$ref`s are resolved at each use site, so a shared schema gives one change per operation and direction. `allOf` is merged; `oneOf`/`anyOf` are not walked |
 | **Unchecked** | A Contract Version stored before 5.3: `breaking` is null, it has no badge, and neither `status` filter matches it. Its diff still gets a live `compatibility` |
+| **Discovered Spec** | One content of an OpenAPI file that Ingestion found in a repository (`spec.discovered`), stored when it differs from the last spec seen at that repository and path. Status `PENDING` (no service yet), `APPLIED` (stored as a version), `UNCHANGED` (same canonical hash as the latest), `REJECTED` (invalid, with parser errors), `SKIPPED` (tombstoned service) or `SUPERSEDED` (a newer spec came first) |
+| **Version Source** | `manual` (`POST /versions`) or `discovery` (applied from a discovered spec, audited as the system actor) |
 | **Spec Type** | Format of the contract: `openapi` (OpenAPI 3.x) only. AsyncAPI is a candidate once a user brings an AsyncAPI spec |
 | **Baseline** | The latest stored Contract Version of a Service; what a candidate spec is checked against |
 | **Consumer** | A Service with an inbound declared or observed dependency edge to the contract's Service; derived from the Topology graph, never registered by hand |
@@ -58,8 +60,9 @@ All cross-context Service references stored as UUIDs only.
 | Table | Status | Purpose |
 |---|---|---|
 | `api_contracts` | Live (5.1) | One live contract per service (partial unique index); spec_type `openapi` |
-| `contract_versions` | Live (5.1) | Immutable revisions; a spec hashing the same as the latest stores nothing. `is_breaking` (5.3, V004): the engine verdict against the previous latest version, set at publish in the same transaction; v1 is `false`; NULL = Unchecked (no backfill). The classified changes are not stored |
-| `services` | Live (5.2) | Projection of Registry services: name for the contract list (from `service.registered`/`updated`; a service with no name yet is looked up once via Registry `POST /internal/services/names` and stored), `deleted_at` tombstone from `service.deleted` (replaced 5.1's `deleted_services`) |
+| `contract_versions` | Live (5.1) | Immutable revisions; a spec hashing the same as the latest stores nothing. `is_breaking` (5.3, V004): the engine verdict against the previous latest version, set at publish in the same transaction; v1 is `false`; NULL = Unchecked (no backfill). The classified changes are not stored. `source` `manual`/`discovery` and `discovered_spec_id` (5.8, V005) |
+| `discovered_specs` | Live (5.8) | Discovered specs; `is_latest` marks the last spec seen for each `(tenant_id, repository_full_name, file_path)`; keeps the raw spec so a PENDING row can be applied later; `status`, `service_id`, `contract_version_id`, `errors` JSONB |
+| `services` | Live (5.2) | Projection of Registry services: name for the contract list (from `service.registered`/`updated`; a service with no name yet is looked up once via Registry `POST /internal/services/names` and stored), `deleted_at` tombstone from `service.deleted` (replaced 5.1's `deleted_services`). `external_id` (5.8, SCM repository full path, unique per live service) from `service.registered`/`updated` or a Registry `GET /internal/services/by-external-id` lookup |
 | `contract_checks` | Planned (5.5) | Check result per candidate vs. baseline; `is_breaking` + `changes` JSONB |
 | inbound-edge projection | Planned (5.4) | Consumer edges projected from Topology `dependency.*` events, idempotent on event id |
 | `notification_rules` | Planned (5.7) | Per-tenant Slack delivery rules |
@@ -77,7 +80,7 @@ Contract: `docs/api/contract.openapi.yaml`. Writes need ADMIN or MEMBER (`@PreAu
 | GET | `/api/v1/contracts/{id}` | Live (5.1) | Contract + latest version |
 | POST | `/api/v1/contracts/{id}/versions` | Live (5.1) | `{spec}` → 201 next version; same hash as latest → 200 latest, nothing stored; an older version's spec (revert) → new version |
 | GET | `/api/v1/contracts?q&status&limit&offset` | Live (5.2; `status` 5.3) | `PageResult` of live contracts with `serviceName` (null until projected) and latest version, most recently changed first; `q` matches the service name; `status=breaking\|compatible` filters on the latest version's `breaking` (another value → 400 `VALIDATION_ERROR`) |
-| GET | `/api/v1/contracts/{id}/versions?limit&offset` | Live (5.2) | Versions newest first (no spec text) |
+| GET | `/api/v1/contracts/{id}/versions?limit&offset` | Live (5.2) | Versions newest first (no spec text). Each version has `source`, and `repositoryFullName` + `filePath` for a discovered one (5.8) |
 | GET | `/api/v1/contracts/{id}/versions/{v}/diff` | Live (5.2; `compatibility` 5.3) | `{from, to, changes[], lines[], compatibility}` against version v-1; v1 → `from: null`, all lines added. `compatibility: {isBreaking, changes[{rule, breaking, direction, method, path, location, message}]}` |
 | POST | `/api/v1/contracts/check` | Planned (5.5) | CI check: `{service, spec}` → `{is_breaking, changes[], affected_consumers[]}`; API key scope `ci:check`; never creates a version |
 
@@ -91,9 +94,9 @@ Spec rules: OpenAPI 3.0/3.1, YAML or JSON, ≤ 1 MiB (blank or larger → 400 `V
 
 | Topic | Source | Action |
 |---|---|---|
-| `cartogra.ingestion.spec.discovered` | Ingestion | Store a new version, idempotent on `(tenant_id, repository_full_name, file_path, content_sha256)` |
+| `cartogra.ingestion.spec.discovered` | Ingestion | **Live (5.8)**, `SpecDiscoveredConsumer`. Record the spec as the last spec seen for its repository and path: equal to the last spec seen and its service still live (or the row `REJECTED`) → acked, no change; equal, but the row `SKIPPED` or its service tombstoned → a `PENDING` copy becomes the latest row and the repository is resolved again; different (also a revert) → new row, an older `PENDING` row → `SUPERSEDED`. Resolve the repository to a service (live projection `external_id`, else Registry lookup); no match → `PENDING`. Else apply: tombstoned → `SKIPPED`; invalid → `REJECTED` (acked, no DLQ); no contract → contract + v1 (audit `created`); same canonical hash → `UNCHANGED`; else next version (audit `version_published`). A race with a manual create publishes a version instead. Unreadable records → `.dlq` |
 | `cartogra.topology.dependency.changed` (`event_type` `dependency.{declared,observed,removed}`) | Topology | Maintain the inbound-edge projection that names Consumers |
-| `cartogra.registry.service.changed` | Registry | **Live**, `ServiceEventConsumer`, group `contract-consumer`. `service.registered`/`updated` (5.2): upsert the projected name, never on a tombstone. `service.deleted` (5.1): tombstone the service, soft-delete its contract and versions, audit `deleted` (system) per contract changed. Replay changes and audits nothing; other event types are acked and ignored. Poison records → `.dlq` |
+| `cartogra.registry.service.changed` | Registry | **Live**, `ServiceEventConsumer`, group `contract-consumer`. `service.registered`/`updated` (5.2): upsert the projected name, never on a tombstone; store `externalId` and apply the PENDING discovered specs of that repository (5.8). `service.deleted` (5.1): tombstone the service, soft-delete its contract and versions, audit `deleted` (system) per contract changed. Replay changes and audits nothing; other event types are acked and ignored. Poison records → `.dlq` |
 
 **Produced:**
 
@@ -111,7 +114,7 @@ No `check.*` or `version.published` topics: no consumer exists for them (roadmap
 |---|---|---|
 | Ingestion | Downstream (Conformist) | Consumes `spec.discovered` to receive spec content |
 | Topology | Downstream (Conformist) | Consumes `dependency.*` to derive Consumers |
-| Service Catalog (Registry) | Downstream (Conformist) | Consumes `service.changed` for names and to cascade `service.deleted`; calls `POST /internal/services/names` directly (bypasses the Gateway) only for services with no stored name, failing open to an empty name; receives audit events |
+| Service Catalog (Registry) | Downstream (Conformist) | Consumes `service.changed` for names and to cascade `service.deleted`; calls `POST /internal/services/names` directly (bypasses the Gateway) only for services with no stored name, failing open to an empty name; calls `GET /internal/services/by-external-id` for a discovered spec whose repository is not in the projection, failing open to PENDING; receives audit events |
 | Identity & Access (Gateway) | Conformist | Receives proxied requests with `X-Tenant-Id`; gateway validates `X-Cartogra-Api-Key` for the CI check |
 | Shared Kernel | Shared Kernel | `EventEnvelope`, `ApiResponse`, `ErrorCodes` |
 

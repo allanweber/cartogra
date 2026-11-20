@@ -10,14 +10,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 import java.net.http.HttpClient;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
-/** Direct call to Registry's internal {@code /internal/services/names}; failures propagate as {@code RestClientException}. */
+/**
+ * Direct calls to Registry's internal {@code /internal/services/names} and {@code /internal/services/by-external-id};
+ * failures propagate as {@code RestClientException}.
+ */
 @Component
 public class RegistryNameClient {
 
@@ -51,9 +56,33 @@ public class RegistryNameClient {
         return envelope != null && envelope.data() != null ? envelope.data() : Map.of();
     }
 
+    /** The live service with the SCM external id; empty when Registry gives 404. */
+    public Optional<UUID> findServiceIdByExternalId(UUID tenantId, String externalId) {
+        ServiceIdEnvelope envelope;
+        try {
+            envelope = retry.executeSupplier(() -> restClient.get()
+                    .uri(uri -> uri.path("/internal/services/by-external-id")
+                            .queryParam("tenantId", tenantId)
+                            .queryParam("externalId", externalId)
+                            .build())
+                    .header("X-Tenant-Id", tenantId.toString())
+                    .retrieve()
+                    .body(ServiceIdEnvelope.class));
+        } catch (HttpClientErrorException.NotFound _) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(envelope).map(ServiceIdEnvelope::data).map(ServiceId::serviceId);
+    }
+
     private record NamesRequest(UUID tenantId, Collection<UUID> serviceIds) {
     }
 
     private record NamesEnvelope(Map<UUID, String> data, String traceId) {
+    }
+
+    private record ServiceId(UUID serviceId) {
+    }
+
+    private record ServiceIdEnvelope(ServiceId data, String traceId) {
     }
 }
