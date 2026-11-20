@@ -13,7 +13,7 @@
 | **Service Catalog** | `services/registry` | Live (Phase 0/1) |
 | **Ingestion** | `services/ingestion` | Live (Phase 0/1) |
 | **Topology** | `services/topology` | Live (Phase 1 complete — backfill, dependency CRUD, graph read; Phase 2 mostly complete — blast radius [2.1], impact panel [2.2], cycles [2.3], SPOFs [2.4], risks [2.5] shipped; performance evidence [2.6] in progress) |
-| **Contract** | `services/contract` | Live (Phase 5 — contract store [5.1]: contracts, immutable versions, `service.deleted` cascade) |
+| **Contract** | `services/contract` | Live (Phase 5 — contract store [5.1]: contracts, immutable versions, `service.deleted` cascade; spec discovery [5.8]) |
 | **Intelligence** | `services/intelligence` | Empty directory (Phase 6) |
 | **Frontend Shell** | `frontend/` | Partial (Phase 1) |
 | **Shared Kernel** | `shared/common` | Live |
@@ -57,7 +57,8 @@
   ║   Ingestion   ║  ← Separate inbound channel
   ║   (Ph. 0/1)   ║    (SCM webhooks · K8s watch)
   ╚══════╤════════╝
-         │  Kafka: service.discovered / ownership.resolved
+         │  Kafka: service.discovered / ownership.resolved → Catalog
+         │  Kafka: spec.discovered → Contract (5.8)
          ▼
   ╔════════════╗
   ║  Service   ║  ← Catalog consumes ingestion events
@@ -83,10 +84,10 @@
 | Identity & Access | Contract | Open Host Service / Conformist | Declarative reverse proxy (`gateway/application.yml`, `Path=/api/v1/contracts/**`, breaker `contract`) — [5.1] |
 | Identity & Access | Intelligence | Open Host Service / Conformist | Declarative reverse proxy (Phase 6 — route not yet created) |
 | Service Catalog (U) | Topology (D) | **Customer / Supplier** | Live: Kafka `cartogra.registry.service.changed` (`event_type` `service.{registered,updated,deleted}`), consumed by `GraphNodeEventConsumer` to project `graph_nodes` (including `team_id`/`tier`, used for orphan risk and SPOF scoring — ADR-0028). No separate `ownership-changed` topic exists or is needed (ADR-0028 supersedes ADR-0027's plan to add one) |
-| Service Catalog (U) | Contract (D) | Customer / Supplier | Live: Kafka `cartogra.registry.service.changed`, consumed by `ServiceDeletedConsumer` on `service.deleted` only (soft-deletes the contract, tombstones the service) |
+| Service Catalog (U) | Contract (D) | Customer / Supplier | Live: Kafka `cartogra.registry.service.changed`, consumed by `ServiceEventConsumer`: names and `externalId` from `service.registered`/`updated` (which also apply PENDING discovered specs), and `service.deleted` (soft-deletes the contract, tombstones the service) |
 | Service Catalog (U) | Intelligence (D) | Customer / Supplier | Planned, Phase 6: Kafka registry events |
 | Ingestion (U) | Service Catalog (D) | **Published Language** | Live today: Kafka `cartogra.ingestion.service.changed`, `ownership.resolved` |
-| Ingestion (U) | Contract (D) | Published Language | Planned, Phase 5 (5.8): Kafka `cartogra.ingestion.spec.discovered` |
+| Ingestion (U) | Contract (D) | Published Language | Live (5.8): Kafka `cartogra.ingestion.spec.discovered`, consumed by `SpecDiscoveredConsumer`. The payload has no service id; Contract resolves the repository through its `services.external_id` projection or Registry `GET /internal/services/by-external-id` (ADR-0018) |
 | Topology (U) | Intelligence (D) | Customer / Supplier | Planned, deferred to Phase 6 per roadmap 3.5 — exact topic names TBD, see `docs/roadmap.md` §6/§9 |
 | Contract (U) | Intelligence (D) | Customer / Supplier | Planned, Phase 6 — no topic names committed yet in `docs/roadmap.md` |
 | Shared Kernel | All JVM modules | **Shared Kernel** | Gradle dep `:shared:common` |
@@ -140,7 +141,8 @@ SCM / K8s ──► Ingestion ──Kafka──► Service Catalog ──Kafka�
                     └──────────────────────────Kafka──► Contract ──Kafka──► Intelligence
 ```
 
-Today, only the first arrow is real: Ingestion → Service Catalog (`service.discovered`, `ownership.resolved`).
+Ingestion → Service Catalog (`service.discovered`, `ownership.resolved`) and Ingestion → Contract
+(`spec.discovered`, 5.8) are real.
 Everything from Topology onward is still schema-and-plan — see `docs/roadmap.md`. There is no "Notification
 worker" module, planned or otherwise; it was removed from the plan as a speculative context with no producer,
 no consumer, and no code (`docs/roadmap.md` §12).

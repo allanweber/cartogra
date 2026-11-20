@@ -19,9 +19,9 @@ not the domain descriptions below, which can drift again — re-run that grep be
 | Domain | Real topics today | Notes |
 | ------ | ------------------ | ----- |
 | Registry | 2 (`service.changed`, `team.changed`) | `service.changed` consumed by Topology; `team.changed` has no consumer |
-| Ingestion | 4 (`service.changed`, `ownership.resolved`, `sync.completed`, `sync.command`) | `service.changed` and `ownership.resolved` are consumed by Registry; `sync.completed` has no consumer; `sync.command` is produced *and* consumed inside Ingestion itself despite its `registry.` prefix — see below |
+| Ingestion | 5 (`service.changed`, `ownership.resolved`, `spec.discovered`, `sync.completed`, `sync.command`) | `service.changed` and `ownership.resolved` are consumed by Registry; `spec.discovered` is consumed by Contract; `sync.completed` has no consumer; `sync.command` is produced *and* consumed inside Ingestion itself despite its `registry.` prefix — see below |
 | Topology | 0 | Service has schema + CI + IT harness only (Phase 0); no service class, controller, producer, or consumer exists |
-| Contract | 0 | Consumes `registry.service.changed` (`service.deleted`); produces only `platform.audit.recorded` |
+| Contract | 0 | Consumes `registry.service.changed` (`service.registered`/`service.updated`/`service.deleted`) and `ingestion.spec.discovered`; produces only `platform.audit.recorded` |
 | Intelligence | 0 | Empty directory — no code at all |
 
 There is no "Notification" domain and no "Notification worker" module. An earlier version of this document
@@ -36,7 +36,7 @@ removed — "No producer, no consumer, no module. Violates the project's own no-
 
 | Topic | Producer | Consumers today | Description |
 | ----- | -------- | ---------------- | ----------- |
-| `cartogra.registry.service.changed` | Registry (`ServiceLifecycleEventProducer`) | Topology (`GraphNodeEventConsumer`), Contract (`ServiceDeletedConsumer`, group `contract-consumer`, acts on `service.deleted` only) | Service lifecycle, keyed by service id; `event_type` `service.registered` / `service.updated` / `service.deleted` (soft delete) |
+| `cartogra.registry.service.changed` | Registry (`ServiceLifecycleEventProducer`) | Topology (`GraphNodeEventConsumer`), Contract (`ServiceEventConsumer`, group `contract-consumer`: keeps the name and `externalId` projection, applies PENDING discovered specs, cascades `service.deleted`) | Service lifecycle, keyed by service id; `event_type` `service.registered` / `service.updated` / `service.deleted` (soft delete) |
 | `cartogra.registry.team.changed` | Registry (`TeamLifecycleEventProducer`) | none | Team lifecycle, keyed by team id; `event_type` `team.created` / `team.updated` (rename) / `team.deleted` |
 
 ### Ingestion domain
@@ -45,6 +45,7 @@ removed — "No producer, no consumer, no module. Violates the project's own no-
 | ----- | -------- | ---------------- | ----------- |
 | `cartogra.ingestion.service.changed` | Ingestion (`ServiceChangedProducer`) | Registry (`RegistryServiceDiscoveryConsumer`) | Discovered services. `event_type` `service.discovered`: a repo or K8s Service is present (key = external id, or `cluster/namespace/name`). `service.removed`: a K8s Service was deleted (key = `cluster/namespace/name`). `service.resynced`: the full set of tenant Services in one cluster at `observedAt` (key = cluster name); Registry removes the cluster from rows not in the set. An empty set is sent when a cluster is deleted or renamed |
 | `cartogra.ingestion.ownership.resolved` | Ingestion (`OwnershipResolvedProducer`) | Registry (`OwnershipResolvedConsumer`) | CODEOWNERS/K8s-label ownership resolved for a repo |
+| `cartogra.ingestion.spec.discovered` | Ingestion (`SpecDiscoveredProducer`) | Contract (`SpecDiscoveredConsumer`) | An OpenAPI file that a sync found at a probe path (ADR-0018, roadmap 5.8). One event for each repo with a spec; the first hit in probe order wins. `event_type` `spec.discovered`; key = `entityId` = UUIDv5 of `(tenant, repository, path)`. Payload carries the file in base64 and its SHA-256, no service id: Contract resolves the repository to a service. Specs over 512 KiB or empty are not sent |
 | `cartogra.ingestion.sync.completed` | Ingestion (`SyncResultProducer`) | none (tests subscribe directly; no production consumer) | A Sync Job finished (success or failure) |
 | `cartogra.registry.sync.command` | Ingestion (`SyncCommandProducer`) | Ingestion (`SyncCommandConsumer`) | **Not** a Registry→Ingestion handoff despite the `registry.` prefix. `ScmConnectionService`/`WebhookService`/`ScheduledSyncService` in Ingestion publish this to queue a sync job for its own `SyncCommandConsumer`; the name is a leftover from before SCM Connections moved from Registry to Ingestion (see `services/registry/CONTEXT.md`) |
 
@@ -64,6 +65,7 @@ pattern this document used to describe:
 - `cartogra.ingestion.service.changed.dlq`
 - `cartogra.ingestion.ownership.resolved.dlq`
 - `cartogra.registry.service.changed.dlq` — shared by Topology's and Contract's consumers; each lands its own poison records there
+- `cartogra.ingestion.spec.discovered.dlq` — Contract's `SpecDiscoveredConsumer`; only records that cannot be read. An invalid spec is stored as `REJECTED` and acked
 
 Ingestion's own consumer (`SyncCommandConsumer`) has no error handler configured at all — no retry, no DLQ.
 A poison `cartogra.registry.sync.command` message currently blocks that consumer's partition rather than
@@ -87,7 +89,6 @@ table, as authoritative on exact timing, and re-check the wording there before r
 | `cartogra.observability.spans` | OTel Collector → Topology (`OtelSpanWorker`) | 3.1 | **Implemented in 3.1** (consumer side; the collector is the producer). Payload is raw OTLP/JSON from the collector's `kafka` exporter — a documented exception to the envelope rule (ADR-0029). Tenant comes from resource attribute `cartogra.tenant.id`; unattributable records go to `cartogra.observability.spans.dlq`. Ingestion is not on this path |
 | `cartogra.registry.service.ownership-changed` | Registry → Topology, orphan-risk flagging only | ADR-0027 | **Not built — superseded by ADR-0028.** Topology reads `graph_nodes.team_id`, already synced by `service.{registered,updated}`; roadmap 3.4 was rescoped to the CODEOWNERS team mapping and adds no topic |
 | `cartogra.platform.audit.recorded` | Topology → Registry | 4.1 | Registry writes audit events directly; Topology publishes this for Registry's consumer |
-| `cartogra.ingestion.spec.discovered` | Ingestion → Contract | 5.8 | Named `spec.discovered`, not `spec.updated` as an earlier version of this document had it |
 | `cartogra.platform.dead-letter` | platform-wide DLQ replay | 7.5 | Distinct from the per-service `.dlq` topics above |
 
 Topology's own future producer topics (3.5, deferred per the roadmap's "no topic without a consumer" rule):
@@ -95,8 +96,8 @@ Topology's own future producer topics (3.5, deferred per the roadmap's "no topic
 `cartogra.topology.dependency.changed` keyed by edge id, consumed by Contract to name affected consumers;
 `drift.detected` stays in 6.7 until Intelligence consumes it.
 
-No Kafka topic names are committed anywhere in `docs/roadmap.md` for Contract (beyond `spec.discovered`
-above) or for Intelligence. An earlier version of this document speculated `check.passed`/`check.failed`/
+No Kafka topic names are committed anywhere in `docs/roadmap.md` for Contract (beyond `spec.discovered`,
+now live) or for Intelligence. An earlier version of this document speculated `check.passed`/`check.failed`/
 `version.published` for Contract and `digest.generated`/`alert.raised` for Intelligence — those are dropped
 here as unimplemented and unplanned; do not treat them as pending work.
 
