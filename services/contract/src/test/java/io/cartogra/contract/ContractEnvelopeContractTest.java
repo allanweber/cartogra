@@ -85,6 +85,28 @@ class ContractEnvelopeContractTest extends AbstractContractIT {
     void list200() {
         contractId();
         assertConforms("GET", "/api/v1/contracts", http.read(tenant, ""), 200);
+        assertConforms("GET", "/api/v1/contracts", http.read(tenant, "?status=compatible"), 200);
+    }
+
+    @Test
+    void list400ForUnknownStatus() {
+        assertConforms("GET", "/api/v1/contracts", http.read(tenant, "?status=nope"), 400);
+    }
+
+    @Test
+    void diff200WithBreakingCompatibility() {
+        String id = contractId();
+        http.publish(tenant, id, SPEC.replace("paths: {}", """
+                paths:
+                  /a:
+                    get:
+                      parameters:
+                        - {name: q, in: query, required: true, schema: {type: string}}
+                      responses:
+                        '200': {description: ok}"""));
+        http.publish(tenant, id, SPEC.replace("version: '1'", "version: '3'"));
+        assertConforms("GET", "/api/v1/contracts/" + id + "/versions/3/diff",
+                http.read(tenant, "/" + id + "/versions/3/diff"), 200);
     }
 
     @Test

@@ -1,0 +1,3 @@
+{"isBreaking": false, "changes": [
+  {"rule": "parameter-required-removed", "breaking": false, "direction": "request", "method": "GET", "path": "/accounts/{id}/entries", "location": "query.limit"}
+]}

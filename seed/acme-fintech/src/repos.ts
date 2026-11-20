@@ -8,9 +8,24 @@ export interface RepoOptions {
   githubOrg?: string
   azureOrg?: string
   azureProject?: string
+  /** Write the breaking contract version as `openapi.yaml` (see `openapiSpec`). */
+  breaking?: boolean
 }
 
 export type RepoFiles = Map<string, string>
+
+export interface RepoArgs {
+  provider: 'github' | 'azure' | undefined
+  breaking: boolean
+}
+
+/** Flags of `acme repos`: `--provider github|azure` and `--breaking`. */
+export function parseRepoArgs(args: string[]): RepoArgs {
+  const flag = args.indexOf('--provider')
+  const provider = flag >= 0 ? args[flag + 1] : undefined
+  if (provider !== undefined && provider !== 'github' && provider !== 'azure') throw new Error('--provider must be github or azure')
+  return { provider, breaking: args.includes('--breaking') }
+}
 
 const STACK_LABEL = { java: 'Java 21 / Spring Boot', node: 'Node.js 22 / Express', python: 'Python 3.12 / FastAPI' } as const
 
@@ -39,7 +54,7 @@ export function renderRepo(service: SeedService, options: RepoOptions = {}): Rep
   const files: RepoFiles = new Map()
   const { stack, port, provider } = service.repo
   files.set('README.md', readme(service))
-  files.set('openapi.yaml', openapiSpec(service))
+  files.set('openapi.yaml', options.breaking ? openapiSpec(service, breakingVersion(service), { breaking: true }) : openapiSpec(service))
   files.set('.dockerignore', '.git\nbuild/\n.gradle/\ntarget/\n*.md\n.env\nnode_modules/\n__pycache__/\n*.pyc\ndist/\n')
   if (service.team !== null) {
     const slug = teamSlug(service.team)
@@ -78,16 +93,46 @@ function historyRoute(s: SeedService): Route {
   return { method: 'GET', path: `${get.path}/{id}/history`, summary: `History of ${get.path.slice(1).replace(/s$/, '')}` }
 }
 
-/** OpenAPI spec of a service at contract version `version` (1-based); the repo carries the latest. */
-export function openapiSpec(s: SeedService, version: number = s.contractVersions ?? 1): string {
-  const routes = [...routesFor(s), ...(version > 1 ? [historyRoute(s)] : [])]
+/** Version number of the breaking contract version that `load --breaking` publishes after the seeded ones. */
+export function breakingVersion(s: SeedService): number {
+  return (s.contractVersions ?? 1) + 1
+}
+
+/** `info.version` label of the breaking contract version, the label `openapiSpec` gives that version. */
+export function breakingLabel(s: SeedService): string {
+  return `1.${breakingVersion(s) - 1}.0`
+}
+
+/** v1 path the breaking version removes (engine rule `path-removed`). */
+export function breakingRemovedPath(s: SeedService): string {
+  return routesFor(s)[2].path
+}
+
+/** GET path whose operation gets a new required query parameter `currency` in the breaking version (`parameter-required-added`). */
+export function breakingParameterPath(s: SeedService): string {
+  return routesFor(s)[0].path
+}
+
+const CURRENCY_PARAM = '      parameters:\n        - name: currency\n          in: query\n          required: true\n          schema:\n            type: string\n'
+
+/**
+ * OpenAPI spec of a service at contract version `version` (1-based); the repo carries the latest. The `breaking`
+ * variant keeps the later paths, removes `breakingRemovedPath` and adds a required `currency` query parameter.
+ */
+export function openapiSpec(s: SeedService, version: number = s.contractVersions ?? 1, options: { breaking?: boolean } = {}): string {
+  const removed = options.breaking ? breakingRemovedPath(s) : undefined
+  const required = options.breaking ? breakingParameterPath(s) : undefined
+  const routes = [...routesFor(s), ...(version > 1 ? [historyRoute(s)] : [])].filter((r) => r.path !== removed)
   const paths = [...new Set(routes.map((r) => r.path))]
   const idParam = '    parameters:\n      - name: id\n        in: path\n        required: true\n        schema:\n          type: string\n'
   const body = paths
     .map((path) => {
       const ops = routes
         .filter((r) => r.path === path)
-        .map((r) => `    ${r.method.toLowerCase()}:\n      summary: "${r.summary}"\n      responses:\n        "200":\n          description: OK\n`)
+        .map((r) => {
+          const params = r.method === 'GET' && r.path === required ? CURRENCY_PARAM : ''
+          return `    ${r.method.toLowerCase()}:\n      summary: "${r.summary}"\n${params}      responses:\n        "200":\n          description: OK\n`
+        })
         .join('')
       return `  "${path}":\n${path.includes('{id}') ? idParam : ''}${ops}`
     })

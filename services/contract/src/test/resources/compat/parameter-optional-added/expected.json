@@ -1,0 +1,3 @@
+{"isBreaking": false, "changes": [
+  {"rule": "parameter-optional-added", "breaking": false, "direction": "request", "method": "GET", "path": "/accounts/{id}/entries", "location": "header.X-Request-Id"}
+]}

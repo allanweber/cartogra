@@ -175,6 +175,7 @@ Immutable. `UNIQUE (contract_id, version_number)`; numbered under `SELECT … FO
 | `spec_raw` | TEXT NOT NULL | As submitted (YAML or JSON) |
 | `spec_canonical` | TEXT NOT NULL | Keys sorted recursively, arrays in order, compact JSON; `$ref` unresolved |
 | `spec_hash` | CHAR(64) NOT NULL | SHA-256 hex of `spec_canonical`; same as latest = no new version |
+| `is_breaking` | BOOLEAN | 5.3 (V004): breaking-change engine verdict against the previous latest version, set at publish; v1 = `false`; NULL = unchecked (stored before 5.3, no backfill) |
 | `created_at` | TIMESTAMPTZ | |
 | `deleted_at` | TIMESTAMPTZ | Set with the contract's |
 

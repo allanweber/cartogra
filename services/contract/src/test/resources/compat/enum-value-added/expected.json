@@ -1,0 +1,4 @@
+{"isBreaking": true, "changes": [
+  {"rule": "request-enum-value-added", "breaking": false, "direction": "request", "method": "POST", "path": "/payments", "location": "requestBody.status"},
+  {"rule": "response-enum-value-added", "breaking": true, "direction": "response", "method": "POST", "path": "/payments", "location": "responses.200.status"}
+]}

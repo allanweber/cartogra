@@ -1,6 +1,7 @@
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { callProtocol, declaredCalls, loadSeedFile } from '../src/schema.ts'
+import { loadSeed } from '../src/load.ts'
 import { godService, verify } from '../src/verify.ts'
 import { FakeApi } from './fakeApi.ts'
 
@@ -29,6 +30,78 @@ describe('verify contracts', () => {
       ['ledger-service v1 → v2 diff adds /ledgers/{id}/history', true],
       ['ledger-service re-publishing latest spec stores nothing', true],
     ])
+    expect(checks.find((c) => c.name === 'ledger-service v2 is compatible (path-added)')?.ok).toBe(true)
+  })
+
+  it('passes the default verify after load --breaking and publishes no new version', async () => {
+    const api = new FakeApi(seed)
+    const loaded = await loadSeed(api, seed, { ...opts, breaking: true })
+    const checks = await verify(api, seed, opts)
+    expect(checks.filter((c) => !c.ok)).toEqual([])
+    expect((await api.getContract(loaded.contracts['ledger-service'])).latestVersion.versionNumber).toBe(3)
+  })
+
+  it('passes when v2 is unchecked (stored before 5.3) and its live diff is compatible', async () => {
+    const api = new FakeApi(seed)
+    const diff = api.contractDiff.bind(api)
+    api.contractDiff = async (id, v) => {
+      const d = await diff(id, v)
+      return { ...d, to: { ...d.to, breaking: null } }
+    }
+    const checks = await verify(api, seed, opts)
+    expect(checks.find((c) => c.name === 'ledger-service v2 is compatible (path-added)')?.ok).toBe(true)
+  })
+
+  it('fails when v2 is stored as breaking', async () => {
+    const api = new FakeApi(seed)
+    const diff = api.contractDiff.bind(api)
+    api.contractDiff = async (id, v) => {
+      const d = await diff(id, v)
+      return { ...d, to: { ...d.to, breaking: true } }
+    }
+    const checks = await verify(api, seed, opts)
+    expect(checks.find((c) => c.name === 'ledger-service v2 is compatible (path-added)')?.ok).toBe(false)
+  })
+
+  it('fails when the live diff of v2 has no path-added', async () => {
+    const api = new FakeApi(seed)
+    const diff = api.contractDiff.bind(api)
+    api.contractDiff = async (id, v) => {
+      const d = await diff(id, v)
+      return { ...d, compatibility: { isBreaking: false, changes: [] } }
+    }
+    const checks = await verify(api, seed, opts)
+    expect(checks.find((c) => c.name === 'ledger-service v2 is compatible (path-added)')?.ok).toBe(false)
+  })
+
+  it('with breaking, passes when v3 is breaking with both rules and listed by the status filter', async () => {
+    const checks = await verify(new FakeApi(seed), seed, { ...opts, breaking: true })
+    expect(checks.filter((c) => !c.ok)).toEqual([])
+    expect(checks.filter((c) => c.name.startsWith('ledger-service')).map((c) => c.name)).toEqual(expect.arrayContaining([
+      'ledger-service contract at v3',
+      'ledger-service v2 is compatible (path-added)',
+      'ledger-service v3 is breaking (path-removed, parameter-required-added)',
+      'ledger-service listed with ?status=breaking',
+    ]))
+  })
+
+  it('with breaking, fails when the status filter does not list the contract', async () => {
+    const api = new FakeApi(seed)
+    const list = api.listContracts.bind(api)
+    api.listContracts = async (q, status) => (status === 'breaking' ? [] : list(q, status))
+    const checks = await verify(api, seed, { ...opts, breaking: true })
+    expect(checks.find((c) => c.name === 'ledger-service listed with ?status=breaking')?.ok).toBe(false)
+  })
+
+  it('with breaking, fails when the engine misses the required parameter', async () => {
+    const api = new FakeApi(seed)
+    const diff = api.contractDiff.bind(api)
+    api.contractDiff = async (id, v) => {
+      const d = await diff(id, v)
+      return { ...d, compatibility: { ...d.compatibility, changes: d.compatibility.changes.filter((c) => c.rule !== 'parameter-required-added') } }
+    }
+    const checks = await verify(api, seed, { ...opts, breaking: true })
+    expect(checks.find((c) => c.name === 'ledger-service v3 is breaking (path-removed, parameter-required-added)')?.ok).toBe(false)
   })
 
   it('fails when the list has no service name for the contract', async () => {

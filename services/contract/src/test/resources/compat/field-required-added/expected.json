@@ -1,0 +1,4 @@
+{"isBreaking": true, "changes": [
+  {"rule": "request-field-required-added", "breaking": true, "direction": "request", "method": "POST", "path": "/payments", "location": "requestBody.currency"},
+  {"rule": "response-field-added", "breaking": false, "direction": "response", "method": "POST", "path": "/payments", "location": "responses.200.currency"}
+]}

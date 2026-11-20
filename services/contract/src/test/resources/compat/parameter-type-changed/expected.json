@@ -1,0 +1,3 @@
+{"isBreaking": true, "changes": [
+  {"rule": "parameter-type-changed", "breaking": true, "direction": "request", "method": "GET", "path": "/accounts/{id}/entries", "location": "query.limit"}
+]}

@@ -1,0 +1,3 @@
+{"isBreaking": false, "changes": [
+  {"rule": "path-added", "breaking": false, "direction": "operation", "method": null, "path": "/accounts/{id}", "location": null}
+]}

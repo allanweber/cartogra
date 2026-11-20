@@ -1,3 +1,4 @@
+import { CompatibilityBadge } from '#/components/CompatibilityBadge'
 import { cn } from '#/lib/utils'
 import { relativeTime } from '#/lib/audit-format'
 
@@ -34,9 +35,12 @@ export function ContractTimeline({
                 active ? 'bg-muted' : 'hover:bg-muted/50',
               )}
             >
-              <span className="block font-mono text-sm font-medium">
-                v{v.versionNumber}
-                {v.label && <span className="text-muted-foreground"> · {v.label}</span>}
+              <span className="flex flex-wrap items-center justify-between gap-1">
+                <span className="font-mono text-sm font-medium">
+                  v{v.versionNumber}
+                  {v.label && <span className="text-muted-foreground"> · {v.label}</span>}
+                </span>
+                <CompatibilityBadge breaking={v.breaking} />
               </span>
               <span className="block text-xs text-muted-foreground">
                 <time dateTime={v.createdAt}>{relativeTime(v.createdAt)}</time>

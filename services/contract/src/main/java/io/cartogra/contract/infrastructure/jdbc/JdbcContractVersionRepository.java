@@ -27,6 +27,7 @@ public class JdbcContractVersionRepository implements ContractVersionRepository 
             rs.getString("spec_raw"),
             rs.getString("spec_canonical"),
             rs.getString("spec_hash"),
+            rs.getObject("is_breaking", Boolean.class),
             rs.getTimestamp("created_at").toInstant());
 
     private static final RowMapper<VersionHeader> HEADER_MAPPER = (rs, _) -> new VersionHeader(
@@ -35,6 +36,7 @@ public class JdbcContractVersionRepository implements ContractVersionRepository 
             rs.getInt("version_number"),
             rs.getString("label"),
             rs.getString("spec_hash"),
+            rs.getObject("is_breaking", Boolean.class),
             rs.getTimestamp("created_at").toInstant());
 
     private final NamedParameterJdbcTemplate jdbc;
@@ -47,9 +49,11 @@ public class JdbcContractVersionRepository implements ContractVersionRepository 
     public void insert(ContractVersion version) {
         jdbc.update("""
                 INSERT INTO contract_versions
-                    (id, tenant_id, contract_id, version_number, label, spec_raw, spec_canonical, spec_hash, created_at)
+                    (id, tenant_id, contract_id, version_number, label, spec_raw, spec_canonical, spec_hash, is_breaking,
+                     created_at)
                 VALUES
-                    (:id, :tenantId, :contractId, :versionNumber, :label, :specRaw, :specCanonical, :specHash, :createdAt)
+                    (:id, :tenantId, :contractId, :versionNumber, :label, :specRaw, :specCanonical, :specHash,
+                     :isBreaking, :createdAt)
                 """, new MapSqlParameterSource()
                 .addValue("id", version.id())
                 .addValue("tenantId", version.tenantId())
@@ -59,6 +63,7 @@ public class JdbcContractVersionRepository implements ContractVersionRepository 
                 .addValue("specRaw", version.specRaw())
                 .addValue("specCanonical", version.specCanonical())
                 .addValue("specHash", version.specHash())
+                .addValue("isBreaking", version.breaking())
                 .addValue("createdAt", Timestamp.from(version.createdAt())));
     }
 
@@ -101,7 +106,7 @@ public class JdbcContractVersionRepository implements ContractVersionRepository 
     @Override
     public List<VersionHeader> list(UUID tenantId, UUID contractId, int limit, int offset) {
         return jdbc.query("""
-                SELECT id, contract_id, version_number, label, spec_hash, created_at FROM contract_versions
+                SELECT id, contract_id, version_number, label, spec_hash, is_breaking, created_at FROM contract_versions
                 WHERE tenant_id = :tenantId AND contract_id = :contractId AND deleted_at IS NULL
                 ORDER BY version_number DESC
                 LIMIT :limit OFFSET :offset

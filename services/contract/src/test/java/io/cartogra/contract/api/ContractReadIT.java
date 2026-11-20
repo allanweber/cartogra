@@ -107,6 +107,58 @@ class ContractReadIT extends AbstractContractIT {
     }
 
     @Test
+    void statusFiltersOnTheLatestVersionAndPages() {
+        List<String> breaking = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            String id = create(UUID.randomUUID(), V2);
+            assertThat(http.publish(tenant, id, V1).statusCode()).isEqualTo(201);
+            breaking.add(id);
+        }
+        String compatible = create(UUID.randomUUID(), V1);
+        http.publish(tenant, compatible, V2);
+        String unchecked = create(UUID.randomUUID(), V1);
+        jdbc.update("UPDATE contract_versions SET is_breaking = NULL WHERE tenant_id = :t AND contract_id = :c",
+                new MapSqlParameterSource().addValue("t", tenant).addValue("c", UUID.fromString(unchecked)));
+        String otherTenant = data(new ContractHttp(port).create(UUID.randomUUID(), UUID.randomUUID(), V2))
+                .get("id").stringValue();
+
+        JsonNode page = data(http.read(tenant, "?status=breaking&limit=2&offset=0"));
+        assertThat(page.get("total").asLong()).isEqualTo(3);
+        assertThat(page.get("items").size()).isEqualTo(2);
+        JsonNode rest = data(http.read(tenant, "?status=breaking&limit=2&offset=2"));
+        assertThat(rest.get("items").size()).isEqualTo(1);
+        List<String> ids = new ArrayList<>();
+        page.get("items").forEach(c -> ids.add(c.get("id").stringValue()));
+        rest.get("items").forEach(c -> ids.add(c.get("id").stringValue()));
+        assertThat(ids).containsExactlyInAnyOrderElementsOf(breaking);
+        page.get("items").forEach(c -> assertThat(c.get("latestVersion").get("breaking").booleanValue()).isTrue());
+
+        JsonNode compat = data(http.read(tenant, "?status=compatible"));
+        assertThat(compat.get("total").asLong()).isEqualTo(1);
+        assertThat(compat.get("items").get(0).get("id").stringValue()).isEqualTo(compatible).isNotEqualTo(otherTenant);
+
+        JsonNode all = data(http.read(tenant, ""));
+        assertThat(all.get("total").asLong()).isEqualTo(5);
+        all.get("items").forEach(c -> {
+            if (c.get("id").stringValue().equals(unchecked)) {
+                assertThat(c.get("latestVersion").get("breaking").isNull()).isTrue();
+            }
+        });
+    }
+
+    @Test
+    void anUnknownStatusIsAValidationError() {
+        HttpResponse<String> resp = http.read(tenant, "?status=nope");
+
+        assertThat(resp.statusCode()).isEqualTo(400);
+        JsonNode body = objectMapper.readTree(resp.body());
+        assertThat(body.get("error").get("code").stringValue()).isEqualTo("VALIDATION_ERROR");
+        assertThat(body.get("error").get("details").has("status")).isTrue();
+        assertThat(body.get("traceId").stringValue()).matches("[0-9a-f]{32}")
+                .isEqualTo(resp.headers().firstValue("X-Trace-Id").orElseThrow());
+    }
+
+    @Test
     void listOmitsContractsOfDeletedServices() {
         UUID serviceId = UUID.randomUUID();
         create(serviceId, V1);
@@ -126,6 +178,7 @@ class ContractReadIT extends AbstractContractIT {
         List<Integer> numbers = new ArrayList<>();
         page.get("items").forEach(v -> numbers.add(v.get("versionNumber").asInt()));
         assertThat(numbers).containsExactly(2, 1);
+        page.get("items").forEach(v -> assertThat(v.get("breaking").booleanValue()).isFalse());
         assertThat(data(http.read(tenant, "/" + id + "/versions?limit=1&offset=1")).get("items").get(0)
                 .get("versionNumber").asInt()).isEqualTo(1);
         assertThat(http.read(UUID.randomUUID(), "/" + id + "/versions").statusCode()).isEqualTo(404);
@@ -152,6 +205,32 @@ class ContractReadIT extends AbstractContractIT {
             }
         });
         assertThat(added).anyMatch(line -> line.contains("/entries/{id}"));
+        JsonNode compatibility = diff.get("compatibility");
+        assertThat(compatibility.get("isBreaking").booleanValue()).isFalse();
+        JsonNode hit = compatibility.get("changes").get(0);
+        assertThat(compatibility.get("changes").size()).isEqualTo(1);
+        assertThat(hit.get("rule").stringValue()).isEqualTo("path-added");
+        assertThat(hit.get("breaking").booleanValue()).isFalse();
+        assertThat(hit.get("direction").stringValue()).isEqualTo("operation");
+        assertThat(hit.get("path").stringValue()).isEqualTo("/entries/{id}");
+        assertThat(diff.get("to").get("breaking").booleanValue()).isFalse();
+    }
+
+    @Test
+    void diffComputesCompatibilityForAnUncheckedVersion() {
+        String id = create(UUID.randomUUID(), V2);
+        http.publish(tenant, id, V1);
+        jdbc.update("UPDATE contract_versions SET is_breaking = NULL WHERE tenant_id = :t",
+                new MapSqlParameterSource("t", tenant));
+
+        JsonNode diff = data(http.read(tenant, "/" + id + "/versions/2/diff"));
+
+        assertThat(diff.get("to").get("breaking").isNull()).isTrue();
+        assertThat(diff.get("compatibility").get("isBreaking").booleanValue()).isTrue();
+        assertThat(diff.get("compatibility").get("changes").get(0).get("rule").stringValue())
+                .isEqualTo("path-removed");
+        assertThat(data(http.read(tenant, "?status=breaking")).get("total").asLong()).isZero();
+        assertThat(data(http.read(tenant, "?status=compatible")).get("total").asLong()).isZero();
     }
 
     @Test

@@ -1,0 +1,16 @@
+openapi: 3.0.3
+info: {title: Golden, version: 1.0.0}
+paths:
+  /payments:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {allOf: [{type: object, required: [amount], properties: {amount: {type: integer}}}, {type: object, required: [currency], properties: {memo: {type: string}, currency: {type: string}}}]}
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {allOf: [{type: object, required: [amount], properties: {amount: {type: integer}}}, {type: object, required: [currency], properties: {memo: {type: string}, currency: {type: string}}}]}

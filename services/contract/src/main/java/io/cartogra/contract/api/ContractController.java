@@ -10,6 +10,7 @@ import io.cartogra.contract.api.dto.VersionDiffResponse;
 import io.cartogra.contract.api.dto.ContractVersionResponse;
 import io.cartogra.contract.domain.ContractService;
 import io.cartogra.contract.domain.VersionPublication;
+import io.cartogra.contract.domain.exception.InvalidParameterException;
 import io.cartogra.web.api.TracedResponse;
 import jakarta.validation.Valid;
 import org.jspecify.annotations.Nullable;
@@ -64,9 +65,11 @@ public class ContractController {
     public ResponseEntity<ApiResponse<PageResult<ContractSummaryResponse>>> list(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
             @RequestParam(required = false) @Nullable String q,
+            @RequestParam(required = false) @Nullable String status,
             @RequestParam(defaultValue = "20") int limit,
             @RequestParam(defaultValue = "0") int offset) {
-        return TracedResponse.ok(contractService.list(tenantId, q, limit, offset).map(ContractSummaryResponse::from));
+        return TracedResponse.ok(contractService.list(tenantId, q, breakingFilter(status), limit, offset)
+                .map(ContractSummaryResponse::from));
     }
 
     @GetMapping("/{id}/versions")
@@ -77,6 +80,17 @@ public class ContractController {
             @RequestParam(defaultValue = "0") int offset) {
         return TracedResponse.ok(contractService.listVersions(tenantId, id, limit, offset)
                 .map(ContractVersionResponse::from));
+    }
+
+    private static @Nullable Boolean breakingFilter(@Nullable String status) {
+        if (status == null || status.isEmpty()) {
+            return null;
+        }
+        return switch (status) {
+            case "breaking" -> true;
+            case "compatible" -> false;
+            default -> throw new InvalidParameterException("status", "must be breaking or compatible");
+        };
     }
 
     @GetMapping("/{id}/versions/{versionNumber}/diff")

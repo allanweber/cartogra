@@ -1,0 +1,4 @@
+{"isBreaking": true, "changes": [
+  {"rule": "request-field-removed", "breaking": false, "direction": "request", "method": "POST", "path": "/payments", "location": "requestBody.payer.name"},
+  {"rule": "response-field-removed", "breaking": true, "direction": "response", "method": "POST", "path": "/payments", "location": "responses.200.payer.name"}
+]}

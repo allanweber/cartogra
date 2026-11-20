@@ -1,0 +1,3 @@
+{"isBreaking": false, "changes": [
+  {"rule": "request-field-required-removed", "breaking": false, "direction": "request", "method": "POST", "path": "/payments", "location": "requestBody.memo"}
+]}

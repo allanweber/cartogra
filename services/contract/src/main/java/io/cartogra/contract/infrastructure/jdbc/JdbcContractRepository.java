@@ -41,12 +41,18 @@ public class JdbcContractRepository implements ContractRepository {
                     rs.getInt("version_number"),
                     rs.getString("label"),
                     rs.getString("spec_hash"),
+                    rs.getObject("is_breaking", Boolean.class),
                     rs.getTimestamp("version_created_at").toInstant()),
             rs.getTimestamp("updated_at").toInstant());
 
     private static final String LIVE_FROM = """
             FROM api_contracts c
             LEFT JOIN services s ON s.tenant_id = c.tenant_id AND s.service_id = c.service_id
+            CROSS JOIN LATERAL (
+                SELECT id, version_number, label, spec_hash, is_breaking, created_at FROM contract_versions
+                WHERE tenant_id = c.tenant_id AND contract_id = c.id AND deleted_at IS NULL
+                ORDER BY version_number DESC LIMIT 1
+            ) v
             WHERE c.tenant_id = :tenantId AND c.deleted_at IS NULL
             """;
 
@@ -121,42 +127,40 @@ public class JdbcContractRepository implements ContractRepository {
     }
 
     @Override
-    public List<ContractSummary> listLive(UUID tenantId, @Nullable String q, int limit, int offset) {
-        MapSqlParameterSource params = searchParams(tenantId, q)
+    public List<ContractSummary> listLive(UUID tenantId, @Nullable String q, @Nullable Boolean breaking, int limit,
+                                          int offset) {
+        MapSqlParameterSource params = filterParams(tenantId, q, breaking)
                 .addValue("limit", limit)
                 .addValue("offset", offset);
         return jdbc.query("""
                 SELECT c.id, c.service_id, c.updated_at, s.name AS service_name,
-                       v.id AS version_id, v.version_number, v.label, v.spec_hash, v.created_at AS version_created_at
-                FROM api_contracts c
-                LEFT JOIN services s ON s.tenant_id = c.tenant_id AND s.service_id = c.service_id
-                CROSS JOIN LATERAL (
-                    SELECT id, version_number, label, spec_hash, created_at FROM contract_versions
-                    WHERE tenant_id = c.tenant_id AND contract_id = c.id AND deleted_at IS NULL
-                    ORDER BY version_number DESC LIMIT 1
-                ) v
-                WHERE c.tenant_id = :tenantId AND c.deleted_at IS NULL
-                """ + searchClause(q) + """
+                       v.id AS version_id, v.version_number, v.label, v.spec_hash, v.is_breaking,
+                       v.created_at AS version_created_at
+                """ + LIVE_FROM + filterClause(q, breaking) + """
                 ORDER BY c.updated_at DESC, c.id
                 LIMIT :limit OFFSET :offset
                 """, params, SUMMARY_MAPPER);
     }
 
     @Override
-    public long countLive(UUID tenantId, @Nullable String q) {
-        Long count = jdbc.queryForObject("SELECT count(*) " + LIVE_FROM + searchClause(q),
-                searchParams(tenantId, q), Long.class);
+    public long countLive(UUID tenantId, @Nullable String q, @Nullable Boolean breaking) {
+        Long count = jdbc.queryForObject("SELECT count(*) " + LIVE_FROM + filterClause(q, breaking),
+                filterParams(tenantId, q, breaking), Long.class);
         return count == null ? 0 : count;
     }
 
-    private static String searchClause(@Nullable String q) {
-        return q == null || q.isBlank() ? "" : " AND s.name ILIKE :q\n";
+    private static String filterClause(@Nullable String q, @Nullable Boolean breaking) {
+        return (q == null || q.isBlank() ? "" : " AND s.name ILIKE :q\n")
+                + (breaking == null ? "" : " AND v.is_breaking = :breaking\n");
     }
 
-    private static MapSqlParameterSource searchParams(UUID tenantId, @Nullable String q) {
+    private static MapSqlParameterSource filterParams(UUID tenantId, @Nullable String q, @Nullable Boolean breaking) {
         MapSqlParameterSource params = new MapSqlParameterSource().addValue("tenantId", tenantId);
         if (q != null && !q.isBlank()) {
             params.addValue("q", "%" + q.trim().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%");
+        }
+        if (breaking != null) {
+            params.addValue("breaking", breaking);
         }
         return params;
     }

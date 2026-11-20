@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { openapiSpec, remoteFor, renderRepo, routesFor, teamSlug } from '../src/repos.ts'
+import { breakingVersion, openapiSpec, parseRepoArgs, remoteFor, renderRepo, routesFor, teamSlug } from '../src/repos.ts'
 import { loadSeedFile, type SeedService } from '../src/schema.ts'
 
 const seed = loadSeedFile(resolve(import.meta.dirname, '../seed-data.json'))
@@ -50,6 +50,19 @@ describe('renderRepo', () => {
     expect(openapiSpec(ledger, 2)).toContain('"/ledgers/{id}/history":')
   })
 
+  it('renders a breaking version that removes a v1 path and adds a required currency parameter', () => {
+    const ledger = byName('ledger-service')
+    const spec = openapiSpec(ledger, breakingVersion(ledger), { breaking: true })
+    expect(breakingVersion(ledger)).toBe(3)
+    expect(spec).toContain('version: "1.2.0"')
+    expect(spec).not.toContain('"/ledgers/{id}":')
+    expect(spec).toContain('"/ledgers/{id}/history":')
+    expect(spec).toContain('  "/ledgers":\n    get:\n      summary: "List ledgers"\n      parameters:\n        - name: currency\n          in: query\n          required: true')
+    expect(spec.match(/name: currency/g)).toHaveLength(1)
+    expect(renderRepo(ledger, { breaking: true }).get('openapi.yaml')).toBe(spec)
+    expect(renderRepo(ledger).get('openapi.yaml')).not.toContain('currency')
+  })
+
   it('is deterministic', () => {
     expect([...renderRepo(byName('card-service'))]).toEqual([...renderRepo(byName('card-service'))])
   })
@@ -74,5 +87,17 @@ describe('remoteFor', () => {
 
   it('slugs team names', () => {
     expect(teamSlug('Payments')).toBe('payments')
+  })
+})
+
+describe('parseRepoArgs', () => {
+  it('reads --provider and --breaking in any order', () => {
+    expect(parseRepoArgs([])).toEqual({ provider: undefined, breaking: false })
+    expect(parseRepoArgs(['--breaking', '--provider', 'github'])).toEqual({ provider: 'github', breaking: true })
+    expect(parseRepoArgs(['--provider', 'azure'])).toEqual({ provider: 'azure', breaking: false })
+  })
+
+  it('rejects an unknown provider', () => {
+    expect(() => parseRepoArgs(['--provider', 'gitlab'])).toThrow('--provider must be github or azure')
   })
 })

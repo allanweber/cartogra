@@ -1,5 +1,5 @@
 import { ApiError, type CartograApi, type CatalogService } from './api.ts'
-import { openapiSpec } from './repos.ts'
+import { breakingLabel, breakingVersion, openapiSpec } from './repos.ts'
 import { callProtocol, declaredCalls, edgeKey, type Protocol, type SeedData } from './schema.ts'
 
 export interface LoadOptions {
@@ -10,6 +10,8 @@ export interface LoadOptions {
   pollMs?: number
   /** Leave owners unassigned so CODEOWNERS (SCM sync) is the only ownership source. */
   skipOwners?: boolean
+  /** After the seeded contract versions, publish the breaking version (`openapiSpec(..., { breaking: true })`). */
+  breaking?: boolean
 }
 
 export interface LoadSummary {
@@ -94,17 +96,22 @@ export async function loadSeed(api: CartograApi, seed: SeedData, options: LoadOp
   }
   log(`edges: ${summary.edgesCreated} created, ${summary.edgesExisting} already declared`)
 
-  await loadContracts(api, seed, services, summary, log)
+  await loadContracts(api, seed, services, summary, log, options.breaking ?? false)
   return summary
 }
 
-/** Creates each contract with version 1 and publishes 2..n; a re-run gets 409 then 200s and stores nothing. */
+/**
+ * Creates each contract with version 1 and publishes 2..n; a re-run gets 409 then 200s and stores nothing. With
+ * `breaking`, it then publishes the breaking version. A contract already at the breaking label is left as it is, also
+ * by a plain load: the seeded spec would otherwise come back as a new version.
+ */
 async function loadContracts(
   api: CartograApi,
   seed: SeedData,
   services: Map<string, CatalogService>,
   summary: LoadSummary,
   log: (message: string) => void,
+  breaking: boolean,
 ): Promise<void> {
   for (const seeded of seed.services) {
     const versions = seeded.contractVersions
@@ -120,8 +127,18 @@ async function loadContracts(
       contractId = error.details.contractId
     }
     summary.contracts[seeded.name] = contractId
-    for (let v = 2; v <= versions; v++) {
-      const published = await api.publishContractVersion(contractId, openapiSpec(seeded, v))
+    const breakingAt = breakingVersion(seeded)
+    const latest = (await api.getContract(contractId)).latestVersion
+    if (latest.label === breakingLabel(seeded)) {
+      if (!breaking) {
+        log(`contract kept: ${seeded.name} is at the breaking version v${latest.versionNumber} (${latest.label}); a plain load does not publish over it`)
+      }
+      continue
+    }
+    const specs = Array.from({ length: versions - 1 }, (_, i) => openapiSpec(seeded, i + 2))
+    if (breaking) specs.push(openapiSpec(seeded, breakingAt, { breaking: true }))
+    for (const spec of specs) {
+      const published = await api.publishContractVersion(contractId, spec)
       if (published.created) {
         summary.contractVersionsPublished++
         log(`contract version published: ${seeded.name} v${published.version.versionNumber} (${published.version.label})`)

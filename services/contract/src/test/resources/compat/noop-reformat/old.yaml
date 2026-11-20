@@ -1,0 +1,19 @@
+# Ledger
+openapi: 3.0.3
+info:
+  title: Ledger
+  version: 1.0.0
+paths:
+  /entries:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount: {type: integer}
+                kind: {type: string, enum: [debit, credit]}
+      responses:
+        '200': {description: ok}

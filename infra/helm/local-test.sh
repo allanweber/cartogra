@@ -384,6 +384,67 @@ pass "removed Service keeps its row and owner"
 remove_check_service
 wait_for "check service removed from catalog" "$REGISTRY_TIMEOUT" absent in_orphan_list
 
+step "Check 5.3 breaking-change engine"
+CONTRACTS_API="$URL/api/v1/contracts"
+compat_service=$(admin -X POST -H 'Content-Type: application/json' \
+  -d "{\"name\":\"compat-check-$(date +%s)\"}" "$SERVICES_API" | jq -r '.data.id // empty') || true
+[ -n "$compat_service" ] || fail "register throwaway service"
+on_exit "admin -X DELETE '$SERVICES_API/$compat_service' >/dev/null 2>&1 || true"
+
+compat_spec() {
+  printf 'openapi: 3.0.3\ninfo: {title: compat-check, version: %s}\npaths:\n  /entries:\n    get:\n      responses:\n        "200": {description: ok}\n%s' "$1" "$2"
+}
+COMPAT_REMOVED_PATH='  /entries/{id}:
+    get:
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        "200": {description: ok}
+'
+compat_id=$(jq -n --arg s "$compat_service" --arg spec "$(compat_spec 1.0.0 "$COMPAT_REMOVED_PATH")" \
+  '{serviceId: $s, spec: $spec}' | admin -X POST -H 'Content-Type: application/json' -d @- "$CONTRACTS_API" \
+  | jq -r '.data.id // empty') || true
+[ -n "$compat_id" ] || fail "create contract v1"
+v2_breaking=$(jq -n --arg spec "$(compat_spec 2.0.0 '')" '{spec: $spec}' \
+  | admin -X POST -H 'Content-Type: application/json' -d @- "$CONTRACTS_API/$compat_id/versions" \
+  | jq -r '.data.breaking') || true
+[ "$v2_breaking" = true ] || fail "v2 with a removed path stored breaking=$v2_breaking"
+pass "v2 with a removed path stored as breaking"
+
+admin "$CONTRACTS_API/$compat_id/versions/2/diff" \
+  | jq -e '.data.compatibility.isBreaking == true
+      and any(.data.compatibility.changes[]; .rule == "path-removed" and .path == "/entries/{id}")' >/dev/null \
+  || fail "diff compatibility has no path-removed"
+pass "diff compatibility isBreaking with path-removed"
+
+admin "$CONTRACTS_API?status=breaking&limit=100" | jq -e --arg id "$compat_id" 'any(.data.items[]; .id == $id)' >/dev/null \
+  || fail "status=breaking does not list the contract"
+admin "$CONTRACTS_API?status=compatible&limit=100" | jq -e --arg id "$compat_id" 'all(.data.items[]; .id != $id)' >/dev/null \
+  || fail "status=compatible lists the breaking contract"
+pass "status filter lists the contract only under breaking"
+
+bad_status=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $token" "$CONTRACTS_API?status=nope")
+[ "$bad_status" = 400 ] || fail "status=nope returned $bad_status"
+pass "status=nope 400"
+
+# Reads v2 by its number: a --reuse run finds the v3 that the seed step below publishes.
+ledger_contract=$(admin "$CONTRACTS_API?q=ledger-service&limit=100" \
+  | jq -r '.data.items[] | select(.serviceName == "ledger-service") | .id') || true
+[ -n "$ledger_contract" ] || fail "seeded ledger-service contract not found"
+ledger_breaking=$(admin "$CONTRACTS_API/$ledger_contract/versions/2/diff" | jq -r '.data.to.breaking') || true
+[ "$ledger_breaking" = false ] || fail "seeded ledger-service v2 breaking=$ledger_breaking"
+pass "seeded ledger-service v2 is compatible"
+
+# The seed CLI runs on the host against the k3d gateway, as the acme admin that the bootstrap Job uses.
+acme() {
+  (cd seed/acme-fintech && ACME_API_URL="$URL" ACME_EMAIL="$ACME_ADMIN_EMAIL" ACME_PASSWORD="$ADMIN_PASSWORD" \
+    ACME_TENANT_ID=a0000000-0000-4000-8000-00000000ac3e node src/cli.ts "$@")
+}
+acme load --breaking || fail "acme load --breaking"
+pass "acme load --breaking"
+acme verify --breaking --no-spans || fail "acme verify --breaking"
+pass "acme verify --breaking"
+
 step "Check team save, team-member access check and drift accept"
 TEAMS_API="$URL/api/v1/registry/teams"
 TOPOLOGY_API="$URL/api/v1/topology"

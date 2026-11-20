@@ -1,0 +1,9 @@
+openapi: 3.0.3
+info: {title: Golden, version: 1.0.0}
+paths:
+  /accounts/{id}:
+    get:
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        '200': {description: ok}

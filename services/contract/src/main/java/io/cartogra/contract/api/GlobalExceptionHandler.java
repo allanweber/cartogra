@@ -5,6 +5,7 @@ import io.cartogra.common.api.ApiErrorResponse;
 import io.cartogra.common.api.ErrorCodes;
 import io.cartogra.contract.domain.exception.ContractAlreadyExistsException;
 import io.cartogra.contract.domain.exception.ContractNotFoundException;
+import io.cartogra.contract.domain.exception.InvalidParameterException;
 import io.cartogra.contract.domain.exception.InvalidSpecException;
 import io.cartogra.contract.domain.exception.MissingFieldException;
 import io.cartogra.contract.domain.exception.RegistryUnavailableException;
@@ -77,6 +78,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleMissingField(MissingFieldException ex) {
         return respond(HttpStatus.BAD_REQUEST, ErrorCodes.VALIDATION_ERROR, "Validation failed",
                 Map.of(ex.field(), "must not be null"));
+    }
+
+    @ExceptionHandler(InvalidParameterException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidParameter(InvalidParameterException ex) {
+        return respond(HttpStatus.BAD_REQUEST, ErrorCodes.VALIDATION_ERROR, "Validation failed",
+                Map.of(ex.parameter(), ex.reason()));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

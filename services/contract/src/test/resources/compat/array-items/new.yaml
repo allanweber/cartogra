@@ -1,0 +1,16 @@
+openapi: 3.0.3
+info: {title: Golden, version: 1.0.0}
+paths:
+  /payments:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, properties: {lines: {type: array, items: {type: object, properties: {sku: {type: integer}, qty: {type: integer}}}}}}
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {type: array, items: {type: object, properties: {}}}

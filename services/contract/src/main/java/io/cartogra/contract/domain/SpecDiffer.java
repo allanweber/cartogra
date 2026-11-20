@@ -17,9 +17,10 @@ import java.util.List;
 import java.util.TreeSet;
 
 /**
- * Compares two canonical specs: a structural diff of the JSON trees (objects key by key, arrays by index) and a
- * side-by-side line diff of their YAML renderings. Canonical specs have sorted keys, so neither diff reports
- * reordering or reformatting.
+ * Compares two canonical specs and gives three results. The first is a structural diff of the JSON trees (objects key
+ * by key, arrays by index). The second is a side-by-side line diff of their YAML renderings. The third is the
+ * compatibility verdict of the {@link BreakingChangeEngine}. The differ parses each spec once for the three results.
+ * Canonical specs have sorted keys, so a change of key order or of format is not a diff.
  */
 @Component
 public class SpecDiffer {
@@ -29,12 +30,18 @@ public class SpecDiffer {
             .disable(YAMLWriteFeature.WRITE_DOC_START_MARKER)
             .enable(YAMLWriteFeature.MINIMIZE_QUOTES)
             .build();
+    private final BreakingChangeEngine engine;
+
+    public SpecDiffer(BreakingChangeEngine engine) {
+        this.engine = engine;
+    }
 
     public VersionDiff diff(@Nullable ContractVersion from, ContractVersion to) {
         JsonNode toTree = json.readTree(to.specCanonical());
         JsonNode fromTree = from == null ? null : json.readTree(from.specCanonical());
         return new VersionDiff(from == null ? null : VersionHeader.of(from), VersionHeader.of(to),
-                changes(fromTree, toTree), lines(fromTree == null ? "" : toYaml(fromTree), toYaml(toTree)));
+                changes(fromTree, toTree), lines(fromTree == null ? "" : toYaml(fromTree), toYaml(toTree)),
+                engine.compare(fromTree, toTree));
     }
 
     /** Structural changes from {@code from} to {@code to}; a null {@code from} reports every top-level key as added. */

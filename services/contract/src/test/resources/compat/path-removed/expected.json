@@ -1,0 +1,3 @@
+{"isBreaking": true, "changes": [
+  {"rule": "path-removed", "breaking": true, "direction": "operation", "method": null, "path": "/accounts/{id}", "location": null}
+]}

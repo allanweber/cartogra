@@ -1,5 +1,5 @@
-import { render } from '@testing-library/react'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { render, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
   DependencyGraph,
@@ -168,22 +168,30 @@ function graph(): Graph {
   }
 }
 
+const originalMatchMedia = window.matchMedia
+
+function mockReducedMotion(matches: boolean) {
+  window.matchMedia = (query: string) => ({
+    matches,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })
+}
+
+afterEach(() => {
+  window.matchMedia = originalMatchMedia
+})
+
 describe('DependencyGraph camera pan', () => {
   // Forces the synchronous reduced-motion settle path so the force simulation finishes
   // (and centerOnService can act on real positions) within the render itself, instead of
   // needing to wait on d3's async tick loop.
-  beforeEach(() => {
-    window.matchMedia = (query: string) => ({
-      matches: true,
-      media: query,
-      onchange: null,
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      addListener: () => {},
-      removeListener: () => {},
-      dispatchEvent: () => false,
-    })
-  })
+  beforeEach(() => mockReducedMotion(true))
 
   it('pans when selectedServiceId is set externally (a deep link), not by a click', () => {
     const { container, rerender } = render(
@@ -218,4 +226,22 @@ describe('DependencyGraph camera pan', () => {
 
     expect(root.getAttribute('transform')).toBe(transformAfterClick)
   })
+})
+
+describe('DependencyGraph settled signal', () => {
+  it('marks the svg settled after the synchronous reduced-motion layout', () => {
+    mockReducedMotion(true)
+    const { container } = render(<DependencyGraph graph={graph()} selectedServiceId={null} onSelectNode={() => {}} />)
+
+    expect(container.querySelector('svg')!.getAttribute('data-settled')).toBe('true')
+  })
+
+  it('marks the svg unsettled while the animated simulation runs, then settled at its end', async () => {
+    mockReducedMotion(false)
+    const { container } = render(<DependencyGraph graph={graph()} selectedServiceId={null} onSelectNode={() => {}} />)
+    const svg = container.querySelector('svg')!
+
+    expect(svg.getAttribute('data-settled')).toBe('false')
+    await waitFor(() => expect(svg.getAttribute('data-settled')).toBe('true'), { timeout: 10_000 })
+  }, 15_000)
 })

@@ -70,9 +70,17 @@ const V1: ContractVersion = {
   versionNumber: 1,
   label: '1.0.0',
   specHash: 'a'.repeat(64),
+  breaking: false,
   createdAt: '2026-11-01T00:00:00Z',
 }
-const V2: ContractVersion = { ...V1, id: 'v-2', versionNumber: 2, label: '1.1.0', specHash: 'b'.repeat(64) }
+const V2: ContractVersion = {
+  ...V1,
+  id: 'v-2',
+  versionNumber: 2,
+  label: '1.1.0',
+  specHash: 'b'.repeat(64),
+  breaking: true,
+}
 
 const LIST: ContractsPage = {
   items: [
@@ -108,6 +116,29 @@ const DIFF_V2: VersionDiff = {
     { kind: 'changed', leftNo: 2, left: '  version: 1.0.0', rightNo: 2, right: '  version: 1.1.0' },
     { kind: 'added', leftNo: null, left: null, rightNo: 3, right: '  /entries/{id}:' },
   ],
+  compatibility: {
+    isBreaking: true,
+    changes: [
+      {
+        rule: 'path-added',
+        breaking: false,
+        direction: 'operation',
+        method: null,
+        path: '/entries/{id}',
+        location: null,
+        message: 'Path /entries/{id} was added',
+      },
+      {
+        rule: 'path-removed',
+        breaking: true,
+        direction: 'operation',
+        method: null,
+        path: '/entries',
+        location: null,
+        message: 'Path /entries was removed',
+      },
+    ],
+  },
 }
 
 const DIFF_V1: VersionDiff = {
@@ -115,6 +146,7 @@ const DIFF_V1: VersionDiff = {
   to: V1,
   changes: [],
   lines: [{ kind: 'added', leftNo: null, left: null, rightNo: 1, right: 'info:' }],
+  compatibility: { isBreaking: false, changes: [] },
 }
 
 function renderRoute(route: unknown) {
@@ -171,6 +203,37 @@ describe('ContractsPage', () => {
     expect(apiFetch).toHaveBeenCalledWith('/v1/contracts?limit=20&offset=20&q=ledger')
   })
 
+  it('shows a Status column with the verdict of the latest version', async () => {
+    mockApi({
+      '/v1/contracts?': {
+        ...LIST,
+        items: [...LIST.items, { ...LIST.items[1], id: 'c-3', latestVersion: { ...V1, breaking: null } }],
+      },
+    })
+    renderRoute(ListRoute)
+
+    await screen.findByRole('link', { name: 'ledger-service' })
+    expect(screen.getByRole('columnheader', { name: 'Status' })).toBeInTheDocument()
+    const rows = screen.getAllByRole('row').slice(1)
+    expect(within(rows[0]).getByText('Breaking')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('Compatible')).toBeInTheDocument()
+    expect(within(rows[2]).queryByText(/Breaking|Compatible/)).not.toBeInTheDocument()
+  })
+
+  it('writes the status toggle to the URL, resets the page and sends it to the API', async () => {
+    mockApi()
+    setMockSearch({ q: 'ledger', page: 2 })
+    renderRoute(ListRoute)
+
+    fireEvent.click(await screen.findByRole('radio', { name: 'Breaking' }))
+    expect(mockSearch).toEqual({ q: 'ledger', status: 'breaking', page: undefined })
+    await screen.findByRole('link', { name: 'ledger-service' })
+    expect(apiFetch).toHaveBeenCalledWith('/v1/contracts?limit=20&offset=0&q=ledger&status=breaking')
+
+    fireEvent.click(screen.getByRole('radio', { name: 'All' }))
+    expect(mockSearch.status).toBeUndefined()
+  })
+
   it('shows the trace id when the list fails', async () => {
     mockApi({ '/v1/contracts?': new ApiError('INTERNAL_ERROR', 'Boom', 'trace-123') })
     renderRoute(ListRoute)
@@ -196,6 +259,9 @@ describe('ContractDetailPage', () => {
     const changes = await screen.findByRole('list', { name: 'Changes' })
     expect(within(changes).getByText('paths › /entries/{id}')).toBeInTheDocument()
     expect(within(changes).getByText('1.0.0 → 1.1.0')).toBeInTheDocument()
+    const breaking = screen.getByRole('list', { name: 'Breaking changes' })
+    expect(within(breaking).getByText('path-removed')).toBeInTheDocument()
+    expect(screen.getByRole('list', { name: 'Compatible changes' })).toBeInTheDocument()
     const table = screen.getByRole('table', { name: 'Diff v1 to v2' })
     expect(table.querySelectorAll('tr[data-kind="added"]')).toHaveLength(1)
     expect(table.querySelectorAll('tr[data-kind="changed"]')).toHaveLength(1)
@@ -206,6 +272,9 @@ describe('ContractDetailPage', () => {
     renderRoute(DetailRoute)
 
     const timeline = await screen.findByRole('list', { name: 'Version timeline' })
+    const [v2Item, v1Item] = within(timeline).getAllByRole('listitem')
+    expect(within(v2Item).getByText('Breaking')).toBeInTheDocument()
+    expect(within(v1Item).getByText('Compatible')).toBeInTheDocument()
     fireEvent.click(within(timeline).getByRole('button', { name: /v1/ }))
 
     expect(mockSearch).toEqual({ v: 1 })

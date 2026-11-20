@@ -4,26 +4,32 @@ import { useEffect, useState } from 'react'
 import { z } from 'zod'
 
 import { AppLayout } from '#/components/AppLayout'
+import { CompatibilityBadge } from '#/components/CompatibilityBadge'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Card, CardContent } from '#/components/ui/card'
 import { Input } from '#/components/ui/input'
 import { Skeleton } from '#/components/ui/skeleton'
+import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
 import { CONTRACTS_PAGE_SIZE, useContracts } from '#/hooks/useContracts'
 import { useDebounce } from '#/hooks/useDebounce'
 import { ApiError } from '#/lib/api'
 import { relativeTime } from '#/lib/audit-format'
+import { COMPATIBILITY_STATUSES, type CompatibilityStatus } from '#/lib/contract-types'
 
 const contractsSearchSchema = z.object({
   q: z.string().optional(),
   page: z.number().int().min(0).optional(),
+  status: z.enum(COMPATIBILITY_STATUSES).optional(),
 })
 
 export const Route = createFileRoute('/_authenticated/contracts/')({
   component: ContractsPage,
   validateSearch: contractsSearchSchema,
 })
+
+const STATUS_LABELS: Record<CompatibilityStatus, string> = { breaking: 'Breaking', compatible: 'Compatible' }
 
 const HEADER = 'px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground'
 
@@ -35,26 +41,47 @@ function ContractsPage() {
   const dQuery = useDebounce(query, 400)
   useEffect(() => {
     if (dQuery !== (search.q ?? '')) {
-      navigate({ search: { q: dQuery || undefined, page: undefined }, replace: true })
+      navigate({ search: (prev) => ({ ...prev, q: dQuery || undefined, page: undefined }), replace: true })
     }
   }, [dQuery])
 
-  const { data, isLoading, error, refetch } = useContracts(search.q ?? '', page)
+  const { data, isLoading, error, refetch } = useContracts(search.q ?? '', page, search.status)
   const total = data?.total ?? 0
   const lastPage = Math.max(0, Math.ceil(total / CONTRACTS_PAGE_SIZE) - 1)
 
   return (
     <AppLayout title="Contracts" description="OpenAPI contracts and their version history">
       <div className="space-y-4">
-        <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by service"
-            aria-label="Search contracts by service"
-            className="pl-9"
-          />
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative w-full max-w-sm">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by service"
+              aria-label="Search contracts by service"
+              className="pl-9"
+            />
+          </div>
+          <ToggleGroup
+            type="single"
+            value={search.status ?? 'all'}
+            onValueChange={(value) => {
+              const parsed = contractsSearchSchema.shape.status.safeParse(value === 'all' || !value ? undefined : value)
+              if (!parsed.success) return
+              navigate({ search: (prev) => ({ ...prev, status: parsed.data, page: undefined }) })
+            }}
+            variant="outline"
+            size="sm"
+            aria-label="Filter by compatibility"
+          >
+            <ToggleGroupItem value="all">All</ToggleGroupItem>
+            {COMPATIBILITY_STATUSES.map((status) => (
+              <ToggleGroupItem key={status} value={status}>
+                {STATUS_LABELS[status]}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
         </div>
 
         {error ? (
@@ -78,6 +105,7 @@ function ContractsPage() {
                     <tr className="border-b border-border bg-muted/50">
                       <th className={HEADER}>Service</th>
                       <th className={HEADER}>Latest version</th>
+                      <th className={HEADER}>Status</th>
                       <th className={HEADER}>Last changed</th>
                     </tr>
                   </thead>
@@ -85,7 +113,7 @@ function ContractsPage() {
                     {isLoading ? (
                       Array.from({ length: 4 }).map((_, i) => (
                         <tr key={i}>
-                          <td colSpan={3} className="px-4 py-3">
+                          <td colSpan={4} className="px-4 py-3">
                             <Skeleton className="h-5 w-full" />
                           </td>
                         </tr>
@@ -108,13 +136,16 @@ function ContractsPage() {
                               {contract.latestVersion.label && ` · ${contract.latestVersion.label}`}
                             </Badge>
                           </td>
+                          <td className="px-4 py-3">
+                            <CompatibilityBadge breaking={contract.latestVersion.breaking} />
+                          </td>
                           <td className="px-4 py-3 text-muted-foreground">{relativeTime(contract.updatedAt)}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={3} className="px-4 py-8 text-center text-sm text-muted-foreground">
-                          {search.q ? 'No contracts match this search.' : 'No contracts yet.'}
+                        <td colSpan={4} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                          {search.q || search.status ? 'No contracts match this search.' : 'No contracts yet.'}
                         </td>
                       </tr>
                     )}

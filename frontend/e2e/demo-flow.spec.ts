@@ -5,6 +5,7 @@ import { expect, test } from '@playwright/test'
 import { Client } from 'pg'
 
 import { runInfoPath } from './global-setup'
+import { waitForGraphSettled } from './graph'
 
 const dbUrl = process.env.E2E_DB_URL ?? 'postgresql://cartogra:cartogra@localhost:5436/cartogra'
 const otlpTracesUrl = process.env.E2E_OTLP_TRACES_URL ?? 'http://localhost:4318/v1/traces'
@@ -159,6 +160,7 @@ test('register services, declare a dependency, and see it on the graph', async (
   // computation on an SVG <g> with a transform attribute lands on the raw canvas instead
   // of the node (same reason the earlier `.graph-node circle` click above targets a circle).
   const thirdNode = page.getByRole('button', { name: new RegExp(`^${thirdService},`) })
+  await waitForGraphSettled(page)
   await thirdNode.locator('circle.graph-node-hit').click()
   // Both other cycle members appear in both directions here (a 3-cycle walked either way
   // reaches the same two other nodes), hence .first() rather than a single unique match.
@@ -270,6 +272,7 @@ test('register services, declare a dependency, and see it on the graph', async (
   await page.getByRole('radio', { name: 'Declared' }).click()
   await expect(page.getByRole('group', { name: 'Service dependency graph' })).toBeVisible()
 
+  await waitForGraphSettled(page)
   await page.locator('.graph-node circle').first().click()
   await expect(page.getByRole('tab', { name: 'Blast Radius' })).toBeVisible()
 

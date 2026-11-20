@@ -57,7 +57,7 @@ class ContractServiceTest {
     void setUp() {
         service = new ContractService(contractRepository, versionRepository, serviceProjectionRepository,
                 serviceProjectionService, specParser,
-                new SpecDiffer(), auditEventPort, transactionManager);
+                new SpecDiffer(new BreakingChangeEngine()), new BreakingChangeEngine(), auditEventPort, transactionManager);
     }
 
     @Test
@@ -68,6 +68,7 @@ class ContractServiceTest {
 
         assertThat(created.latestVersion().versionNumber()).isEqualTo(1);
         assertThat(created.latestVersion().label()).isEqualTo("1.2.0");
+        assertThat(created.latestVersion().breaking()).isFalse();
         verify(versionRepository).insert(created.latestVersion());
         AuditEvent event = capturedAudit();
         assertThat(event.action()).isEqualTo("created");
@@ -150,6 +151,53 @@ class ContractServiceTest {
     }
 
     @Test
+    void publishStoresTheEngineVerdictAgainstTheLatestVersion() {
+        UUID id = UUID.randomUUID();
+        String withRefunds = SpecParserTest.YAML_30.replace("""
+                paths:
+                """, """
+                paths:
+                  /refunds:
+                    get:
+                      responses:
+                        '200':
+                          description: ok
+                """);
+        when(contractRepository.lockLive(TENANT, id)).thenReturn(Optional.of(contract(id)));
+        when(versionRepository.findLatest(TENANT, id))
+                .thenReturn(Optional.of(version(id, 1, specParser.parse(SpecParserTest.YAML_30))));
+
+        VersionPublication added = service.publishVersion(TENANT, USER, id, new ContractRequest(null, withRefunds));
+
+        assertThat(added.version().breaking()).isFalse();
+        verify(versionRepository).insert(added.version());
+
+        when(versionRepository.findLatest(TENANT, id))
+                .thenReturn(Optional.of(version(id, 2, specParser.parse(withRefunds))));
+        VersionPublication removed = service.publishVersion(TENANT, USER, id,
+                new ContractRequest(null, SpecParserTest.YAML_30));
+
+        assertThat(removed.version().breaking()).isTrue();
+        verify(versionRepository).insert(removed.version());
+    }
+
+    @Test
+    void diffCarriesTheCompatibilityOfTheVersion() {
+        UUID id = UUID.randomUUID();
+        when(contractRepository.findLive(TENANT, id)).thenReturn(Optional.of(contract(id)));
+        when(versionRepository.findByNumber(TENANT, id, 1))
+                .thenReturn(Optional.of(version(id, 1, specParser.parse(SpecParserTest.YAML_30))));
+        when(versionRepository.findByNumber(TENANT, id, 2)).thenReturn(Optional.of(version(id, 2,
+                specParser.parse(SpecParserTest.YAML_30.replace("/payments:", "/refunds:")))));
+
+        VersionDiff diff = service.diff(TENANT, id, 2);
+
+        assertThat(diff.compatibility().isBreaking()).isTrue();
+        assertThat(diff.compatibility().changes()).extracting(CompatibilityChange::rule)
+                .containsExactlyInAnyOrder(CompatibilityRule.PATH_ADDED, CompatibilityRule.PATH_REMOVED);
+    }
+
+    @Test
     void deleteForServiceAuditsEachDeletedContractAsSystem() {
         UUID id = UUID.randomUUID();
         when(contractRepository.softDeleteByService(eq(TENANT), eq(SERVICE), any())).thenReturn(List.of(id));
@@ -186,14 +234,14 @@ class ContractServiceTest {
 
     private static ContractVersion version(UUID contractId, int number, ParsedSpec parsed) {
         return new ContractVersion(UUID.randomUUID(), TENANT, contractId, number, parsed.label(), "raw",
-                parsed.canonical(), parsed.hash(), Instant.now());
+                parsed.canonical(), parsed.hash(), null, Instant.now());
     }
 
     @Test
     void listClampsThePageSize() {
-        when(contractRepository.listLive(TENANT, null, ContractService.MAX_PAGE_SIZE, 0)).thenReturn(List.of());
+        when(contractRepository.listLive(TENANT, null, true, ContractService.MAX_PAGE_SIZE, 0)).thenReturn(List.of());
 
-        var page = service.list(TENANT, null, 10_000, -5);
+        var page = service.list(TENANT, null, true, 10_000, -5);
 
         assertThat(page.limit()).isEqualTo(ContractService.MAX_PAGE_SIZE);
         assertThat(page.offset()).isZero();

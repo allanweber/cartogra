@@ -63,6 +63,30 @@ describe('loadSeed', () => {
     expect(contract.latestVersion).toMatchObject({ versionNumber: 2, label: '1.1.0' })
   })
 
+  it('publishes the breaking version after v2 with breaking, once', async () => {
+    const api = new FakeApi(seed)
+    const first = await loadSeed(api, seed, { ...fast, breaking: true })
+    expect(first).toMatchObject({ contractsCreated: 1, contractVersionsPublished: 2 })
+    const latest = (await api.getContract(first.contracts['ledger-service'])).latestVersion
+    expect(latest).toMatchObject({ versionNumber: 3, label: '1.2.0', breaking: true })
+
+    const second = await loadSeed(api, seed, { ...fast, breaking: true })
+    expect(second).toMatchObject({ contractsCreated: 0, contractVersionsPublished: 0 })
+    expect((await api.getContract(first.contracts['ledger-service'])).latestVersion.versionNumber).toBe(3)
+  })
+
+  it('keeps the breaking version on a plain load after load --breaking, and says so', async () => {
+    const api = new FakeApi(seed)
+    const first = await loadSeed(api, seed, { ...fast, breaking: true })
+    const lines: string[] = []
+    const plain = await loadSeed(api, seed, { ...fast, log: (m) => lines.push(m) })
+    expect(plain).toMatchObject({ contractsCreated: 0, contractVersionsPublished: 0 })
+    expect((await api.getContract(first.contracts['ledger-service'])).latestVersion).toMatchObject({ versionNumber: 3, label: '1.2.0' })
+    expect(lines.filter((l) => /breaking version/.test(l))).toEqual([
+      'contract kept: ledger-service is at the breaking version v3 (1.2.0); a plain load does not publish over it',
+    ])
+  })
+
   it('reuses the existing contract on a re-run and stores no new version', async () => {
     const api = new FakeApi(seed)
     const first = await loadSeed(api, seed, fast)
