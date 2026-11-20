@@ -253,6 +253,11 @@ public class ServiceService {
         return serviceRepository.findNames(tenantId, serviceIds);
     }
 
+    /** Backs the internal {@code /internal/services/by-external-id} endpoint. A deleted service is not found. */
+    public Optional<UUID> findIdByExternalId(UUID tenantId, String externalId) {
+        return serviceRepository.findByExternalId(tenantId, externalId).map(Service::id);
+    }
+
     /**
      * Backs the internal {@code /internal/services/access} endpoint — Topology's authorization
      * check for declared-dependency mutations. One entry per requested id; an unknown,

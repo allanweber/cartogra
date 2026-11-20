@@ -6,4 +6,8 @@ public class ServiceNotFoundException extends RuntimeException {
     public ServiceNotFoundException(UUID id) {
         super("Service not found: " + id);
     }
+
+    public ServiceNotFoundException(String externalId) {
+        super("Service not found for external id: " + externalId);
+    }
 }
