@@ -200,3 +200,31 @@ describe('verify kafka and db edges', () => {
     })
   })
 })
+
+describe('verify spec discovery', () => {
+  const opts = { skipObserved: true, sleep: async () => {}, pollMs: 0, discoveryTimeoutMs: 50, syncTimeoutMs: 50, specDiscoveryTimeoutMs: 0 }
+  const name = `${seed.services.length} services have a contract from spec discovery`
+
+  it('prints SKIP when the tenant has no SCM connection', async () => {
+    const checks = await verify(new FakeApi(seed), seed, opts)
+    expect(checks.find((c) => c.name.startsWith('spec discovery SKIP'))?.ok).toBe(true)
+    expect(checks.find((c) => c.name === name)).toBeUndefined()
+  })
+
+  it('passes when discovery gave each seed service a contract', async () => {
+    const api = new FakeApi(seed)
+    api.discoverSpecs(seed.services.filter((s) => s.contractVersions === undefined).map((s) => s.name))
+    const checks = await verify(api, seed, { ...opts, scmConnected: true })
+    expect(checks.find((c) => c.name === name)).toMatchObject({ ok: true })
+  })
+
+  it('fails and names the services that discovery missed', async () => {
+    const api = new FakeApi(seed)
+    const discovered = seed.services.filter((s) => s.contractVersions === undefined).map((s) => s.name)
+    api.discoverSpecs(discovered.slice(1))
+    const checks = await verify(api, seed, { ...opts, scmConnected: true })
+    const check = checks.find((c) => c.name === name)
+    expect(check?.ok).toBe(false)
+    expect(check?.detail).toContain(`${discovered[0]}: no contract`)
+  })
+})

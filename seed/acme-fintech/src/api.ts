@@ -65,6 +65,8 @@ export interface ContractVersion {
   specHash: string
   /** Breaking-change verdict against the previous version; null = unchecked (stored before 5.3). */
   breaking: boolean | null
+  /** `discovery` when spec discovery applied the repo's OpenAPI file (story 5.8). */
+  source?: 'manual' | 'discovery'
 }
 
 export interface Contract {
@@ -153,6 +155,7 @@ export interface CartograApi {
   /** `status` keeps the contracts whose latest version is breaking or compatible. */
   listContracts(q?: string, status?: 'breaking' | 'compatible'): Promise<Contract[]>
   contractDiff(contractId: string, versionNumber: number): Promise<VersionDiff>
+  listContractVersions(contractId: string): Promise<ContractVersion[]>
 }
 
 export interface Cluster {
@@ -296,6 +299,10 @@ export class HttpCartograApi implements CartograApi, ConnectionsApi {
 
   contractDiff(contractId: string, versionNumber: number): Promise<VersionDiff> {
     return this.request<VersionDiff>('GET', `/api/v1/contracts/${contractId}/versions/${versionNumber}/diff`)
+  }
+
+  listContractVersions(contractId: string): Promise<ContractVersion[]> {
+    return this.listAll<ContractVersion>(`/api/v1/contracts/${contractId}/versions`)
   }
 
   listClusters(): Promise<Cluster[]> {
