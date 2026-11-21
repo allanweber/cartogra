@@ -12,7 +12,10 @@ interface TokenPayload {
 
 function decodeJwtPayload(token: string): TokenPayload {
   const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
-  return JSON.parse(atob(base64)) as TokenPayload
+  // atob() returns one character per byte, but the payload is UTF-8, so
+  // decode the bytes instead of reading them as Latin-1.
+  const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0))
+  return JSON.parse(new TextDecoder().decode(bytes)) as TokenPayload
 }
 
 export function sessionFromAccessToken(token: string): { user: AuthUser; exp: number } {
