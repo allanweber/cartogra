@@ -1,6 +1,6 @@
 #!/bin/sh
 # Installs both charts on a local k3d cluster, seeds Acme, checks NetworkPolicy, guest mode, the ownership flow,
-# team save, the team-member access check, drift accept, spec discovery and alerting. Writes every check to REPORT (build/local-test-report.html).
+# team save, the team-member access check, drift accept, spec discovery, contract consumers and alerting. Writes every check to REPORT (build/local-test-report.html).
 #
 #   sh infra/helm/local-test.sh              fresh cluster: deletes CLUSTER first, tests bootstrap and seed from nothing
 #   sh infra/helm/local-test.sh --reuse      keeps the cluster and its data, rolls out the new images
@@ -539,6 +539,78 @@ admin "$TOPOLOGY_API/services/$source_id/dependencies" \
   | jq -e --arg t "$target_id" '[.data.downstream[] | select(.serviceId == $t)] | length > 0' >/dev/null \
   || fail "accepted drift did not declare $source_id -> $target_id"
 pass "accepted drift declared the observed pair"
+
+step "Check 5.4 contract consumers"
+CONTRACTS_API="$URL/api/v1/contracts"
+CONSUMERS_TIMEOUT=30
+consumers_run=$(date +%s)
+new_service() {
+  id=$(admin -X POST -H 'Content-Type: application/json' -d "{\"name\":\"$1-$consumers_run\"}" "$SERVICES_API" \
+    | jq -r '.data.id') || return 1
+  [ -n "$id" ] && [ "$id" != null ] && echo "$id"
+}
+producer_id=$(new_service consumers-producer) || fail "register producer"
+on_exit "admin -X DELETE '$SERVICES_API/$producer_id' >/dev/null 2>&1"
+http_id=$(new_service consumers-http) || fail "register http consumer"
+on_exit "admin -X DELETE '$SERVICES_API/$http_id' >/dev/null 2>&1"
+grpc_id=$(new_service consumers-grpc) || fail "register grpc consumer"
+on_exit "admin -X DELETE '$SERVICES_API/$grpc_id' >/dev/null 2>&1"
+kafka_id=$(new_service consumers-kafka) || fail "register kafka consumer"
+on_exit "admin -X DELETE '$SERVICES_API/$kafka_id' >/dev/null 2>&1"
+
+contract_id=$(admin -X POST -H 'Content-Type: application/json' \
+  -d "{\"serviceId\":\"$producer_id\",\"spec\":\"openapi: 3.0.3\\ninfo: {title: consumers, version: '1'}\\npaths: {}\\n\"}" \
+  "$CONTRACTS_API" | jq -r '.data.id') || fail "create producer contract"
+[ -n "$contract_id" ] && [ "$contract_id" != null ] || fail "create producer contract"
+pass "producer contract created"
+
+# Topology learns the new services from registry's events, so a declare can see an unknown node for a moment.
+declare_edge() {
+  edge_id=$(curl -fsS -H "Authorization: Bearer $token" -X POST -H 'Content-Type: application/json' \
+    -d "{\"sourceServiceId\":\"$1\",\"targetServiceId\":\"$producer_id\",\"protocol\":\"$2\"}" \
+    "$TOPOLOGY_API/dependencies" 2>/dev/null | jq -r '.data.id') || return 1
+  [ -n "$edge_id" ] && [ "$edge_id" != null ]
+}
+wait_for "kafka edge declared" "$CONSUMERS_TIMEOUT" declare_edge "$kafka_id" KAFKA
+wait_for "grpc edge declared" "$CONSUMERS_TIMEOUT" declare_edge "$grpc_id" GRPC
+wait_for "http edge declared" "$CONSUMERS_TIMEOUT" declare_edge "$http_id" HTTP
+http_edge_id=$edge_id
+
+consumer_listed() {
+  ids=$(admin "$CONTRACTS_API/$contract_id/consumers?limit=100" | jq -r '.data.items[].serviceId') || return 2
+  echo "$ids" | grep -qx "$1"
+}
+wait_for "http consumer listed" "$CONSUMERS_TIMEOUT" consumer_listed "$http_id"
+wait_for "grpc consumer listed" "$CONSUMERS_TIMEOUT" consumer_listed "$grpc_id"
+# The kafka edge was declared first; on the one-partition topic it is applied before the http edge.
+absent consumer_listed "$kafka_id" || fail "kafka-only service listed as a consumer"
+pass "kafka-only service not listed"
+
+admin -X DELETE "$TOPOLOGY_API/dependencies/$http_edge_id" >/dev/null || fail "remove http edge"
+consumer_gone() { absent consumer_listed "$http_id"; }
+wait_for "removed edge drops the consumer" "$CONSUMERS_TIMEOUT" consumer_gone
+
+ledger_contract=$(admin "$CONTRACTS_API?q=ledger-service&limit=20" \
+  | jq -r '.data.items[] | select(.serviceName == "ledger-service") | .id') || fail "list contracts"
+[ -n "$ledger_contract" ] || fail "no ledger-service contract"
+ledger_consumers() {
+  total=$(admin "$CONTRACTS_API/$ledger_contract/consumers?limit=1" | jq -r '.data.total') || return 2
+  [ "$total" = 12 ]
+}
+wait_for "ledger-service contract lists 12 consumers" "$CONSUMERS_TIMEOUT" ledger_consumers
+
+outbox_drained() {
+  rows=$(kubectl -n cartogra exec postgres-0 -- sh -c \
+    'psql -tA -U "$(cat /etc/cartogra/secrets/DB_USERNAME)" -d cartogra -c "SELECT count(*) FROM topology.outbox"') || return 2
+  [ "$rows" = 0 ]
+}
+wait_for "topology outbox drained" "$CONSUMERS_TIMEOUT" outbox_drained
+
+# Remove the step's services now: four extra nodes change the graph layout that the e2e tests click on.
+for id in "$producer_id" "$http_id" "$grpc_id" "$kafka_id"; do
+  admin -X DELETE "$SERVICES_API/$id" >/dev/null || fail "remove consumers service $id"
+done
+pass "consumers services removed"
 
 step "Check alerting (the gateway exports its metrics once a minute)"
 query='http://localhost:9090/api/v1/query?query=cartogra_guest_mints_total%7Boutcome%3D%22issued%22%7D'
