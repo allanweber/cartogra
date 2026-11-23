@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# perf/bench.sh
+# infra/perf/graph-bench/bench.sh
 #
 # Measures graph read p95, blast radius p95, and MV refresh duration against
-# the perf/graph-perf-200-seed.sql fixture, for docs/architecture/
+# the infra/perf/graph-bench/graph-perf-200-seed.sql fixture, for docs/architecture/
 # topology-performance.md (docs/roadmap.md §5, item 2.6 / GitHub issue #118).
 #
 # Assumes the local dev stack is already up (infra/docker-compose + the
 # registry/topology services running, e.g. via `./gradlew :services:topology:bootRun`)
-# and that perf/graph-perf-200-seed.sql has already been applied for TENANT_ID
+# and that infra/perf/graph-bench/graph-perf-200-seed.sql has already been applied for TENANT_ID
 # (this script does not seed, so reruns measure the same fixture; remove the fixture
-# afterwards with perf/graph-perf-200-teardown.sql).
+# afterwards with infra/perf/graph-bench/graph-perf-200-teardown.sql).
 #
 # Usage:
 #   TENANT_ID=<uuid> ./perf/bench.sh
@@ -27,11 +27,11 @@
 # Outputs raw per-call timings (seconds) to stdout prefixed by metric name, and
 # a summary block at the end. Redirect to a file to keep the raw data for the
 # doc's appendix, e.g.:
-#   TENANT_ID=<uuid> ./perf/bench.sh | tee perf/bench-results-$(date +%Y%m%d).txt
+#   TENANT_ID=<uuid> ./perf/bench.sh | tee infra/perf/graph-bench/bench-results-$(date +%Y%m%d).txt
 
 set -euo pipefail
 
-TENANT_ID="${TENANT_ID:?set TENANT_ID to the tenant perf/graph-perf-200-seed.sql was run for}"
+TENANT_ID="${TENANT_ID:?set TENANT_ID to the tenant infra/perf/graph-bench/graph-perf-200-seed.sql was run for}"
 if ! [[ "$TENANT_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
     echo "error: TENANT_ID must be a UUID" >&2
     exit 1

@@ -10,7 +10,7 @@ This is a **descriptive snapshot, not a pass/fail gate** — issue #118 asks to 
 meet a target. No SLO threshold exists for graph read, blast radius, or MV refresh anywhere in `docs/roadmap.md`
 or `docs/adr/`.
 
-Measured 2026-10-01 (Phase 2, issue #118). Re-run `perf/bench.sh` and update this file if the topology
+Measured 2026-10-01 (Phase 2, issue #118). Re-run `infra/perf/graph-bench/bench.sh` and update this file if the topology
 service's query plan, indexes, or the `dependency_graph_edges` materialized view's definition change —
 these numbers will drift.
 
@@ -29,7 +29,7 @@ these numbers will drift.
 
 ## Fixture
 
-`perf/graph-perf-200-seed.sql` — 130 services + 3 synthetic SPOF hub services (133 nodes total), 200
+`infra/perf/graph-bench/graph-perf-200-seed.sql` — 130 services + 3 synthetic SPOF hub services (133 nodes total), 200
 directed edges:
 
 - 182 backbone edges: a full permutation at offset 1 over the 130 services (130 edges, one complete
@@ -39,7 +39,7 @@ directed edges:
   detection itself is covered by issues #116/#117).
 
 Seeded for tenant `99999999-9999-4999-8999-999999999999` (a throwaway tenant; the seed takes it as
-`-v tenant_id=<uuid>`, see the header of `perf/graph-perf-200-seed.sql`, and `perf/graph-perf-200-teardown.sql`
+`-v tenant_id=<uuid>`, see the header of `infra/perf/graph-bench/graph-perf-200-seed.sql`, and `infra/perf/graph-bench/graph-perf-200-teardown.sql`
 removes it again) directly against `registry.services` /
 `topology.graph_nodes` / `topology.dependencies`, bypassing the registry API and Kafka sync. Verified via
 `GET /graph`: 133 nodes, 200 edges, `truncated: false`.
@@ -48,9 +48,9 @@ removes it again) directly against `registry.services` /
 
 | Metric | p95 / median | n | Measured via |
 | --- | --- | --- | --- |
-| Graph read (`GET /graph`, unfiltered, full 200-edge tenant graph) | **14.2 ms** (p95) | 60 | `perf/bench.sh`, direct HTTP against the topology service |
-| Blast radius (`GET /blast-radius/{id}`, default depth 3, default direction) | **11.7 ms** (p95) | 60 distinct random starting nodes | `perf/bench.sh`, direct HTTP against the topology service |
-| MV refresh (`REFRESH MATERIALIZED VIEW CONCURRENTLY dependency_graph_edges`) | **26.3 ms** (median) | 5 | `perf/bench.sh`, `psql \timing` against the fixture's fixed 200-edge dataset |
+| Graph read (`GET /graph`, unfiltered, full 200-edge tenant graph) | **14.2 ms** (p95) | 60 | `infra/perf/graph-bench/bench.sh`, direct HTTP against the topology service |
+| Blast radius (`GET /blast-radius/{id}`, default depth 3, default direction) | **11.7 ms** (p95) | 60 distinct random starting nodes | `infra/perf/graph-bench/bench.sh`, direct HTTP against the topology service |
+| MV refresh (`REFRESH MATERIALIZED VIEW CONCURRENTLY dependency_graph_edges`) | **26.3 ms** (median) | 5 | `infra/perf/graph-bench/bench.sh`, `psql \timing` against the fixture's fixed 200-edge dataset |
 
 Full distribution:
 
@@ -63,12 +63,12 @@ Full distribution:
 | --- | --- | --- | --- | --- |
 | MV refresh | 24.5 ms | 26.3 ms | 27.5 ms | 33.9 ms |
 
-Raw per-call timings: `perf/bench-results-20261001.txt`.
+Raw per-call timings: `infra/perf/graph-bench/bench-results-20261001.txt`.
 
 ## Methodology
 
-- **Tool**: `perf/bench.sh` — no benchmarking framework (JMH/Gatling/k6/etc.) exists anywhere in this repo
-  yet, so this is a plain bash harness: `curl -w "%{time_total}"` against the running topology service for
+- **Tool**: `infra/perf/graph-bench/bench.sh` — separate from the k6 load test in `infra/perf/k6` (CI `perf.yml`).
+  It is a plain bash harness: `curl -w "%{time_total}"` against the running topology service for
   graph read and blast radius, `psql \timing` for the MV refresh statement. Not committed to CI; reusable
   for a future re-run.
 - **Warm-up**: 5 discarded calls before each of graph read and blast radius, to let the JVM JIT and the
@@ -93,8 +93,8 @@ Raw per-call timings: `perf/bench-results-20261001.txt`.
 ## Scope
 
 One-time local measurement, not an automated or CI-enforced performance test. No regression gate exists on
-these numbers — if they're needed again (e.g. after a schema or index change), re-run `perf/bench.sh`
-against a freshly-seeded `perf/graph-perf-200-seed.sql` fixture and update this file.
+these numbers — if they're needed again (e.g. after a schema or index change), re-run `infra/perf/graph-bench/bench.sh`
+against a freshly-seeded `infra/perf/graph-bench/graph-perf-200-seed.sql` fixture and update this file.
 
 Run on a local dev machine with the rest of the dev stack active in the background (Kafka, Grafana,
 Prometheus, Loki, Tempo, a second unrelated Postgres container for another project), not an isolated or

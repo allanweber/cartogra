@@ -1,4 +1,4 @@
--- perf/graph-perf-200-seed.sql
+-- infra/perf/graph-bench/graph-perf-200-seed.sql
 --
 -- Seeds a 130-service, 200-edge dependency graph for one tenant, to gather the
 -- Phase 2 performance evidence required by docs/roadmap.md §5, item 2.6 /
@@ -35,10 +35,10 @@
 -- real one — the seed writes straight into the shared dev database:
 --
 --   docker exec -i cartogra-postgres psql -U cartogra -d cartogra \
---       -v tenant_id=<uuid> < perf/graph-perf-200-seed.sql
+--       -v tenant_id=<uuid> < infra/perf/graph-bench/graph-perf-200-seed.sql
 --
--- Then measure with `TENANT_ID=<uuid> perf/bench.sh` (bench.sh does not seed), and
--- remove the fixture afterwards with perf/graph-perf-200-teardown.sql.
+-- Then measure with `TENANT_ID=<uuid> infra/perf/graph-bench/bench.sh` (bench.sh does not seed), and
+-- remove the fixture afterwards with infra/perf/graph-bench/graph-perf-200-teardown.sql.
 
 \if :{?tenant_id}
 \else

@@ -163,7 +163,7 @@ No user-facing value. It exists because the next phases are unverifiable without
 - [x] **2.5 — Risks page.** `GET /v1/risks` aggregating cycles + SPOFs + orphans into `{severity, type, title, description, affectedServices[]}`, paginated. `risks.tsx` drops `MOCK_RISKS`.
   *Acme test:* ✅ `verify`: the 3 orphans appear. ❌ add cycle and SPOF rows.
 - [x] **2.6 — Performance evidence.** 200-edge fixture; record graph read, blast radius p95, and MV refresh duration in `docs/architecture/topology-performance.md` with the hardware named.
-  *Acme test:* n/a: 200-edge fixture stays `perf/graph-perf-200-seed.sql`.
+  *Acme test:* n/a: 200-edge fixture stays `infra/perf/graph-bench/graph-perf-200-seed.sql`.
 
 **Demo:** "if payments-api goes down, what breaks?" answered in one click, with the owning teams listed.
 
@@ -399,7 +399,7 @@ Triggered by real users, not by a calendar. Before this, Phase 4's single-node k
 - [ ] **7.4** NetworkPolicy restricting services to gateway-namespace ingress + short-lived `X-Gateway-Token` validated by a shared filter in `shared:common`; IT proves direct access is rejected.
 - [ ] **7.5** DLQ (`cartogra.platform.dead-letter`) + admin replay writing audit events; IT proves poison → DLQ → replay.
 - [ ] **7.6** Grafana dashboards auto-provisioned per service + platform overview; alerts on consumer lag, error rate, MV refresh duration.
-- [ ] **7.7** Playwright E2E (guest browse, graph exploration, contract check, one NL query) + k6 thresholds committed under `perf/results/`.
+- [ ] **7.7** Playwright E2E (guest browse, graph exploration, contract check, one NL query) + k6 thresholds committed under `infra/perf/results/`.
 - [ ] **7.8** Docs site with the ADR index and runbooks.
 
 - [ ] **7.9** Cartogra emits its own CLIENT spans. Replace the static `RestClient.builder()` calls (topology `RegistryMembershipClient`, contract `RegistryNameClient`, ingestion `RegistryPlanLimitClient`, registry `HttpClientConfig`) with the injected, instrumented `RestClient.Builder`; drop the gateway `AppConfig` builder override; turn on Kafka template/listener observation. IT asserts a CLIENT span with `server.address`.
