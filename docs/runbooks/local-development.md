@@ -1,21 +1,24 @@
 # Runbook: Local Development
 
+Docker Compose (`infra/docker-compose/docker-compose.dev.yml`) is the local stack. `docker-compose.yml` is the
+deployable stack, not for local work. Kubernetes is optional: see [§11](#11-kubernetes-optional).
+
 ## Prerequisites
 
-| Tool | Minimum version | Install |
-|------|----------------|---------|
+| Tool | Version | Install |
+|------|---------|---------|
 | JDK | 25 | [Eclipse Temurin](https://adoptium.net/) |
-| Gradle | 8.14 | Bundled via `./gradlew` wrapper |
-| Docker Desktop | 4.x | [docker.com](https://www.docker.com/products/docker-desktop/) |
+| Gradle | 9.5 | Bundled via `./gradlew` wrapper |
+| Docker | Engine or Desktop | [docker.com](https://www.docker.com/) |
 | Node.js | 22 LTS | [nodejs.org](https://nodejs.org/) |
-| pnpm | 9.x | `npm install -g pnpm` |
+| pnpm | 12 | `corepack enable` (version pinned in `frontend/package.json`) |
 
 ---
 
 ## 1. Clone and bootstrap
 
 ```bash
-git clone https://github.com/your-org/cartogra.git
+git clone https://github.com/allanweber/cartogra.git
 cd cartogra
 cp .env.example .env          # fill in secrets (see §2)
 ```
@@ -24,19 +27,18 @@ cp .env.example .env          # fill in secrets (see §2)
 
 ## 2. Environment variables (`.env`)
 
-Copy `.env.example` to `.env`. The following variables are required to start all services locally:
+`.env.example` lists all variables with comments. The defaults work for local, except these:
 
 | Variable | Description |
 |----------|-------------|
-| `POSTGRES_PASSWORD` | Local Postgres superuser password |
-| `REDIS_PASSWORD` | Local Redis auth password |
-| `JWT_SECRET` | 256-bit secret for gateway JWT signing |
-| `INTERNAL_TOKEN_KEY` | 256-bit key that signs the internal tokens. The gateway and all four services need the same value. |
-| `RESEND_API_KEY` | Resend API key for OTP emails (`re_...`) |
-| `GITHUB_PAT` | GitHub Personal Access Token with `repo` scope (for SCM ingestion) |
-| `AZDO_PAT` | Azure DevOps Personal Access Token (for SCM ingestion) |
-| `AZDO_ORG` | Azure DevOps organization name |
-| `CLAUDE_API_KEY` | Anthropic API key (skip if not testing intelligence service) |
+| `JWT_SECRET` | Gateway JWT signing key, at least 32 random bytes (`openssl rand -base64 48`). The gateway does not start with the placeholder. |
+| `INTERNAL_TOKEN_KEY` | Signs internal tokens. All JVM services need the same value. Not the same as `JWT_SECRET`. |
+| `CLUSTER_CREDENTIALS_KEY` | Ingestion AES key for SCM and cluster credentials (`openssl rand -base64 32`). Required. |
+| `RESEND_API_KEY` | Resend key for emails. Set `RESEND_TEST_MODE=true` to not send. |
+| `CLAUDE_API_KEY` | Anthropic key. Only for the intelligence service. |
+
+SCM tokens (GitHub, Azure DevOps) are not env vars: you add them as a connection in the UI, stored encrypted in
+`ingestion.scm_connections`.
 
 **Never commit `.env`** — it is in `.gitignore`.
 
@@ -114,17 +116,8 @@ The TanStack Start dev server proxies `/api/*` to `http://localhost:8080`.
 
 ## 7. Seed data
 
-Load the Acme Fintech seed dataset for a realistic local environment:
-
-```bash
-./gradlew :seed:run
-```
-
-This creates:
-- 1 tenant (`acme-fintech`)
-- 6 teams
-- 24 services with ownership, dependencies, and health data
-- Sample API contracts and breaking-change history
+The only seed is Acme Fintech (20 fake services, teams, owners, contracts):
+[`seed/acme-fintech/README.md`](../../seed/acme-fintech/README.md). After setup: `cd seed/acme-fintech && pnpm acme load`.
 
 ---
 
@@ -136,14 +129,13 @@ This creates:
 | `http://localhost:3001` | Grafana (traces + logs + metrics) |
 | `http://localhost:8080/actuator/health` | Gateway health |
 | `http://localhost:8081/actuator/health` | Registry health |
-| `http://localhost:5436` | PostgreSQL (`psql -U postgres -d cartogra`) |
-| `http://localhost:6379` | Redis (`redis-cli`) |
-| `http://localhost:9092` | Kafka bootstrap |
+| `localhost:5436` | PostgreSQL (user and database from `.env`) |
+| `localhost:6380` | Valkey (`redis-cli -p 6380`) |
+| `localhost:9092` | Kafka bootstrap |
 | `http://localhost:9090` | Prometheus (direct query) |
 | `http://localhost:3200` | Tempo HTTP API |
 | `http://localhost:8086` | Kafka UI |
 | `http://localhost:8087` | Valkey UI |
-| `http://localhost:8088` | pgAdmin |
 
 ---
 
@@ -160,7 +152,10 @@ This creates:
 cd frontend && pnpm test
 ```
 
-Testcontainers spins up ephemeral Postgres and Kafka containers. Docker Desktop must be running.
+Testcontainers starts temporary Postgres and Kafka containers. Docker must be running.
+
+The full check on Kubernetes (k3d, production values, Acme seed, e2e) is `infra/helm/local-test.sh`. See
+[`infra/helm/README.md`](../../infra/helm/README.md).
 
 ---
 
@@ -372,58 +367,6 @@ update topology.unresolved_span_services set deleted_at = now() where deleted_at
 - One collector = one tenant. Multi-tenant intake and the Settings → Connections → OpenTelemetry card (currently an inactive placeholder) arrive with roadmap 5.9 (`X-Cartogra-Api-Key`, scope `spans:write`).
 - Cartogra's own services mostly emit no CLIENT spans yet (roadmap 7.9), so the dev stack won't produce edges by itself; use the fixtures or your own instrumented services.
 
-## Service Auto-Discovery
-
-### Namespace label contract (Kubernetes)
-
-Cartogra discovers K8s Services in namespaces bearing the label:
-
-```yaml
-cartogra.io/tenant-id: <UUID>
-```
-
-Set this label on any namespace you want Cartogra to monitor:
-
-```bash
-kubectl label namespace my-app cartogra.io/tenant-id=<your-tenant-uuid>
-```
-
-The UUID must be the tenant that registered the cluster; any other value is skipped.
-
-The KubernetesWorker must be enabled (`ingestion.workers.k8s.enabled=true`) and a synthetic
-connection UUID must be configured (`ingestion.workers.k8s.connection-id=<UUID>`).
-
-### Health status mapping
-
-| Endpoints state                                      | Cartogra healthStatus |
-| ---------------------------------------------------- | --------------------- |
-| Resource absent or no subsets                        | UNKNOWN               |
-| All subsets have ready addresses only                | HEALTHY               |
-| Some subsets have both ready and not-ready addresses | DEGRADED              |
-| All subsets have only not-ready addresses            | UNHEALTHY             |
-
-### Tech-stack detection rules (SCM)
-
-Cartogra probes each non-archived repository via the SCM API for these files:
-
-| File                                          | Technology detected |
-| --------------------------------------------- | ------------------- |
-| `pom.xml`                                     | java                |
-| `pom.xml` containing `spring-boot`            | spring-boot         |
-| `build.gradle` or `build.gradle.kts`          | java                |
-| `build.gradle*` containing `spring-boot`      | spring-boot         |
-| `package.json`                                | javascript          |
-| `go.mod`                                      | go                  |
-| `Cargo.toml`                                  | rust                |
-| `requirements.txt`                            | python              |
-| `Dockerfile` FROM `eclipse-temurin:*`         | java                |
-| `Dockerfile` FROM `node:*`                    | javascript          |
-| `Dockerfile` FROM `python:*`                  | python              |
-| `Dockerfile` FROM `golang:*`                  | go                  |
-| `Dockerfile` FROM `rust:*`                    | rust                |
-
-Detection is additive: multiple signals result in a list (e.g., `["java","spring-boot"]`).
-
 ## To remove the database container + volume and recreate it
 
 ```bash
@@ -433,3 +376,14 @@ docker compose -f infra/docker-compose/docker-compose.dev.yml rm -f postgres
 docker volume rm cartogra-dev_postgres-data
 docker compose -f infra/docker-compose/docker-compose.dev.yml up -d postgres
 ```
+
+## 11. Kubernetes (optional)
+
+Two separate paths:
+
+- **Test discovery** (ingestion `KubernetesWorker`, SCM sync, drift): a kind cluster per
+  [`seed/install-kind-kubectl.md`](../../seed/install-kind-kubectl.md), then
+  [`seed/acme-fintech/README.md`](../../seed/acme-fintech/README.md). Register the cluster per
+  [`connections.md`](connections.md#local-kind).
+- **Run Cartogra itself on Kubernetes**: `infra/helm/local-test.sh` on k3d (see §9). Production:
+  [`deployment.md`](deployment.md).

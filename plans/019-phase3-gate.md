@@ -91,4 +91,4 @@ Report: `architecture-review-*.html` in the OS temp dir. #1–#3 chosen and done
 ## Content
 
 `docs/bip/3.3-declared-vs-observed-gap.md`, `docs/bip/3.1-otel-spans-to-graph-edges.md`, `docs/bip/3.3-drift-as-a-workflow.md`.
-Screen test plan: `docs/runbooks/phase-3-acme-screen-test-plan.md`.
+Screen test plan: `plans/019-phase3-gate-screen-test-plan.md`.

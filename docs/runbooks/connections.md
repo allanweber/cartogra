@@ -1,4 +1,8 @@
-# Runbook: Getting Kubernetes Cluster Configuration for Cartogra
+# Runbook: Connections
+
+How to connect sources to Cartogra: Kubernetes clusters, SCM providers and webhooks.
+
+# Kubernetes clusters
 
 Cartogra's "Add cluster" dialog (`Settings → Connections → Kubernetes`) accepts credentials
 via two auth methods:
@@ -206,3 +210,125 @@ kubectl delete serviceaccount cartogra-reader -n cartogra-system
 
 Removing the binding/role immediately invalidates the token's permissions even though the
 JWT itself remains valid until its `exp` claim.
+
+---
+
+# SCM
+
+## SCM providers
+
+SCM provider credentials are stored in the `ingestion.scm_connections` table as JSONB (`config` column). They are **never** stored in environment variables on the ingestion service. SCM connection management lives in the **ingestion** service (gateway route `/api/v1/ingestion/scm-connections`), not registry.
+
+### GitHub — Personal Access Token
+
+1. Create a PAT at **GitHub → Settings → Developer settings → Personal access tokens** with scopes: `repo` (read), `read:org`.
+2. Insert a connection record via the Ingestion API (gateway-authenticated):
+
+```http
+POST /api/v1/ingestion/scm-connections
+Authorization: Bearer <token>
+X-Tenant-Id: <tenantId>
+Content-Type: application/json
+
+{
+  "provider": "github",
+  "config": "{\"token\":\"<PAT value>\",\"org\":\"your-github-org\"}",
+  "syncScheduler": true,
+  "pollIntervalMinutes": 15,
+  "webhookEnabled": true
+}
+```
+
+**Security:** Ingestion encrypts the token with AES-GCM using `CLUSTER_CREDENTIALS_KEY` before storing it, and never logs it.
+
+### Azure DevOps — Personal Access Token
+
+1. Create a PAT at **Azure DevOps → User Settings → Personal Access Tokens** with scopes: `Code (Read)`, `Graph (Read)`.
+2. Insert a connection record:
+
+```http
+POST /api/v1/ingestion/scm-connections
+Authorization: Bearer <token>
+X-Tenant-Id: <tenantId>
+Content-Type: application/json
+
+{
+  "provider": "azuredevops",
+  "config": "{\"pat\":\"<PAT value>\",\"organization\":\"your-ado-org\"}"
+}
+```
+
+### Triggering a manual sync (smoke test)
+
+```bash
+curl -s -X POST https://cartogra.dev/api/v1/ingestion/scm-connections/<connectionId>/sync -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+Monitor the `sync_jobs` table to observe the PENDING → RUNNING → COMPLETED transition:
+
+```sql
+SELECT id, status, repositories_synced, error_message, updated_at
+FROM ingestion.sync_jobs
+ORDER BY created_at DESC
+LIMIT 5;
+```
+
+The completed sync writes its outcome back onto the connection (`last_sync_status`, `last_sync_at`):
+
+```sql
+SELECT id, provider, last_sync_status, last_sync_at, next_sync_at
+FROM ingestion.scm_connections
+ORDER BY updated_at DESC
+LIMIT 5;
+```
+
+## Scheduled sync
+
+When `scm_connections.sync_scheduler = true`, the ingestion `SyncScheduler` polls for due connections and publishes a `sync.command` for each.
+
+- **Cadence:** the scheduler tick runs every `INGESTION_SYNC_POLL_INTERVAL` (ISO-8601 duration, default `PT15M`). Per-connection cadence is `poll_interval_minutes`, tracked via `next_sync_at`.
+- **Multi-instance safety:** each connection is published inside a `REQUIRES_NEW` transaction guarded by a PostgreSQL transaction-scoped advisory lock (`pg_try_advisory_xact_lock`). With N ingestion replicas, only the replica that wins the lock publishes — no duplicate commands.
+- **Delivery semantics:** at-least-once. `next_sync_at` is advanced outside the lock transaction, so a crash between publish and timestamp-advance results in a retry on the next tick (deduplicated downstream by the RUNNING-job guard in `SyncExecutionService`).
+
+Inspect due connections:
+
+```sql
+SELECT id, provider, poll_interval_minutes, next_sync_at
+FROM ingestion.scm_connections
+WHERE sync_scheduler = true AND deleted_at IS NULL
+  AND (next_sync_at IS NULL OR next_sync_at <= now());
+```
+
+To pause scheduling for a connection: `PUT /api/v1/ingestion/scm-connections/{id}` with `{"syncScheduler": false}` (clears `next_sync_at`).
+
+## Webhooks
+
+Real-time sync is driven by SCM webhooks. The gateway exposes the receiver publicly at `/api/v1/ingestion/webhooks/{providerType}/{connectionId}` (no JWT). Per-provider authentication is verified against the secret stored in `ingestion.scm_webhooks.webhook_secret`.
+
+**Register a webhook secret** (one row per connection in `scm_webhooks`) and set `scm_connections.webhook_enabled = true`.
+
+### GitHub
+
+1. Repo/org **Settings → Webhooks → Add webhook**.
+2. **Payload URL:** `https://<gateway-host>/api/v1/ingestion/webhooks/github/<connectionId>`
+3. **Content type:** `application/json`
+4. **Secret:** the value stored in `scm_webhooks.webhook_secret`. Ingestion verifies `X-Hub-Signature-256` (HMAC-SHA256 over the raw body).
+5. **Events:** at least `push`. (`ping` is accepted with `202` but does not trigger a sync.)
+
+### Azure DevOps
+
+1. **Project Settings → Service hooks → Create subscription → Web Hooks**.
+2. **Trigger:** *Code pushed* (`git.push`).
+3. **URL:** `https://<gateway-host>/api/v1/ingestion/webhooks/azuredevops/<connectionId>`
+4. **Basic auth:** set username/password; store the same `user:password` string in `scm_webhooks.webhook_secret`. Ingestion verifies the `Authorization: Basic` header.
+
+### Responses
+
+| Outcome | Status |
+|---------|--------|
+| Valid signature, actionable event | `202` + `sync.command` published |
+| Valid signature, non-actionable (e.g. GitHub `ping`) | `202`, no publish |
+| Invalid signature / Basic auth | `401` (`WEBHOOK_SIGNATURE_INVALID`) |
+| No webhook registration / unknown provider | `404` (`WEBHOOK_CONNECTION_NOT_FOUND`) |
+
+Webhook responses are **not** wrapped in the standard response envelope.
