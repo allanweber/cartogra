@@ -29,6 +29,7 @@ describe('verify contracts', () => {
       ['ledger-service contract listed with its service name', true],
       ['ledger-service v1 → v2 diff adds /ledgers/{id}/history', true],
       ['ledger-service re-publishing latest spec stores nothing', true],
+      ['ledger-service contract lists 12 consumers', true],
     ])
     expect(checks.find((c) => c.name === 'ledger-service v2 is compatible (path-added)')?.ok).toBe(true)
   })
@@ -102,6 +103,16 @@ describe('verify contracts', () => {
     }
     const checks = await verify(api, seed, { ...opts, breaking: true })
     expect(checks.find((c) => c.name === 'ledger-service v3 is breaking (path-removed, parameter-required-added)')?.ok).toBe(false)
+  })
+
+  it('fails when a declared caller is missing from the contract consumers', async () => {
+    const api = new FakeApi(seed)
+    const consumers = api.contractConsumers.bind(api)
+    api.contractConsumers = async (id) => (await consumers(id)).slice(1)
+    const checks = await verify(api, seed, { ...opts, consumersTimeoutMs: 0 })
+    const check = checks.find((c) => c.name === 'ledger-service contract lists 12 consumers')
+    expect(check?.ok).toBe(false)
+    expect(check?.detail).toMatch(/^missing /)
   })
 
   it('fails when the list has no service name for the contract', async () => {

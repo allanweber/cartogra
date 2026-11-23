@@ -1,5 +1,5 @@
 import {
-  ApiError, type CartograApi, type CatalogService, type Compatibility, type CompatibilityChange, type Contract, type ContractVersion, type Drift, type Graph, type PublishedVersion, type Risk,
+  ApiError, type CartograApi, type CatalogService, type Compatibility, type CompatibilityChange, type Contract, type ContractConsumer, type ContractVersion, type Drift, type Graph, type PublishedVersion, type Risk,
   type Team, type UnresolvedSpanService, type VersionDiff,
 } from '../src/api.ts'
 import { declaredCycles, type Protocol, type SeedData } from '../src/schema.ts'
@@ -147,6 +147,21 @@ export class FakeApi implements CartograApi {
         this.contracts.set(`contract-${++this.seq}`, { serviceId, versions: [version] })
       }
     }
+  }
+  /** The sources of declared HTTP edges into the contract's service, as contract would project them. */
+  async contractConsumers(contractId: string): Promise<ContractConsumer[]> {
+    const contract = this.contracts.get(contractId)
+    if (!contract) throw new ApiError(404, 'NOT_FOUND', 'unknown contract', 't')
+    const sources = new Set([...this.edges]
+      .map((e) => e.split(' '))
+      .filter(([pair, protocol]) => protocol === 'HTTP' && pair.split('>')[1] === contract.serviceId)
+      .map(([pair]) => pair.split('>')[0]))
+    return [...sources].map((id) => ({
+      serviceId: id,
+      serviceName: this.services.find((s) => s.id === id)?.name ?? null,
+      dependencyTypes: ['declared'],
+      protocols: ['http'],
+    }))
   }
   /** Reports each path key the version adds over the previous one; the spec text is in `specHash`. */
   async contractDiff(contractId: string, versionNumber: number): Promise<VersionDiff> {
