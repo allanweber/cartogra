@@ -27,6 +27,7 @@ dependencies {
     testFixturesCompileOnly("jakarta.servlet:jakarta.servlet-api")
     testFixturesCompileOnly("org.springframework.boot:spring-boot")
 
+    testImplementation("org.springframework.kafka:spring-kafka")
     testImplementation("jakarta.servlet:jakarta.servlet-api")
     testImplementation("com.zaxxer:HikariCP")
     testImplementation("org.junit.jupiter:junit-jupiter")
