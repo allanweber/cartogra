@@ -1,3 +1,9 @@
+---
+paths:
+  - "services/**"
+  - "shared/**"
+---
+
 # Backend Rules
 
 ## Java 25
@@ -92,7 +98,7 @@ Five top-level packages per service — NEVER an `application` package, NEVER `a
 - Controllers inject ONLY services — NEVER a repository/producer/client directly in a controller
 - Interfaces (ports) ONLY where a field needs a real seam (repositories, providers, locks); a once-implemented service gets NO interface. Repository ports go in `repository` (their Jdbc impls in `infrastructure/jdbc`); other provider ports go in `infrastructure` beside their adapter
 - Domain → response via `static from(domain)` on the response record (in `api/dto`); ONE nullable request record per entity (service enforces create-time requireds)
-- See `patterns.md` → "Layering" + "REST Endpoint" for the skeleton
+- Reference skeleton: registry `api/ServiceController.java`, `domain/ServiceService.java`, `api/dto/ServiceResponse.java`
 
 ## Spring Data JDBC
 
@@ -186,6 +192,16 @@ Every message payload MUST match this envelope:
 - Kafka message headers: include `traceparent` (W3C format) on every send
 - Introduce new topic ONLY when first real producer/consumer exists — no speculative topics
 - Topic naming: ONE topic per entity for lifecycle events — `cartogra.{domain}.{entity}.changed` (e.g., `cartogra.registry.service.changed`), keyed by entity id, the event in the envelope's `event_type` (`service.registered`, `service.deleted`, …). NEVER one topic per lifecycle event: Kafka orders only within a topic, so `deleted` could be read before `updated`. A topic carrying a single kind of event keeps `cartogra.{domain}.{entity}.{event}` (e.g., `cartogra.ingestion.ownership.resolved`)
+
+## Transactional Outbox (shared/web)
+
+Use it when a consumer keeps a projection that a lost event leaves wrong for good (topology `dependency.changed` → contract `inbound_edges`). Reference: topology `config/OutboxConfig.java` + `V016__create_outbox.sql`.
+
+- Each service owns its `outbox` migration (copy topology `V016`)
+- Wire `JdbcOutboxRepository`, `OutboxWriter`, `OutboxRelay` as `@Bean`s with an idempotent `acks=all` producer; schedule `relay.relayBatch()` from `infrastructure/scheduled`
+- Call `outboxWriter.publish(topic, envelope)` (or `publishAll` for a batch) inside the write's transaction — it throws outside one
+- One relay sends at a time (advisory lock), in `id` order, stops at first failed send. At-least-once: consumers MUST be idempotent
+- Tests: keep the relay idle (`<service>.outbox.relay-interval=PT1H`), call `relayBatch()` from the test that needs it
 
 ## Internal Service Communication (Gateway → Services)
 

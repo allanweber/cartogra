@@ -1,3 +1,8 @@
+---
+paths:
+  - "frontend/**"
+---
+
 # Frontend Rules
 
 ## Tech Choices (Non-Negotiable)

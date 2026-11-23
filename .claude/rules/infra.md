@@ -1,3 +1,11 @@
+---
+paths:
+  - "infra/**"
+  - ".github/**"
+  - "**/Dockerfile"
+  - "**/*.gradle.kts"
+---
+
 # Infrastructure Rules
 
 ## Dockerfile
