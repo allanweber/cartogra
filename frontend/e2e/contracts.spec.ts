@@ -121,3 +121,56 @@ test('a breaking version shows its badge, its filter and its rule hits', async (
   await expect(breaking.getByText('path-removed', { exact: true })).toBeVisible()
   await expect(breaking.getByText('/entries/{id}/history', { exact: true })).toBeVisible()
 })
+
+// Edges are declared through the gateway; topology's outbox relay and contract's projection then put the consumer
+// on the contract page. Each step polls, because the event path is asynchronous (relay tick + Kafka).
+test('contract consumers follow topology edges', async ({ page }) => {
+  const producerName = uniqueName('producer')
+  const consumerName = uniqueName('consumer')
+
+  async function register(name: string) {
+    const created = await page.request.post('/api/v1/registry/services', { data: { name } })
+    expect(created.status()).toBe(201)
+    return (await created.json()).data.id as string
+  }
+
+  const producerId = await register(producerName)
+  const consumerId = await register(consumerName)
+
+  const created = await page.request.post('/api/v1/contracts', {
+    data: { serviceId: producerId, spec: spec('1.0.0') },
+  })
+  expect(created.status()).toBe(201)
+  const contractId = (await created.json()).data.id as string
+
+  // Topology learns about new services from registry's events, so the first declare can see an unknown node.
+  let edgeId = ''
+  await expect(async () => {
+    const declared = await page.request.post('/api/v1/topology/dependencies', {
+      data: { sourceServiceId: consumerId, targetServiceId: producerId, protocol: 'HTTP' },
+    })
+    expect(declared.status()).toBe(201)
+    edgeId = (await declared.json()).data.id as string
+  }).toPass({ timeout: 20_000, intervals: [1_000] })
+
+  const consumers = page.getByRole('list', { name: 'Consumers' })
+  await expect(async () => {
+    await page.goto(`/contracts/${contractId}`)
+    await page.getByRole('button', { name: 'Skip setup' }).click({ timeout: 5_000 })
+    await expect(consumers.getByRole('link', { name: new RegExp(consumerName) })).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 30_000 })
+  await expect(consumers.getByText('declared')).toBeVisible()
+  await expect(consumers.getByText('http')).toBeVisible()
+
+  await consumers.getByRole('link', { name: new RegExp(consumerName) }).click()
+  await expect(page).toHaveURL(new RegExp(`/catalog/${consumerId}`))
+
+  const removed = await page.request.delete(`/api/v1/topology/dependencies/${edgeId}`)
+  expect(removed.status()).toBe(204)
+
+  await expect(async () => {
+    await page.goto(`/contracts/${contractId}`)
+    await page.getByRole('button', { name: 'Skip setup' }).click({ timeout: 5_000 })
+    await expect(page.getByText('No services depend on this one.')).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 30_000 })
+})

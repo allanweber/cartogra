@@ -84,3 +84,13 @@ export interface VersionDiff {
   lines: DiffLine[]
   compatibility: Compatibility
 }
+
+/** A service with a live http/grpc edge into the contract's service, its edges merged. */
+export interface ContractConsumer {
+  serviceId: string
+  serviceName: string | null
+  dependencyTypes: ('declared' | 'observed')[]
+  protocols: string[]
+}
+
+export type ContractConsumersPage = PageResult<ContractConsumer>
