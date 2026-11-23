@@ -3,11 +3,13 @@ package io.cartogra.contract.api;
 import io.cartogra.common.api.ApiResponse;
 import io.cartogra.common.api.PageResult;
 import io.cartogra.common.identity.Actor;
+import io.cartogra.contract.api.dto.ConsumerResponse;
 import io.cartogra.contract.api.dto.ContractRequest;
 import io.cartogra.contract.api.dto.ContractResponse;
 import io.cartogra.contract.api.dto.ContractSummaryResponse;
 import io.cartogra.contract.api.dto.VersionDiffResponse;
 import io.cartogra.contract.api.dto.ContractVersionResponse;
+import io.cartogra.contract.domain.ConsumerService;
 import io.cartogra.contract.domain.ContractService;
 import io.cartogra.contract.domain.VersionPublication;
 import io.cartogra.contract.domain.exception.InvalidParameterException;
@@ -30,9 +32,11 @@ import java.util.UUID;
 public class ContractController {
 
     private final ContractService contractService;
+    private final ConsumerService consumerService;
 
-    public ContractController(ContractService contractService) {
+    public ContractController(ContractService contractService, ConsumerService consumerService) {
         this.contractService = contractService;
+        this.consumerService = consumerService;
     }
 
     @PostMapping({"", "/"})
@@ -99,5 +103,14 @@ public class ContractController {
             @PathVariable UUID id,
             @PathVariable int versionNumber) {
         return TracedResponse.ok(VersionDiffResponse.from(contractService.diff(tenantId, id, versionNumber)));
+    }
+
+    @GetMapping("/{id}/consumers")
+    public ResponseEntity<ApiResponse<PageResult<ConsumerResponse>>> consumers(
+            @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(defaultValue = "0") int offset) {
+        return TracedResponse.ok(consumerService.consumersOf(tenantId, id, limit, offset).map(ConsumerResponse::from));
     }
 }

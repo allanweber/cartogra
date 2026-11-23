@@ -1,6 +1,6 @@
 # Contract Context
 
-**Service**: `services/contract` · Port `8083` · Context path `/api/v1/contracts` · Phase 5 · **Live: contract store (5.1), diff + timeline (5.2), breaking-change engine (5.3), spec discovery (5.8)**; CI checks, consumers, alerts planned
+**Service**: `services/contract` · Port `8083` · Context path `/api/v1/contracts` · Phase 5 · **Live: contract store (5.1), diff + timeline (5.2), breaking-change engine (5.3), consumers (5.4), spec discovery (5.8)**; CI checks, alerts planned
 
 ---
 
@@ -25,7 +25,7 @@ The Contract context is Cartogra's API compatibility guardian. It stores the Ope
 | **Version Source** | `manual` (`POST /versions`) or `discovery` (applied from a discovered spec, audited as the system actor) |
 | **Spec Type** | Format of the contract: `openapi` (OpenAPI 3.x) only. AsyncAPI is a candidate once a user brings an AsyncAPI spec |
 | **Baseline** | The latest stored Contract Version of a Service; what a candidate spec is checked against |
-| **Consumer** | A Service with an inbound declared or observed dependency edge to the contract's Service; derived from the Topology graph, never registered by hand |
+| **Consumer** | A Service with a live inbound declared or observed `http` or `grpc` edge to the contract's Service; derived from the Topology graph, never registered by hand. Deleted services and self edges are not consumers |
 | **Producer** | The Service that owns and publishes the API Contract |
 | **Contract Check** | A compatibility analysis comparing a candidate spec against the Baseline; result: `breaking` or `compatible` |
 | **Breaking Change** | A direction-aware contract mutation that would break a Consumer (removed path or operation, removed response field, type change, new required request field or parameter, enum value removed from a request or added to a response) |
@@ -64,7 +64,7 @@ All cross-context Service references stored as UUIDs only.
 | `discovered_specs` | Live (5.8) | Discovered specs; `is_latest` marks the last spec seen for each `(tenant_id, repository_full_name, file_path)`; keeps the raw spec so a PENDING row can be applied later; `status`, `service_id`, `contract_version_id`, `errors` JSONB |
 | `services` | Live (5.2) | Projection of Registry services: name for the contract list (from `service.registered`/`updated`; a service with no name yet is looked up once via Registry `POST /internal/services/names` and stored), `deleted_at` tombstone from `service.deleted` (replaced 5.1's `deleted_services`). `external_id` (5.8, SCM repository full path, unique per live service) from `service.registered`/`updated` or a Registry `GET /internal/services/by-external-id` lookup |
 | `contract_checks` | Planned (5.5) | Check result per candidate vs. baseline; `is_breaking` + `changes` JSONB |
-| inbound-edge projection | Planned (5.4) | Consumer edges projected from Topology `dependency.*` events, idempotent on event id |
+| `inbound_edges` | Live (5.4) | Topology edges projected from `dependency.changed`, PK `(tenant_id, edge_id)`; all protocols stored. `removed_at` is final, so a replayed or late event cannot bring a removed edge back |
 | `notification_rules` | Planned (5.7) | Per-tenant Slack delivery rules |
 | `notification_log` | Planned (5.7) | Every delivery attempt, with retry/backoff outcome |
 
@@ -82,6 +82,7 @@ Contract: `docs/api/contract.openapi.yaml`. Writes need ADMIN or MEMBER (`@PreAu
 | GET | `/api/v1/contracts?q&status&limit&offset` | Live (5.2; `status` 5.3) | `PageResult` of live contracts with `serviceName` (null until projected) and latest version, most recently changed first; `q` matches the service name; `status=breaking\|compatible` filters on the latest version's `breaking` (another value → 400 `VALIDATION_ERROR`) |
 | GET | `/api/v1/contracts/{id}/versions?limit&offset` | Live (5.2) | Versions newest first (no spec text). Each version has `source`, and `repositoryFullName` + `filePath` for a discovered one (5.8) |
 | GET | `/api/v1/contracts/{id}/versions/{v}/diff` | Live (5.2; `compatibility` 5.3) | `{from, to, changes[], lines[], compatibility}` against version v-1; v1 → `from: null`, all lines added. `compatibility: {isBreaking, changes[{rule, breaking, direction, method, path, location, message}]}` |
+| GET | `/api/v1/contracts/{id}/consumers?limit&offset` | Live (5.4) | `PageResult` of Consumers `{serviceId, serviceName, dependencyTypes[], protocols[]}`, one row per service, sorted by name; unknown names fetched from Registry in one call; 404 when the contract is not live |
 | POST | `/api/v1/contracts/check` | Planned (5.5) | CI check: `{service, spec}` → `{is_breaking, changes[], affected_consumers[]}`; API key scope `ci:check`; never creates a version |
 
 Spec rules: OpenAPI 3.0/3.1, YAML or JSON, ≤ 1 MiB (blank or larger → 400 `VALIDATION_ERROR`). Not YAML/JSON, Swagger 2.0, AsyncAPI, or any swagger-parser validation message → 422 `INVALID_SPEC` with up to 50 `details.messages`. `$ref`s are never resolved, so parsing never fetches a URL.
@@ -95,7 +96,7 @@ Spec rules: OpenAPI 3.0/3.1, YAML or JSON, ≤ 1 MiB (blank or larger → 400 `V
 | Topic | Source | Action |
 |---|---|---|
 | `cartogra.ingestion.spec.discovered` | Ingestion | **Live (5.8)**, `SpecDiscoveredConsumer`. Record the spec as the last spec seen for its repository and path: equal to the last spec seen and its service still live (or the row `REJECTED`) → acked, no change; equal, but the row `SKIPPED` or its service tombstoned → a `PENDING` copy becomes the latest row and the repository is resolved again; different (also a revert) → new row, an older `PENDING` row → `SUPERSEDED`. Resolve the repository to a service (live projection `external_id`, else Registry lookup); no match → `PENDING`. Else apply: tombstoned → `SKIPPED`; invalid → `REJECTED` (acked, no DLQ); no contract → contract + v1 (audit `created`); same canonical hash → `UNCHANGED`; else next version (audit `version_published`). A race with a manual create publishes a version instead. Unreadable records → `.dlq` |
-| `cartogra.topology.dependency.changed` (`event_type` `dependency.{declared,observed,removed}`) | Topology | Maintain the inbound-edge projection that names Consumers |
+| `cartogra.topology.dependency.changed` (`event_type` `dependency.{declared,observed,removed}`) | Topology | **Live**, `DependencyEventConsumer`, group `contract-consumer`. `declared`/`observed` upsert the edge by edge id, `removed` marks it removed (final). Other event types are acked and ignored. Poison records → `.dlq` |
 | `cartogra.registry.service.changed` | Registry | **Live**, `ServiceEventConsumer`, group `contract-consumer`. `service.registered`/`updated` (5.2): upsert the projected name, never on a tombstone; store `externalId` and apply the PENDING discovered specs of that repository (5.8). `service.deleted` (5.1): tombstone the service, soft-delete its contract and versions, audit `deleted` (system) per contract changed. Replay changes and audits nothing; other event types are acked and ignored. Poison records → `.dlq` |
 
 **Produced:**

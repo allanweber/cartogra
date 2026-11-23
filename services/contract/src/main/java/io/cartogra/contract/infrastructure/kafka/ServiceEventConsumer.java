@@ -37,7 +37,7 @@ public class ServiceEventConsumer {
     static final String SERVICE_UPDATED = "service.updated";
     static final String SERVICE_DELETED = "service.deleted";
 
-    private static final TextMapGetter<Headers> HEADERS_GETTER = new TextMapGetter<>() {
+    static final TextMapGetter<Headers> HEADERS_GETTER = new TextMapGetter<>() {
         @Override
         public Iterable<String> keys(Headers carrier) {
             return () -> StreamSupport.stream(carrier.spliterator(), false).map(Header::key).iterator();

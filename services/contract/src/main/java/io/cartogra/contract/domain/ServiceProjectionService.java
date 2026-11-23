@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientException;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -98,6 +99,14 @@ public class ServiceProjectionService {
         if (!unnamed.isEmpty()) {
             fetch(tenantId, unnamed);
         }
+    }
+
+    /** Fetches and stores the names of these services in one Registry call; fails open to an empty map. */
+    public Map<UUID, String> fetchNames(UUID tenantId, Collection<UUID> serviceIds) {
+        if (serviceIds.isEmpty()) {
+            return Map.of();
+        }
+        return fetch(tenantId, serviceIds.stream().distinct().limit(MAX_LOOKUP).toList());
     }
 
     private Map<UUID, String> fetch(UUID tenantId, List<UUID> serviceIds) {
