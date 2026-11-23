@@ -6,4 +6,6 @@
     <!-- Test methods use method_scenario_result naming convention -->
     <suppress checks="MethodName" files=".*Test\.java$"/>
     <suppress checks="MethodName" files=".*IT\.java$"/>
+    <!-- Flyway Java migrations need the V<version>__<Description> class name -->
+    <suppress checks="TypeName" files="[\\/]db[\\/]migration[\\/]V\d+__\w+\.java$"/>
 </suppressions>
