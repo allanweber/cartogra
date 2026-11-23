@@ -1,29 +1,19 @@
 # Cartogra — Product Roadmap
 
-> **Plan of record.** Supersedes the old execution checklist, retired (deleted) once every live
-> reference to it below was repointed here — see git history for the prior content.
-> Written 2026-08-18 against commit `d6922fa`, after reading the code — not the old plan.
+> **Plan of record.** First written 2026-08-18 against commit `d6922fa`. The old execution checklist is in the
+> git history.
 
 ---
 
-## Where we actually are
+## Where we are (2026-11-23)
 
-Measured, not claimed:
-
-| Area | State | Evidence |
-|---|---|---|
-| Gateway (identity, proxy) | **Live** | 111 java / 21 test classes. Local login + OTP, Google/GitHub OAuth, per-tenant OIDC, refresh tokens, invitations, admin user management, Redis rate limit, Spring Cloud Gateway routes with circuit breakers |
-| Registry (catalog) | **Live** | 68 java / 28 test classes, 13 migrations. Service + Team CRUD, team members, ownership assign, history/snapshots, orphan list, health probing (`HealthProbeScheduler`, `RestClientHealthChecker`), plan limits, server-side pagination **and** Postgres FTS (`to_tsvector` + GIN index in V005) |
-| Ingestion (discovery) | **Live** | 100 java / 31 test classes, 5 migrations. GitHub + Azure DevOps providers, repo scan, tech-stack detection, CODEOWNERS ownership, webhooks with signature verification, K8s cluster watch, sync jobs + stale-job reaper |
-| Topology | **Skeleton + harness** | 25 java, 3 migrations, 4 Testcontainers ITs (added since, story 0.2), no service class, no controller, no consumer. `dependencies`, `dependency_drifts`, `dependency_graph_edges` MV + refresh scheduler + advisory lock exist |
-| Contract, Intelligence | **Empty directories** | 0 files |
-| Frontend | **Partial** | Real data: catalog list/detail, teams, settings (connections, tenant, users). Mock data: dashboard, risks, contracts, timeline. Placeholders: graph, intelligence, ops. Honest stubs: settings/api-keys, settings/notifications |
-| Kafka | **5 real topics** | `registry.service.{registered,updated,deleted}`, `registry.sync.command`, `ingestion.{service.discovered,ownership.resolved,sync.completed}` (+2 DLQs). `docs/architecture/kafka-topics.md` documents ~20 — the rest do not exist |
-| CI | **Topology enabled** | Topology now builds and tests in CI (story 0.1, commit `40fff29`). Contract and intelligence steps stay commented out until those services exist |
-
-**Velocity:** 64 commits since 2026-06-04. June 24 · July 38 · August 2. Last feature commit 2026-08-05.
-
-**Product position:** the catalog half of the product works. The differentiator — dependency intelligence — has schema and nothing else. Everything in this roadmap is ordered to close that gap first, because a catalog without a graph is a spreadsheet with OAuth.
+| Area | State |
+|---|---|
+| Gateway, Registry, Ingestion | Live: auth, catalog, SCM and Kubernetes discovery, ownership, audit trail, guest mode |
+| Topology | Live: dependency graph, blast radius, SPOF, observed edges from OTel spans, drift |
+| Contract | Phase 5 in progress: store, diff, breaking-change engine, spec discovery and consumers are done; CI check, GitHub Action, Slack and trusted OTLP intake are open |
+| Intelligence | Phase 6: no code |
+| Production | `cartogra.dev`, single-node k3s (ADR-0032) |
 
 ---
 
@@ -66,35 +56,17 @@ The old checklist broke each of these; that is why it stopped being usable.
 
 ## ✅ Phase 0 — Make the repo honest DONE
 
+Phases 0–4 are done. Each line below is the item title only; the detail is in `plans/` and the git history.
+
+
 No user-facing value. It exists because the next phases are unverifiable without it.
 
-- [x] **0.1 — Topology enters CI.** ✅ *Done — `40fff29`.* Uncomment the topology build steps in `.github/workflows/ci.yml` and `ci-full.yml`; `:services:topology:build` green on every push touching that path.
-  *Done:* a deliberate compile error in topology fails CI.
-- [x] **0.2 — Topology test harness.** ✅ *Done — `18bcce7`.* `AbstractTopologyIT` with Testcontainers Postgres, mirroring registry's. ITs for `JdbcDependencyRepository` (insert, soft delete, edge-identity uniqueness), `JdbcDependencyDriftRepository`, and the MV refresh path including advisory-lock contention between two callers.
-  *Done:* topology jacoco report exists and CI uploads it like the other services.
-- [x] **0.3 — Restore the decision record.** `git checkout e6f0b45^ -- docs/adr` brings back ADR-0001…0021 plus README/TEMPLATE (deleted in "clean up", Jun 25, while ~40 references to them remain live in `CONTRIBUTING.md`, `CONTEXT-MAP.md`, six `CONTEXT.md` files, and published BIP posts). New ADRs continue at **0028**.
-  *Done:* no dangling `ADR-00xx` reference in the repo.
-- [x] **0.4 — Docs match code.** `CONTEXT-MAP.md` topology status; `services/registry/CONTEXT.md` (claims V001–V011 and an `application/usecase` layer that no longer exists); `kafka-topics.md` cut to the 8 real topics with the rest moved to a clearly-marked "proposed" appendix; drop the "Notification worker" context that is not a module.
-  *Done:* every table, topic, and package named in docs exists in code.
-- [x] **0.5 — Retire the old checklist.** ~~Banner at the top of `docs/execution-checklist.md` pointing here.~~
-  Done one step further: the file is deleted outright and every live reference to it (OpenAPI specs,
-  `CONTEXT.md` files, `.claude/rules/backend.md`, BIP docs) repointed at this roadmap.
-- [x] **0.6 — Make the gate tooling installable.** `npx impeccable install` and the `/improve-codebase-architecture` source pinned in `CONTRIBUTING.md`, with versions. A gate nobody else can run is not a gate — this story is what makes the standing checks below honest.
-
-**Gate**
-
-- [x] A deliberate compile error in `services/topology` fails CI; a topology coverage report uploads like registry's.
-- [x] Every `ADR-00xx` reference in the repo resolves to a file that exists.
-- [x] Every table, topic, and package named in `CONTEXT-MAP.md`, the service `CONTEXT.md` files, and `kafka-topics.md` exists in code.
-- [x] `docs/execution-checklist.md` is deleted; no reference to it remains anywhere in the repo.
-
-*Standing checks (§2 — Definition of done):*
-
-- [x] Every story in this phase passed `/code-review` and `/security-review` before merge.
-- [x] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
-- [x] `/impeccable critique` run over every screen this phase touched; findings fixed or recorded.
-- [x] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
-- [x] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
+- [x] **0.1 — Topology enters CI.**
+- [x] **0.2 — Topology test harness.**
+- [x] **0.3 — Restore the decision record.**
+- [x] **0.4 — Docs match code.**
+- [x] **0.5 — Retire the old checklist.**
+- [x] **0.6 — Make the gate tooling installable.**
 
 **Worth writing about**
 
@@ -107,37 +79,14 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 **Goal:** a user can express and see how their services connect. This is the first time Cartogra does something a catalog cannot.
 
-- [x] **1.1 — Graph nodes projected from the registry.** *As the platform, I keep a local node list so graph queries never call the registry synchronously.*
-  Topology consumes `cartogra.registry.service.{registered,updated,deleted}` into a `graph_nodes` table (`tenant_id`, `service_id`, `name`, `team_id`, `tier`, `health_status`, `deleted_at`), idempotent via a `(tenant_id, event_id)` dedupe table.
-  *Acceptance:* replaying an envelope is a no-op; `service.deleted` soft-deletes the node; ITs prove all three.
-  *Acme test:* ✅ `pnpm acme load` waits for all 21 K8s-discovered services to appear as nodes.
-- [x] **1.2 — Declared dependencies.** *As an engineer, I record that service A calls service B.*
-  `POST/PUT/DELETE /v1/dependencies` validated against `graph_nodes` (404 unknown node, 409 duplicate edge, 422 self-edge — the CHECK constraint already exists). Every mutation calls `markDirty()` on the MV scheduler.
-  *Acme test:* ✅ `verify`: all 43 declared edges present; second `load` creates none.
-- [x] **1.3 — Graph read API.** `GET /v1/graph?teamId=&type=&limit=` returns `{nodes[], edges[], truncated}` from `dependency_graph_edges` joined to `graph_nodes`. Hard node cap with `truncated: true` rather than an unbounded payload.
-  *Acme test:* ✅ `verify`: declared and observed graph queries return the expected edges (21 nodes).
-- [x] **1.4 — Graph page.** D3 force-directed canvas replacing `PhasePlaceholder` in `routes/_authenticated/graph.tsx`: zoom, pan, node select, declared/observed toggle (observed empty until Phase 3), shadcn chrome, TanStack Query, `Skeleton` + `Alert`-with-`traceId`. Deletes `MOCK_GRAPH_NODES` / `MOCK_GRAPH_EDGES`.
-  *Acme test:* 🔎 manual: open `/graph` on the Acme tenant (21 nodes, 43 declared edges, 2 cycle badges).
-- [x] **1.5 — Dependencies on the service page.** Upstream/downstream lists on `catalog.$serviceId` with add/remove, so the graph is editable from where users already work.
-  *Acme test:* 🔎 manual: `ledger-service` shows 12 upstream dependents.
-- [x] **1.6 — `docs/api/topology.openapi.yaml`** reduced to exactly the endpoints that exist.
+- [x] **1.1 — Graph nodes projected from the registry.**
+- [x] **1.2 — Declared dependencies.**
+- [x] **1.3 — Graph read API.**
+- [x] **1.4 — Graph page.**
+- [x] **1.5 — Dependencies on the service page.**
+- [x] **1.6 — `docs/api/topology.openapi.yaml`**
 
 **Demo:** register three services, draw two edges, open `/graph`, click a node, see its neighbours.
-
-**Gate**
-
-- [x] Replaying a `service.registered` envelope is a no-op; `service.deleted` soft-deletes the node — both proven by ITs.
-- [x] `/graph` renders a 20-service, 30-edge tenant without freezing, on hardware named in the doc.
-- [x] `MOCK_GRAPH_NODES` and `MOCK_GRAPH_EDGES` are deleted from the repo.
-- [x] `docs/api/topology.openapi.yaml` matches the implemented routes exactly — no path documented that does not exist.
-
-*Standing checks (§2 — Definition of done):*
-
-- [x] Every story in this phase passed `/code-review` and `/security-review` before merge.
-- [x] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
-- [x] `/impeccable critique` run over every screen this phase touched; findings fixed or recorded.
-- [x] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
-- [x] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
 
 **Worth writing about**
 
@@ -151,36 +100,14 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 **Goal:** the graph stops being a picture and starts making decisions. This is the "seconds, not hours" promise in `PRODUCT.md`.
 
-- [x] **2.1 — Blast radius.** `GET /v1/blast-radius/{serviceId}?direction=&depth=` — recursive CTE over the MV, default depth 3 / max 6, visited-path array so cycles terminate, node cap with explicit truncation flag. Returns upstream and downstream with distance.
-  *Acceptance:* fixture graph with a known 12-node fan-out returns exactly those 12; a 3-node cycle terminates.
-  *Acme test:* ❌ add `verify` check: `ledger-service` blast radius = its transitive callers; a `depth=1` call returns `truncated`. Cycles terminate: the 2 seeded cycles.
-- [x] **2.2 — Impact panel + on-graph highlight.** Selecting a node dims everything outside its blast radius; side panel lists affected services grouped by distance, with owning team.
-  *Acme test:* 🔎 manual: select `ledger-service`, owning teams listed per distance.
-- [x] **2.3 — Cycles.** `GET /v1/cycles` returning normalized, deduplicated cycles (rotation-invariant key). Cycle badge on the graph and on each member node.
-  *Acme test:* ✅ `verify`: `/cycles` reports exactly 2.
-- [x] **2.4 — Single points of failure.** `GET /v1/spofs` — documented heuristic: fan-in ≥ threshold (default 5, configurable per tenant), weighted by `tier=CRITICAL` and by orphan status. The threshold and its rationale ship in the response payload, not just in docs.
-  *Acme test:* ✅ `ledger-service` (12) flagged. ❌ add boundary checks: `notification-service` (5) flagged, `user-service` and `payments-service` (4) not.
-- [x] **2.5 — Risks page.** `GET /v1/risks` aggregating cycles + SPOFs + orphans into `{severity, type, title, description, affectedServices[]}`, paginated. `risks.tsx` drops `MOCK_RISKS`.
-  *Acme test:* ✅ `verify`: the 3 orphans appear. ❌ add cycle and SPOF rows.
-- [x] **2.6 — Performance evidence.** 200-edge fixture; record graph read, blast radius p95, and MV refresh duration in `docs/architecture/topology-performance.md` with the hardware named.
-  *Acme test:* n/a: 200-edge fixture stays `infra/perf/graph-bench/graph-perf-200-seed.sql`.
+- [x] **2.1 — Blast radius.**
+- [x] **2.2 — Impact panel + on-graph highlight.**
+- [x] **2.3 — Cycles.**
+- [x] **2.4 — Single points of failure.**
+- [x] **2.5 — Risks page.**
+- [x] **2.6 — Performance evidence.**
 
 **Demo:** "if payments-api goes down, what breaks?" answered in one click, with the owning teams listed.
-
-**Gate**
-
-- [x] Blast radius returns exactly the fixture's known fan-out; a 3-node cycle terminates; depth cap and truncation flag both exercised.
-- [x] Cycles are rotation-deduplicated; the SPOF threshold and its rationale travel in the response payload.
-- [x] Risks page runs on `GET /v1/risks`; `MOCK_RISKS` is deleted.
-- [x] p95 for graph read and blast radius recorded in `topology-performance.md` with the hardware named.
-
-*Standing checks (§2 — Definition of done):*
-
-- [x] Every story in this phase passed `/code-review` and `/security-review` before merge.
-- [x] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
-- [x] `/impeccable critique` run over every screen this phase touched; findings fixed or recorded.
-- [x] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
-- [x] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
 
 **Worth writing about**
 
@@ -195,38 +122,15 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 **Goal:** remove manual upkeep — the reason internal service catalogs die.
 
-- [x] **3.1 — Observed edges from traces.** OTel Collector exports spans (OTLP/JSON) to `cartogra.observability.spans` (config in `infra/docker-compose/otel-collector.yml`); `OtelSpanWorker` derives `dependency_type='observed'` edges idempotently on the existing edge-identity index, with `last_seen_at` freshness. Synthetic span fixtures work without a live collector. ADR-0029.
-  *Acme test:* ✅ `verify`: every enabled declared call appears as an observed edge within ~60 s.
-- [x] **3.2 — Acme Fintech seed.** `seed/acme-fintech/seed-data.json`: 21 services, 5 teams, 3 orphans, 2 cycles, 1 god service (12 dependents), 3 undeclared + 1 missing drift. A standalone simulated customer stack in the kind cluster: one generic fake-service image run as 21 Deployments in a tenant-labelled namespace (services come from K8s discovery, never from `POST /services`), emitting real OTel spans through the collector. Idempotent loader (`pnpm acme load`) adds teams, owners, tiers and declared edges through the gateway API; `pnpm acme drift on` switches on the 3 dormant undeclared calls. Replaces `seed/graph-perf-seed.sql`. See `seed/acme-fintech/README.md`.
-  *Acme test:* ✅ `verify`: second `load` is a no-op and state is identical.
-- [x] **3.3 — Drift detection.** Declared-without-observed and observed-without-declared written to `dependency_drifts`; A sweep (`topology.drift.sweep-interval`, default 5 min) compares declared and observed pairs, protocol ignored: *undeclared* = observed since the `missing-after` cutoff with no declared pair (a long-silent observed edge raises nothing, so removing a missing edge doesn't bounce back as undeclared); *missing* = declared for longer than `topology.drift.missing-after` (default 7 days) with no recent observed call, only for tenants that have observed edges. `GET /v1/drifts` + `POST /v1/drifts/{id}/resolve` (`ACCEPT_OBSERVED` declares the observed edge / `REMOVE_DECLARED` deletes the declared one / `DISMISS`, which is never re-raised); a drift whose condition clears closes itself. Edge mode (All / Declared / Observed / Drift) and an Inspector Drift tab on the graph. Plan: `plans/014-drift-detection.md`.
-  *Acme test:* ✅ `verify --with-drift`: `drift on` enables 3 dormant undeclared calls (`reporting-service` → `payments-service`, `webhook-relay` → `fraud-service`, `legacy-batch` → `notification-service`) and the declared-but-silent `loyalty-service` → `fx-service` is reported as missing; accept / remove / dismiss each get their own drift. Needs `TOPOLOGY_DRIFT_SWEEP_INTERVAL` / `TOPOLOGY_DRIFT_MISSING_AFTER` set short (e.g. `PT15S` / `PT2M`) for a quick demo.
-- [x] **3.4 — CODEOWNERS team mapping (orphan risk from ownership events).** No Topology consumer: ownership already reaches `graph_nodes.team_id` through `service.{registered,updated}` and feeds the 2.5 risk list (ADR-0028, superseding ADR-0027). The gap was the mapping itself — CODEOWNERS never assigned a team. Ingestion providers now reduce handles to bare team names (GitHub `@org/team`; Azure DevOps `@team`, `[Project]\Team`, `[Team]`); Registry finds the service by SCM external id (falling back to the repo-URL suffix) and matches handles to teams by slug, assigning when exactly one distinct team matches. Already-owned services are still never overridden. Plan: `plans/015-codeowners-team-mapping.md`.
-  *Acme test:* 🔎 `AcmeCodeownersMappingIT` asserts 17 owned / 3 orphans from the seed's CODEOWNERS handles; the live check (`pnpm acme load --skip-owners` + SCM sync) is manual, see `seed/acme-fintech/README.md`. Orphans in `/risks` already asserted by `verify`.
-- [x] **3.5 — Topology events *(only if a consumer exists)*.** `dependency.declared/observed/removed` and `drift.detected` are **deferred to Phase 6**, where Intelligence consumes them. Rule 4. Closed by deferral: no consumer exists, so no topic or producer was introduced in Phase 3; work moves to 6.7. `dependency.*` later pulled into 5.4, where contract consumes them. Unused topology JSON `KafkaTemplate` removed. Plan: `plans/016-topology-events-deferral.md`.
-  *Acme test:* n/a: deferred.
-- [x] **3.6 — Unresolved span services.** `GET /v1/unresolved-span-services` (paginated, sorted by `seen_count`) + `POST …/{id}/dismiss` (soft delete). A list in the UI next to drift, with a "create service" shortcut that pre-fills the registry form. Reads the table 3.1 fills. Dismiss is sticky (a dismissed name is never re-recorded); registering a service with that name clears its row (`resolution='registered'`), so it can resurface if the service is later deleted. Plan: `plans/017-unresolved-span-services.md`.
-  *Acme test:* ✅ `verify`: `payments-service -> stripe-gateway` (`"external": true`) is listed in `/unresolved-span-services`.
-- [x] **3.7 — Messaging and DB edges.** PRODUCER/CONSUMER spans joined on `messaging.destination.name` give `kafka` edges between the services on each side. CLIENT spans with `db.system` give `db` edges, only when the DB matches a catalog service by name (`peer.service`, then `db.namespace`, then host); unmatched DBs are dropped, never listed as unresolved. Reuses `pending_span_links`: one row per (topic, producer/consumer, service), never deleted on match, kept for `topology.span-links.messaging-ttl` (default 24 h). Kafka only. ADR-0029 amended. Plan: `plans/018-messaging-db-edges.md`.
-  *Acme test:* ✅ `verify`: `payments-service` publishes `payments.completed`, consumed by `notification-service` and `loyalty-service` (2 `kafka` edges, one beside an existing `http` edge); `ledger-service` → `ledger-db` (`db` edge). All declared, so no extra drift.
+- [x] **3.1 — Observed edges from traces.**
+- [x] **3.2 — Acme Fintech seed.**
+- [x] **3.3 — Drift detection.**
+- [x] **3.4 — CODEOWNERS team mapping (orphan risk from ownership events).**
+- [x] **3.5 — Topology events.** Deferred: `dependency.*` moved to 5.4, `drift.detected` to 6.7.
+- [x] **3.6 — Unresolved span services.**
+- [x] **3.7 — Messaging and DB edges.**
 
 **Demo:** load the Acme Fintech seed and run its traffic generator, watch an edge appear on the graph that nobody declared, resolve the drift.
-
-**Gate**
-
-- [x] A synthetic span fixture produces an observed edge with no live collector running.
-- [x] Declared-without-observed and observed-without-declared drift are both raised; accept / remove / dismiss all covered by ITs.
-- [x] The Acme seed loader run twice leaves identical state.
-- [x] A `service.updated` that clears `teamId` updates `graph_nodes.team_id`, and the resulting orphan appears in `GET /v1/risks`; CODEOWNERS handles resolve to Registry teams.
-- [x] No new Kafka topic exists without a consumer — topology lifecycle events remain deferred.
-
-*Standing checks (§2 — Definition of done):*
-
-- [x] Every story in this phase passed `/code-review` and `/security-review` before merge.
-- [x] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
-- [x] `/impeccable critique` run over every screen this phase touched; findings fixed or recorded.
-- [x] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
-- [x] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
 
 **Worth writing about**
 
@@ -240,34 +144,14 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 **Goal:** the first public artifact. Moved forward from the old plan's Phase 5 — nothing is validated until someone outside can click it. It runs on k3s with 7.1's Helm charts pulled in (ADR-0030). Plan: `plans/021-phase4-public-demo.md`.
 
-- [x] **4.1 — Audit trail.** `audit_events` migration in registry (`entity_type`, `entity_id`, `action`, `actor_kind` user|system, `actor_id`, `payload` JSONB of changed fields before → after, RLS, GIN); `AuditEventPort` in `shared:common`; registry and gateway (same schema) write directly; topology and ingestion publish `cartogra.platform.audit.recorded` for registry to consume (ADR-0017, accepted). State changes only — no logins or per-span bumps. `GET /api/v1/registry/audit-events` paginated + filterable, readable by every role incl. guest. `timeline.tsx` drops `MOCK_TIMELINE`.
-  *Acme test:* 🔎 loader owner/tier/edge writes produce audit events; `demo-flow` e2e asserts they reach the Timeline.
-- [x] **4.2 — Dashboard on real data.** Health summary from registry, top risks from 2.5, recent activity from 4.1. `dashboard.tsx` drops all `MOCK_*`. Vitest covers loading/error/empty.
-  *Acme test:* 🔎 manual: dashboard shows Acme risks and activity.
-- [x] **4.3 — Guest read-only mode.** `/demo` mints a 60-min `roles=["GUEST"]` token bound to the demo tenant (UUID `sub`, silent re-mint, no anonymous path). Gateway rejects every non-GET guest request (primary guard); `@PreAuthorize` sweep across registry + topology + ingestion (topology writes guarded, `TEAM_OWNER` → ADR-0025 membership). Per-IP mint limit, per-guest API bucket. Read-only banner, write controls disabled. IT enumerates every write route → 403; `guest-demo.spec` e2e. ADR-0019 (accepted, amended).
-  *Acme test:* 🔎 Acme is the demo tenant; the guest-403 matrix is an IT, not seed work.
-- [x] **4.4 — Collector in the deployable compose.** Add `otel-collector` (same `otel-collector.yml`) to `docker-compose.yml`, wire every service's `OTEL_EXPORTER_OTLP_ENDPOINT` to it, and add a `kafka` dependency, so observed edges work in the public environment. The `demo-flow` observed-edge step runs unconditionally (CI included). Plus a demo collector config without Tempo/Loki for the Helm chart.
-  *Acme test:* ✅ run `pnpm acme verify` against the compose stack with the collector (observed-edge check).
-- [x] **7.1 — Helm charts (pulled forward from Phase 7).** Per-service charts + umbrella with infra.md probes, resources and security contexts; single-replica Postgres/Kafka/Valkey StatefulSets; `values-demo.yaml` (now `values-production.yaml`) with 1 replica, no PDB/HPA and 8GB sizing (ADR-0030); multi-arch images (amd64 + arm64); secrets via Sealed Secrets.
-- [x] **4.5 — One public environment.** Single-node k3s on a Hetzner ARM VM (CAX21, 8GB; multi-arch images, memory-sized `values-demo.yaml`), Traefik + cert-manager TLS on `cartogra.dev` (ADR-0030). CI pushes SHA-tagged images to GHCR; manual `helm upgrade` workflow. Acme runs live in-cluster; a bootstrap Job creates the demo tenant, registers the cluster read-only, connects a public GitHub mirror of the Acme repos, and runs `acme load`. Self-registration off (`app.signup.enabled=false`). Nightly `pg_dump`, external uptime check. `docs/runbooks/deployment.md` rewritten. Depends on 4.4 and 7.1. Also delivered: NetworkPolicy on the backends, in-cluster Prometheus + Alertmanager for guest-mint spikes and capacity (plan 021 steps 7a/7c), and `infra/k8s/demo-host-wizard.sh` (now `production-host-wizard.sh`) for the host build. The host is production (ADR-0032).
+- [x] **4.1 — Audit trail.**
+- [x] **4.2 — Dashboard on real data.**
+- [x] **4.3 — Guest read-only mode.**
+- [x] **4.4 — Collector in the deployable compose.**
+- [x] **7.1 — Helm charts (pulled forward from Phase 7).**
+- [x] **4.5 — One public environment.**
 
 **Demo:** send someone a link. They browse Acme Fintech, run a blast radius, and cannot change anything.
-
-**Gate**
-
-- [x] A public URL serves the Acme tenant over TLS, and the runbook rebuilds that host from scratch (VM → k3s → helm → bootstrap Job).
-- [x] `/demo` gets a stranger in with no credentials; the public host has no self-registration path.
-- [x] Guest token reads succeed and every mutating endpoint returns 403 — the IT enumerates the routes rather than sampling them.
-- [x] Dashboard and Timeline mocks deleted; `mock-data.ts` retains only fixtures for unshipped screens.
-- [x] Audit events are written by registry, topology, ingestion and gateway mutations; the list is paginated and readable by guests (filtered: guests see only `AuditKind` kinds and fields declared guest-safe, ADR-0019 §8).
-
-*Standing checks (§2 — Definition of done):*
-
-- [x] Every story in this phase passed `/code-review` and `/security-review` before merge.
-- [x] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
-- [x] `/impeccable critique` run over every screen this phase touched; findings fixed or recorded.
-- [x] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
-- [x] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
 
 **Worth writing about**
 

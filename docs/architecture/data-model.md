@@ -310,4 +310,4 @@ CREATE INDEX ON dependencies USING GIN (metadata) WHERE metadata IS NOT NULL;
 ## References
 
 - [system-overview.md](system-overview.md)
-- [ADR-0001 — PostgreSQL over graph database](../adr/ADR-0001-postgresql-over-graph-database.md)
+- [ADR-0001 — PostgreSQL over graph database](../adr/0001-postgresql-over-graph-database.md)

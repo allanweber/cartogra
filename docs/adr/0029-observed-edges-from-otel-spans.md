@@ -1,7 +1,7 @@
 # ADR-0029 — Observed edges from OTel spans
 
 **Date:** 2026-10-07
-**Status:** Accepted (supersedes [ADR-0016](ADR-0016-otel-span-worker-ingestion.md)); amended 2026-10-26 for messaging and DB edges (roadmap 3.7)
+**Status:** Accepted (supersedes [ADR-0016](0016-otel-span-worker-ingestion.md)); amended 2026-10-26 for messaging and DB edges (roadmap 3.7)
 **Deciders:** Allan Weber
 
 ---

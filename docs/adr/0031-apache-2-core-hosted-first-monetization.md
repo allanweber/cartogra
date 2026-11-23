@@ -60,4 +60,4 @@ Facts at decision time:
 - [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
 - [Functional Source License](https://fsl.software/)
 - [Developer Certificate of Origin](https://developercertificate.org/)
-- [ADR-0017](ADR-0017-audit-events-ownership-port.md): audit events
+- [ADR-0017](0017-audit-events-ownership-port.md): audit events

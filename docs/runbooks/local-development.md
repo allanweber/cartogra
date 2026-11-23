@@ -61,22 +61,15 @@ Expected: all containers `(healthy)` or `Up`. Kafka may take 20–30 seconds on 
 
 ---
 
-## 4. Run database migrations
+## 4. Database migrations
 
-Flyway runs automatically on service startup. To run migrations manually:
-
-```bash
-./gradlew :services:registry:flywayMigrate
-./gradlew :services:topology:flywayMigrate
-./gradlew :services:contract:flywayMigrate
-./gradlew :services:intelligence:flywayMigrate
-```
+Flyway runs on service startup. Each service migrates its own schema. There is no separate Gradle migrate task.
 
 ---
 
 ## 5. Start backend services
 
-Open one terminal per service, or use the IntelliJ "Run Configurations":
+Run all services with `./gradlew bootRun`, or one terminal per service:
 
 ```bash
 # Terminal 1 — Gateway (port 8080)
@@ -91,10 +84,7 @@ Open one terminal per service, or use the IntelliJ "Run Configurations":
 # Terminal 4 — Contract (port 8083)
 ./gradlew :services:contract:bootRun
 
-# Terminal 5 — Intelligence (port 8084)
-./gradlew :services:intelligence:bootRun
-
-# Terminal 6 — Ingestion (port 8085)
+# Terminal 5 — Ingestion (port 8085)
 ./gradlew :services:ingestion:bootRun
 ```
 
@@ -184,7 +174,7 @@ Never edit a committed Flyway migration. If you need to fix a mistake, create a 
 ```bash
 docker compose -f infra/docker-compose/docker-compose.dev.yml down -v postgres
 docker compose -f infra/docker-compose/docker-compose.dev.yml up -d postgres
-./gradlew :services:registry:flywayMigrate
+./gradlew :services:registry:bootRun   # Flyway migrates on startup
 ```
 
 ### Flyway error: non-empty schema but no schema history table
