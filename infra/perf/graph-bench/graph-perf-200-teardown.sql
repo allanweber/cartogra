@@ -1,11 +1,11 @@
--- perf/graph-perf-200-teardown.sql
+-- infra/perf/graph-bench/graph-perf-200-teardown.sql
 --
--- Removes everything perf/graph-perf-200-seed.sql created for one tenant. The fixture is
+-- Removes everything infra/perf/graph-bench/graph-perf-200-seed.sql created for one tenant. The fixture is
 -- synthetic (names prefixed "Perf200 Seed"), so these are hard deletes on purpose — soft
 -- deletes would leave 133 fake services in the dev database forever.
 --
 --   docker exec -i cartogra-postgres psql -U cartogra -d cartogra \
---       -v tenant_id=<uuid> < perf/graph-perf-200-teardown.sql
+--       -v tenant_id=<uuid> < infra/perf/graph-bench/graph-perf-200-teardown.sql
 
 \if :{?tenant_id}
 \else

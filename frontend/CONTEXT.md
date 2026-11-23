@@ -26,7 +26,6 @@ The Frontend Shell is Cartogra's single-page application. It renders the service
 | **Edge mode** | The Graph page's unified edge-visibility control: All / Declared only / Observed only / Drift only — replaces having separate declared-vs-observed and drift toggles |
 | **Standing badge** | A node/edge visual marker (SPOF badge, cycle dashed-edge) that is always rendered when the underlying condition holds — never toggle-gated, unlike Edge mode |
 
-Confirmed Phase 2 design brief: [docs/design/phase-2-dependency-graph.md](../docs/design/phase-2-dependency-graph.md).
 
 ---
 

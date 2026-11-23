@@ -73,6 +73,30 @@ SyncJob  ──  (tenant_id, connection_id, provider_type, status, counters)
 
 ---
 
+## Discovery rules
+
+**Kubernetes health** (from Endpoints):
+
+| Endpoints state | `healthStatus` |
+|---|---|
+| Resource absent or no subsets | UNKNOWN |
+| All subsets have ready addresses only | HEALTHY |
+| Some subsets have both ready and not-ready addresses | DEGRADED |
+| All subsets have only not-ready addresses | UNHEALTHY |
+
+**Tech stack** (SCM, per non-archived repo, additive: e.g. `["java","spring-boot"]`):
+
+| File | Technology |
+|---|---|
+| `pom.xml` / `build.gradle` / `build.gradle.kts` | java (+ spring-boot if it contains `spring-boot`) |
+| `package.json` | javascript |
+| `go.mod` | go |
+| `Cargo.toml` | rust |
+| `requirements.txt` | python |
+| `Dockerfile` FROM `eclipse-temurin:*` / `node:*` / `python:*` / `golang:*` / `rust:*` | java / javascript / python / go / rust |
+
+---
+
 ## Use Cases
 
 | Use Case | Trigger | Output |

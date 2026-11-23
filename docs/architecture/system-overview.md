@@ -175,6 +175,6 @@ POST /ingestion/webhooks/github (raw, no envelope)
 
 - [data-model.md](data-model.md) — per-service table definitions
 - [kafka-topics.md](kafka-topics.md) — full topic catalog
-- [ADR-0001](../adr/ADR-0001-postgresql-over-graph-database.md) — graph storage decision
-- [ADR-0002](../adr/ADR-0002-scm-provider-abstraction.md) — SCM SPI decision
+- [ADR-0001](../adr/0001-postgresql-over-graph-database.md) — graph storage decision
+- [ADR-0002](../adr/0002-scm-provider-abstraction.md) — SCM SPI decision
 - ADR-0003 — gRPC for internal sync communication (Superseded 2026-05-18; deferred to Phase 6 research)

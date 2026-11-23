@@ -1,7 +1,7 @@
 # ADR-0007 — Local Development Infrastructure (S0.3)
 
 **Date:** 2026-05-01
-**Status:** Accepted — §4 superseded by [ADR-0008](ADR-0008-lgtm-observability-stack.md)
+**Status:** Accepted — §4 superseded by [ADR-0008](0008-lgtm-observability-stack.md)
 **Deciders:** Platform team
 
 ---
@@ -82,7 +82,7 @@ services live in the dev overlay so they do not bloat CI or minimal local runs.
 **Decision:** Use Grafana Tempo (traces), Grafana Loki (logs), and Prometheus (metrics) as
 local observability backends, with Grafana as the single correlation UI.
 
-See [ADR-0008](ADR-0008-lgtm-observability-stack.md) for the full rationale, signal pipeline
+See [ADR-0008](0008-lgtm-observability-stack.md) for the full rationale, signal pipeline
 detail, and K8s deployment plan.
 
 ---
@@ -162,5 +162,5 @@ restarts the relevant `bootRun` process.
 - [Valkey project](https://valkey.io/)
 - [Redis SSPL license change announcement](https://redis.io/blog/redis-adopts-dual-source-available-licensing/)
 - [OTel Collector contrib releases](https://github.com/open-telemetry/opentelemetry-collector-contrib/releases)
-- [ADR-0008 — LGTM Observability Stack](ADR-0008-lgtm-observability-stack.md)
+- [ADR-0008 — LGTM Observability Stack](0008-lgtm-observability-stack.md)
 - ADR-0003 — gRPC for internal service communication (Superseded 2026-05-18; deferred to Phase 6 research)

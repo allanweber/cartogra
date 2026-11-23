@@ -1,3 +1,11 @@
+---
+paths:
+  - "infra/**"
+  - ".github/**"
+  - "**/Dockerfile"
+  - "**/*.gradle.kts"
+---
+
 # Infrastructure Rules
 
 ## Dockerfile
@@ -24,28 +32,13 @@
 - Container `securityContext`: `readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]`
 - Mount `/tmp` as `emptyDir` when `readOnlyRootFilesystem: true`
 - Secrets: mount as volumes — NEVER as env vars; NEVER commit Secret YAMLs to Git (use sealed-secrets or external manager)
-- `PodDisruptionBudget` REQUIRED for every production Deployment (`minAvailable: 2`)
-- `HorizontalPodAutoscaler`: `minReplicas ≥ PDB.minAvailable`; CPU + memory targets; `scaleDown.stabilizationWindowSeconds: 300`
+- HA values (multi-node): `PodDisruptionBudget` `minAvailable: 2`; HPA `minReplicas ≥ PDB.minAvailable`, CPU + memory targets, `scaleDown.stabilizationWindowSeconds: 300`
+- Single-node production (`values-production.yaml`, ADR-0032): PDB and HPA off, one replica — do not add them there
 - Rolling update: `maxUnavailable: 0`, `maxSurge: 1` (zero-downtime)
 - Service type: `ClusterIP` for internal services; external traffic via Ingress only — NEVER `LoadBalancer` for internal
 - Required labels: `app`, `version`, `environment`, `team`
-- Namespaces: `dev` · `staging` · `prod` · `infra`
+- Namespaces: `cartogra` (product) · `acme-system` (Acme release) · `acme-fintech` (fake services) · `ci-deploy` (CI identity)
 - NEVER `privileged: true`; NEVER `runAsUser: 0`
-
-## Terraform
-
-- Module structure: `terraform/modules/<name>/` (main.tf + variables.tf + outputs.tf + README.md)
-- Environment configs: `terraform/environments/<env>/` (main.tf + terraform.tfvars + backend.tf)
-- One module per concern (vpc, rds, eks, iam) — NEVER monolith modules
-- Remote state REQUIRED: S3 backend + DynamoDB lock table + `encrypt = true` + bucket versioning
-- Separate state per environment — NEVER share state files across envs
-- Sensitive vars: mark `sensitive = true` — NEVER hardcode passwords/tokens in `.tf` or `.tfvars`
-- NEVER commit `.tfvars` with real secrets — use `terraform.tfvars.example` + env vars + secret manager
-- Tag ALL resources: `Environment`, `Project`, `ManagedBy = "Terraform"`, `Owner`, `CostCenter`
-- Variable validation: `validation { condition = contains([...], var.x) }` for enumerated values
-- NEVER edit state files directly — use `terraform state` subcommands
-- `for_each` (not `count`) for removable resources
-- NEVER run `terraform destroy` in CI without a human approval gate
 
 ## CI / Build
 

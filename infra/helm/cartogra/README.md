@@ -35,7 +35,7 @@ Postgres RLS isolates the tenants. The `tenant_isolation` policies apply only to
 | `cartogra_owner` | Owns the schemas and tables. Flyway connects with it. |
 | `cartogra_app` | The services connect with it. DML grants only; the policies always apply. |
 
-`charts/postgres/files/bootstrap-roles.sql` creates both roles. The postgres pod runs it at init, on an empty volume only. For an existing volume, run it one time as the superuser before the services start: it also gives the existing schemas to `cartogra_owner`. On the production host, use `infra/k8s/activate-rls-wizard.sh`. The services set `app.current_tenant_id` (or `app.rls_bypass` for system work) on each connection; see "Row-level security" in [`docs/architecture/system-overview.md`](../../../docs/architecture/system-overview.md).
+`charts/postgres/files/bootstrap-roles.sql` creates both roles. The postgres pod runs it at init, on an empty volume only. For an existing volume, run it one time as the superuser before the services start: it also gives the existing schemas to `cartogra_owner`. The services set `app.current_tenant_id` (or `app.rls_bypass` for system work) on each connection; see "Row-level security" in [`docs/architecture/system-overview.md`](../../../docs/architecture/system-overview.md).
 
 Known gap: RLS does not apply to the materialized view `topology.dependency_graph_edges`. Its reads filter by `tenant_id` in the code.
 

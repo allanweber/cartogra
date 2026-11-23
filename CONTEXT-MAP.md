@@ -142,11 +142,9 @@ SCM / K8s ──► Ingestion ──Kafka──► Service Catalog ──Kafka�
                     └──────────────────────────Kafka──► Contract ──Kafka──► Intelligence
 ```
 
-Ingestion → Service Catalog (`service.discovered`, `ownership.resolved`) and Ingestion → Contract
-(`spec.discovered`, 5.8) are real.
-Everything from Topology onward is still schema-and-plan — see `docs/roadmap.md`. There is no "Notification
-worker" module, planned or otherwise; it was removed from the plan as a speculative context with no producer,
-no consumer, and no code (`docs/roadmap.md` §12).
+Live: Ingestion → Service Catalog, Ingestion → Contract (`spec.discovered`), Service Catalog → Topology and
+Contract (`service.changed`), Topology → Contract (`dependency.changed`). Intelligence is planned and has no code.
+Topic list: [`docs/architecture/kafka-topics.md`](docs/architecture/kafka-topics.md).
 
 ---
 

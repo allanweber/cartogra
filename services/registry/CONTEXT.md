@@ -76,7 +76,7 @@ Service ──> Team               (team_id FK, nullable — orphan when NULL)
 
 ## Domain Services
 
-No `*UseCase`/`*UseCaseImpl` layer — one `@Service` class per domain concept in `domain/`, called directly by the controllers (see `.claude/rules/patterns.md` — Layering).
+No `*UseCase`/`*UseCaseImpl` layer — one `@Service` class per domain concept in `domain/`, called directly by the controllers (see `.claude/rules/backend.md` — Application Layering).
 
 | Service class | Key methods | Notes |
 |---|---|---|

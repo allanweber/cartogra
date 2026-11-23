@@ -152,5 +152,5 @@ Partitions are a starting point; review against throughput at 1k+ tenants.
 ## References
 
 - [system-overview.md](system-overview.md)
-- [patterns.md — Kafka Producer + Consumer](../../.claude/rules/patterns.md)
+- [backend.md — Kafka](../../.claude/rules/backend.md)
 - `docs/roadmap.md` — plan of record for every topic in the "Proposed" section above

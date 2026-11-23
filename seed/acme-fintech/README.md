@@ -41,7 +41,7 @@ below are the local (kind) setup.
 
 ## 0. Start Cartogra and the cluster (from scratch)
 
-From the repo root. Full detail in `docs/runbooks/quickstart.md`.
+From the repo root. Full detail in `docs/runbooks/local-development.md`.
 
 ```bash
 cp .env.example .env                                   # defaults work locally (RESEND_TEST_MODE=true)
@@ -124,7 +124,7 @@ kubectl -n acme-fintech get pods -w        # 21 pods Running 1/1
 ## 4. Register the cluster in ingestion
 
 Discovery only runs for registered clusters. In the UI (`http://localhost:3006`, log in as the tenant admin) add a Kubernetes cluster and paste the kind kubeconfig
-(`kind get kubeconfig --name cartogra`), see `docs/runbooks/kubernetes-cluster-config.md` (Local, Option A).
+(`kind get kubeconfig --name cartogra`), see `docs/runbooks/connections.md` (Local, Option A).
 Or call it through the gateway (`$TOKEN` from step 1; the gateway derives the ADMIN role, calling ingestion on :8085 directly gets "Access Denied"):
 
 ```bash
