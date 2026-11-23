@@ -8,6 +8,7 @@ import io.cartogra.topology.domain.exception.DependencyNotFoundException;
 import io.cartogra.topology.domain.exception.DuplicateDependencyException;
 import io.cartogra.topology.domain.exception.SelfDependencyException;
 import io.cartogra.topology.domain.exception.UnknownServiceNodeException;
+import io.cartogra.topology.infrastructure.kafka.DependencyEventPublisher;
 import io.cartogra.topology.infrastructure.registry.RegistryMembershipClient;
 import io.cartogra.topology.infrastructure.scheduled.DependencyGraphViewRefreshScheduler;
 import io.cartogra.topology.repository.DependencyRepository;
@@ -47,19 +48,22 @@ public class DependencyService {
     private final DependencyGraphViewRefreshScheduler graphViewRefreshScheduler;
     private final TransactionTemplate transactionTemplate;
     private final EdgeAuditRecorder auditRecorder;
+    private final DependencyEventPublisher eventPublisher;
 
     public DependencyService(DependencyRepository dependencyRepository,
             GraphNodeRepository graphNodeRepository,
             RegistryMembershipClient registryMembershipClient,
             DependencyGraphViewRefreshScheduler graphViewRefreshScheduler,
             PlatformTransactionManager transactionManager,
-            EdgeAuditRecorder auditRecorder) {
+            EdgeAuditRecorder auditRecorder,
+            DependencyEventPublisher eventPublisher) {
         this.dependencyRepository = dependencyRepository;
         this.graphNodeRepository = graphNodeRepository;
         this.registryMembershipClient = registryMembershipClient;
         this.graphViewRefreshScheduler = graphViewRefreshScheduler;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.auditRecorder = auditRecorder;
+        this.eventPublisher = eventPublisher;
     }
 
     @PreAuthorize(Roles.CAN_WRITE)
@@ -76,6 +80,7 @@ public class DependencyService {
                     UUID.randomUUID(), tenantId, request.sourceServiceId(), request.targetServiceId(),
                     DependencyType.DECLARED, request.protocol(), request.metadata(), now, now, null));
             graphViewRefreshScheduler.markDirty();
+            eventPublisher.live(saved);
             audit(saved, "declared", actor, Map.of("protocol", saved.protocol().toDbValue()));
             return saved;
         });
@@ -109,6 +114,7 @@ public class DependencyService {
             putChange(changes, "targetServiceId", existing.targetServiceId(), saved.targetServiceId());
             putChange(changes, "protocol", existing.protocol().toDbValue(), saved.protocol().toDbValue());
             if (!changes.isEmpty()) {
+                eventPublisher.live(saved);
                 audit(saved, "updated", actor, Map.of("protocol", saved.protocol().toDbValue(), "changes", changes));
             }
             return saved;
@@ -123,6 +129,7 @@ public class DependencyService {
         transactionTemplate.executeWithoutResult(status -> {
             dependencyRepository.softDelete(tenantId, id);
             graphViewRefreshScheduler.markDirty();
+            eventPublisher.removed(existing);
             audit(existing, "removed", actor, Map.of("protocol", existing.protocol().toDbValue()));
         });
     }
@@ -140,7 +147,8 @@ public class DependencyService {
             if (observed.isEmpty()) {
                 return false;
             }
-            dependencyRepository.declareMissing(tenantId, sourceServiceId, targetServiceId, observed, Instant.now());
+            eventPublisher.live(dependencyRepository.declareMissing(tenantId, sourceServiceId, targetServiceId,
+                    observed, Instant.now()));
             graphViewRefreshScheduler.markDirty();
             return true;
         }));
@@ -149,7 +157,8 @@ public class DependencyService {
     /** Soft-deletes every declared protocol of the pair. Joins the caller's transaction; the caller has authorized it. */
     public void removeDeclaredPair(UUID tenantId, UUID sourceServiceId, UUID targetServiceId) {
         transactionTemplate.executeWithoutResult(status -> {
-            dependencyRepository.softDeleteDeclaredPair(tenantId, sourceServiceId, targetServiceId);
+            eventPublisher.removed(dependencyRepository.softDeleteDeclaredPair(tenantId, sourceServiceId,
+                    targetServiceId));
             graphViewRefreshScheduler.markDirty();
         });
     }

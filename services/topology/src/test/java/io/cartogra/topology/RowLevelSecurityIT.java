@@ -38,6 +38,12 @@ class RowLevelSecurityIT extends AbstractTopologyIT {
     }
 
     @Test
+    void theOutboxSeesOnlyTheBoundTenant() {
+        RlsChecks.assertIsolatesTenants(jdbc, "outbox",
+                "INSERT INTO outbox (tenant_id, topic, record_key, payload) VALUES (?, 'topic', 'key', '{}')");
+    }
+
+    @Test
     void theAppRoleRefreshesTheGraphViewForAllTenantsWithoutAScope() {
         UUID tenantA = UUID.randomUUID();
         UUID tenantB = UUID.randomUUID();

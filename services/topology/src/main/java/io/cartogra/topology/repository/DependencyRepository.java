@@ -24,8 +24,8 @@ public interface DependencyRepository {
 
     void softDelete(UUID tenantId, UUID id);
 
-    /** Soft-deletes every edge (declared or observed) touching a service — used on service.deleted. */
-    void softDeleteAllForService(UUID tenantId, UUID serviceId);
+    /** Soft-deletes every edge (declared or observed) touching a service — used on service.deleted. Returns them. */
+    List<Dependency> softDeleteAllForService(UUID tenantId, UUID serviceId);
 
     /**
      * Looks up the edge identity used for observed-edge upserts: same tenant, source, target,
@@ -39,7 +39,7 @@ public interface DependencyRepository {
      * is throttled: it only happens when the stored value is more than a minute older than
      * {@code seenAt}, otherwise the outcome is {@link UpsertOutcome#UNCHANGED}.
      */
-    UpsertOutcome upsertObserved(UUID tenantId, UUID sourceServiceId, UUID targetServiceId,
+    ObservedUpsert upsertObserved(UUID tenantId, UUID sourceServiceId, UUID targetServiceId,
             DependencyProtocol protocol, Instant seenAt);
 
     /**
@@ -53,10 +53,13 @@ public interface DependencyRepository {
     List<DependencyProtocol> findLiveProtocols(UUID tenantId, UUID sourceServiceId, UUID targetServiceId,
             DependencyType type);
 
-    /** Inserts a live declared edge of the pair for each of {@code protocols} not declared yet, in one statement. */
-    int declareMissing(UUID tenantId, UUID sourceServiceId, UUID targetServiceId,
+    /**
+     * Inserts a live declared edge of the pair for each of {@code protocols} not declared yet, in one statement.
+     * Returns the inserted edges.
+     */
+    List<Dependency> declareMissing(UUID tenantId, UUID sourceServiceId, UUID targetServiceId,
             List<DependencyProtocol> protocols, Instant now);
 
-    /** Soft-deletes every live declared edge of the pair, whatever its protocol. */
-    int softDeleteDeclaredPair(UUID tenantId, UUID sourceServiceId, UUID targetServiceId);
+    /** Soft-deletes every live declared edge of the pair, whatever its protocol. Returns the removed edges. */
+    List<Dependency> softDeleteDeclaredPair(UUID tenantId, UUID sourceServiceId, UUID targetServiceId);
 }

@@ -1,5 +1,6 @@
 package io.cartogra.topology.domain;
 
+import io.cartogra.topology.infrastructure.kafka.DependencyEventPublisher;
 import io.cartogra.common.identity.Actor;
 import io.cartogra.topology.api.dto.DeclareDependencyRequest;
 import io.cartogra.topology.domain.exception.DependencyNotFoundException;
@@ -45,6 +46,7 @@ class DependencyServiceTest {
     @Mock GraphNodeRepository graphNodeRepository;
     @Mock RegistryMembershipClient registryMembershipClient;
     @Mock DependencyGraphViewRefreshScheduler graphViewRefreshScheduler;
+    @Mock DependencyEventPublisher eventPublisher;
     @Mock PlatformTransactionManager transactionManager;
     @Mock TransactionStatus transactionStatus;
 
@@ -59,7 +61,7 @@ class DependencyServiceTest {
     void setUp() {
         service = new DependencyService(dependencyRepository, graphNodeRepository,
                 registryMembershipClient, graphViewRefreshScheduler, transactionManager,
-                new EdgeAuditRecorder(_ -> { }, graphNodeRepository));
+                new EdgeAuditRecorder(_ -> { }, graphNodeRepository), eventPublisher);
         lenient().when(transactionManager.getTransaction(any(TransactionDefinition.class)))
                 .thenReturn(transactionStatus);
     }
@@ -110,6 +112,7 @@ class DependencyServiceTest {
         assertThat(result.sourceServiceId()).isEqualTo(sourceId);
         assertThat(result.targetServiceId()).isEqualTo(targetId);
         verify(graphViewRefreshScheduler).markDirty();
+        verify(eventPublisher).live(result);
     }
 
     @Test
@@ -384,6 +387,7 @@ class DependencyServiceTest {
 
         verify(dependencyRepository).softDelete(tenantId, id);
         verify(graphViewRefreshScheduler).markDirty();
+        verify(eventPublisher).removed(existing);
     }
 
     @Test
@@ -427,9 +431,14 @@ class DependencyServiceTest {
         when(dependencyRepository.findLiveProtocols(tenantId, sourceId, targetId, DependencyType.OBSERVED))
                 .thenReturn(observed);
 
+        List<Dependency> inserted = List.of(declaredEdge(DependencyProtocol.HTTP), declaredEdge(DependencyProtocol.GRPC));
+        when(dependencyRepository.declareMissing(eq(tenantId), eq(sourceId), eq(targetId), eq(observed), any()))
+                .thenReturn(inserted);
+
         assertThat(service.declareObservedPair(tenantId, sourceId, targetId)).isTrue();
 
         verify(dependencyRepository).declareMissing(eq(tenantId), eq(sourceId), eq(targetId), eq(observed), any());
+        verify(eventPublisher).live(inserted);
         verify(graphViewRefreshScheduler).markDirty();
     }
 
@@ -456,9 +465,19 @@ class DependencyServiceTest {
 
     @Test
     void removeDeclaredPairSoftDeletesThePair() {
+        List<Dependency> removed = List.of(declaredEdge(DependencyProtocol.HTTP));
+        when(dependencyRepository.softDeleteDeclaredPair(tenantId, sourceId, targetId)).thenReturn(removed);
+
         service.removeDeclaredPair(tenantId, sourceId, targetId);
 
         verify(dependencyRepository).softDeleteDeclaredPair(tenantId, sourceId, targetId);
+        verify(eventPublisher).removed(removed);
         verify(graphViewRefreshScheduler).markDirty();
+    }
+
+    private Dependency declaredEdge(DependencyProtocol protocol) {
+        Instant now = Instant.now();
+        return new Dependency(UUID.randomUUID(), tenantId, sourceId, targetId, DependencyType.DECLARED, protocol,
+                null, now, now, null);
     }
 }

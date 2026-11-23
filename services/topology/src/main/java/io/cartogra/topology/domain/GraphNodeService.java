@@ -2,6 +2,7 @@ package io.cartogra.topology.domain;
 
 import io.cartogra.common.event.EventEnvelope;
 import io.cartogra.topology.domain.event.ServiceLifecyclePayload;
+import io.cartogra.topology.infrastructure.kafka.DependencyEventPublisher;
 import io.cartogra.topology.infrastructure.scheduled.DependencyGraphViewRefreshScheduler;
 import io.cartogra.topology.repository.DependencyRepository;
 import io.cartogra.topology.repository.GraphNodeRepository;
@@ -25,17 +26,20 @@ public class GraphNodeService {
     private final DependencyRepository dependencyRepository;
     private final DependencyGraphViewRefreshScheduler graphViewRefreshScheduler;
     private final UnresolvedSpanServiceService unresolvedSpanServiceService;
+    private final DependencyEventPublisher eventPublisher;
 
     public GraphNodeService(GraphNodeRepository graphNodeRepository,
                              ProcessedEventRepository processedEventRepository,
                              DependencyRepository dependencyRepository,
                              DependencyGraphViewRefreshScheduler graphViewRefreshScheduler,
-                             UnresolvedSpanServiceService unresolvedSpanServiceService) {
+                             UnresolvedSpanServiceService unresolvedSpanServiceService,
+                             DependencyEventPublisher eventPublisher) {
         this.graphNodeRepository = graphNodeRepository;
         this.processedEventRepository = processedEventRepository;
         this.dependencyRepository = dependencyRepository;
         this.graphViewRefreshScheduler = graphViewRefreshScheduler;
         this.unresolvedSpanServiceService = unresolvedSpanServiceService;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -69,7 +73,7 @@ public class GraphNodeService {
     private void handleDeleted(ServiceLifecyclePayload payload, Instant envelopeTimestamp) {
         Instant deletedAt = payload.deletedAt() != null ? payload.deletedAt() : envelopeTimestamp;
         graphNodeRepository.softDelete(payload.tenantId(), payload.id(), deletedAt);
-        dependencyRepository.softDeleteAllForService(payload.tenantId(), payload.id());
+        eventPublisher.removed(dependencyRepository.softDeleteAllForService(payload.tenantId(), payload.id()));
         graphViewRefreshScheduler.markDirty();
     }
 

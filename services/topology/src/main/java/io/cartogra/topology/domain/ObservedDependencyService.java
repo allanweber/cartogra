@@ -6,10 +6,12 @@ import io.cartogra.common.event.UuidV5;
 import io.cartogra.topology.config.SpanLinkProperties;
 import io.cartogra.topology.domain.exception.UnattributedSpanBatchException;
 import io.cartogra.topology.domain.exception.UnattributedSpanBatchException.QuarantineReason;
+import io.cartogra.topology.infrastructure.kafka.DependencyEventPublisher;
 import io.cartogra.topology.infrastructure.scheduled.DependencyGraphViewRefreshScheduler;
 import io.cartogra.topology.repository.DependencyRepository;
 import io.cartogra.topology.repository.GraphNodeRepository;
 import io.cartogra.topology.repository.MessagingEndpoint;
+import io.cartogra.topology.repository.ObservedUpsert;
 import io.cartogra.topology.repository.PendingSpanLink;
 import io.cartogra.topology.repository.PendingSpanLinkRepository;
 import io.cartogra.topology.repository.SpanRef;
@@ -52,6 +54,7 @@ public class ObservedDependencyService {
     private final SpanLinkProperties spanLinkProperties;
     private final MeterRegistry meterRegistry;
     private final EdgeAuditRecorder auditRecorder;
+    private final DependencyEventPublisher eventPublisher;
 
     public ObservedDependencyService(GraphNodeRepository graphNodeRepository,
                                      DependencyRepository dependencyRepository,
@@ -60,7 +63,8 @@ public class ObservedDependencyService {
                                      DependencyGraphViewRefreshScheduler graphViewRefreshScheduler,
                                      SpanLinkProperties spanLinkProperties,
                                      MeterRegistry meterRegistry,
-                                     EdgeAuditRecorder auditRecorder) {
+                                     EdgeAuditRecorder auditRecorder,
+                                     DependencyEventPublisher eventPublisher) {
         this.graphNodeRepository = graphNodeRepository;
         this.dependencyRepository = dependencyRepository;
         this.pendingSpanLinkRepository = pendingSpanLinkRepository;
@@ -69,6 +73,7 @@ public class ObservedDependencyService {
         this.spanLinkProperties = spanLinkProperties;
         this.meterRegistry = meterRegistry;
         this.auditRecorder = auditRecorder;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -301,9 +306,11 @@ public class ObservedDependencyService {
         boolean touched = false;
         List<EdgeKey> ordered = edges.stream().sorted(EDGE_LOCK_ORDER).toList();
         for (EdgeKey edge : ordered) {
-            UpsertOutcome outcome = dependencyRepository.upsertObserved(
+            ObservedUpsert upsert = dependencyRepository.upsertObserved(
                     tenantId, edge.source(), edge.target(), edge.protocol(), now);
-            if (outcome == UpsertOutcome.INSERTED) {
+            UpsertOutcome outcome = upsert.outcome();
+            if (outcome == UpsertOutcome.INSERTED && upsert.edge() != null) {
+                eventPublisher.live(upsert.edge());
                 auditRecorder.record(tenantId, AuditKind.DEPENDENCY,
                         UuidV5.fromNames(tenantId.toString(), edge.source().toString(), edge.target().toString(),
                                 edge.protocol().toDbValue()),

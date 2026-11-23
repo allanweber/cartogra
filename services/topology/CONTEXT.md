@@ -99,7 +99,9 @@ Implemented: dependency CRUD, graph read (`[1.1]`–`[1.3]`), blast radius (`[2.
 
 | Topic | Trigger |
 |---|---|
-None today. The only producer is the span DLQ (`cartogra.observability.spans.dlq`). Topology lifecycle events are deferred to Phase 6 (roadmap 3.5 → 6.7) until a consumer exists:
+| `cartogra.topology.dependency.changed` | Every write to `dependencies` (5.4): create, update of source/target/protocol, delete, drift accept/remove, observed insert (not the refresh), and the `service.deleted` cascade. One event per edge row, keyed by edge id: `dependency.{declared,observed,removed}`. Written to the `outbox` table in the same transaction; `OutboxRelayScheduler` sends the rows in order (`topology.outbox.*`) |
+
+Other lifecycle events are deferred to Phase 6 (roadmap 6.7) until a consumer exists:
 
 | Topic (deferred) | Trigger |
 |---|---|

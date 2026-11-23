@@ -62,6 +62,10 @@ topology:
   span-topics:
     retention: ${TOPOLOGY_SPAN_TOPICS_RETENTION:PT1H}
     dlq-retention: ${TOPOLOGY_SPAN_TOPICS_DLQ_RETENTION:P3D}
+  outbox:
+    relay-interval: ${TOPOLOGY_OUTBOX_RELAY_INTERVAL:PT1S}
+    batch-size: ${TOPOLOGY_OUTBOX_BATCH_SIZE:100}
+    send-timeout: ${TOPOLOGY_OUTBOX_SEND_TIMEOUT:PT10S}
   processed-events:
     retention: ${TOPOLOGY_PROCESSED_EVENTS_RETENTION:P30D}
     reaper-interval: ${TOPOLOGY_PROCESSED_EVENTS_REAPER_INTERVAL:PT1H}

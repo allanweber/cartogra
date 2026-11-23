@@ -6,6 +6,7 @@ import io.cartogra.topology.domain.DependencyType;
 import io.cartogra.topology.repository.DependencyFilter;
 import io.cartogra.topology.repository.DependencyRepository;
 import io.cartogra.topology.repository.EdgePairStat;
+import io.cartogra.topology.repository.ObservedUpsert;
 import io.cartogra.topology.repository.UpsertOutcome;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -114,15 +115,16 @@ public class JdbcDependencyRepository implements DependencyRepository {
     }
 
     @Override
-    public void softDeleteAllForService(UUID tenantId, UUID serviceId) {
+    public List<Dependency> softDeleteAllForService(UUID tenantId, UUID serviceId) {
         String sql = """
                 UPDATE dependencies SET deleted_at = now(), updated_at = now()
                 WHERE tenant_id = :tenantId AND deleted_at IS NULL
                   AND (source_service_id = :serviceId OR target_service_id = :serviceId)
+                RETURNING *
                 """;
-        jdbc.update(sql, new MapSqlParameterSource()
+        return jdbc.query(sql, new MapSqlParameterSource()
                 .addValue("tenantId", tenantId)
-                .addValue("serviceId", serviceId));
+                .addValue("serviceId", serviceId), DEPENDENCY_MAPPER);
     }
 
     @Override
@@ -144,7 +146,7 @@ public class JdbcDependencyRepository implements DependencyRepository {
     }
 
     @Override
-    public UpsertOutcome upsertObserved(UUID tenantId, UUID sourceServiceId, UUID targetServiceId,
+    public ObservedUpsert upsertObserved(UUID tenantId, UUID sourceServiceId, UUID targetServiceId,
             DependencyProtocol protocol, Instant seenAt) {
         String sql = """
                 INSERT INTO dependencies (tenant_id, source_service_id, target_service_id,
@@ -155,7 +157,7 @@ public class JdbcDependencyRepository implements DependencyRepository {
                 DO UPDATE SET last_seen_at = EXCLUDED.last_seen_at, updated_at = now()
                     WHERE dependencies.last_seen_at IS NULL
                        OR dependencies.last_seen_at < EXCLUDED.last_seen_at - interval '1 minute'
-                RETURNING (xmax = 0) AS inserted
+                RETURNING *, (xmax = 0) AS inserted
                 """;
         var params = new MapSqlParameterSource()
                 .addValue("tenantId", tenantId)
@@ -163,11 +165,9 @@ public class JdbcDependencyRepository implements DependencyRepository {
                 .addValue("targetServiceId", targetServiceId)
                 .addValue("protocol", protocol.toDbValue())
                 .addValue("seenAt", Timestamp.from(seenAt));
-        List<Boolean> rows = jdbc.query(sql, params, (rs, _) -> rs.getBoolean("inserted"));
-        if (rows.isEmpty()) {
-            return UpsertOutcome.UNCHANGED;
-        }
-        return rows.getFirst() ? UpsertOutcome.INSERTED : UpsertOutcome.REFRESHED;
+        List<ObservedUpsert> rows = jdbc.query(sql, params, (rs, _) -> new ObservedUpsert(
+                rs.getBoolean("inserted") ? UpsertOutcome.INSERTED : UpsertOutcome.REFRESHED, mapDependency(rs)));
+        return rows.isEmpty() ? ObservedUpsert.unchanged() : rows.getFirst();
     }
 
     private void applyFilter(StringBuilder sql, MapSqlParameterSource params, DependencyFilter filter) {
@@ -248,10 +248,10 @@ public class JdbcDependencyRepository implements DependencyRepository {
     }
 
     @Override
-    public int declareMissing(UUID tenantId, UUID sourceServiceId, UUID targetServiceId,
+    public List<Dependency> declareMissing(UUID tenantId, UUID sourceServiceId, UUID targetServiceId,
             List<DependencyProtocol> protocols, Instant now) {
         if (protocols.isEmpty()) {
-            return 0;
+            return List.of();
         }
         String sql = """
                 INSERT INTO dependencies (id, tenant_id, source_service_id, target_service_id,
@@ -262,27 +262,29 @@ public class JdbcDependencyRepository implements DependencyRepository {
                                   WHERE d.tenant_id = :tenantId AND d.source_service_id = :sourceServiceId
                                     AND d.target_service_id = :targetServiceId AND d.dependency_type = 'declared'
                                     AND d.protocol = p AND d.deleted_at IS NULL)
+                RETURNING *
                 """;
-        return jdbc.update(sql, new MapSqlParameterSource()
+        return jdbc.query(sql, new MapSqlParameterSource()
                 .addValue("tenantId", tenantId)
                 .addValue("sourceServiceId", sourceServiceId)
                 .addValue("targetServiceId", targetServiceId)
                 .addValue("protocols", protocols.stream().map(DependencyProtocol::toDbValue).toArray(String[]::new))
-                .addValue("now", Timestamp.from(now)));
+                .addValue("now", Timestamp.from(now)), DEPENDENCY_MAPPER);
     }
 
     @Override
-    public int softDeleteDeclaredPair(UUID tenantId, UUID sourceServiceId, UUID targetServiceId) {
+    public List<Dependency> softDeleteDeclaredPair(UUID tenantId, UUID sourceServiceId, UUID targetServiceId) {
         String sql = """
                 UPDATE dependencies SET deleted_at = now(), updated_at = now()
                 WHERE tenant_id = :tenantId AND source_service_id = :sourceServiceId
                   AND target_service_id = :targetServiceId AND dependency_type = 'declared'
                   AND deleted_at IS NULL
+                RETURNING *
                 """;
-        return jdbc.update(sql, new MapSqlParameterSource()
+        return jdbc.query(sql, new MapSqlParameterSource()
                 .addValue("tenantId", tenantId)
                 .addValue("sourceServiceId", sourceServiceId)
-                .addValue("targetServiceId", targetServiceId));
+                .addValue("targetServiceId", targetServiceId), DEPENDENCY_MAPPER);
     }
 
     private static final RowMapper<Dependency> DEPENDENCY_MAPPER = (rs, _) -> mapDependency(rs);
