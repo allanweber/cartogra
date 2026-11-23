@@ -20,8 +20,8 @@ not the domain descriptions below, which can drift again — re-run that grep be
 | ------ | ------------------ | ----- |
 | Registry | 2 (`service.changed`, `team.changed`) | `service.changed` consumed by Topology; `team.changed` has no consumer |
 | Ingestion | 5 (`service.changed`, `ownership.resolved`, `spec.discovered`, `sync.completed`, `sync.command`) | `service.changed` and `ownership.resolved` are consumed by Registry; `spec.discovered` is consumed by Contract; `sync.completed` has no consumer; `sync.command` is produced *and* consumed inside Ingestion itself despite its `registry.` prefix — see below |
-| Topology | 0 | Service has schema + CI + IT harness only (Phase 0); no service class, controller, producer, or consumer exists |
-| Contract | 0 | Consumes `registry.service.changed` (`service.registered`/`service.updated`/`service.deleted`) and `ingestion.spec.discovered`; produces only `platform.audit.recorded` |
+| Topology | 1 (`dependency.changed`) | Sent through a transactional outbox (`shared/web` `OutboxWriter` + `OutboxRelay`); consumed by Contract. Topology also consumes `registry.service.changed` and `observability.spans` |
+| Contract | 0 | Consumes `registry.service.changed` (`service.registered`/`service.updated`/`service.deleted`), `ingestion.spec.discovered` and `topology.dependency.changed`; produces only `platform.audit.recorded` |
 | Intelligence | 0 | Empty directory — no code at all |
 
 There is no "Notification" domain and no "Notification worker" module. An earlier version of this document
@@ -38,6 +38,12 @@ removed — "No producer, no consumer, no module. Violates the project's own no-
 | ----- | -------- | ---------------- | ----------- |
 | `cartogra.registry.service.changed` | Registry (`ServiceLifecycleEventProducer`) | Topology (`GraphNodeEventConsumer`), Contract (`ServiceEventConsumer`, group `contract-consumer`: keeps the name and `externalId` projection, applies PENDING discovered specs, cascades `service.deleted`) | Service lifecycle, keyed by service id; `event_type` `service.registered` / `service.updated` / `service.deleted` (soft delete) |
 | `cartogra.registry.team.changed` | Registry (`TeamLifecycleEventProducer`) | none | Team lifecycle, keyed by team id; `event_type` `team.created` / `team.updated` (rename) / `team.deleted` |
+
+### Topology domain
+
+| Topic | Producer | Consumers today | Description |
+| ----- | -------- | ---------------- | ----------- |
+| `cartogra.topology.dependency.changed` | Topology (`DependencyEventPublisher` → `outbox` → `OutboxRelay`) | Contract (`DependencyEventConsumer`, group `contract-consumer`) | Edge lifecycle, keyed by edge id (one row of `dependencies`); `event_type` `dependency.declared` / `dependency.observed` / `dependency.removed`; payload `{edgeId, sourceServiceId, targetServiceId, dependencyType, protocol}`. A PUT that changes source, target or protocol sends `dependency.declared` again; an observed refresh sends nothing. Written in the transaction of the edge change and sent in `id` order by one relay at a time; at-least-once. Migration V017 backfilled the edges that existed before the topic |
 
 ### Ingestion domain
 
@@ -91,10 +97,9 @@ table, as authoritative on exact timing, and re-check the wording there before r
 | `cartogra.platform.audit.recorded` | Topology → Registry | 4.1 | Registry writes audit events directly; Topology publishes this for Registry's consumer |
 | `cartogra.platform.dead-letter` | platform-wide DLQ replay | 7.5 | Distinct from the per-service `.dlq` topics above |
 
-Topology's own future producer topics (3.5, deferred per the roadmap's "no topic without a consumer" rule):
-`dependency.declared`, `dependency.observed`, `dependency.removed` ship in 5.4 on one topic,
-`cartogra.topology.dependency.changed` keyed by edge id, consumed by Contract to name affected consumers;
-`drift.detected` stays in 6.7 until Intelligence consumes it.
+Topology's `dependency.declared`, `dependency.observed`, `dependency.removed` shipped in 5.4 on one topic,
+`cartogra.topology.dependency.changed` (see the Topology domain table above). `drift.detected` stays in 6.7
+until Intelligence consumes it.
 
 No Kafka topic names are committed anywhere in `docs/roadmap.md` for Contract (beyond `spec.discovered`,
 now live) or for Intelligence. An earlier version of this document speculated `check.passed`/`check.failed`/

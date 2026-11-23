@@ -13,7 +13,7 @@
 | **Service Catalog** | `services/registry` | Live (Phase 0/1) |
 | **Ingestion** | `services/ingestion` | Live (Phase 0/1) |
 | **Topology** | `services/topology` | Live (Phase 1 complete — backfill, dependency CRUD, graph read; Phase 2 mostly complete — blast radius [2.1], impact panel [2.2], cycles [2.3], SPOFs [2.4], risks [2.5] shipped; performance evidence [2.6] in progress) |
-| **Contract** | `services/contract` | Live (Phase 5 — contract store [5.1]: contracts, immutable versions, `service.deleted` cascade; spec discovery [5.8]) |
+| **Contract** | `services/contract` | Live (Phase 5 — contract store [5.1], diff + timeline [5.2], breaking-change engine [5.3], consumers from the graph [5.4], spec discovery [5.8]) |
 | **Intelligence** | `services/intelligence` | Empty directory (Phase 6) |
 | **Frontend Shell** | `frontend/` | Partial (Phase 1) |
 | **Shared Kernel** | `shared/common` | Live |
@@ -88,6 +88,7 @@
 | Service Catalog (U) | Intelligence (D) | Customer / Supplier | Planned, Phase 6: Kafka registry events |
 | Ingestion (U) | Service Catalog (D) | **Published Language** | Live today: Kafka `cartogra.ingestion.service.changed`, `ownership.resolved` |
 | Ingestion (U) | Contract (D) | Published Language | Live (5.8): Kafka `cartogra.ingestion.spec.discovered`, consumed by `SpecDiscoveredConsumer`. The payload has no service id; Contract resolves the repository through its `services.external_id` projection or Registry `GET /internal/services/by-external-id` (ADR-0018) |
+| Topology (U) | Contract (D) | Customer / Supplier | Live (5.4): Kafka `cartogra.topology.dependency.changed` (`dependency.{declared,observed,removed}`, keyed by edge id), sent through Topology's transactional outbox, consumed by `DependencyEventConsumer` into `inbound_edges` to name Consumers |
 | Topology (U) | Intelligence (D) | Customer / Supplier | Planned, deferred to Phase 6 per roadmap 3.5 — exact topic names TBD, see `docs/roadmap.md` §6/§9 |
 | Contract (U) | Intelligence (D) | Customer / Supplier | Planned, Phase 6 — no topic names committed yet in `docs/roadmap.md` |
 | Shared Kernel | All JVM modules | **Shared Kernel** | Gradle dep `:shared:common` |
@@ -155,7 +156,7 @@ no consumer, and no code (`docs/roadmap.md` §12).
 - `services/registry/CONTEXT.md` — Service Catalog context
 - `services/ingestion/CONTEXT.md` — Ingestion context
 - `services/topology/CONTEXT.md` — Topology context (Phase 1 complete, Phase 2 mostly complete)
-- `services/contract/CONTEXT.md` — Contract context (5.1 contract store live)
+- `services/contract/CONTEXT.md` — Contract context (5.1 store, 5.2 diff, 5.4 consumers live)
 - `services/intelligence/CONTEXT.md` — Intelligence context (planned)
 - `frontend/CONTEXT.md` — Frontend Shell context
 - `shared/common/CONTEXT.md` — Shared Kernel

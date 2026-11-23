@@ -179,6 +179,27 @@ public class ServiceEventConsumer {
 
 ---
 
+## Transactional Outbox (shared/web)
+
+Use it when a consumer keeps a projection that a lost event leaves wrong for good (topology `dependency.changed` → contract `inbound_edges`). The event then commits with the write, or neither commits.
+
+- Each service owns its `outbox` migration (copy topology `V016__create_outbox.sql`: `id BIGSERIAL` send order, `tenant_id`, `topic`, `record_key`, `payload`, `headers JSONB`, `attempts`, `last_error`, RLS).
+- Wire `JdbcOutboxRepository`, `OutboxWriter`, and `OutboxRelay` as `@Bean`s (topology `OutboxConfig`), with an idempotent `acks=all` producer. Schedule `relay.relayBatch()` from an `infrastructure/scheduled` component.
+- Call `outboxWriter.publish(topic, envelope)` (or `publishAll` for a batch: one JDBC batch, so no query per row) inside the write's transaction. It throws outside a transaction.
+- One relay sends at a time (advisory lock), in `id` order, and stops at the first failed send. Delivery is at least once: consumers must be idempotent.
+- Keep the relay idle in tests (`<service>.outbox.relay-interval=PT1H` in test properties) and call `relayBatch()` from the test that needs it.
+
+```java
+@Transactional
+public Dependency create(...) {
+    Dependency saved = repository.save(...);
+    eventPublisher.live(saved);   // -> outboxWriter.publish(TOPIC, EventEnvelope.of(...))
+    return saved;
+}
+```
+
+---
+
 ## React Component
 
 ```tsx
