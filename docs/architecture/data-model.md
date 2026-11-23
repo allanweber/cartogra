@@ -12,7 +12,8 @@ Each service owns its schema entirely. No cross-service joins. Cross-aggregate r
 | Contract — api_contracts, contract_versions, deleted_services | Phase 5 (5.1) | Implemented |
 | Contract — discovered_specs, services.external_id, contract_versions.source | Phase 5 (5.8) | Implemented |
 | Ingestion — tenant_spec_paths | Phase 5 (5.8) | Implemented |
-| Contract — contract_checks (5.5), inbound-edge projection (5.4) | Phase 5 | Planned |
+| Contract — inbound_edges (5.4); Topology — outbox (5.4) | Phase 5 | Implemented |
+| Contract — contract_checks (5.5) | Phase 5 | Planned |
 | Intelligence — nl_query_logs, health_scores | Phase 4 | Planned |
 
 ---
@@ -145,6 +146,21 @@ Append-only audit log — one row per version.
 | `resolved_by` | UUID | Null when closed automatically |
 | `resolution` | TEXT | `accepted` \| `removed` \| `dismissed` \| `auto`; set iff `resolved_at` is set. `dismissed` suppresses re-detection |
 
+### `outbox` (5.4)
+Transactional outbox for `cartogra.topology.dependency.changed` (shared/web `OutboxWriter` + `OutboxRelay`). A row is written in the transaction of the edge change and hard-deleted after the broker accepts it; it is transport, not domain data. RLS like every tenant table; the relay reads in system scope.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | BIGSERIAL PK | Send order (not a UUID: the relay needs an order) |
+| `tenant_id` | UUID NOT NULL | |
+| `topic` | TEXT NOT NULL | |
+| `record_key` | TEXT NOT NULL | Edge id |
+| `payload` | TEXT NOT NULL | `EventEnvelope` JSON |
+| `headers` | JSONB NOT NULL | `traceparent` of the write |
+| `created_at` | TIMESTAMPTZ NOT NULL | |
+| `attempts` | INT NOT NULL | Failed sends |
+| `last_error` | TEXT | Last send failure |
+
 ---
 
 ## Contract Service (`services/contract`)
@@ -213,6 +229,20 @@ Tombstone of services Registry deleted; create/publish for one returns 404. PK `
 | `tenant_id` | UUID NOT NULL | |
 | `service_id` | UUID NOT NULL | |
 | `deleted_at` | TIMESTAMPTZ NOT NULL | When the event was applied |
+
+### `inbound_edges` (5.4)
+Topology edges projected from `cartogra.topology.dependency.changed`. PK `(tenant_id, edge_id)`; partial index `(tenant_id, target_service_id) WHERE removed_at IS NULL`. The source of a live `http`/`grpc` edge into a contract's service is a Consumer.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `tenant_id` | UUID NOT NULL | |
+| `edge_id` | UUID NOT NULL | Topology `dependencies.id` |
+| `source_service_id` | UUID NOT NULL | The consumer |
+| `target_service_id` | UUID NOT NULL | The producer |
+| `dependency_type` | TEXT NOT NULL | `declared` \| `observed` |
+| `protocol` | TEXT NOT NULL | `http` \| `grpc` \| `kafka` \| `db`, all stored |
+| `updated_at` | TIMESTAMPTZ NOT NULL | |
+| `removed_at` | TIMESTAMPTZ | Final: a later event never clears it |
 
 ### `contract_checks` _(planned, 5.5)_
 Written by the CI check once the 5.3 engine defines `changes[]`.

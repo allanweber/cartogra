@@ -2,7 +2,7 @@ import type { CartograApi } from './api.ts'
 import { loadSeed, type LoadOptions, type LoadSummary } from './load.ts'
 import { breakingLabel, breakingParameterPath, breakingRemovedPath, breakingVersion, historyPath, openapiSpec } from './repos.ts'
 import {
-  allCycles, callKey, callKind, declaredCalls, declaredCycles, dormantCalls, edgeKey, externalCalls, silentDeclaredCalls,
+  allCycles, callKey, callKind, callProtocol, declaredCalls, declaredCycles, dormantCalls, edgeKey, externalCalls, silentDeclaredCalls,
   unownedServices, type SeedData,
 } from './schema.ts'
 
@@ -26,6 +26,7 @@ export interface VerifyOptions extends LoadOptions {
   /** The tenant has an SCM connection, so each sync runs spec discovery (story 5.8). Unset: the check is skipped. */
   scmConnected?: boolean
   specDiscoveryTimeoutMs?: number
+  consumersTimeoutMs?: number
 }
 
 export async function snapshot(api: CartograApi, seed: SeedData): Promise<Snapshot> {
@@ -63,6 +64,7 @@ export async function verify(api: CartograApi, seed: SeedData, options: VerifyOp
 
   await verifyContracts(api, seed, second, add, options.breaking ?? false)
   await verifySpecDiscovery(api, seed, options, sleep, add)
+  await verifyConsumers(api, seed, second, add, options.consumersTimeoutMs ?? 60_000, sleep)
 
   const graph = await api.graph()
   const nodeId = new Map(graph.nodes.map((n) => [n.name, n.serviceId]))
@@ -221,6 +223,29 @@ async function verifySpecDiscovery(
     absent = await missing()
   }
   add(`${seed.services.length} services have a contract from spec discovery`, absent.length === 0, absent.join(', '))
+}
+
+/** Each contract lists as consumers the services with a declared http call into it (topology edges, 5.4). */
+async function verifyConsumers(
+  api: CartograApi,
+  seed: SeedData,
+  loaded: LoadSummary,
+  add: (name: string, ok: boolean, detail?: string) => void,
+  timeoutMs: number,
+  sleep: (ms: number) => Promise<void>,
+): Promise<void> {
+  for (const s of seed.services) {
+    const id = loaded.contracts[s.name]
+    if (s.contractVersions === undefined || !id) continue
+    const expected = [...new Set(declaredCalls(seed)
+      .filter((c) => c.to === s.name && callProtocol(c) === 'HTTP')
+      .map((c) => c.from))]
+    const listed = async () => new Set((await api.contractConsumers(id)).map((c) => c.serviceName ?? c.serviceId))
+    const missing = await pollMissing(expected, listed, timeoutMs, sleep)
+    const extra = [...(await listed())].filter((name) => !expected.includes(name))
+    add(`${s.name} contract lists ${expected.length} consumers`, missing.length === 0 && extra.length === 0,
+      [...missing.map((n) => `missing ${n}`), ...extra.map((n) => `extra ${n}`)].join(', '))
+  }
 }
 
 function unresolvedNames(api: CartograApi): () => Promise<Set<string>> {

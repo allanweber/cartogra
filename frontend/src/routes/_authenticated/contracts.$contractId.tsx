@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { AppLayout } from '#/components/AppLayout'
 import { ContractChangeList } from '#/components/ContractChangeList'
 import { ContractCompatibility } from '#/components/ContractCompatibility'
+import { ContractConsumers } from '#/components/ContractConsumers'
 import { ContractTimeline } from '#/components/ContractTimeline'
 import { SideBySideDiff } from '#/components/SideBySideDiff'
 import { Alert, AlertDescription } from '#/components/ui/alert'
@@ -53,28 +54,31 @@ function ContractDetailPage() {
           <QueryAlert error={contract.error} />
         ) : (
           <div className="grid gap-4 lg:grid-cols-[14rem_minmax(0,1fr)]">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Versions</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {versions.error ? (
-                  <QueryAlert error={versions.error} />
-                ) : versions.isLoading || selected === undefined ? (
-                  <div className="space-y-2">
-                    {Array.from({ length: 3 }).map((_, i) => (
-                      <Skeleton key={i} className="h-12 w-full" />
-                    ))}
-                  </div>
-                ) : (
-                  <ContractTimeline
-                    versions={versions.data?.items ?? []}
-                    selected={selected}
-                    onSelect={(v) => navigate({ search: { v }, replace: true })}
-                  />
-                )}
-              </CardContent>
-            </Card>
+            <div className="min-w-0 space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Versions</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {versions.error ? (
+                    <QueryAlert error={versions.error} />
+                  ) : versions.isLoading || selected === undefined ? (
+                    <div className="space-y-2">
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <Skeleton key={i} className="h-12 w-full" />
+                      ))}
+                    </div>
+                  ) : (
+                    <ContractTimeline
+                      versions={versions.data?.items ?? []}
+                      selected={selected}
+                      onSelect={(v) => navigate({ search: { v }, replace: true })}
+                    />
+                  )}
+                </CardContent>
+              </Card>
+              <ContractConsumers contractId={contractId} />
+            </div>
 
             <div className="min-w-0 space-y-4">
               {diff.error ? (

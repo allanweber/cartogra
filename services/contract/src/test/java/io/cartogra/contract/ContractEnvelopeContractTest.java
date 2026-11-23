@@ -129,6 +129,14 @@ class ContractEnvelopeContractTest extends AbstractContractIT {
                 http.read(tenant, "/" + id + "/versions/5/diff"), 404);
     }
 
+    @Test
+    void consumers200And404() {
+        String id = contractId();
+        String path = "/api/v1/contracts/" + id + "/consumers";
+        assertConforms("GET", path, http.read(tenant, "/" + id + "/consumers"), 200);
+        assertConforms("GET", path, http.read(UUID.randomUUID(), "/" + id + "/consumers"), 404);
+    }
+
     private String contractId() {
         HttpResponse<String> resp = http.create(tenant, UUID.randomUUID(), SPEC);
         return objectMapper.readTree(resp.body()).get("data").get("id").stringValue();

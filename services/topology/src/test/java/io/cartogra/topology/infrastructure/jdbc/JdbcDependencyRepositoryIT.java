@@ -72,7 +72,8 @@ class JdbcDependencyRepositoryIT extends AbstractTopologyIT {
         Dependency unrelated = repository.save(
                 newDependency(UUID.randomUUID(), UUID.randomUUID(), DependencyType.DECLARED, DependencyProtocol.KAFKA));
 
-        repository.softDeleteAllForService(TENANT, service);
+        assertThat(repository.softDeleteAllForService(TENANT, service))
+                .extracting(Dependency::id).containsExactlyInAnyOrder(asSource.id(), asTarget.id());
 
         assertThat(repository.findById(TENANT, asSource.id())).isEmpty();
         assertThat(repository.findById(TENANT, asTarget.id())).isEmpty();
@@ -167,12 +168,13 @@ class JdbcDependencyRepositoryIT extends AbstractTopologyIT {
         repository.save(newDependency(source, target, DependencyType.DECLARED, DependencyProtocol.GRPC));
         Instant now = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
 
-        int[] inserted = new int[1];
-        int statements = SqlStatementCounter.count(() -> inserted[0] = repository.declareMissing(TENANT, source, target,
-                List.of(DependencyProtocol.HTTP, DependencyProtocol.GRPC, DependencyProtocol.KAFKA), now));
+        List<List<Dependency>> inserted = new java.util.ArrayList<>();
+        int statements = SqlStatementCounter.count(() -> inserted.add(repository.declareMissing(TENANT, source, target,
+                List.of(DependencyProtocol.HTTP, DependencyProtocol.GRPC, DependencyProtocol.KAFKA), now)));
 
         assertThat(statements).isEqualTo(1);
-        assertThat(inserted[0]).isEqualTo(2);
+        assertThat(inserted.getFirst()).extracting(Dependency::protocol)
+                .containsExactlyInAnyOrder(DependencyProtocol.HTTP, DependencyProtocol.KAFKA);
         assertThat(repository.findLiveProtocols(TENANT, source, target, DependencyType.DECLARED))
                 .containsExactlyInAnyOrder(DependencyProtocol.HTTP, DependencyProtocol.GRPC, DependencyProtocol.KAFKA);
         Dependency http = repository.findByEdgeIdentity(TENANT, source, target, DependencyType.DECLARED,
@@ -193,9 +195,9 @@ class JdbcDependencyRepositoryIT extends AbstractTopologyIT {
                 DependencyProtocol.HTTP, null, Instant.now(), Instant.now(), null));
 
         assertThat(repository.declareMissing(TENANT, source, target, List.of(DependencyProtocol.HTTP), Instant.now()))
-                .isEqualTo(1);
+                .hasSize(1);
         assertThat(repository.declareMissing(TENANT, source, target, List.of(DependencyProtocol.HTTP), Instant.now()))
-                .isZero();
+                .isEmpty();
         assertThat(repository.findLiveProtocols(otherTenant, source, target, DependencyType.DECLARED))
                 .containsExactly(DependencyProtocol.HTTP);
     }
@@ -207,7 +209,7 @@ class JdbcDependencyRepositoryIT extends AbstractTopologyIT {
         repository.save(newDependency(source, target, DependencyType.OBSERVED, DependencyProtocol.HTTP));
 
         assertThat(repository.declareMissing(TENANT, source, target, List.of(DependencyProtocol.HTTP), Instant.now()))
-                .isEqualTo(1);
+                .hasSize(1);
         assertThat(repository.findLiveProtocols(TENANT, source, target, DependencyType.OBSERVED))
                 .containsExactly(DependencyProtocol.HTTP);
     }
@@ -218,7 +220,7 @@ class JdbcDependencyRepositoryIT extends AbstractTopologyIT {
         UUID target = UUID.randomUUID();
 
         int statements = SqlStatementCounter.count(() ->
-                assertThat(repository.declareMissing(TENANT, source, target, List.of(), Instant.now())).isZero());
+                assertThat(repository.declareMissing(TENANT, source, target, List.of(), Instant.now())).isEmpty());
 
         assertThat(statements).isZero();
         assertThat(repository.findLiveProtocols(TENANT, source, target, DependencyType.DECLARED)).isEmpty();
@@ -235,11 +237,11 @@ class JdbcDependencyRepositoryIT extends AbstractTopologyIT {
         UUID target = UUID.randomUUID();
         Instant t0 = Instant.now().minus(Duration.ofHours(1));
 
-        assertThat(repository.upsertObserved(TENANT, source, target, DependencyProtocol.HTTP, t0))
+        assertThat(repository.upsertObserved(TENANT, source, target, DependencyProtocol.HTTP, t0).outcome())
                 .isEqualTo(UpsertOutcome.INSERTED);
-        assertThat(repository.upsertObserved(TENANT, source, target, DependencyProtocol.HTTP, t0.plusSeconds(30)))
+        assertThat(repository.upsertObserved(TENANT, source, target, DependencyProtocol.HTTP, t0.plusSeconds(30)).outcome())
                 .isEqualTo(UpsertOutcome.UNCHANGED);
-        assertThat(repository.upsertObserved(TENANT, source, target, DependencyProtocol.HTTP, t0.plusSeconds(120)))
+        assertThat(repository.upsertObserved(TENANT, source, target, DependencyProtocol.HTTP, t0.plusSeconds(120)).outcome())
                 .isEqualTo(UpsertOutcome.REFRESHED);
 
         Dependency edge = repository.findByEdgeIdentity(TENANT, source, target,
@@ -253,9 +255,9 @@ class JdbcDependencyRepositoryIT extends AbstractTopologyIT {
         UUID source = UUID.randomUUID();
         UUID target = UUID.randomUUID();
 
-        assertThat(repository.upsertObserved(TENANT, source, target, DependencyProtocol.HTTP, Instant.now()))
+        assertThat(repository.upsertObserved(TENANT, source, target, DependencyProtocol.HTTP, Instant.now()).outcome())
                 .isEqualTo(UpsertOutcome.INSERTED);
-        assertThat(repository.upsertObserved(TENANT, source, target, DependencyProtocol.GRPC, Instant.now()))
+        assertThat(repository.upsertObserved(TENANT, source, target, DependencyProtocol.GRPC, Instant.now()).outcome())
                 .isEqualTo(UpsertOutcome.INSERTED);
     }
 
@@ -265,7 +267,7 @@ class JdbcDependencyRepositoryIT extends AbstractTopologyIT {
         UUID target = UUID.randomUUID();
         Dependency declared = repository.save(newDependency(source, target, DependencyType.DECLARED, DependencyProtocol.HTTP));
 
-        assertThat(repository.upsertObserved(TENANT, source, target, DependencyProtocol.HTTP, Instant.now()))
+        assertThat(repository.upsertObserved(TENANT, source, target, DependencyProtocol.HTTP, Instant.now()).outcome())
                 .isEqualTo(UpsertOutcome.INSERTED);
 
         assertThat(repository.findById(TENANT, declared.id())).isPresent();

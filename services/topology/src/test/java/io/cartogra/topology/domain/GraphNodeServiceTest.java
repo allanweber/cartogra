@@ -1,5 +1,7 @@
 package io.cartogra.topology.domain;
 
+import java.util.List;
+import io.cartogra.topology.infrastructure.kafka.DependencyEventPublisher;
 import io.cartogra.common.event.EventEnvelope;
 import io.cartogra.topology.domain.event.ServiceLifecyclePayload;
 import io.cartogra.topology.infrastructure.scheduled.DependencyGraphViewRefreshScheduler;
@@ -29,13 +31,14 @@ class GraphNodeServiceTest {
     @Mock DependencyRepository dependencyRepository;
     @Mock DependencyGraphViewRefreshScheduler graphViewRefreshScheduler;
     @Mock UnresolvedSpanServiceService unresolvedSpanServiceService;
+    @Mock DependencyEventPublisher eventPublisher;
 
     private GraphNodeService service;
 
     @BeforeEach
     void setUp() {
         service = new GraphNodeService(graphNodeRepository, processedEventRepository,
-                dependencyRepository, graphViewRefreshScheduler, unresolvedSpanServiceService);
+                dependencyRepository, graphViewRefreshScheduler, unresolvedSpanServiceService, eventPublisher);
     }
 
     private static EventEnvelope<ServiceLifecyclePayload> envelope(String eventType, ServiceLifecyclePayload payload) {
@@ -74,6 +77,7 @@ class GraphNodeServiceTest {
         verify(graphNodeRepository, never()).upsert(any());
         verify(unresolvedSpanServiceService, never()).markRegistered(any(), any());
         verify(dependencyRepository).softDeleteAllForService(tenantId, serviceId);
+        verify(eventPublisher).removed(List.of());
         verify(graphViewRefreshScheduler).markDirty();
     }
 

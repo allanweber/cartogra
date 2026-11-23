@@ -1,11 +1,19 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query'
 
 import { apiFetch } from '#/lib/api'
 
-import type { CompatibilityStatus, Contract, ContractsPage, ContractVersionsPage, VersionDiff } from '#/lib/contract-types'
+import type {
+  CompatibilityStatus,
+  Contract,
+  ContractConsumersPage,
+  ContractsPage,
+  ContractVersionsPage,
+  VersionDiff,
+} from '#/lib/contract-types'
 
 export const CONTRACTS_PAGE_SIZE = 20
 export const VERSIONS_LIMIT = 100
+export const CONSUMERS_PAGE_SIZE = 50
 
 export function useContracts(q: string, page: number, status?: CompatibilityStatus) {
   return useQuery({
@@ -40,5 +48,16 @@ export function useVersionDiff(contractId: string, versionNumber: number | undef
     enabled: versionNumber !== undefined,
     queryFn: () => apiFetch<VersionDiff>(`/v1/contracts/${contractId}/versions/${versionNumber}/diff`),
     staleTime: Infinity,
+  })
+}
+
+export function useContractConsumers(contractId: string) {
+  return useInfiniteQuery({
+    queryKey: ['contracts', contractId, 'consumers'],
+    queryFn: ({ pageParam }) =>
+      apiFetch<ContractConsumersPage>(`/v1/contracts/${contractId}/consumers?limit=${CONSUMERS_PAGE_SIZE}&offset=${pageParam}`),
+    initialPageParam: 0,
+    getNextPageParam: (last) =>
+      last.offset + last.items.length < last.total ? last.offset + last.items.length : undefined,
   })
 }

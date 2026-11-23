@@ -35,4 +35,13 @@ class RowLevelSecurityIT extends AbstractContractIT {
                 VALUES (?, 'acme/rls', 'openapi.yaml', repeat('a', 64), 'openapi: 3.0.3')
                 """);
     }
+
+    @Test
+    void inboundEdgesIsolatesTenants() {
+        RlsChecks.assertIsolatesTenants(jdbc, "inbound_edges", """
+                INSERT INTO inbound_edges (tenant_id, edge_id, source_service_id, target_service_id,
+                                           dependency_type, protocol)
+                VALUES (?, gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), 'declared', 'http')
+                """);
+    }
 }

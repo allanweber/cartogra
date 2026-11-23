@@ -69,6 +69,14 @@ export interface ContractVersion {
   source?: 'manual' | 'discovery'
 }
 
+/** A service with a live http/grpc edge into the contract's service (Topology edges, story 5.4). */
+export interface ContractConsumer {
+  serviceId: string
+  serviceName: string | null
+  dependencyTypes: string[]
+  protocols: string[]
+}
+
 export interface Contract {
   id: string
   serviceId: string
@@ -156,6 +164,7 @@ export interface CartograApi {
   listContracts(q?: string, status?: 'breaking' | 'compatible'): Promise<Contract[]>
   contractDiff(contractId: string, versionNumber: number): Promise<VersionDiff>
   listContractVersions(contractId: string): Promise<ContractVersion[]>
+  contractConsumers(contractId: string): Promise<ContractConsumer[]>
 }
 
 export interface Cluster {
@@ -303,6 +312,10 @@ export class HttpCartograApi implements CartograApi, ConnectionsApi {
 
   listContractVersions(contractId: string): Promise<ContractVersion[]> {
     return this.listAll<ContractVersion>(`/api/v1/contracts/${contractId}/versions`)
+  }
+
+  contractConsumers(contractId: string): Promise<ContractConsumer[]> {
+    return this.listAll<ContractConsumer>(`/api/v1/contracts/${contractId}/consumers`)
   }
 
   listClusters(): Promise<Cluster[]> {

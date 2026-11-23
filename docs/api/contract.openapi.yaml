@@ -247,6 +247,43 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /contracts/{contractId}/consumers:
+    get:
+      summary: List the services that consume a contract
+      description: |
+        A consumer is a service with a live declared or observed edge in the topology graph into the contract's
+        service, over http or grpc. Its edges are merged into one row. Deleted services and self edges are left
+        out. Sorted by service name; a service whose name is not known yet comes last with `serviceName` null.
+      operationId: listContractConsumers
+      tags: [contracts]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ContractIdParam"
+        - name: limit
+          in: query
+          required: false
+          description: Page size, clamped to 1..100
+          schema:
+            type: integer
+            default: 50
+        - $ref: "#/components/parameters/OffsetParam"
+      responses:
+        "200":
+          description: A page of consumers
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsumerPageEnvelope"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -442,6 +479,47 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/ContractVersion"
+            total:
+              type: integer
+            limit:
+              type: integer
+            offset:
+              type: integer
+        traceId:
+          $ref: "#/components/schemas/TraceId"
+
+    Consumer:
+      type: object
+      required: [serviceId, serviceName, dependencyTypes, protocols]
+      properties:
+        serviceId:
+          type: string
+          format: uuid
+        serviceName:
+          type: [string, "null"]
+        dependencyTypes:
+          type: array
+          items:
+            type: string
+            enum: [declared, observed]
+        protocols:
+          type: array
+          items:
+            type: string
+            enum: [http, grpc]
+
+    ConsumerPageEnvelope:
+      type: object
+      required: [data, traceId]
+      properties:
+        data:
+          type: object
+          required: [items, total, limit, offset]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Consumer"
             total:
               type: integer
             limit:
