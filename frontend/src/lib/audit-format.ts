@@ -9,7 +9,7 @@ export const AUDIT_CATEGORY_ENTITY_TYPES: Record<AuditCategory, string[]> = {
   dependency: ['dependency'],
   drift: ['drift'],
   integration: ['scm_connection', 'cluster', 'spec_paths'],
-  access: ['user', 'invitation', 'oidc_config'],
+  access: ['user', 'invitation', 'oidc_config', 'api_key'],
 }
 
 export const AUDIT_CATEGORY_COLORS: Record<AuditCategory, string> = {
@@ -33,6 +33,7 @@ const ENTITY_LABELS: Record<string, string> = {
   user: 'User',
   invitation: 'Invitation',
   oidc_config: 'OIDC config',
+  api_key: 'API key',
 }
 
 const ACTION_LABELS: Record<string, string> = {

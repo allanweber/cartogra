@@ -102,3 +102,21 @@ export const SCM_LABEL: Record<string, string> = {
   bitbucket: 'Bitbucket',
   kubernetes: 'Kubernetes',
 }
+
+export type ApiKeyStatus = 'active' | 'expired' | 'revoked'
+
+export interface ApiKey {
+  id: string
+  name: string
+  prefix: string
+  scopes: string[]
+  status: ApiKeyStatus
+  expiresAt: string | null
+  lastUsedAt: string | null
+  createdAt: string
+}
+
+/** The create response: the only time the full `key` is returned. */
+export interface CreatedApiKey extends ApiKey {
+  key: string
+}
