@@ -430,7 +430,14 @@ components:
       type: apiKey
       in: header
       name: X-Cartogra-Api-Key
-      description: Tenant-scoped API key for CI/automation (x-planned — Phase 3)
+      description: |
+        Tenant API key for CI. The gateway reads it only on the API Key Allowlist: today
+        `POST /api/v1/contracts/check` needs the scope `ci:check`. On every other path the header is ignored.
+        On an allowlisted endpoint only a key authenticates: no key gives 401, a JWT only gives 403, an unknown,
+        revoked or expired key gives 401, and a key without the scope gives 403. The key is looked up by its
+        SHA-256 hash on each request (no cache), so a revoke works at once. The downstream internal token has the
+        subject `apikey:<id>`, the tenant of the key and one role for each scope (`ci:check` → `CI_CHECK`). The
+        key header is not forwarded. Each key has its own rate-limit bucket `apikey:<id>`.
 
   headers:
     XTraceId:

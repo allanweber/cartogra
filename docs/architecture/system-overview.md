@@ -97,7 +97,7 @@ Each table with `tenant_id` has `ENABLE` and `FORCE ROW LEVEL SECURITY` and one 
 |------------|-----------|
 | Browser | httpOnly JWT cookie (gateway-issued) |
 | Non-browser API | `Authorization: Bearer <token>` |
-| CI/automation | `X-Cartogra-Api-Key: <key>` (tenant-scoped) — **planned, not yet implemented** (see `docs/roadmap.md` item 5.5) |
+| CI/automation | `X-Cartogra-Api-Key: <key>` (tenant-scoped, 5.5). An ADMIN creates it in Settings → API Keys. The gateway accepts it only on the API Key Allowlist (today `POST /api/v1/contracts/check`, scope `ci:check`) and ignores it on every other path. |
 
 Auth flows: local email+password with Resend OTP, Google OAuth, GitHub OAuth, per-tenant OIDC. All token issuance in the gateway — no separate auth service.
 

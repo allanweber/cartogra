@@ -291,7 +291,7 @@ New route for a not-yet-built service (topology/contract/intelligence): add the 
 
 - Browser clients: httpOnly JWT cookie
 - Non-browser clients: `Authorization: Bearer <token>`
-- CI / automation: `X-Cartogra-Api-Key: <key>` (tenant-scoped API key) — NEVER HMAC v1 — **planned, not yet implemented** (see `docs/roadmap.md` item 5.5)
+- CI / automation: `X-Cartogra-Api-Key: <key>` (tenant-scoped API key, 5.5) — NEVER HMAC v1. The gateway accepts it only on the API Key Allowlist (`ApiKeyAllowlist`)
 - Gateway issues ALL tokens — NEVER a separate auth microservice (MVP scope)
 - Gateway strips `X-Tenant-Id` from inbound requests and injects it from the validated token
 - JWT payload: `sub` (userId), `tid` (tenantId), `roles[]`, `exp`
