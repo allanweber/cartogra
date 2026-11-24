@@ -24,6 +24,12 @@ These skills change an idea into a plan, then implement the plan with worker age
   ├── plan-reviewer (Opus, high effort): plan coverage, with evidence  ┐
   └── code-review skill: Standards + Spec axes                         ┴→ review.md
 
+/ship NNN   (runs the other commands, stops at your gates)
+  ├── execute → review-plan (+ security-audit when auth, queries, or config change)
+  ├── gate: you approve fix tasks → next round (max 2)
+  ├── gate: "commit"
+  └── gate: push + PR, watch CI
+
 /security-audit [NNN]
   ├── security-auditor (Opus, high effort): five categories      ┐
   └── security-review skill: changes on the branch              ┴→ findings.json → PDF
@@ -33,7 +39,7 @@ These skills change an idea into a plan, then implement the plan with worker age
 2. Answer the questions. The agent asks one question at a time and gives a recommended answer first.
 3. Confirm the summary of the decisions.
 4. Review `plan.md` and `checklist.md` in the new `plans/NNN-<slug>/` folder.
-5. Type `/execute NNN`.
+5. Type `/execute NNN`. Or type `/ship NNN` to run steps 5 to 9 with the review rounds, and continue at its gates.
 6. Answer the questions about plan problems, if the executor asks.
 7. Review the report.
 8. Optional: type `/review-plan NNN` for an independent review. Read `review.md` in the plan folder.
@@ -47,6 +53,7 @@ These skills change an idea into a plan, then implement the plan with worker age
 | `design-interview` | You or the agent | Interviews you about a design. It covers the design decisions and these mandatory topics: business rules, scenarios, data model, test seams, e2e, acceptance criteria, branch name, and linked issue. |
 | `domain-language` | You or the agent | Keeps the domain terms in `CONTEXT.md` and `CONTEXT-MAP.md` correct. It records ADRs only for decisions that are hard to reverse, surprising, and a real trade-off. |
 | `execute` | You only (`/execute NNN`) | Sends the tasks to the workers, judges the results against the plan, runs the final checks, and asks you when the plan is wrong. It continues from the checklist after a stop. |
+| `ship` | You only (`/ship NNN`) | Runs `execute`, `review-plan`, and `security-audit` (only when the diff touches auth, queries, or config). It changes the findings into fix tasks for your approval, with a maximum of 2 fix rounds. Then it stops for the commit, and for the push and the PR. Its log is `ship-log.md` in the plan folder. |
 | `review-plan` | You only (`/review-plan NNN`) | Sends `plan-reviewer` to verify each task, BR, scenario, and checklist tick against the code and the tests. At the same time, it runs the `code-review` skill with `plan.md` as the spec. Both results go into `review.md`. It changes no code. |
 | `security-audit` | You only (`/security-audit [NNN]`) | Sends `security-auditor` to audit tenant isolation, browser-only permissions, IDOR, hard-coded secrets, and XSS. At the same time, it runs the `security-review` skill. It merges both into `findings.json`, then makes a PDF in `docs/security-audit/` with GitHub issue texts. Git ignores that folder. It changes no code. |
 | `build-in-public` | You only (`/build-in-public`) | Writes build-in-public drafts in `docs/bip/` from a roadmap item, a story, or a topic, with SVG diagrams and copy-ready text. It does not post. `published <id> <links>` records the publication. |
