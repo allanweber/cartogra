@@ -13,7 +13,7 @@ An admin creates a tenant API key with scope `ci:check` on Settings → API Keys
 3. As an admin, I want to give a key an optional expiry date, so that a temporary key stops on its own.
 4. As an admin, I want to revoke a key, so that a leaked key stops at once.
 5. As an admin, I want a clear error when my plan has no more key slots, so that I know to revoke a key or upgrade.
-6. As a viewer or member, I want to see the keys of my tenant (name, prefix, scopes, status, last used), so that I know what CI uses.
+6. As a viewer or member, I want to read the keys of my tenant through the API (name, prefix, scopes, status, last used), so that I know what CI uses. The Settings UI stays admin-only.
 7. As an admin, I want to see when each key was last used, so that I can find stale keys.
 8. As a CI pipeline, I want to send `{service, spec}` and get `isBreaking`, `changes` and `affectedConsumers`, so that I can fail the build on a breaking change.
 9. As a CI pipeline, I want to name the service by its id or its name, so that the configuration is simple.
@@ -82,7 +82,7 @@ Given a Free tenant (max 2) with 1 active key, 1 expired key and 1 revoked key
 When an ADMIN creates a key
 Then the response is 201
 When the ADMIN creates one more key
-Then the response is 409 PLAN_LIMIT_EXCEEDED
+Then the response is 402 PLAN_LIMIT_EXCEEDED
 ```
 ### S-7: Revoke (BR-6, BR-15)
 ```gherkin
@@ -188,11 +188,12 @@ And after the dialog closes, the list shows only the prefix
 When they revoke the key and confirm
 Then the row shows "revoked"
 ```
-### S-21: UI read-only for non-admins (BR-1)
+### S-21: UI admin-only, API read for non-admins (BR-1)
 ```gherkin
 Given a VIEWER on Settings → API Keys
-Then the list shows the keys
+Then the page shows the Admin-role alert of the Settings layout
 And there is no create button and no revoke button
+And GET /api/v1/registry/api-keys returns 200 for the viewer, and POST returns 403
 ```
 
 ## Data model
@@ -200,7 +201,7 @@ And there is no create button and no revoke button
 | Column | Type | Notes |
 |---|---|---|
 | `id` | UUID PK | `gen_random_uuid()` |
-| `tenant_id` | UUID NOT NULL | FK `tenants(id)` |
+| `tenant_id` | UUID NOT NULL | no FK, as the other registry tables |
 | `name` | TEXT NOT NULL | `CHECK (char_length(name) BETWEEN 1 AND 100)` |
 | `key_hash` | CHAR(64) NOT NULL UNIQUE | SHA-256 hex of the full key |
 | `key_prefix` | TEXT NOT NULL | `cgk_` + 8 characters, display only |
@@ -420,7 +421,7 @@ Index: `(tenant_id, service_id, created_at DESC)`. RLS: `ENABLE` + `FORCE` + the
 - Module: `seed/acme-fintech`
 - Files: `seed/acme-fintech/src/api.ts`, `seed/acme-fintech/src/verify.ts`, `seed/acme-fintech/test/verify.test.ts`
 - Depends on: T7, T9, T12
-- Change: add `createApiKey`, `revokeApiKey` and `checkContract` (the last one sends `X-Cartogra-Api-Key` and no JWT). With `--breaking`, verify creates a key, checks ledger-service by name with the breaking spec, asserts `isBreaking` and the 12 consumer names, and revokes the key in `finally`.
+- Change: add `createApiKey`, `revokeApiKey` and `checkContract` (the last one sends `X-Cartogra-Api-Key` and no JWT). Each verify creates a key, checks ledger-service by name with the v1 spec, asserts `isBreaking` (`path-removed` of the history path) and the 12 consumer names, and revokes the key in `finally`.
 - Test: unit `verify.test.ts` "breaking verify runs the CI check and revokes the key"
 - Done when: the test passes and the key is revoked when the check fails.
 
@@ -442,9 +443,108 @@ Index: `(tenant_id, service_id, created_at DESC)`. RLS: `ENABLE` + `FORCE` + the
 - Test: none (docs); `./gradlew` contract tests that read the openapi files still pass.
 - Done when: no doc says that API keys are planned.
 
+### T21: Rate limit before the key lookup (fix F-1)
+- Implements: review F-1 (major), Spec (c)1, audit F1, review F-2; BR-8, BR-9
+- Module: `services/gateway`
+- Files: `.../config/SecurityConfig.java`, `.../config/RateLimitFilter.java`, `.../config/ApiKeyAuthenticationFilter.java`, `services/gateway/src/test/java/io/cartogra/gateway/api/ApiKeyRateLimitIT.java`
+- Depends on: T10
+- Change: on an allowlisted endpoint, apply the IP bucket before the key lookup, so that a missing, unknown, revoked or expired key cannot skip the rate limit. A valid key keeps its own bucket `apikey:<id>`.
+- Test: integration `ApiKeyRateLimitIT.badKeysAreRateLimitedByIp` (N bad-key requests give 429 and stop the lookups); `ApiKeyRateLimitIT.keyBucketDoesNotDrainTenantBucket` fails if the `apikey:` bucket is removed.
+- Done when: both tests pass and the existing gateway ITs pass.
+
+### T22: Allowlist ignores one trailing slash (fix Spec (c)2)
+- Implements: Spec (c)2; BR-7, BR-8
+- Module: `services/gateway`
+- Files: `.../config/ApiKeyAllowlist.java`, `services/gateway/src/test/java/io/cartogra/gateway/api/ApiKeyAuthIT.java`
+- Depends on: T9
+- Change: `requiredScope` matches the path with one trailing slash removed. Each other path variant stays off the allowlist.
+- Test: integration `ApiKeyAuthIT.trailingSlashIsOnTheAllowlist`
+- Done when: a valid key on `POST /api/v1/contracts/check/` gets the same result as without the slash.
+
+### T23: Bounded queries on request paths (fix Standards hard 1, 2)
+- Implements: code review Standards hard 1 and 2
+- Module: `services/contract`, `services/registry`
+- Files: `services/contract/src/main/java/io/cartogra/contract/domain/ConsumerService.java`, `services/contract/src/test/java/io/cartogra/contract/domain/ConsumerServiceTest.java`, `services/registry/src/main/java/io/cartogra/registry/domain/ApiKeyService.java`, `services/registry/src/test/java/io/cartogra/registry/domain/ApiKeyServiceTest.java`
+- Depends on: T6, T12
+- Change: `allConsumersOfService` reads at most 500 consumers. `ApiKeyService.list` clamps `limit` to 1..200 and `offset` to 0 or more, as `AuditEventService` does.
+- Test: unit `ApiKeyServiceTest.listClampsLimit`, `ConsumerServiceTest.consumersAreBounded`
+- Done when: no request path in this story runs a query with `Integer.MAX_VALUE` or an unclamped limit.
+
+### T24: Verify reports a failed key create (fix F-4)
+- Implements: review F-4, Spec (a)2
+- Module: `seed/acme-fintech`
+- Files: `seed/acme-fintech/src/verify.ts`, `seed/acme-fintech/test/verify.test.ts`
+- Depends on: T18
+- Change: a failed `createApiKey` gives one failed check with the error text, and verify continues. The check of the Acme plan on k3d and prod stays a manual step for the user.
+- Test: unit `verify.test.ts` "a failed key create is one failed check"
+- Done when: the test passes.
+
+### T25: Contract CONTEXT intro (fix F-3)
+- Implements: review F-3
+- Module: `docs`
+- Files: `services/contract/CONTEXT.md`
+- Depends on: T20
+- Change: line 3 no longer says that CI checks are planned.
+- Test: none (docs)
+- Done when: no doc says that the CI check or API keys are planned.
+
+### T26: API keys list with TanStack Table (fix Standards hard 3)
+- Implements: code review Standards hard 3
+- Module: `frontend`
+- Files: `frontend/src/routes/_authenticated/settings.api-keys.tsx`, `frontend/src/test/routes/settings.api-keys.test.tsx`
+- Depends on: T15
+- Change: build the key list with TanStack Table, as `.claude/rules/frontend.md` says. The columns and the admin-only buttons stay the same.
+- Test: unit (Vitest) `settings.api-keys.test.tsx` (the 3 existing tests); e2e `api-keys.spec.ts`
+- Done when: the tests pass.
+
+### T27: Contract accepts the trailing slash on /check (fix R2-F1)
+- Implements: round 2 review R2-F1, Spec (c) T22; BR-7, BR-8
+- Module: `services/contract`
+- Files: `services/contract/src/main/java/io/cartogra/contract/api/ContractCheckController.java`, `services/contract/src/main/java/io/cartogra/contract/config/SecurityConfig.java`, `services/contract/src/test/java/io/cartogra/contract/api/ContractCheckIT.java`
+- Depends on: T13, T22
+- Change: map `POST /check` and `POST /check/` to the same handler. The `CI_CHECK` matcher in the contract `SecurityConfig` covers both paths. Each other path variant stays as it is.
+- Test: integration `ContractCheckIT.trailingSlashGivesSameResult` (a `CI_CHECK` actor on `/check/` gets the same 200 body as on `/check`; a JWT actor on `/check/` gets 403).
+- Done when: the test passes and T22 is true end to end.
+
+### T28: One RateLimiter for both filters (fix Standards round 2 items 1, 2)
+- Implements: round 2 code review Standards judgement 1 and 2
+- Module: `services/gateway`
+- Files: `.../config/RateLimitFilter.java`, `.../config/ApiKeyAuthenticationFilter.java`, a new `.../config/RateLimiter.java`, `.../config/SecurityFilterRegistrationConfig.java` (if the wiring changes), the unit tests of both filters
+- Depends on: T21
+- Change: move the bucket logic (consume, bucket key, Retry-After, the 429 response) into a `RateLimiter` bean. `RateLimitFilter` and `ApiKeyAuthenticationFilter` both use it. `ApiKeyAuthenticationFilter` no longer depends on `RateLimitFilter`. One helper makes the bucket key, and one helper makes the Retry-After value. The behavior does not change.
+- Test: the existing `ApiKeyRateLimitIT` (2), `ApiKeyAuthIT` (12), `ApiKeyAuthenticationFilterTest`, and the existing rate-limit ITs of the gateway pass without assertion changes.
+- Done when: the tests pass and no filter injects another filter.
+
+### T29: Script keys expire after 1 hour (fix audit F3)
+- Implements: round 2 audit F3
+- Module: `seed/acme-fintech`, `infra`
+- Files: `seed/acme-fintech/src/api.ts`, `seed/acme-fintech/src/verify.ts`, `seed/acme-fintech/test/fakeApi.ts`, `seed/acme-fintech/test/verify.test.ts`, `infra/helm/local-test.sh`
+- Depends on: T18, T19
+- Change: `createApiKey` takes an optional `expiresAt`. Verify and `local-test.sh` create the key with `expiresAt` 1 hour from now. `local-test.sh` sends the key header to curl through a config on stdin (`-K -`), not in the command arguments.
+- Test: unit `verify.test.ts` "the verify key expires within 1 hour"; `sh -n infra/helm/local-test.sh`. Do not run `local-test.sh`.
+- Done when: the test passes and `sh -n` passes.
+
+### T30: Key create dialog: cache and expiry date (fix audit F4, review F-5)
+- Implements: round 2 audit F4, round 1 review F-5 (R2-F3)
+- Module: `frontend`
+- Files: `frontend/src/hooks/useApiKeys.ts`, `frontend/src/components/ApiKeyCreateDialog.tsx`, the tests of the dialog or the page
+- Depends on: T15
+- Change: the create mutation sets `gcTime: 0`. The date input has `min` = today in local time. The expiry is the end of the picked day in the local time zone, sent as an ISO instant.
+- Test: unit (Vitest) "the expiry is the end of the local day" and "the date input has min today"; the existing `settings.api-keys.test.tsx` and `e2e/api-keys.spec.ts` pass.
+- Done when: the tests pass.
+
+### T31: Roadmap and context map show 5.5 as live (fix R2-F4, Spec (a)1)
+- Implements: round 2 review R2-F4, round 1 Spec (a)1
+- Module: `docs`
+- Files: `docs/roadmap.md`, `CONTEXT-MAP.md`
+- Depends on: T20
+- Change: tick 5.5 in the roadmap. `CONTEXT-MAP.md` lists the CI check [5.5] in the Contract row and the API key path to Contract. `docs/bip/1.48-gateway-auth-rationale.md` stays as it is, because it records the history of an old decision.
+- Test: none (docs)
+- Done when: no current doc says that 5.5 is planned.
+
 ## Acceptance criteria
 - [ ] AC-1: An admin creates a `ci:check` key on Settings → API Keys and sees the full key exactly one time.
-- [ ] AC-2: Non-admins see the key list in read-only mode. Guests and members get 403 on writes.
+- [ ] AC-2: Non-admins can read the key list through the API; the Settings UI stays admin-only. Guests and members get 403 on writes.
 - [ ] AC-3: The plan limit counts only active keys.
 - [ ] AC-4: A revoked or expired key gets 401 on the next request.
 - [ ] AC-5: The key header is ignored on each path that is not on the allowlist. A JWT on `/contracts/check` gets 403.
@@ -469,3 +569,15 @@ Index: `(tenant_id, service_id, created_at DESC)`. RLS: `ENABLE` + `FORCE` + the
 - `SpecParser` and `ContractService` already canonicalize and hash specs. Reuse them; do not parse a second time.
 - The Acme tenant plan must allow 1 more active key while verify runs. Check the plan of the acme tenant on k3d and prod before T18 is complete.
 - An ADR for "API keys: allowlist in the gateway, SHA-256, owned by registry" is offered, not planned.
+
+## Changes during execution
+- 2026-11-24: S-6 gives 402 `PLAN_LIMIT_EXCEEDED`, not 409. The registry handler already gives 402 for each plan limit (user decision).
+- 2026-11-24: `api_keys.tenant_id` has no FK. No registry table has an FK to `tenants`, and `tenants` has both `id` and `tenant_id`.
+- 2026-11-24: BR-9: the key bucket uses the same numbers as the tenant bucket (`RateLimitProperties`). The gateway does not read the plan rate columns today.
+- 2026-11-24: the check endpoint uses a new `CheckServiceNotFoundException` for `SERVICE_NOT_FOUND`. The existing `ServiceNotFoundException` keeps the code `NOT_FOUND` for `create`.
+- 2026-11-24: T18 and T19 send the v1 spec of ledger-service, not the breaking spec. After `load --breaking` the baseline is the breaking v3, so the breaking spec gives `isBreaking: false`. v1 has no history path, so it is breaking against v2 and v3. Verify runs the check in each mode (user decision).
+- 2026-11-24: S-21, user story 6 and AC-2: the Settings layout stays admin-only, so a VIEWER sees the Admin-role alert, not the key list. Non-admins read the keys through the API only. `e2e/api-keys.spec.ts` spec 2 asserts the alert, no buttons, API GET 200 and POST 403 (user decision).
+- 2026-11-24: fix tasks T21 (review F-1, Spec (c)1, audit F1, review F-2), T22 (Spec (c)2), T23 (Standards hard 1, 2), T24 (review F-4), T25 (review F-3), T26 (Standards hard 3), approved at gate 3 of round 1.
+- 2026-11-24: T23 caps `affectedConsumers` at 500 (BR-12 holds up to 500 consumers). The test is `ConsumerServiceTest.consumersAreBounded`, because `ContractCheckServiceTest` mocks `ConsumerService`.
+- 2026-11-24: T21 charges each request on an allowlisted endpoint, a valid key included, to a separate IP bucket `rate_limit:ip:<addr>:apikey-lookup` before the key lookup. A valid key then also uses its own `apikey:<id>` bucket (BR-9). T22 also changes the `CI_CHECK` matcher in the gateway `SecurityConfig` for the trailing-slash path.
+- 2026-11-24: fix tasks T27 (R2-F1), T28 (Standards round 2 items 1, 2), T29 (audit F3), T30 (audit F4, review F-5), T31 (R2-F4, Spec (a)1), approved at gate 3 of round 2. Refused: charge the IP pre-bucket only when the lookup fails (audit round 2 F1), and remove the 4-argument `PlanLimits` constructor (R2-F5). T22 is unticked until T27 passes.
