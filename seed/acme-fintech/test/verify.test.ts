@@ -239,3 +239,63 @@ describe('verify spec discovery', () => {
     expect(check?.detail).toContain(`${discovered[0]}: no contract`)
   })
 })
+
+describe('verify CI check', () => {
+  const opts = { skipObserved: true, sleep: async () => {}, pollMs: 0, discoveryTimeoutMs: 50, syncTimeoutMs: 50 }
+  const ciChecks = (checks: Array<{ name: string; ok: boolean }>) =>
+    checks.filter((c) => c.name.startsWith('CI check')).map((c) => [c.name, c.ok])
+
+  it('breaking verify runs the CI check and revokes the key', async () => {
+    const api = new FakeApi(seed)
+    const checks = await verify(api, seed, { ...opts, breaking: true })
+    expect(ciChecks(checks)).toEqual([
+      ['CI check of ledger-service is breaking (path-removed /ledgers/{id}/history)', true],
+      ['CI check of ledger-service lists 12 affected consumers', true],
+      ['CI check key revoked', true],
+    ])
+    expect(api.checks).toBe(1)
+    expect([...api.apiKeys.values()].map((k) => [k.scopes, k.status])).toEqual([[['ci:check'], 'revoked']])
+  })
+
+  it('default verify also gets a breaking result against the v2 baseline', async () => {
+    const checks = await verify(new FakeApi(seed), seed, opts)
+    expect(ciChecks(checks).every(([, ok]) => ok)).toBe(true)
+  })
+
+  it('revokes the key when the check fails', async () => {
+    const api = new FakeApi(seed)
+    api.checkContract = async () => { throw new Error('boom') }
+    const checks = await verify(api, seed, { ...opts, breaking: true })
+    expect(checks.find((c) => c.name.startsWith('CI check of ledger-service is breaking'))?.ok).toBe(false)
+    expect(checks.find((c) => c.name === 'CI check key revoked')?.ok).toBe(true)
+    expect([...api.apiKeys.values()][0].status).toBe('revoked')
+  })
+
+  it('the verify key expires within 1 hour', async () => {
+    const api = new FakeApi(seed)
+    const before = Date.now()
+    await verify(api, seed, { ...opts, breaking: true })
+    const expiresAt = [...api.apiKeys.values()][0].expiresAt
+    expect(expiresAt).toBeTruthy()
+    const ms = Date.parse(expiresAt!) - before
+    expect(ms).toBeGreaterThan(0)
+    expect(ms).toBeLessThanOrEqual(60 * 60 * 1000 + 5000)
+  })
+
+  it('a failed key create is one failed check', async () => {
+    const api = new FakeApi(seed)
+    api.createApiKey = async () => { throw new Error('PLAN_LIMIT_EXCEEDED') }
+    const checks = await verify(api, seed, { ...opts, breaking: true })
+    expect(ciChecks(checks)).toEqual([['CI check key created', false]])
+    expect(checks.find((c) => c.name === 'CI check key created')?.detail).toContain('PLAN_LIMIT_EXCEEDED')
+    expect(api.checks).toBe(0)
+  })
+
+  it('fails when the check lists no consumers', async () => {
+    const api = new FakeApi(seed)
+    const check = api.checkContract.bind(api)
+    api.checkContract = async (k, s, spec) => ({ ...(await check(k, s, spec)), affectedConsumers: [] })
+    const checks = await verify(api, seed, { ...opts, breaking: true })
+    expect(checks.find((c) => c.name === 'CI check of ledger-service lists 12 affected consumers')?.ok).toBe(false)
+  })
+})
