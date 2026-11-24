@@ -65,3 +65,6 @@ build
 .claude/plans
 .scratch/
 frontend/test-results/
+
+# Security audit reports: they describe weaknesses that are not fixed
+docs/security-audit/
