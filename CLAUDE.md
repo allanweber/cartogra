@@ -14,7 +14,7 @@ ideation-output: C:\Users\allan\Documents\Allan\Notes\Ideation
 
 ## Plans
 
-Every implementation plan is saved in the project at `plans/NNN-<slug>.md` (next number), never only in `~/.claude/plans`.
+Every implementation plan is saved in the project as a folder `plans/NNN-<slug>/` (next number) with `plan.md` and `checklist.md`, never only in `~/.claude/plans`. Older plans are single files `plans/NNN-<slug>.md`.
 
 ## Agent skills
 
