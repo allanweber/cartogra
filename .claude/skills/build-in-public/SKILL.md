@@ -1,6 +1,6 @@
 ---
 name: build-in-public
-description: Write build-in-public drafts (blog, X, LinkedIn, Instagram, video) from a roadmap item, a story, or a topic, and record them when they are published.
+description: Write build-in-public drafts (blog, X, LinkedIn, Instagram, video) from a roadmap item, a story, or a topic, and record them when they are published. Reads its folders from .claude/project.md.
 disable-model-invocation: true
 ---
 
@@ -16,11 +16,15 @@ You are a software engineer who builds in public. You turn real engineering work
 | `/build-in-public published <id> <links>` | Record a publication. Go to "Published" |
 | `--channels blog,x,linkedin,instagram,video` | Optional on the first three calls. It replaces the default channels |
 
+## 0. Read the project file
+
+Read the "Product" and "Build in public" sections of `.claude/project.md`. Below, *roadmap*, *drafts folder*, *format guide*, *voice examples*, and *images folder* are the values of that section. If a value is missing, ask the user for it.
+
 ## 1. Find the subject
 
 - **No argument:**
-  1. Read each "Worth writing about" bullet in `docs/roadmap.md`.
-  2. Remove each bullet that a file in `docs/bip/` names in its `roadmap_item:` field.
+  1. Read each bullet under the given heading of the roadmap.
+  2. Remove each bullet that a file in the drafts folder names in its `roadmap_item:` field.
   3. Show the open bullets in one `AskUserQuestion`, with the phase and the format tag of each. If more than four are open, show the four oldest and tell the user to type another one.
 - **A story number:** read the plan folder `plans/NNN-<slug>/`, the merged PR (`gh pr list --state merged --search <story>`), the roadmap bullets of that phase, and the code that the story changed.
 - **A free topic:** search the repo for the code, the plans, the ADRs, and the PRs about the topic.
@@ -41,9 +45,9 @@ If there is no tag, use X and LinkedIn.
 
 ## 3. Write the draft
 
-1. Read `docs/bip/README.md`. It is the single source of truth for the channel formats, the file name, and the frontmatter.
-2. Read `docs/bip/3.3-drift-as-a-workflow.md` and `docs/bip/3.1-otel-spans-to-graph-edges.md` as examples of the voice.
-3. Write `docs/bip/{id}-{slug}.md`. Add these fields to the frontmatter of the guide:
+1. Read the format guide. It is the single source of truth for the channel formats, the file name, and the frontmatter.
+2. Read the voice examples, if there are any.
+3. Write `{drafts folder}/{id}-{slug}.md`. Add these fields to the frontmatter of the guide:
 
    ```yaml
    roadmap_item: "<the exact roadmap bullet text, or none>"
@@ -61,7 +65,7 @@ If there is no tag, use X and LinkedIn.
 ### Images
 
 - For each image, describe in the draft what it shows and the text on it.
-- For each diagram, also write an SVG file in `docs/bip/images/{id}-{name}.svg`, and link it from the draft.
+- For each diagram, also write an SVG file in `{images folder}/{id}-{name}.svg`, and link it from the draft.
 - Screenshots are the job of the user. Describe them only.
 
 ### Guardrails
@@ -70,7 +74,7 @@ Public text can be indexed and copied. These rules have no exceptions:
 
 - Write no secrets, tokens, tenant IDs, user IDs, emails, or internal hostnames.
 - Write no security weakness that is not fixed and deployed.
-- The public URL of the product is `https://cartogra.dev`.
+- Use only the "Public URL" of the product. Do not write a host from "Deployed hosts" that is not public.
 
 ## 4. Hand off
 
@@ -85,7 +89,7 @@ Then stop. The user reviews the facts and posts the text. This skill never posts
 
 For `/build-in-public published <id> <links>`:
 
-1. Find the draft `docs/bip/<id>-*.md`. If more than one matches, ask the user which one.
+1. Find the draft `{drafts folder}/<id>-*.md`. If more than one matches, ask the user which one.
 2. Match each link to its channel from its host (for example `linkedin.com` is LinkedIn, `x.com` is X).
 3. In the frontmatter, set `status: published`, `published_at: <today, YYYY-MM-DD>`, and add each link under `links:`.
 4. Show the changed frontmatter.

@@ -1,6 +1,6 @@
 ---
 name: integration-tester
-description: Writes and runs the Testcontainers integration tests of one backend module from a plan. Sent by the execute skill.
+description: Writes and runs the integration tests (with containers) of one backend module from a plan. Sent by the execute skill.
 model: sonnet
 effort: medium
 ---
@@ -9,15 +9,15 @@ You write and run the integration tests (ITs) of one backend module. The orchest
 
 ## Before you write
 
-1. Read `.claude/rules/backend.md`.
+1. Read `.claude/project.md`. Use its "Backend commands" in the steps below, and read each file in its "Rules to read".
 2. Read the tasks, and the BRs and scenarios that they name, in `plan.md`.
-3. Find the IT base class of the module (`Abstract*IT`) and one existing IT as an example.
+3. Find the IT base class of the module (see the "Integration test marker") and one existing IT as an example.
 
 ## Work
 
-1. Write the ITs that the tasks name. Each IT extends the IT base class of the module, so Testcontainers starts and stops its own containers.
+1. Write the ITs that the tasks name. Each IT extends the IT base class of the module, so the test starts and stops its own containers.
 2. Write an IT that tests a scenario at the highest seam of the plan.
-3. Run the ITs: `./gradlew :<module path>:test --tests <Class>`. You must run them.
+3. Run the ITs with the "Integration test of one class" command. You must run them.
 
 Do not change production code. If an IT fails because of the production code, report it.
 
