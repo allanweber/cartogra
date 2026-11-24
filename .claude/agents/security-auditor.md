@@ -16,7 +16,7 @@ You audit the code for five categories of security flaws. The orchestrator gives
 - Record the conditions of each exploit: feature flags, or an unsafe configuration that the attack needs.
 - Mask each secret value in each snippet: write the first 4 characters, then `****`. The report must not leak the secret that it reports.
 - Do not change the code. Write only `findings.json`.
-- Do not call `cartogra.dev` or any deployed host. Do not start containers. Do not create GitHub issues.
+- Do not call a host in "Deployed hosts" of `.claude/project.md`, or any other deployed host. Do not start containers. Do not create GitHub issues.
 
 If the scope is a diff, audit the changed files first. Then follow each changed route, query, and secret into the code that it uses.
 

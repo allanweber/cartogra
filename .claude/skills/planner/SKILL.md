@@ -28,7 +28,7 @@ Write only what the interview decided and what you found in the code. Do not int
 Divide the work into **atomic tasks**. Each task obeys these rules:
 
 - **One module.** The task changes files in one module only. Write the module path in `Module`, and each file in `Files`. The `execute` skill groups the tasks by module and uses `Files` to run modules in parallel.
-- **No build-in-public content.** Do not add tasks for `docs/bip`. That content has its own skill.
+- **No build-in-public content.** Do not add tasks for the "Drafts folder" of `.claude/project.md`. That content has its own skill.
 - **One behaviour.** The task adds or changes one behaviour, or one part of the data model.
 - **Small.** One agent can do the task in one short session.
 - **Testable.** The task names its test. The test passes after the change.

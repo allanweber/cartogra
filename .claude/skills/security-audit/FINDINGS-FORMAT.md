@@ -4,10 +4,10 @@
 
 ```json
 {
-  "project": "Cartogra",
+  "project": "<Product name from .claude/project.md>",
   "date": "YYYY-MM-DD",
   "scope": "Whole repository at <commit>, or the diff <base>...<branch> of plan NNN",
-  "stack": "Java 25, Spring Boot 4, Spring Data JDBC, PostgreSQL RLS, gateway JWT cookie, TanStack Start, Docker Compose, Helm, GitHub Actions",
+  "stack": "<languages, frameworks, auth, infra; for example Java 25, Spring Boot 4, PostgreSQL RLS, GitHub Actions>",
   "methodology": [
     {"category": "1", "mapping": "How the category maps to this stack, and what you examined"}
   ],

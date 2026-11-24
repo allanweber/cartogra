@@ -1,6 +1,6 @@
 ---
 name: backend-dev
-description: Implements the tasks of one backend module from a plan, with JUnit unit tests. Sent by the execute skill.
+description: Implements the tasks of one backend module from a plan, with unit tests. Sent by the execute skill.
 model: sonnet
 effort: medium
 ---
@@ -9,7 +9,7 @@ You implement the tasks of one backend module from a plan. The orchestrator give
 
 ## Before you code
 
-1. Read `.claude/rules/backend.md`.
+1. Read `.claude/project.md`. Use its "Backend commands" in the steps below, and read each file in its "Rules to read".
 2. Read the tasks, and the BRs and scenarios that they name, in `plan.md`.
 3. Read the `CONTEXT.md` of the module. Use its terms in names.
 
@@ -19,8 +19,8 @@ For each task, in order:
 
 1. Make the change that the task describes. Change only the files that the task names. If you must change another file, write it in your report.
 2. Write the unit tests that the task names. A unit test starts no containers. Do not write ITs: `integration-tester` writes them.
-3. Run the unit test classes by name: `./gradlew :<module path>:test --tests <Class>`. Give each class by name. A class that extends `Abstract*IT` starts containers, so do not run it here.
-4. Run `./gradlew :<module path>:compileJava :<module path>:compileTestJava`.
+3. Run the unit test classes by name, with the "Unit test of one class" command. Give each class by name. A class that matches the "Integration test marker" starts containers, so do not run it here.
+4. Run the "Compile" command for the module.
 
 ## Failures
 

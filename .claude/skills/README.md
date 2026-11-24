@@ -2,9 +2,16 @@
 
 These skills change an idea into a plan, then implement the plan with worker agents. The plan has business rules, scenarios, a data model, and atomic tasks.
 
+Each project needs a `.claude/project.md` file. Run `/project-setup` one time to make it, and again when the project changes. It also writes `AGENTS.md`. The skills and the agents read the commands, the modules, the dev server, and the build-in-public folders from that file.
+
 ## Workflow
 
 ```
+/project-setup   (one time for each project)
+  ├── finds the facts in the code
+  ├── asks the open values and the unwritten rules
+  └── .claude/project.md + AGENTS.md (+ @AGENTS.md in CLAUDE.md)
+
 /planner
   ├── design-interview   interview, one question at a time
   ├── domain-language    CONTEXT.md terms and ADRs, during the interview
@@ -15,9 +22,9 @@ These skills change an idea into a plan, then implement the plan with worker age
 /execute NNN
   ├── worktree + branch from plan.md
   ├── for each backend module:  backend-dev → integration-tester
-  ├── bootRun from the worktree (dev infra, port 8080)
-  ├── frontend:                 frontend-dev (code, Vitest, Playwright e2e)
-  ├── final checks: gradle build, frontend checks, full e2e suite
+  ├── dev server from the worktree (project.md)
+  ├── frontend:                 frontend-dev (code, unit tests, e2e)
+  ├── final checks from project.md
   └── report, then wait for "commit"
 
 /review-plan NNN
@@ -49,6 +56,7 @@ These skills change an idea into a plan, then implement the plan with worker age
 
 | Skill | Start | Purpose |
 |---|---|---|
+| `project-setup` | You only (`/project-setup`) | Fills `.claude/project.md` and `AGENTS.md` from the code, then from questions. In update mode it changes only missing or stale values. |
 | `planner` | You only (`/planner`) | Runs the interview, then writes the plan folder. |
 | `design-interview` | You or the agent | Interviews you about a design. It covers the design decisions and these mandatory topics: business rules, scenarios, data model, test seams, e2e, acceptance criteria, branch name, and linked issue. |
 | `domain-language` | You or the agent | Keeps the domain terms in `CONTEXT.md` and `CONTEXT-MAP.md` correct. It records ADRs only for decisions that are hard to reverse, surprising, and a real trade-off. |
@@ -56,8 +64,7 @@ These skills change an idea into a plan, then implement the plan with worker age
 | `ship` | You only (`/ship NNN`) | Runs `execute`, `review-plan`, and `security-audit` (only when the diff touches auth, queries, or config). It changes the findings into fix tasks for your approval, with a maximum of 2 fix rounds. Then it stops for the commit, and for the push and the PR. Its log is `ship-log.md` in the plan folder. |
 | `review-plan` | You only (`/review-plan NNN`) | Sends `plan-reviewer` to verify each task, BR, scenario, and checklist tick against the code and the tests. At the same time, it runs the `code-review` skill with `plan.md` as the spec. Both results go into `review.md`. It changes no code. |
 | `security-audit` | You only (`/security-audit [NNN]`) | Sends `security-auditor` to audit tenant isolation, browser-only permissions, IDOR, hard-coded secrets, and XSS. At the same time, it runs the `security-review` skill. It merges both into `findings.json`, then makes a PDF in `docs/security-audit/` with GitHub issue texts. Git ignores that folder. It changes no code. |
-| `build-in-public` | You only (`/build-in-public`) | Writes build-in-public drafts in `docs/bip/` from a roadmap item, a story, or a topic, with SVG diagrams and copy-ready text. It does not post. `published <id> <links>` records the publication. |
-| `k3d-verify` | You only | Placeholder. It will run `local-test.sh` on k3d. It does nothing yet. |
+| `build-in-public` | You only (`/build-in-public`) | Writes build-in-public drafts in the drafts folder of `project.md` from a roadmap item, a story, or a topic, with SVG diagrams and copy-ready text. It does not post. `published <id> <links>` records the publication. |
 
 ## Agents
 
@@ -65,9 +72,9 @@ The agents are in `../agents/`. The workers use Sonnet at medium effort, so the 
 
 | Agent | Purpose |
 |---|---|
-| `backend-dev` | Code and JUnit unit tests for one backend module. Starts no containers. |
-| `integration-tester` | Testcontainers ITs for one backend module. It must run them. |
-| `frontend-dev` | Frontend code, Vitest tests, and Playwright e2e tests. Reads `.claude/rules/frontend.md` and `DESIGN.md`. |
+| `backend-dev` | Code and unit tests for one backend module. Starts no containers. |
+| `integration-tester` | Integration tests (with containers) for one backend module. It must run them. |
+| `frontend-dev` | Frontend code, unit tests, and e2e tests. Reads the frontend rules that `project.md` names. |
 | `security-auditor` | Read-only audit of five security categories, adapted to the stack. It records the findings and the verified strengths in `findings.json`, and masks each secret. |
 | `plan-reviewer` | Read-only verification of a plan's work. It runs the named tests, marks each plan item PASS, FAIL, or UNVERIFIED with evidence, finds behaviour defects, and writes `review.md`. |
 
@@ -76,7 +83,7 @@ The agents are in `../agents/`. The workers use Sonnet at medium effort, so the 
 - A worker makes a maximum of two fix attempts, then reports to the executor.
 - A worker changes an assertion only when it does not match a BR or a scenario of the plan. The report names the BR or the scenario.
 - When the plan is wrong, the executor asks you. Then it updates `plan.md` and `checklist.md`, and logs the change under `## Changes during execution`.
-- The executor does the tasks in `docs`, `infra`, `seed`, the OpenAPI files, `CONTEXT.md`, and `.claude/rules` itself. It skips `docs/bip`: use `/build-in-public` for that content.
+- The executor does the tasks of the modules of kind `other` itself. It skips the build-in-public drafts folder: use `/build-in-public` for that content.
 - Modules run in parallel only when they do not depend on each other and their `Files` lists do not overlap.
 
 ## Files in `planner`

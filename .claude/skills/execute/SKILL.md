@@ -12,9 +12,10 @@ You are the **orchestrator**. The workers write the code and the tests. You read
 
 1. Find the plan folder. If it does not exist, stop and tell the user.
 2. Read `plan.md` and `checklist.md`. Get the branch name from the header of `plan.md`.
-3. Find the story worktree in `git worktree list`. If it does not exist, create `.claude/worktrees/<N.M>` on the branch, from `origin/main`. Run `pnpm install` in `frontend` and `seed/acme-fintech`.
-4. Do all the next steps in the worktree.
-5. **Resume.** If some lines in `checklist.md` are ticked, run the tests of the ticked tasks. If they pass, continue from the first unticked task. If they fail, go to step 4 (Failures).
+3. Read `.claude/project.md`. It gives the modules, the commands, the dev server, and the final checks. If it does not exist, stop and tell the user to run `/project-setup`.
+4. Find the story worktree in `git worktree list`. If it does not exist, create it in the "Worktrees" folder, on the branch, from `origin/main`. Run the "Setup" commands.
+5. Do all the next steps in the worktree.
+6. **Resume.** If some lines in `checklist.md` are ticked, run the tests of the ticked tasks. If they pass, continue from the first unticked task. If they fail, go to step 4 (Failures).
 
 ## 2. Plan the workers
 
@@ -33,25 +34,29 @@ Send each worker with the Agent tool and its `subagent_type`. Give the worker:
 - The worktree path, the plan path, and the task IDs of its module.
 - The test names from `checklist.md` for those tasks.
 
-| Module | Workers, in order |
+Use the "Modules" table of `.claude/project.md`:
+
+| Kind | Workers, in order |
 |---|---|
-| A backend service or a shared module | `backend-dev`, then `integration-tester` |
+| `backend` | `backend-dev`, then `integration-tester` |
 | `frontend` | `frontend-dev` |
-| `docs`, `infra`, `seed`, OpenAPI files, `CONTEXT.md`, `.claude/rules` | You do these tasks yourself |
-| `docs/bip` | Skip. Build-in-public content is not part of `/execute` |
+| `other`, and `CONTEXT.md` or `.claude/rules` files | You do these tasks yourself |
+| The "Drafts folder" of "Build in public" | Skip. Build-in-public content is not part of `/execute` |
+
+If a task module is not in the table, ask the user which kind it is.
 
 For the tasks that you do yourself:
 
 - Do them after the code tasks that they describe, so that the text matches the code.
-- Run the check that the task names. Examples: `pnpm typecheck` and `pnpm test` in `seed/acme-fintech`, `helm lint` for a chart, `sh -n` for a shell script.
-- Write a new `local-test.sh` step when the task asks for it, but do not run `local-test.sh`.
+- Run the check that the task names. Examples: a typecheck and the tests of a package, `helm lint` for a chart, `sh -n` for a shell script.
+- Obey the "Forbidden actions". Example: write a new step of a cluster test script when the task asks for it, but do not run the script when it is forbidden.
 
-Before the first `frontend-dev` that has an e2e task, start the backend:
+Before the first `frontend-dev` that has an e2e task, start the "Dev server":
 
 1. Make sure that all backend modules are complete.
-2. If a process uses port `8080`, stop and ask the user. A process on that port is the bootRun of the user.
-3. In the worktree, start `./gradlew bootRun` in the background. It uses the dev infra of Docker Compose and starts no containers.
-4. Wait until `curl -sf http://localhost:8080/actuator/health` succeeds.
+2. If a process uses the "Port", stop and ask the user. That process belongs to the user.
+3. In the worktree, run the "Start" command in the background.
+4. Wait until `curl -sf <Health URL>` succeeds.
 
 After each worker:
 
@@ -76,13 +81,9 @@ When the user decides a fix to the plan:
 
 ## 5. Final checks
 
-Run all these checks in the worktree:
+Run each command of "Final checks" in the worktree, in order.
 
-1. `./gradlew build`. This runs the unit tests and the Testcontainers ITs.
-2. In `frontend`: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`.
-3. In `frontend`: `pnpm test:e2e`. This is the full Playwright suite.
-
-Stop the `bootRun` that you started. Tick the lines under `## Verification` in `checklist.md`.
+Stop the dev server that you started. Tick the lines under `## Verification` in `checklist.md`.
 
 If a check fails, go to step 4 (Failures).
 

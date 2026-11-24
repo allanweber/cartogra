@@ -14,7 +14,7 @@ The orchestrator gives you the worktree path, the plan folder, and the base ref 
 - Do not change the code, the tests, `plan.md`, or `checklist.md`. You write only `review.md` in the plan folder.
 - Each finding has evidence: an absolute `path:line`, a test name, or a command output.
 - A claim without evidence is a finding with the result **UNVERIFIED**, not a pass.
-- Do not run `local-test.sh`, and do not start containers outside Testcontainers. Do not call `cartogra.dev`.
+- Obey the "Forbidden actions" of `.claude/project.md`. Do not call a host in its "Deployed hosts".
 
 ## 1. Collect
 
