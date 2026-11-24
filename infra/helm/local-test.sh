@@ -445,6 +445,53 @@ pass "acme load --breaking"
 acme verify --breaking --no-spans || fail "acme verify --breaking"
 pass "acme verify --breaking"
 
+step "Check 5.5 CI check"
+API_KEYS_API="$URL/api/v1/registry/api-keys"
+CHECK_API="$URL/api/v1/contracts/check"
+# The v1 spec has no history path, so it is breaking against the v3 that "acme load --breaking" published.
+ci_body=$(cd seed/acme-fintech && node --input-type=module -e "
+import { openapiSpec } from './src/repos.ts'
+import { loadSeedFile } from './src/schema.ts'
+const s = loadSeedFile('seed-data.json').services.find((x) => x.name === 'ledger-service')
+process.stdout.write(JSON.stringify({ service: 'LEDGER-SERVICE', spec: openapiSpec(s, 1) }))") || fail "build the CI check body"
+# The key expires after 1 hour, so a killed run leaves no active key.
+ci_expires=$(date -u -d '+1 hour' +%Y-%m-%dT%H:%M:%SZ) || fail "compute the key expiry"
+ci_created=$(admin -X POST -H 'Content-Type: application/json' \
+  -d "{\"name\":\"local-test-ci-$(date +%s)\",\"scopes\":[\"ci:check\"],\"expiresAt\":\"$ci_expires\"}" \
+  "$API_KEYS_API") || fail "create a ci:check key"
+ci_key_id=$(echo "$ci_created" | jq -r '.data.id // empty')
+ci_key=$(echo "$ci_created" | jq -r '.data.key // empty')
+[ -n "$ci_key_id" ] && [ -n "$ci_key" ] || fail "create response has no key"
+on_exit "admin -X DELETE '$API_KEYS_API/$ci_key_id' >/dev/null 2>&1 || true"
+# curl reads the key header from a config on stdin, so the key is not in the process arguments.
+key_curl() { printf 'header = "X-Cartogra-Api-Key: %s"\n' "$ci_key" | curl -K - "$@"; }
+admin "$API_KEYS_API?limit=200" | jq -e --arg id "$ci_key_id" \
+  'any(.data.items[]; .id == $id and .status == "active") and all(.data.items[]; has("key") | not)' >/dev/null \
+  || fail "key list has no active key, or shows a secret"
+pass "admin created a ci:check key; the list shows no secret"
+
+jwt_status=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer $token" \
+  -H 'Content-Type: application/json' -d "$ci_body" "$CHECK_API")
+[ "$jwt_status" = 403 ] || fail "JWT-only check returned $jwt_status"
+pass "JWT-only check 403"
+
+off_status=$(key_curl -s -o /dev/null -w '%{http_code}' "$SERVICES_API")
+[ "$off_status" = 401 ] || fail "key on GET services returned $off_status"
+pass "key ignored off the allowlist (401)"
+
+key_curl -fsS -X POST -H 'Content-Type: application/json' -d "$ci_body" "$CHECK_API" \
+  | jq -e '.data.isBreaking == true
+      and any(.data.changes[]; .rule == "path-removed" and .path == "/ledgers/{id}/history")
+      and (.data.affectedConsumers | length) == 12' >/dev/null \
+  || fail "CI check is not breaking with path-removed and 12 consumers"
+pass "CI check by name is breaking with 12 affected consumers"
+
+admin -X DELETE "$API_KEYS_API/$ci_key_id" >/dev/null || fail "revoke the key"
+revoked_status=$(key_curl -s -o /dev/null -w '%{http_code}' -X POST \
+  -H 'Content-Type: application/json' -d "$ci_body" "$CHECK_API")
+[ "$revoked_status" = 401 ] || fail "revoked key check returned $revoked_status"
+pass "revoked key 401 on the next check"
+
 step "Check team save, team-member access check and drift accept"
 TEAMS_API="$URL/api/v1/registry/teams"
 TOPOLOGY_API="$URL/api/v1/topology"
