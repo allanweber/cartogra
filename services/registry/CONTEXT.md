@@ -32,6 +32,8 @@ The Registry is Cartogra's source of truth for the service estate. It owns every
 | **Team management** | Mutating a Team's own state: rename, delete, add/remove members. Gated to ADMIN or an existing member of that Team; creating a new Team is ADMIN-only (a new Team has no members yet). Distinct from editing the Services a Team owns |
 | **Audit Event** | An immutable record that something changed in a Tenant: what (entity type + id), which action, who (the Actor), when, and the details. Covers changes from every context, not just the Service Catalog. Shown to users as the Timeline and as recent activity |
 | **Actor** | Who caused an Audit Event: a `user` (a human User) or `system` (discovery, sync, observed traffic, drift detection — no User behind it) |
+| **API Key** | A named, tenant-scoped secret for machine callers (CI). Stored only as a hash with a display prefix; the full key is shown once at creation. **Active** until it is revoked or its optional expiry passes; then **Revoked** or **Expired**, and it never authenticates again |
+| **Key Scope** | One permission an API Key carries, for example `ci:check`. A key reaches only the endpoints that its scopes allow |
 
 ---
 
