@@ -13,7 +13,7 @@
 | **Service Catalog** | `services/registry` | Live (Phase 0/1) |
 | **Ingestion** | `services/ingestion` | Live (Phase 0/1) |
 | **Topology** | `services/topology` | Live (Phase 1 complete — backfill, dependency CRUD, graph read; Phase 2 mostly complete — blast radius [2.1], impact panel [2.2], cycles [2.3], SPOFs [2.4], risks [2.5] shipped; performance evidence [2.6] in progress) |
-| **Contract** | `services/contract` | Live (Phase 5 — contract store [5.1], diff + timeline [5.2], breaking-change engine [5.3], consumers from the graph [5.4], spec discovery [5.8]) |
+| **Contract** | `services/contract` | Live (Phase 5 — contract store [5.1], diff + timeline [5.2], breaking-change engine [5.3], consumers from the graph [5.4], CI check [5.5], spec discovery [5.8]) |
 | **Intelligence** | `services/intelligence` | Empty directory (Phase 6) |
 | **Frontend Shell** | `frontend/` | Partial (Phase 1) |
 | **Shared Kernel** | `shared/common` | Live |
@@ -81,7 +81,7 @@
 |---|---|---|---|
 | Identity & Access | Service Catalog | **Open Host Service / Conformist** | Declarative reverse proxy (Spring Cloud Gateway route, circuit-breaker guarded); Gateway forwards `X-Tenant-Id` derived from JWT |
 | Identity & Access | Topology | Open Host Service / Conformist | Declarative reverse proxy (`gateway/application.yml`, `Path=/api/v1/topology/**`); backfill, dependency CRUD, graph read, blast radius, cycles, SPOFs, and risks are all live behind it — [1.1]–[1.6], [2.1]–[2.5] |
-| Identity & Access | Contract | Open Host Service / Conformist | Declarative reverse proxy (`gateway/application.yml`, `Path=/api/v1/contracts/**`, breaker `contract`) — [5.1] |
+| Identity & Access | Contract | Open Host Service / Conformist | Declarative reverse proxy (`gateway/application.yml`, `Path=/api/v1/contracts/**`, breaker `contract`) — [5.1]. Live (5.5): an API key with scope `ci:check` (`X-Cartogra-Api-Key`) authenticates only `POST /api/v1/contracts/check`; the gateway finds the key in the registry `api_keys` table and sends role `CI_CHECK` in the internal token |
 | Identity & Access | Intelligence | Open Host Service / Conformist | Declarative reverse proxy (Phase 6 — route not yet created) |
 | Service Catalog (U) | Topology (D) | **Customer / Supplier** | Live: Kafka `cartogra.registry.service.changed` (`event_type` `service.{registered,updated,deleted}`), consumed by `GraphNodeEventConsumer` to project `graph_nodes` (including `team_id`/`tier`, used for orphan risk and SPOF scoring — ADR-0028). No separate `ownership-changed` topic exists or is needed (ADR-0028 supersedes ADR-0027's plan to add one) |
 | Service Catalog (U) | Contract (D) | Customer / Supplier | Live: Kafka `cartogra.registry.service.changed`, consumed by `ServiceEventConsumer`: names and `externalId` from `service.registered`/`updated` (which also apply PENDING discovered specs), and `service.deleted` (soft-deletes the contract, tombstones the service) |

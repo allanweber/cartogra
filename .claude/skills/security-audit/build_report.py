@@ -147,7 +147,7 @@ def build_html(data):
 body {{ font: 10.5pt/1.45 "Inter", "Helvetica Neue", Arial, sans-serif; color: #0f172a; }}
 h1 {{ font-size: 26pt; margin: 0 0 6mm; }} h2 {{ font-size: 16pt; border-bottom: 2px solid #e2e8f0;
   padding-bottom: 2mm; margin-top: 0; }} h3 {{ font-size: 12pt; margin: 6mm 0 2mm; }}
-.cover {{ height: 240mm; display: flex; flex-direction: column; justify-content: center; }}
+.cover {{ min-height: 240mm; display: flex; flex-direction: column; justify-content: center; }}
 .meta td {{ padding: 1mm 4mm 1mm 0; vertical-align: top; }}
 section {{ break-before: page; }}
 table {{ width: 100%; border-collapse: collapse; }} th, td {{ text-align: left; vertical-align: top;

@@ -44,4 +44,21 @@ class RowLevelSecurityIT extends AbstractContractIT {
                 VALUES (?, gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), 'declared', 'http')
                 """);
     }
+
+    @Test
+    void contractChecksIsolatesTenants() {
+        RlsChecks.assertIsolatesTenants(jdbc, "contract_checks", """
+                WITH t AS (SELECT ?::uuid AS tenant_id),
+                c AS (INSERT INTO api_contracts (tenant_id, service_id)
+                      SELECT tenant_id, gen_random_uuid() FROM t RETURNING id, tenant_id),
+                v AS (INSERT INTO contract_versions (tenant_id, contract_id, version_number, spec_raw, spec_canonical,
+                                                     spec_hash)
+                      SELECT tenant_id, id, 1, '{}', '{}', repeat('a', 64) FROM c RETURNING id, tenant_id, contract_id)
+                INSERT INTO contract_checks (tenant_id, service_id, contract_id, baseline_version_id, candidate_hash,
+                                             is_breaking, changes, affected_consumer_ids, api_key_id)
+                SELECT tenant_id, gen_random_uuid(), contract_id, id, repeat('a', 64), false, '[]'::jsonb,
+                       '{}'::uuid[], gen_random_uuid()
+                FROM v
+                """);
+    }
 }

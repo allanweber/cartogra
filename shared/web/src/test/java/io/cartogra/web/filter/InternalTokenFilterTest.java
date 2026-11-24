@@ -80,6 +80,23 @@ class InternalTokenFilterTest {
     }
 
     @Test
+    void apiKeySubjectBecomesApiKeyActor() throws Exception {
+        UUID keyId = UUID.randomUUID();
+        String token = InternalTokens.codec(Clock.systemUTC())
+                .sign(new InternalClaims(TENANT, "apikey:" + keyId, List.of("CI_CHECK")), AUDIENCE);
+        when(request.getHeader(InternalTokens.HEADER)).thenReturn(token);
+
+        filter.doFilter(request, response, chain);
+
+        var auth = (UsernamePasswordAuthenticationToken) SecurityContextHolder.getContext().getAuthentication();
+        assertThat(auth.getPrincipal()).isEqualTo(Actor.apiKey(keyId));
+        assertThat(((Actor) auth.getPrincipal()).userId()).isNull();
+        assertThat(((Actor) auth.getPrincipal()).admin()).isFalse();
+        assertThat(auth.getAuthorities()).containsExactly(new SimpleGrantedAuthority("ROLE_CI_CHECK"));
+        verify(chain).doFilter(request, response);
+    }
+
+    @Test
     void missingTokenContinuesUnauthenticated() throws Exception {
         when(request.getHeader("X-User-Roles")).thenReturn("ADMIN");
 

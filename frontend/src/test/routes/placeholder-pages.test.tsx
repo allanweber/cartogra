@@ -1,6 +1,5 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { Route as ApiKeys } from '#/routes/_authenticated/settings.api-keys'
 import { Route as Intelligence } from '#/routes/_authenticated/intelligence'
 import { Route as Notifications } from '#/routes/_authenticated/settings.notifications'
 import { Route as Operations } from '#/routes/_authenticated/ops'
@@ -18,7 +17,6 @@ describe('placeholder pages', () => {
   it.each([
     ['Intelligence', Intelligence],
     ['Operations', Operations],
-    ['API keys', ApiKeys],
     ['Notifications', Notifications],
   ])('%s declares itself a placeholder', (_, route) => {
     const Page = (route as unknown as { component: React.ComponentType }).component

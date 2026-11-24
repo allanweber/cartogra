@@ -32,6 +32,8 @@ The Registry is Cartogra's source of truth for the service estate. It owns every
 | **Team management** | Mutating a Team's own state: rename, delete, add/remove members. Gated to ADMIN or an existing member of that Team; creating a new Team is ADMIN-only (a new Team has no members yet). Distinct from editing the Services a Team owns |
 | **Audit Event** | An immutable record that something changed in a Tenant: what (entity type + id), which action, who (the Actor), when, and the details. Covers changes from every context, not just the Service Catalog. Shown to users as the Timeline and as recent activity |
 | **Actor** | Who caused an Audit Event: a `user` (a human User) or `system` (discovery, sync, observed traffic, drift detection — no User behind it) |
+| **API Key** | A named, tenant-scoped secret for machine callers (CI). Stored only as a hash with a display prefix; the full key is shown once at creation. **Active** until it is revoked or its optional expiry passes; then **Revoked** or **Expired**, and it never authenticates again |
+| **Key Scope** | One permission an API Key carries, for example `ci:check`. A key reaches only the endpoints that its scopes allow |
 
 ---
 
@@ -63,6 +65,7 @@ Service ──> Team               (team_id FK, nullable — orphan when NULL)
 |---|---|---|
 | `Service` | `Service` record | `services` |
 | `Team` | `Team` record; `TeamMember` is a child entity saved through the `Team` root | `teams`, `team_members` |
+| `ApiKey` | `ApiKey` record (5.5); `ApiKeyScope`, `ApiKeyStatus`; status derived from `revoked_at` / `expires_at` | `api_keys` |
 
 **Authorization model**: service edit (`PUT /services/{id}`) and team management (rename/delete/add-member/remove-member) are both checked live against `team_members` on each request — ADMIN always passes; otherwise the requester must be a member of the Team in question. Orphan services (`team_id IS NULL`) have no owning Team, so only ADMIN can edit them. No role is baked into the JWT for this (see ADR-0025, supersedes ADR-0022).
 
@@ -83,6 +86,7 @@ No `*UseCase`/`*UseCaseImpl` layer — one `@Service` class per domain concept i
 | `ServiceService` | `create`, `update`, `delete`, `get`, `list`, `detectOrphans`, `assignOwner`, `history`, `historyAt`, `listTechStacks`, `countByConnectionId`, `upsertDiscovered`, `resolveOwnership` | Every mutating method saves a history snapshot and publishes the matching lifecycle event (`create`/`update`/`delete` directly; `upsertDiscovered` publishes `registered` on first insert, `updated` on a changed re-sync, nothing when the diff is a no-op; `resolveOwnership` publishes transitively via `assignOwner`) — this is what lets Topology's `GraphNodeEventConsumer` project discovered services into `graph_nodes`, not just manually-created ones. `upsertDiscovered`/`resolveOwnership` are invoked from the Kafka consumers below, not from HTTP |
 | `TeamService` | `create`, `update`, `delete`, `get`, `list`, `addMember`, `removeMember`, `listMembers`, `myTeamIds` | `create`/`update`/`delete` publish `team.created`/`updated`/`deleted` |
 | `ServiceHealthService` | health probing | Backs `HealthProbeScheduler` |
+| `ApiKeyService` | `create`, `list`, `revoke` (5.5) | ADMIN only for `create`/`revoke`. `create` makes `cgk_` + 32 random bytes (base64url), stores the SHA-256 hex and the prefix, and counts active keys against `max_api_keys` under an advisory lock (402 `PLAN_LIMIT_EXCEEDED`). `create` and the first `revoke` write an `api_key` audit event (hidden from guests, no key or hash); a second revoke is a no-op |
 | `PlanLimitService` | plan-limit checks | Backs `/internal/plan-limits`; advisory-lock guarded against TOCTOU |
 
 ---
@@ -109,6 +113,7 @@ The service's own `server.servlet.context-path` is `/api/v1/registry` — paths 
 | POST/GET/GET·`/mine`/GET·`{id}`/PUT·`{id}`/DELETE·`{id}` | `/teams` | Team CRUD — `TeamService` |
 | PUT | `/teams/{id}` | `TeamService.update` — saves the whole team in one request: `{name, serviceIds, memberIds}`, all required; the lists are the full desired sets. Ownership goes through `ServiceService.setTeamServices`. A fixed number of queries, whatever the number of changes |
 | GET/POST·`/members`/DELETE·`/members/{memberUserId}` | `/teams/{id}/members` | Team membership — `TeamService` |
+| GET/POST·`/api-keys`/DELETE·`/api-keys/{id}` | `/api-keys` | `ApiKeyService` (5.5) — list (all roles, `PageResult`, no key or hash), create (ADMIN, 201 with the key one time), revoke (ADMIN, 204, idempotent; unknown or other-tenant key → 404 `API_KEY_NOT_FOUND`) |
 | GET | `/internal/plan-limits/{tenantId}` | `PlanLimitInternalController` → `PlanLimitService` |
 | POST | `/internal/services/access` | `ServiceAccessInternalController` → `ServiceService.checkAccess` (one query) — body `{tenantId, userId, serviceIds[]}` (max 100 ids), returns `{serviceId: boolean}` per id. Tenant-scoped — unknown/cross-tenant/orphan-team resolves to `false`, never an error. Backs Topology's declared-dependency authorization check (Topology issue [1.2]) |
 | POST | `/internal/services/names` | `ServiceNamesInternalController` → `ServiceService.findNames` — body `{tenantId, serviceIds[]}` (1–100), returns `{serviceId: name}` from one query. Tenant-scoped; unknown/deleted/cross-tenant ids are left out. Backs Contract's name lookup for services it has no name for (5.2) |
@@ -149,7 +154,7 @@ SCM Connection created/synced there. See `docs/architecture/kafka-topics.md`.
 
 ---
 
-## Database (Flyway V001–V017)
+## Database (Flyway V001–V020)
 
 | Version | Description |
 |---|---|
@@ -168,6 +173,7 @@ SCM Connection created/synced there. See `docs/architecture/kafka-topics.md`.
 | V015 | Add `disabled_at` to `users` |
 | V016 | Rotate refresh tokens in place |
 | V017 | `audit_events` table — append-only audit trail for every service (ADR-0017); also written by Gateway |
+| V020 | `api_keys` table (5.5) — RLS `ENABLE` + `FORCE` + `tenant_isolation`; the gateway reads it by `key_hash` and writes `last_used_at` |
 
 V004 and V007 are gaps in the sequence — no migration with those numbers exists in this service (nothing to restore; Flyway only requires versions to be increasing, not contiguous). Neither `scm_connections` nor `scm_webhooks` live here — both moved to `services/ingestion`.
 

@@ -28,7 +28,8 @@ public enum AuditKind {
     SPEC_PATHS("spec_paths", Set.of()),
     USER("user", Set.of()),
     INVITATION("invitation", Set.of()),
-    OIDC_CONFIG("oidc_config", Set.of());
+    OIDC_CONFIG("oidc_config", Set.of()),
+    API_KEY("api_key", Set.of());
 
     private static final String CHANGES = "changes";
 

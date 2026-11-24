@@ -1,12 +1,12 @@
 openapi: "3.1.0"
 info:
   title: Cartogra Contract API
-  version: "0.4.0"
+  version: "0.5.0"
   description: |
     Store each service's OpenAPI contract and its immutable versions (roadmap 5.1); list contracts, their
     version timeline and a structured diff of each version against the previous one (5.2); classify each
     version as breaking or compatible against the previous one, and filter the list by that verdict (5.3).
-    The CI check (5.5) is not built yet.
+    CI sends a candidate spec to `POST /contracts/check` with a tenant API key (5.5).
 
     **Authentication:** JWT cookie or Bearer token (Gateway-issued). Gateway injects `X-Tenant-Id`.
     Writes need ADMIN or MEMBER; GUEST and VIEWER get 403.
@@ -30,6 +30,8 @@ servers:
 tags:
   - name: contracts
     description: API contracts and their versions
+  - name: ci
+    description: CI check of a candidate spec — API key only
 
 paths:
   /contracts:
@@ -284,6 +286,64 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /contracts/check:
+    post:
+      summary: Check a candidate spec against the baseline (CI)
+      description: |
+        Compares the candidate with the Baseline (the latest stored version) with the breaking-change engine.
+        `service` is the service id (UUID) or its name (not case-sensitive), in the tenant of the key only.
+        `affectedConsumers` lists all the consumers of the service when `isBreaking` is true, and is empty
+        when it is false. A completed check writes one `contract_checks` row. It never creates a version,
+        an audit event or a Kafka event. A failed check (400, 404, 409, 422) writes no row.
+
+        **Authentication:** only `X-Cartogra-Api-Key` with the scope `ci:check`. The gateway gives 401 with
+        no key or an unknown, revoked or expired key, and 403 with a JWT only or a key without the scope.
+        Each key has its own rate-limit bucket.
+      operationId: checkContract
+      tags: [ci]
+      security:
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContractCheckRequest"
+      responses:
+        "200":
+          description: Check result
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContractCheckEnvelope"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: "`SERVICE_NOT_FOUND` (unknown, deleted or other-tenant service) or `BASELINE_NOT_FOUND` (no contract or no version)"
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: "`SERVICE_AMBIGUOUS` — more than one live service has this name; send the id"
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "422":
+          $ref: "#/components/responses/InvalidSpec"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -294,6 +354,11 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Cartogra-Api-Key
+      description: Tenant API key with the scope `ci:check`; accepted only on `POST /contracts/check`
 
   headers:
     XTraceId:
@@ -648,6 +713,47 @@ components:
             $ref: "#/components/schemas/DiffLine"
         compatibility:
           $ref: "#/components/schemas/Compatibility"
+
+    ContractCheckRequest:
+      type: object
+      required: [service, spec]
+      properties:
+        service:
+          type: string
+          description: Service id (UUID) or service name (not case-sensitive)
+          example: ledger-service
+        spec:
+          type: string
+          description: Candidate OpenAPI 3.x spec, YAML or JSON
+
+    ContractCheck:
+      type: object
+      required: [isBreaking, baselineVersion, changes, affectedConsumers]
+      properties:
+        isBreaking:
+          type: boolean
+        baselineVersion:
+          type: integer
+          description: Version number of the Baseline
+        changes:
+          type: array
+          description: The rule hits of the engine; also lists compatible changes
+          items:
+            $ref: "#/components/schemas/CompatibilityChange"
+        affectedConsumers:
+          type: array
+          description: All consumers (at most 500) when `isBreaking` is true; else empty
+          items:
+            $ref: "#/components/schemas/Consumer"
+
+    ContractCheckEnvelope:
+      type: object
+      required: [data, traceId]
+      properties:
+        data:
+          $ref: "#/components/schemas/ContractCheck"
+        traceId:
+          $ref: "#/components/schemas/TraceId"
 
     VersionDiffEnvelope:
       type: object

@@ -47,4 +47,11 @@ class AuditKindTest {
     void hiddenKindGivesGuestsAnEmptyPayload() {
         assertThat(AuditKind.USER.guestPayload(Map.of("email", "a@x", "role", "ADMIN"))).isEmpty();
     }
+
+    @Test
+    void apiKeyIsHiddenFromGuests() {
+        assertThat(AuditKind.guestVisibleEntityTypes()).doesNotContain("api_key");
+        assertThat(AuditKind.fromEntityType("api_key")).contains(AuditKind.API_KEY);
+        assertThat(AuditKind.API_KEY.guestPayload(Map.of("name", "ci", "prefix", "cgk_ab"))).isEmpty();
+    }
 }

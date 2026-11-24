@@ -74,4 +74,17 @@ class WriteAuthorizationIT extends AbstractContractIT {
             .andReturn().getResponse().getStatus();
         assertThat(status).isEqualTo(401);
     }
+
+    @Test
+    void adminJwtRoleCannotCallCheck() throws Exception {
+        MockMvc mvc = webAppContextSetup(context).apply(springSecurity()).build();
+        UUID tenant = UUID.randomUUID();
+        int status = mvc.perform(request(HttpMethod.POST, "/check")
+                .header("X-Tenant-Id", tenant.toString())
+                .header(InternalTokens.HEADER, InternalTokens.token("contract", tenant, UUID.randomUUID(), "ADMIN"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"service\":\"billing\",\"spec\":\"openapi: 3.0.3\"}"))
+            .andReturn().getResponse().getStatus();
+        assertThat(status).isEqualTo(403);
+    }
 }

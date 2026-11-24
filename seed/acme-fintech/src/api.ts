@@ -112,6 +112,25 @@ export interface Compatibility {
   changes: CompatibilityChange[]
 }
 
+/** A tenant API key. `key` is set only in the create response (story 5.5). */
+export interface ApiKey {
+  id: string
+  name: string
+  prefix: string
+  scopes: string[]
+  status: 'active' | 'expired' | 'revoked'
+  expiresAt?: string | null
+  key?: string
+}
+
+/** Result of `POST /api/v1/contracts/check`: the candidate compared with the baseline (story 5.5). */
+export interface ContractCheck {
+  isBreaking: boolean
+  baselineVersion: number
+  changes: CompatibilityChange[]
+  affectedConsumers: ContractConsumer[]
+}
+
 export interface VersionDiff {
   from: ContractVersion | null
   to: ContractVersion
@@ -165,6 +184,11 @@ export interface CartograApi {
   contractDiff(contractId: string, versionNumber: number): Promise<VersionDiff>
   listContractVersions(contractId: string): Promise<ContractVersion[]>
   contractConsumers(contractId: string): Promise<ContractConsumer[]>
+  /** `expiresAt` is an ISO instant; without it the key does not expire. */
+  createApiKey(name: string, scopes: string[], expiresAt?: string): Promise<ApiKey>
+  revokeApiKey(id: string): Promise<void>
+  /** Sends the API key in `X-Cartogra-Api-Key` and no JWT, as a CI pipeline does. `service` is an id or a name. */
+  checkContract(apiKey: string, service: string, spec: string): Promise<ContractCheck>
 }
 
 export interface Cluster {
@@ -318,6 +342,18 @@ export class HttpCartograApi implements CartograApi, ConnectionsApi {
     return this.listAll<ContractConsumer>(`/api/v1/contracts/${contractId}/consumers`)
   }
 
+  createApiKey(name: string, scopes: string[], expiresAt?: string): Promise<ApiKey> {
+    return this.request<ApiKey>('POST', '/api/v1/registry/api-keys', { name, scopes, ...(expiresAt ? { expiresAt } : {}) })
+  }
+
+  async revokeApiKey(id: string): Promise<void> {
+    await this.request('DELETE', `/api/v1/registry/api-keys/${id}`)
+  }
+
+  async checkContract(apiKey: string, service: string, spec: string): Promise<ContractCheck> {
+    return (await this.send<ContractCheck>('POST', '/api/v1/contracts/check', { service, spec }, apiKey)).data
+  }
+
   listClusters(): Promise<Cluster[]> {
     return this.listAll<Cluster>('/api/v1/ingestion/k8s/clusters')
   }
@@ -363,12 +399,16 @@ export class HttpCartograApi implements CartograApi, ConnectionsApi {
     return (await this.send<T>(method, path, body)).data
   }
 
-  private async send<T>(method: string, path: string, body?: unknown): Promise<{ data: T; status: number }> {
+  /** With `apiKey`, the request carries the key and no JWT. */
+  private async send<T>(method: string, path: string, body?: unknown, apiKey?: string): Promise<{ data: T; status: number }> {
+    const auth: Record<string, string> = apiKey
+      ? { 'X-Cartogra-Api-Key': apiKey }
+      : this.token ? { Authorization: `Bearer ${this.token}` } : {}
     const response = await fetch(`${this.baseUrl}${path}`, {
       method,
       headers: {
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+        ...auth,
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     })

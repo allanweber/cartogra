@@ -1,6 +1,6 @@
 # Contract Context
 
-**Service**: `services/contract` · Port `8083` · Context path `/api/v1/contracts` · Phase 5 · **Live: contract store (5.1), diff + timeline (5.2), breaking-change engine (5.3), consumers (5.4), spec discovery (5.8)**; CI checks, alerts planned
+**Service**: `services/contract` · Port `8083` · Context path `/api/v1/contracts` · Phase 5 · **Live: contract store (5.1), diff + timeline (5.2), breaking-change engine (5.3), consumers (5.4), CI check (5.5), spec discovery (5.8)**; alerts planned
 
 ---
 
@@ -27,7 +27,8 @@ The Contract context is Cartogra's API compatibility guardian. It stores the Ope
 | **Baseline** | The latest stored Contract Version of a Service; what a candidate spec is checked against |
 | **Consumer** | A Service with a live inbound declared or observed `http` or `grpc` edge to the contract's Service; derived from the Topology graph, never registered by hand. Deleted services and self edges are not consumers |
 | **Producer** | The Service that owns and publishes the API Contract |
-| **Contract Check** | A compatibility analysis comparing a candidate spec against the Baseline; result: `breaking` or `compatible` |
+| **Contract Check** | A compatibility analysis of a **Candidate Spec** against the Baseline, sent by CI with an API Key; result: `breaking` or `compatible`. It records one `contract_checks` row and never creates a Contract Version |
+| **Candidate Spec** | The spec a Contract Check compares with the Baseline: a proposed change, not yet a Contract Version. Only its hash is stored |
 | **Breaking Change** | A direction-aware contract mutation that would break a Consumer (removed path or operation, removed response field, type change, new required request field or parameter, enum value removed from a request or added to a response) |
 | **Change** | One classified difference found during a Contract Check |
 | **Affected Consumers** | The Consumers named by a breaking Contract Check |
@@ -63,7 +64,7 @@ All cross-context Service references stored as UUIDs only.
 | `contract_versions` | Live (5.1) | Immutable revisions; a spec hashing the same as the latest stores nothing. `is_breaking` (5.3, V004): the engine verdict against the previous latest version, set at publish in the same transaction; v1 is `false`; NULL = Unchecked (no backfill). The classified changes are not stored. `source` `manual`/`discovery` and `discovered_spec_id` (5.8, V005) |
 | `discovered_specs` | Live (5.8) | Discovered specs; `is_latest` marks the last spec seen for each `(tenant_id, repository_full_name, file_path)`; keeps the raw spec so a PENDING row can be applied later; `status`, `service_id`, `contract_version_id`, `errors` JSONB |
 | `services` | Live (5.2) | Projection of Registry services: name for the contract list (from `service.registered`/`updated`; a service with no name yet is looked up once via Registry `POST /internal/services/names` and stored), `deleted_at` tombstone from `service.deleted` (replaced 5.1's `deleted_services`). `external_id` (5.8, SCM repository full path, unique per live service) from `service.registered`/`updated` or a Registry `GET /internal/services/by-external-id` lookup |
-| `contract_checks` | Planned (5.5) | Check result per candidate vs. baseline; `is_breaking` + `changes` JSONB |
+| `contract_checks` | Live (5.5, V007) | One row per completed CI check: service, contract, `baseline_version_id`, `candidate_hash`, `is_breaking`, `changes` JSONB, `affected_consumer_ids`, `api_key_id`. A failed check writes no row. V007 also indexes `services (tenant_id, lower(name))` for the check by name |
 | `inbound_edges` | Live (5.4) | Topology edges projected from `dependency.changed`, PK `(tenant_id, edge_id)`; all protocols stored. `removed_at` is final, so a replayed or late event cannot bring a removed edge back |
 | `notification_rules` | Planned (5.7) | Per-tenant Slack delivery rules |
 | `notification_log` | Planned (5.7) | Every delivery attempt, with retry/backoff outcome |
@@ -83,7 +84,7 @@ Contract: `docs/api/contract.openapi.yaml`. Writes need ADMIN or MEMBER (`@PreAu
 | GET | `/api/v1/contracts/{id}/versions?limit&offset` | Live (5.2) | Versions newest first (no spec text). Each version has `source`, and `repositoryFullName` + `filePath` for a discovered one (5.8) |
 | GET | `/api/v1/contracts/{id}/versions/{v}/diff` | Live (5.2; `compatibility` 5.3) | `{from, to, changes[], lines[], compatibility}` against version v-1; v1 → `from: null`, all lines added. `compatibility: {isBreaking, changes[{rule, breaking, direction, method, path, location, message}]}` |
 | GET | `/api/v1/contracts/{id}/consumers?limit&offset` | Live (5.4) | `PageResult` of Consumers `{serviceId, serviceName, dependencyTypes[], protocols[]}`, one row per service, sorted by name; unknown names fetched from Registry in one call; 404 when the contract is not live |
-| POST | `/api/v1/contracts/check` | Planned (5.5) | CI check: `{service, spec}` → `{is_breaking, changes[], affected_consumers[]}`; API key scope `ci:check`; never creates a version |
+| POST | `/api/v1/contracts/check` | Live (5.5) | CI check: `{service, spec}` → `{isBreaking, baselineVersion, changes[], affectedConsumers[]}`; `service` is an id or a name (not case-sensitive); role `CI_CHECK` only (an API key with scope `ci:check`; a JWT gets 403). All consumers when breaking (at most 500), else none. Unknown/deleted/other-tenant service → 404 `SERVICE_NOT_FOUND`; 2+ live name matches → 409 `SERVICE_AMBIGUOUS`; no contract or version → 404 `BASELINE_NOT_FOUND`; bad spec → 422. Never creates a version, audit or Kafka event |
 
 Spec rules: OpenAPI 3.0/3.1, YAML or JSON, ≤ 1 MiB (blank or larger → 400 `VALIDATION_ERROR`). Not YAML/JSON, Swagger 2.0, AsyncAPI, or any swagger-parser validation message → 422 `INVALID_SPEC` with up to 50 `details.messages`. `$ref`s are never resolved, so parsing never fetches a URL.
 

@@ -1,10 +1,11 @@
 ---
 name: execute
 description: Implement a plan folder from the planner with module workers, run the unit, integration, and e2e tests, then wait for the user to say "commit".
-disable-model-invocation: true
 ---
 
 Argument: the plan number, for example `/execute 034`. The plan is `plans/034-<slug>/plan.md` with `checklist.md` beside it.
+
+The caller can say that this run is a **fix round**, for example `ship` in its round 2. A fix round runs only the checks of the modules that its tasks change (see step 5).
 
 You are the **orchestrator**. The workers write the code and the tests. You read the plan, send the work, judge the results, and talk to the user. Keep the code out of your context: read the worker reports, not the full diffs.
 
@@ -82,6 +83,14 @@ When the user decides a fix to the plan:
 ## 5. Final checks
 
 Run each command of "Final checks" in the worktree, in order.
+
+In a fix round, run only the checks of the modules that the fix tasks change:
+
+- A backend module: the tests of that module only, for example `./gradlew :services:gateway:build`.
+- The frontend: lint, typecheck, and the unit tests. Run the e2e specs only when a fix task changes an e2e spec or a page that a spec opens.
+- A different module: the check that its task names.
+
+Tell the caller that the full checks did not run. The caller runs them one time before the commit.
 
 Stop the dev server that you started. Tick the lines under `## Verification` in `checklist.md`.
 

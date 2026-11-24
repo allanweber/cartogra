@@ -45,6 +45,15 @@ describe('audit-format', () => {
     expect(contract('deleted', { serviceId: 's' })).toBe('Contract deleted')
   })
 
+  it('formats api_key events', () => {
+    const apiKey = (action: string) =>
+      event({ entityType: 'api_key', action, payload: { name: 'github-ci' } })
+    expect(auditMessage(apiKey('created'))).toBe('API key created')
+    expect(auditMessage(apiKey('revoked'))).toBe('API key revoked')
+    expect(auditSubject(apiKey('created'))).toBe('github-ci')
+    expect(auditCategory('api_key')).toBe('access')
+  })
+
   it('shows system, the actor name, or a short user id', () => {
     expect(auditActor(event({ actorKind: 'system', actorId: null, actorName: null }))).toBe('system')
     expect(auditActor(event())).toBe('Alice')

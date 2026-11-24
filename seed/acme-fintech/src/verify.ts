@@ -65,6 +65,7 @@ export async function verify(api: CartograApi, seed: SeedData, options: VerifyOp
   await verifyContracts(api, seed, second, add, options.breaking ?? false)
   await verifySpecDiscovery(api, seed, options, sleep, add)
   await verifyConsumers(api, seed, second, add, options.consumersTimeoutMs ?? 60_000, sleep)
+  await verifyCiCheck(api, seed, add)
 
   const graph = await api.graph()
   const nodeId = new Map(graph.nodes.map((n) => [n.name, n.serviceId]))
@@ -245,6 +246,58 @@ async function verifyConsumers(
     const extra = [...(await listed())].filter((name) => !expected.includes(name))
     add(`${s.name} contract lists ${expected.length} consumers`, missing.length === 0 && extra.length === 0,
       [...missing.map((n) => `missing ${n}`), ...extra.map((n) => `extra ${n}`)].join(', '))
+  }
+}
+
+/** Service of the CI check (story 5.5): the seed service with the most consumers and a v2 contract. */
+export const CI_CHECK_SERVICE = 'ledger-service'
+const CI_KEY_TTL_MS = 60 * 60 * 1000
+
+/**
+ * CI check (5.5): a temporary `ci:check` key posts the v1 spec of ledger-service by name. v1 has no history path,
+ * so the check is breaking against the baseline v2 and also against the breaking v3 of `load --breaking`.
+ * The key is revoked in each case.
+ */
+async function verifyCiCheck(
+  api: CartograApi,
+  seed: SeedData,
+  add: (name: string, ok: boolean, detail?: string) => void,
+): Promise<void> {
+  const s = seed.services.find((x) => x.name === CI_CHECK_SERVICE)
+  if (!s || (s.contractVersions ?? 0) < 2) {
+    add(`CI check of ${CI_CHECK_SERVICE}`, false, 'the seed has no v2 contract for this service')
+    return
+  }
+  const expected = [...new Set(declaredCalls(seed)
+    .filter((c) => c.to === s.name && callProtocol(c) === 'HTTP')
+    .map((c) => c.from))].sort()
+  const history = historyPath(s)
+  let key: Awaited<ReturnType<CartograApi['createApiKey']>>
+  try {
+    // The key expires after 1 hour, so a killed run leaves no active key.
+    key = await api.createApiKey(`acme-verify-${Date.now()}`, ['ci:check'],
+      new Date(Date.now() + CI_KEY_TTL_MS).toISOString())
+  } catch (e) {
+    add('CI check key created', false, String(e))
+    return
+  }
+  try {
+    const result = await api.checkContract(key.key ?? '', s.name.toUpperCase(), openapiSpec(s, 1))
+    const consumers = result.affectedConsumers.map((c) => c.serviceName ?? c.serviceId).sort()
+    add(`CI check of ${s.name} is breaking (path-removed ${history})`,
+      result.isBreaking && result.changes.some((c) => c.rule === 'path-removed' && c.path === history),
+      `breaking ${result.isBreaking}, rules: ${result.changes.map((c) => `${c.rule} ${c.path}`).join(', ')}`)
+    add(`CI check of ${s.name} lists ${expected.length} affected consumers`,
+      JSON.stringify(consumers) === JSON.stringify(expected), `got ${consumers.join(', ')}`)
+  } catch (e) {
+    add(`CI check of ${s.name} is breaking (path-removed ${history})`, false, String(e))
+  } finally {
+    try {
+      await api.revokeApiKey(key.id)
+      add('CI check key revoked', true)
+    } catch (e) {
+      add('CI check key revoked', false, String(e))
+    }
   }
 }
 

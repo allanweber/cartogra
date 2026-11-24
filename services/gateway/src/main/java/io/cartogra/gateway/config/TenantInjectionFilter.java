@@ -1,5 +1,6 @@
 package io.cartogra.gateway.config;
 
+import io.cartogra.gateway.infrastructure.security.ApiKeyAuthentication;
 import io.cartogra.gateway.infrastructure.security.JwtAuthentication;
 import io.cartogra.web.security.InternalClaims;
 import io.cartogra.web.security.InternalTokenCodec;
@@ -33,7 +34,7 @@ import java.util.Set;
 public class TenantInjectionFilter extends OncePerRequestFilter {
 
     private static final List<String> MANAGED =
-            List.of("X-Tenant-Id", "X-User-Id", "X-User-Roles", InternalTokenCodec.HEADER);
+            List.of("X-Tenant-Id", "X-User-Id", "X-User-Roles", InternalTokenCodec.HEADER, ApiKeyAllowlist.HEADER);
 
     private static final Map<String, String> AUDIENCE_BY_PREFIX = Map.of(
             "/api/v1/registry", "registry",
@@ -51,6 +52,10 @@ public class TenantInjectionFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
         Map<String, String> headers = new HashMap<>();
+        if (SecurityContextHolder.getContext().getAuthentication() instanceof ApiKeyAuthentication keyAuth) {
+            doFilterAsApiKey(request, response, filterChain, keyAuth, headers);
+            return;
+        }
         if (!(SecurityContextHolder.getContext().getAuthentication() instanceof JwtAuthentication jwtAuth)) {
             filterChain.doFilter(new ManagedHeadersRequestWrapper(request, headers), response);
             return;
@@ -62,10 +67,27 @@ public class TenantInjectionFilter extends OncePerRequestFilter {
         audienceOf(request.getRequestURI()).ifPresent(audience -> headers.put(InternalTokenCodec.HEADER,
                 internalTokenCodec.sign(new InternalClaims(jwtAuth.getTenantId(),
                         jwtAuth.getUserId().toString(), roles), audience)));
-        var wrapped = new ManagedHeadersRequestWrapper(request, headers);
+        proceedAsTenant(new ManagedHeadersRequestWrapper(request, headers), response, filterChain,
+                jwtAuth.getTenantId());
+    }
+
+    private void doFilterAsApiKey(HttpServletRequest request, HttpServletResponse response,
+            FilterChain filterChain, ApiKeyAuthentication keyAuth, Map<String, String> headers)
+            throws ServletException, IOException {
+        headers.put("X-Tenant-Id", keyAuth.getTenantId().toString());
+        headers.put("X-User-Roles", String.join(",", keyAuth.getRoles()));
+        audienceOf(request.getRequestURI()).ifPresent(audience -> headers.put(InternalTokenCodec.HEADER,
+                internalTokenCodec.sign(new InternalClaims(keyAuth.getTenantId(), keyAuth.subject(),
+                        keyAuth.getRoles()), audience)));
+        proceedAsTenant(new ManagedHeadersRequestWrapper(request, headers), response, filterChain,
+                keyAuth.getTenantId());
+    }
+
+    private static void proceedAsTenant(HttpServletRequest request, HttpServletResponse response,
+            FilterChain filterChain, java.util.UUID tenantId) throws ServletException, IOException {
         try {
-            TenantContext.callAs(jwtAuth.getTenantId(), () -> {
-                filterChain.doFilter(wrapped, response);
+            TenantContext.callAs(tenantId, () -> {
+                filterChain.doFilter(request, response);
                 return null;
             });
         } catch (IOException | ServletException | RuntimeException e) {

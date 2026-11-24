@@ -7,13 +7,14 @@ Each service owns its schema entirely. No cross-service joins. Cross-aggregate r
 | Schema group | Phase | Status |
 |---|---|---|
 | Registry — tenants, teams, users, scm_connections | Phase 0 | Implemented |
-| Registry — services, services_history, tenant_api_keys | Phase 1 | Planned |
+| Registry — services, services_history | Phase 1 | Planned |
+| Registry — api_keys (5.5) | Phase 5 | Implemented |
 | Topology — dependencies, dependency_drifts | Phase 2 | Planned |
 | Contract — api_contracts, contract_versions, deleted_services | Phase 5 (5.1) | Implemented |
 | Contract — discovered_specs, services.external_id, contract_versions.source | Phase 5 (5.8) | Implemented |
 | Ingestion — tenant_spec_paths | Phase 5 (5.8) | Implemented |
 | Contract — inbound_edges (5.4); Topology — outbox (5.4) | Phase 5 | Implemented |
-| Contract — contract_checks (5.5) | Phase 5 | Planned |
+| Contract — contract_checks (5.5) | Phase 5 | Implemented |
 | Intelligence — nl_query_logs, health_scores | Phase 4 | Planned |
 
 ---
@@ -102,9 +103,29 @@ Append-only audit log — one row per version.
 | `changed_by` | UUID | user_id |
 | `changed_at` | TIMESTAMPTZ | |
 
-### `tenant_api_keys`
+### `api_keys` _(5.5, V020)_
+Tenant API keys for CI. RLS `ENABLE` + `FORCE` + `tenant_isolation`. The gateway reads this table directly (it shares
+the registry schema): it looks a key up by hash with the RLS bypass, because the tenant is not known before the lookup,
+and it writes only `last_used_at`.
+
 | Column | Type | Notes |
 |--------|------|-------|
+| `id` | UUID PK | `gen_random_uuid()` |
+| `tenant_id` | UUID NOT NULL | No FK, as the other registry tables |
+| `name` | TEXT NOT NULL | 1 to 100 characters; not unique |
+| `key_hash` | CHAR(64) NOT NULL UNIQUE | SHA-256 hex of the full key; the raw key is never stored |
+| `key_prefix` | TEXT NOT NULL | `cgk_` + 8 characters; display only |
+| `scopes` | TEXT[] NOT NULL | Not empty; today only `ci:check` |
+| `expires_at` | TIMESTAMPTZ | Null = no expiry |
+| `revoked_at` | TIMESTAMPTZ | Set one time by a revoke |
+| `last_used_at` | TIMESTAMPTZ | Written by the gateway, at most one time per minute |
+| `created_by` | UUID NOT NULL | FK `users(id)`; not returned by the API |
+| `created_at` / `updated_at` | TIMESTAMPTZ NOT NULL | |
+| `deleted_at` | TIMESTAMPTZ | Soft delete; not used yet |
+
+Index: `(tenant_id) WHERE revoked_at IS NULL AND deleted_at IS NULL` for the plan-limit count of active keys.
+
+--------|------|-------|
 | `id` | UUID PK | |
 | `tenant_id` | UUID NOT NULL | |
 | `key_hash` | TEXT NOT NULL | SHA-256 of raw key; raw key never stored |
@@ -244,8 +265,26 @@ Topology edges projected from `cartogra.topology.dependency.changed`. PK `(tenan
 | `updated_at` | TIMESTAMPTZ NOT NULL | |
 | `removed_at` | TIMESTAMPTZ | Final: a later event never clears it |
 
-### `contract_checks` _(planned, 5.5)_
-Written by the CI check once the 5.3 engine defines `changes[]`.
+### `contract_checks` _(5.5, V007)_
+One row for each completed CI check. A failed check writes no row. RLS `ENABLE` + `FORCE` + `tenant_isolation`.
+No retention yet. V007 also adds the index `services (tenant_id, lower(name)) WHERE deleted_at IS NULL` for the
+check by service name.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `tenant_id` | UUID NOT NULL | |
+| `service_id` | UUID NOT NULL | |
+| `contract_id` | UUID NOT NULL | FK `api_contracts(id)` |
+| `baseline_version_id` | UUID NOT NULL | FK `contract_versions(id)` |
+| `candidate_hash` | CHAR(64) NOT NULL | `spec_hash` of the canonical candidate |
+| `is_breaking` | BOOLEAN NOT NULL | |
+| `changes` | JSONB NOT NULL | The engine's `changes[]` |
+| `affected_consumer_ids` | UUID[] NOT NULL | Empty when compatible |
+| `api_key_id` | UUID NOT NULL | The key that ran the check; no FK (registry schema) |
+| `created_at` | TIMESTAMPTZ NOT NULL | |
+
+Index: `(tenant_id, service_id, created_at DESC)`.
 
 ---
 

@@ -17,6 +17,7 @@ export type Action =
   | 'drift.resolve'
   | 'unresolved.dismiss'
   | 'settings.view'
+  | 'apiKey.manage'
 
 export const READ_ONLY_MESSAGE = 'Read-only demo — changes are disabled'
 
@@ -41,6 +42,8 @@ export function resolvePermission(subject: Subject, action: Action, ctx: Permiss
   switch (action) {
     case 'settings.view':
       return 'allow'
+    case 'apiKey.manage':
+      return 'deny'
     case 'service.edit':
     case 'team.manage':
       return allowIf(canWrite && isMemberOf)

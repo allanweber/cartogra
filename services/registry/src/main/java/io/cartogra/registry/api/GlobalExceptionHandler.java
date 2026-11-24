@@ -4,6 +4,7 @@ import io.cartogra.common.api.ApiError;
 import io.cartogra.common.api.ApiErrorResponse;
 import io.cartogra.common.api.ErrorCodes;
 import io.cartogra.registry.domain.exception.DuplicateServiceNameException;
+import io.cartogra.registry.domain.exception.ApiKeyNotFoundException;
 import io.cartogra.registry.domain.exception.DuplicateTeamNameException;
 import io.cartogra.registry.domain.exception.InvalidHealthEndpointException;
 import io.cartogra.registry.domain.exception.PlanLimitExceededException;
@@ -60,6 +61,14 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .header("X-Trace-Id", traceId)
                 .body(new ApiErrorResponse(ApiError.of(ErrorCodes.NOT_FOUND, ex.getMessage()), traceId));
+    }
+
+    @ExceptionHandler(ApiKeyNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleApiKeyNotFound(ApiKeyNotFoundException ex) {
+        String traceId = Span.current().getSpanContext().getTraceId();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .header("X-Trace-Id", traceId)
+                .body(new ApiErrorResponse(ApiError.of(ErrorCodes.API_KEY_NOT_FOUND, ex.getMessage()), traceId));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

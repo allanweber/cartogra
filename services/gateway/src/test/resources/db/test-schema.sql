@@ -1,5 +1,5 @@
 -- Test schema for gateway integration tests.
--- Mirrors the registry Flyway migrations (V001, V002, V003, V008, V009, V010, V011, V012, V013, V014, V015, V016, V017).
+-- Mirrors the registry Flyway migrations (V001, V002, V003, V008, V009, V010, V011, V012, V013, V014, V015, V016, V017, V020).
 -- Used instead of Flyway since the gateway has no migrations of its own. AbstractGatewayIT runs it
 -- with psql as the superuser; the application connects as cartogra_app.
 
@@ -137,6 +137,25 @@ CREATE TABLE IF NOT EXISTS audit_events (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS api_keys (
+    id           UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+    tenant_id    UUID        NOT NULL,
+    name         TEXT        NOT NULL CHECK (char_length(name) BETWEEN 1 AND 100),
+    key_hash     CHAR(64)    NOT NULL UNIQUE,
+    key_prefix   TEXT        NOT NULL,
+    scopes       TEXT[]      NOT NULL CHECK (cardinality(scopes) > 0),
+    expires_at   TIMESTAMPTZ,
+    revoked_at   TIMESTAMPTZ,
+    last_used_at TIMESTAMPTZ,
+    created_by   UUID        NOT NULL REFERENCES users(id),
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    deleted_at   TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS api_keys_tenant_active_idx ON api_keys (tenant_id)
+    WHERE revoked_at IS NULL AND deleted_at IS NULL;
+
 -- RLS as in registry V019: the ITs connect as cartogra_app, so the policies apply.
 GRANT USAGE ON SCHEMA public TO cartogra_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO cartogra_app;
@@ -172,3 +191,7 @@ ALTER TABLE audit_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_events FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON audit_events;
 CREATE POLICY tenant_isolation ON audit_events USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid OR current_setting('app.rls_bypass', true) = 'on');
+ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE api_keys FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON api_keys;
+CREATE POLICY tenant_isolation ON api_keys USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid OR current_setting('app.rls_bypass', true) = 'on');

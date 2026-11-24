@@ -1,5 +1,5 @@
 import {
-  ApiError, type CartograApi, type CatalogService, type Compatibility, type CompatibilityChange, type Contract, type ContractConsumer, type ContractVersion, type Drift, type Graph, type PublishedVersion, type Risk,
+  ApiError, type ApiKey, type CartograApi, type CatalogService, type Compatibility, type CompatibilityChange, type Contract, type ContractCheck, type ContractConsumer, type ContractVersion, type Drift, type Graph, type PublishedVersion, type Risk,
   type Team, type UnresolvedSpanService, type VersionDiff,
 } from '../src/api.ts'
 import { declaredCycles, type Protocol, type SeedData } from '../src/schema.ts'
@@ -14,6 +14,9 @@ export class FakeApi implements CartograApi {
   driftRecords: Drift[] = []
   unresolved: UnresolvedSpanService[] = []
   nodeLagReads = 0
+  /** API keys by raw key; `checks` counts the CI checks. */
+  readonly apiKeys = new Map<string, ApiKey>()
+  checks = 0
   /** Versions per contract id; the spec text itself stands in for the canonical hash. */
   readonly contracts = new Map<string, { serviceId: string; versions: ContractVersion[] }>()
   private seq = 0
@@ -162,6 +165,36 @@ export class FakeApi implements CartograApi {
       dependencyTypes: ['declared'],
       protocols: ['http'],
     }))
+  }
+  async createApiKey(name: string, scopes: string[], expiresAt?: string): Promise<ApiKey> {
+    const n = ++this.seq
+    const key = `cgk_fake${n}`
+    const created: ApiKey = { id: `key-${n}`, name, prefix: key.slice(0, 12), scopes, status: 'active', expiresAt: expiresAt ?? null, key }
+    this.apiKeys.set(key, created)
+    return created
+  }
+  async revokeApiKey(id: string): Promise<void> {
+    const found = [...this.apiKeys.values()].find((k) => k.id === id)
+    if (!found) throw new ApiError(404, 'API_KEY_NOT_FOUND', 'unknown key', 't')
+    found.status = 'revoked'
+  }
+  /** Compares the candidate with the latest version, as the contract service does; consumers only when breaking. */
+  async checkContract(apiKey: string, service: string, spec: string): Promise<ContractCheck> {
+    const key = this.apiKeys.get(apiKey)
+    if (!key || key.status !== 'active') throw new ApiError(401, 'UNAUTHORIZED', 'bad key', 't')
+    const svc = this.services.find((s) => s.id === service || s.name.toLowerCase() === service.toLowerCase())
+    if (!svc) throw new ApiError(404, 'SERVICE_NOT_FOUND', 'unknown service', 't')
+    const entry = [...this.contracts].find(([, c]) => c.serviceId === svc.id)
+    if (!entry) throw new ApiError(404, 'BASELINE_NOT_FOUND', 'no baseline', 't')
+    const baseline = entry[1].versions.at(-1)!
+    const compatibility = fakeCompatibility(baseline.specHash, spec)
+    this.checks++
+    return {
+      isBreaking: compatibility.isBreaking,
+      baselineVersion: baseline.versionNumber,
+      changes: compatibility.changes,
+      affectedConsumers: compatibility.isBreaking ? await this.contractConsumers(entry[0]) : [],
+    }
   }
   /** Reports each path key the version adds over the previous one; the spec text is in `specHash`. */
   async contractDiff(contractId: string, versionNumber: number): Promise<VersionDiff> {
