@@ -56,6 +56,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http,
             JwtAuthenticationFilter jwtFilter,
+            ApiKeyAuthenticationFilter apiKeyFilter,
             RateLimitFilter rateLimitFilter,
             GuestWriteDenyFilter guestWriteDenyFilter,
             TenantInjectionFilter tenantFilter,
@@ -67,7 +68,8 @@ public class SecurityConfig {
                 .formLogin(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(rateLimitFilter, JwtAuthenticationFilter.class)
+                .addFilterAfter(apiKeyFilter, JwtAuthenticationFilter.class)
+                .addFilterAfter(rateLimitFilter, ApiKeyAuthenticationFilter.class)
                 .addFilterAfter(guestWriteDenyFilter, RateLimitFilter.class)
                 .addFilterAfter(tenantFilter, GuestWriteDenyFilter.class)
                 .addFilterAfter(proxyLoggingFilter, TenantInjectionFilter.class)
@@ -92,6 +94,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/ingestion/scm-connections/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/ingestion/k8s/clusters/**").hasRole("ADMIN")
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/contracts/check",
+                                "/api/v1/contracts/check/")
+                        .hasRole("CI_CHECK")
                         .requestMatchers("/api/v1/**").hasAnyRole("VIEWER", "MEMBER", "TEAM_OWNER", "ADMIN", Roles.GUEST)
                         .anyRequest().authenticated())
                 .exceptionHandling(e -> e

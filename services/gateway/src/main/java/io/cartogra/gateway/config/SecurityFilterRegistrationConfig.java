@@ -19,6 +19,12 @@ public class SecurityFilterRegistrationConfig {
     }
 
     @Bean
+    public FilterRegistrationBean<ApiKeyAuthenticationFilter> apiKeyFilterRegistration(
+            ApiKeyAuthenticationFilter f) {
+        return disabled(f);
+    }
+
+    @Bean
     public FilterRegistrationBean<GuestWriteDenyFilter> guestWriteDenyFilterRegistration(GuestWriteDenyFilter f) {
         return disabled(f);
     }

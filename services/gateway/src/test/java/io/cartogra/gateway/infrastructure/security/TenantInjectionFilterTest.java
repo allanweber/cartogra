@@ -141,4 +141,30 @@ class TenantInjectionFilterTest {
         assertThat(captured.getHeader("X-Tenant-Id")).isNotEqualTo(attackerTenantId.toString());
         assertThat(captured.getHeader("X-User-Id")).isEqualTo(userId.toString());
     }
+
+    @Test
+    void apiKeyRequestSignsTheKeySubjectAndRoleAndStripsTheKeyHeader() throws Exception {
+        var key = new io.cartogra.gateway.domain.ApiKey(UUID.randomUUID(), tenantId, java.util.Set.of("ci:check"));
+        var context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(new ApiKeyAuthentication(key));
+        SecurityContextHolder.setContext(context);
+
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/contracts/check");
+        request.addHeader("X-Cartogra-Api-Key", "cgk_secret");
+        request.addHeader("X-User-Id", UUID.randomUUID().toString());
+        AtomicReference<jakarta.servlet.ServletRequest> capturedRequest = new AtomicReference<>();
+        doAnswer(inv -> { capturedRequest.set(inv.getArgument(0)); return null; })
+            .when(filterChain).doFilter(any(), any());
+
+        filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+
+        var captured = (jakarta.servlet.http.HttpServletRequest) capturedRequest.get();
+        assertThat(captured.getHeader("X-Cartogra-Api-Key")).isNull();
+        assertThat(captured.getHeader("X-User-Id")).isNull();
+        assertThat(captured.getHeader("X-Tenant-Id")).isEqualTo(tenantId.toString());
+        var token = codec.verify(captured.getHeader(InternalTokenCodec.HEADER), "contract").orElseThrow();
+        assertThat(token.tenantId()).isEqualTo(tenantId);
+        assertThat(token.subject()).isEqualTo("apikey:" + key.id());
+        assertThat(token.roles()).containsExactly("CI_CHECK");
+    }
 }

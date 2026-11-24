@@ -19,7 +19,7 @@ The Gateway is Cartogra's single entry point and the sole issuer of identity tok
 | **JWT** | Short-lived (15 min) signed token the Gateway issues; carries `sub`, `tid`, `email`, `roles[]` |
 | **Refresh Token** | Long-lived (30 day) opaque token stored httpOnly; exchanged for a new JWT |
 | **X-Tenant-Id** | HTTP header the Gateway injects from the validated JWT before proxying; clients never supply it |
-| **Rate limit** | Redis token-bucket, scoped per Tenant when a request carries a valid JWT, else per IP; auth routes: 5 req/s burst 10; default: 20 req/s burst 40 (same numeric limits for both scopes — no per-tenant override yet) |
+| **Rate limit** | Redis token-bucket, scoped per API Key on an allowlisted endpoint (5.5), else per Tenant when a request carries a valid JWT, else per IP; auth routes: 5 req/s burst 10; default: 20 req/s burst 40 (same numeric limits for both scopes — no per-tenant override yet) |
 | **OTP** | One-time 6-digit email code used to verify a new account (sent via Resend) |
 | **OIDC** | Per-tenant SSO config (discovery URI + client credentials) |
 | **API Key** | Tenant-scoped secret sent as `X-Cartogra-Api-Key` by CI or automation; never HMAC. Stored by Registry. The gateway reads it only on the endpoints of the **API Key Allowlist**, and ignores it on every other path |
@@ -97,7 +97,7 @@ All responses use the standard `ApiResponse<T>` / `ApiErrorResponse` envelope ex
 | Dependency | Type | Purpose |
 |---|---|---|
 | PostgreSQL (registry DB) | Spring Data JDBC | Read users, tenants, refresh_tokens, tenant_oidc_configs |
-| Redis (Valkey) | Lua script via `RedisTemplate` | Rate-limit token buckets; keyed `rate_limit:tenant:{tenantId}:{auth\|default}` (JWT present) or `rate_limit:ip:{ip}:{auth\|default}` (no JWT) |
+| Redis (Valkey) | Lua script via `RedisTemplate` | Rate-limit token buckets; keyed `rate_limit:apikey:{keyId}:default` (API key, 5.5), `rate_limit:tenant:{tenantId}:{auth\|default}` (JWT present) or `rate_limit:ip:{ip}:{auth\|default}` (no JWT) |
 | Resend API | REST (HTTP) | Send OTP and password-reset emails |
 | Google / GitHub OAuth | REST (HTTP) | OAuth2 authorization code exchange |
 | Registry service | Spring Cloud Gateway proxy | Forward `/api/v1/**` |
@@ -107,9 +107,11 @@ All responses use the standard `ApiResponse<T>` / `ApiErrorResponse` envelope ex
 ## Filter Chain (order)
 
 1. `JwtAuthenticationFilter` — validates JWT; populates `SecurityContext`
-2. `RateLimitFilter` — Redis token-bucket; short-circuits 429 on exhaustion
-3. `TenantInjectionFilter` — strips/injects `X-Tenant-Id` and `X-User-Id`
-4. `ProxyRequestLoggingFilter` — structured log per proxied request
+2. `ApiKeyAuthenticationFilter` (5.5) — on the API Key Allowlist only: replaces the authentication with the key (looked up by SHA-256 in `api_keys`, no cache), or gives 401/403; elsewhere does nothing
+3. `RateLimitFilter` — Redis token-bucket; short-circuits 429 on exhaustion
+4. `GuestWriteDenyFilter` — refuses guest writes
+5. `TenantInjectionFilter` — strips/injects `X-Tenant-Id` and `X-User-Id`; for a key, signs the internal token with subject `apikey:<id>` and the key's scope roles, and strips `X-Cartogra-Api-Key`
+6. `ProxyRequestLoggingFilter` — structured log per proxied request
 
 ---
 
