@@ -26,4 +26,8 @@ public final class ErrorCodes {
     public static final String DRIFT_NO_LONGER_OBSERVED       = "DRIFT_NO_LONGER_OBSERVED";
     public static final String UNRESOLVED_SPAN_SERVICE_ALREADY_RESOLVED = "UNRESOLVED_SPAN_SERVICE_ALREADY_RESOLVED";
     public static final String INVALID_SPEC                   = "INVALID_SPEC";
+    public static final String API_KEY_NOT_FOUND              = "API_KEY_NOT_FOUND";
+    public static final String SERVICE_NOT_FOUND              = "SERVICE_NOT_FOUND";
+    public static final String SERVICE_AMBIGUOUS              = "SERVICE_AMBIGUOUS";
+    public static final String BASELINE_NOT_FOUND             = "BASELINE_NOT_FOUND";
 }

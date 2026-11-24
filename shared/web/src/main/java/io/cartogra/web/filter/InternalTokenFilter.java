@@ -27,6 +27,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
  */
 public class InternalTokenFilter extends OncePerRequestFilter {
 
+    private static final String API_KEY_PREFIX = "apikey:";
+
     private final InternalTokenCodec codec;
     private final String audience;
 
@@ -73,12 +75,20 @@ public class InternalTokenFilter extends OncePerRequestFilter {
                 .map(r -> new SimpleGrantedAuthority("ROLE_" + r))
                 .toList();
         boolean admin = authorities.stream().anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
-        var actor = new Actor(parseUserId(claims.subject()), admin);
+        Actor actor = toActor(claims.subject(), admin);
         SecurityContextHolder.getContext()
                 .setAuthentication(new UsernamePasswordAuthenticationToken(actor, null, authorities));
     }
 
-    private static UUID parseUserId(String subject) {
+    private static Actor toActor(String subject, boolean admin) {
+        if (subject != null && subject.startsWith(API_KEY_PREFIX)) {
+            UUID keyId = parseUuid(subject.substring(API_KEY_PREFIX.length()));
+            return keyId == null ? Actor.ANONYMOUS : Actor.apiKey(keyId);
+        }
+        return new Actor(parseUuid(subject), admin);
+    }
+
+    private static UUID parseUuid(String subject) {
         try {
             return UUID.fromString(subject);
         } catch (IllegalArgumentException _) {
