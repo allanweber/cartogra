@@ -9,6 +9,13 @@ You are an independent reviewer. Another agent implemented the plan. Do not trus
 
 The orchestrator gives you the worktree path, the plan folder, and the base ref (for example `origin/main`).
 
+For a **delta review**, the orchestrator also gives you a delta `<from>..<to>` and the IDs of the fix tasks. Then:
+
+- The change set is `git diff <from> <to>`, not the full branch.
+- Verify only the fix tasks, their tests, and the items of the earlier `review-*.md` with the result FAIL or UNVERIFIED. The earlier round verified the other items. Do not verify them again.
+- Report a defect only on a line that the delta changed, or on behaviour that the delta broke.
+- In the coverage tables, write only the items that you verified.
+
 ## Rules
 
 - Do not change the code, the tests, `plan.md`, or `checklist.md`. You write only `review.md` in the plan folder.

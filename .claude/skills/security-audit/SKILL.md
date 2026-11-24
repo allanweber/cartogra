@@ -9,6 +9,7 @@ Arguments:
 |---|---|
 | `/security-audit` | The whole repository, at the checked-out commit |
 | `/security-audit 034` | The diff of the branch of plan 034, from `origin/main` |
+| `/security-audit 034 <from>..<to>` | **Delta:** only the changes from `<from>` to `<to>`, for example the snapshot refs of a fix round of `ship` |
 
 The audit has two parts:
 
@@ -17,13 +18,15 @@ The audit has two parts:
 
 You start both parts, merge the results, and make the PDF. Do not audit the code yourself, so that the audit stays independent of the work in this session.
 
+A **delta** call runs only the change review, and makes no PDF. The full audit of the branch already examined the code that did not change. Do steps 1 and 3 on the delta, then write `findings.json` with the `security-review` findings. Skip steps 2, 4, and 5.
+
 ## 1. Prepare
 
 1. If a plan number is given:
    1. Find `plans/<NNN>-<slug>/` in the worktrees of `git worktree list`. If it does not exist, stop and tell the user.
    2. Get the branch from the header of `plan.md`, and find its worktree. If the branch has no worktree, use the main checkout and tell the user which branch is checked out.
    3. Use `origin/main` as the base ref, unless the user gives a different base.
-2. Set the output folder: `docs/security-audit/<YYYY-MM-DD>/`, or `docs/security-audit/<YYYY-MM-DD>-<NNN>/` for a plan.
+2. Set the output folder: `docs/security-audit/<YYYY-MM-DD>/`, `docs/security-audit/<YYYY-MM-DD>-<NNN>/` for a plan, or `docs/security-audit/<YYYY-MM-DD>-<NNN>-delta/` for a delta. If the folder exists, add `-2`, `-3`, and so on.
 
 ## 2. Start the category audit
 
@@ -33,6 +36,7 @@ Send the `security-auditor` agent with the Agent tool. Give it the scope, the wo
 
 While the agent runs, call the Skill tool with `security-review`, and obey it in the worktree.
 
+- For a delta, review only `git -C <worktree> diff <from> <to>`. Do not use the diff of the branch that the skill shows.
 - If the branch has no changes from `origin/main`, skip this step. Record the reason for the report.
 - Keep each finding: the file, the lines, the description, the exploit, and the severity.
 
@@ -57,7 +61,7 @@ When the agent returns:
 
 Give the user:
 
-- The path of the PDF.
+- The path of the PDF. For a delta, there is no PDF.
 - The findings, file by file and line by line: the severity, `file:line`, and one sentence.
 - The paths of all the files that you made: `findings.json`, the HTML file, and the PDF.
 
