@@ -1,7 +1,6 @@
 ---
 name: execute
 description: Implement a plan folder from the planner with module workers, run the unit, integration, and e2e tests, then wait for the user to say "commit".
-disable-model-invocation: true
 ---
 
 Argument: the plan number, for example `/execute 034`. The plan is `plans/034-<slug>/plan.md` with `checklist.md` beside it.

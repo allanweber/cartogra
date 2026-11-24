@@ -1,7 +1,6 @@
 ---
 name: review-plan
 description: Verify the implemented work of a plan against plan.md and checklist.md with an independent agent, and review the code with the code-review skill.
-disable-model-invocation: true
 ---
 
 Argument: the plan number, for example `/review-plan 034`.

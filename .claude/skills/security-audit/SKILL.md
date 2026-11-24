@@ -1,7 +1,6 @@
 ---
 name: security-audit
 description: Audit the code for tenant isolation, browser-only permissions, IDOR, hard-coded secrets, and XSS with an independent agent, run the security-review skill, and make a PDF report with GitHub issue texts.
-disable-model-invocation: true
 ---
 
 Arguments:
