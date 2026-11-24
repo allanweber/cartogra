@@ -47,6 +47,7 @@ public class SecurityConfig {
                 .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                 .requestMatchers("/actuator/health/**").permitAll()
                 .requestMatchers("/internal/**").hasRole(Roles.SERVICE)
+                .requestMatchers(HttpMethod.POST, "/check", "/check/").hasRole("CI_CHECK")
                 .requestMatchers(HttpMethod.GET, "/**").authenticated()
                 .requestMatchers(HttpMethod.HEAD, "/**").authenticated()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").authenticated()

@@ -27,6 +27,8 @@ public class ConsumerService {
     static final Set<String> API_PROTOCOLS = Set.of("http", "grpc");
 
     static final int MAX_PAGE_SIZE = 100;
+    /** Upper bound of the consumers that one breaking-change check reads. */
+    static final int MAX_CHECK_CONSUMERS = 500;
 
     private final InboundEdgeRepository edgeRepository;
     private final ContractRepository contractRepository;
@@ -63,6 +65,12 @@ public class ConsumerService {
         List<Consumer> page = edgeRepository.findConsumers(tenantId, serviceId, API_PROTOCOLS, size, from);
         long total = edgeRepository.countConsumers(tenantId, serviceId, API_PROTOCOLS);
         return PageResult.of(withNames(tenantId, page), total, size, from);
+    }
+
+    /** The consumers of the service, in one edge query, bounded by {@link #MAX_CHECK_CONSUMERS}. */
+    public List<Consumer> allConsumersOfService(UUID tenantId, UUID serviceId) {
+        return withNames(tenantId, edgeRepository.findConsumers(tenantId, serviceId, API_PROTOCOLS,
+                MAX_CHECK_CONSUMERS, 0));
     }
 
     private List<Consumer> withNames(UUID tenantId, List<Consumer> page) {

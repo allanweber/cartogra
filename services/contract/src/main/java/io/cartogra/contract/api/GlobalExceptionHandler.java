@@ -3,12 +3,15 @@ package io.cartogra.contract.api;
 import io.cartogra.common.api.ApiError;
 import io.cartogra.common.api.ApiErrorResponse;
 import io.cartogra.common.api.ErrorCodes;
+import io.cartogra.contract.domain.exception.BaselineNotFoundException;
+import io.cartogra.contract.domain.exception.CheckServiceNotFoundException;
 import io.cartogra.contract.domain.exception.ContractAlreadyExistsException;
 import io.cartogra.contract.domain.exception.ContractNotFoundException;
 import io.cartogra.contract.domain.exception.InvalidParameterException;
 import io.cartogra.contract.domain.exception.InvalidSpecException;
 import io.cartogra.contract.domain.exception.MissingFieldException;
 import io.cartogra.contract.domain.exception.RegistryUnavailableException;
+import io.cartogra.contract.domain.exception.ServiceAmbiguousException;
 import io.cartogra.contract.domain.exception.ServiceDeletedException;
 import io.cartogra.contract.domain.exception.ServiceNotFoundException;
 import io.cartogra.contract.domain.exception.VersionNotFoundException;
@@ -50,6 +53,21 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ServiceNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleServiceNotFound(ServiceNotFoundException ex) {
         return respond(HttpStatus.NOT_FOUND, ErrorCodes.NOT_FOUND, ex.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(CheckServiceNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleCheckServiceNotFound(CheckServiceNotFoundException ex) {
+        return respond(HttpStatus.NOT_FOUND, ErrorCodes.SERVICE_NOT_FOUND, ex.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(ServiceAmbiguousException.class)
+    public ResponseEntity<ApiErrorResponse> handleServiceAmbiguous(ServiceAmbiguousException ex) {
+        return respond(HttpStatus.CONFLICT, ErrorCodes.SERVICE_AMBIGUOUS, ex.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(BaselineNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleBaselineNotFound(BaselineNotFoundException ex) {
+        return respond(HttpStatus.NOT_FOUND, ErrorCodes.BASELINE_NOT_FOUND, ex.getMessage(), Map.of());
     }
 
     @ExceptionHandler(RegistryUnavailableException.class)

@@ -95,6 +95,17 @@ class ConsumerServiceTest {
     }
 
     @Test
+    void consumersAreBounded() {
+        UUID producer = UUID.randomUUID();
+        when(edgeRepository.findConsumers(eq(TENANT), eq(producer), any(), eq(ConsumerService.MAX_CHECK_CONSUMERS),
+                eq(0))).thenReturn(List.of(consumer(UUID.randomUUID(), "alpha")));
+
+        assertThat(service().allConsumersOfService(TENANT, producer)).hasSize(1);
+
+        assertThat(ConsumerService.MAX_CHECK_CONSUMERS).isEqualTo(500);
+    }
+
+    @Test
     void aContractThatIsNotLiveIs404() {
         UUID contractId = UUID.randomUUID();
         when(contractRepository.findLive(TENANT, contractId)).thenReturn(Optional.empty());

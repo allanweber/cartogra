@@ -61,6 +61,25 @@ public class JdbcServiceProjectionRepository implements ServiceProjectionReposit
     }
 
     @Override
+    public Optional<UUID> findLiveId(UUID tenantId, UUID serviceId) {
+        return jdbc.queryForList("""
+                SELECT service_id FROM services
+                WHERE tenant_id = :tenantId AND service_id = :serviceId AND deleted_at IS NULL
+                """, params(tenantId, serviceId), UUID.class).stream().findFirst();
+    }
+
+    @Override
+    public List<UUID> findLiveIdsByName(UUID tenantId, String name, int limit) {
+        return jdbc.queryForList("""
+                SELECT service_id FROM services
+                WHERE tenant_id = :tenantId AND lower(name) = lower(:name) AND deleted_at IS NULL
+                ORDER BY service_id
+                LIMIT :limit
+                """, new MapSqlParameterSource()
+                .addValue("tenantId", tenantId).addValue("name", name).addValue("limit", limit), UUID.class);
+    }
+
+    @Override
     public List<UUID> findUnnamed(UUID tenantId, int limit) {
         return jdbc.queryForList("""
                 SELECT DISTINCT c.service_id FROM api_contracts c

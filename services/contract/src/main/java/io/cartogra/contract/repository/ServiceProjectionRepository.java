@@ -28,6 +28,12 @@ public interface ServiceProjectionRepository {
     /** The live service with the external id. A tombstoned service is not returned. */
     Optional<UUID> findLiveByExternalId(UUID tenantId, String externalId);
 
+    /** The id when the service is in the projection and not tombstoned. */
+    Optional<UUID> findLiveId(UUID tenantId, UUID serviceId);
+
+    /** The live services whose name equals {@code name} not case-sensitive. A null name never matches. */
+    List<UUID> findLiveIdsByName(UUID tenantId, String name, int limit);
+
     /** Services of the tenant's live contracts with no name yet and not tombstoned. */
     List<UUID> findUnnamed(UUID tenantId, int limit);
 }

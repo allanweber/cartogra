@@ -44,6 +44,35 @@ public final class ContractHttp {
         return send(base(path, tenantId, role).POST(HttpRequest.BodyPublishers.ofString(body)).build());
     }
 
+    /** POST /check with an API-key token (role CI_CHECK, subject {@code apikey:<id>}). */
+    public HttpResponse<String> check(UUID tenantId, UUID apiKeyId, String body) {
+        return check("/check", tenantId, apiKeyId, body);
+    }
+
+    /** Same as {@link #check(UUID, UUID, String)} on another path, for example {@code /check/}. */
+    public HttpResponse<String> check(String path, UUID tenantId, UUID apiKeyId, String body) {
+        String token = InternalTokens.codec(java.time.Clock.systemUTC()).sign(
+                new io.cartogra.web.security.InternalClaims(tenantId, "apikey:" + apiKeyId, java.util.List.of("CI_CHECK")),
+                "contract");
+        return send(HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + "/api/v1/contracts" + path))
+                .header("Content-Type", "application/json")
+                .header("X-Tenant-Id", tenantId.toString())
+                .header(InternalTokens.HEADER, token)
+                .POST(HttpRequest.BodyPublishers.ofString(body)).build());
+    }
+
+    public static String checkBody(String service, String spec) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        if (service != null) {
+            body.put("service", service);
+        }
+        if (spec != null) {
+            body.put("spec", spec);
+        }
+        return JSON.writeValueAsString(body);
+    }
+
     public static String body(UUID serviceId, String spec) {
         Map<String, Object> body = new LinkedHashMap<>();
         if (serviceId != null) {
