@@ -113,4 +113,26 @@ class WriteAuthorizationIT {
         assertThat(user).isEqualTo(403);
         assertThat(service).isEqualTo(200);
     }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"MEMBER", "VIEWER", "GUEST"})
+    void apiKeyWritesNeedAnAdmin(String role) throws Exception {
+        MockMvc mvc = webAppContextSetup(context).apply(springSecurity()).build();
+        UUID tenant = UUID.randomUUID();
+        String token = InternalTokens.token("registry", tenant, UUID.randomUUID(), role);
+
+        int post = mvc.perform(request(HttpMethod.POST, "/api-keys")
+                .header("X-Tenant-Id", tenant.toString())
+                .header(InternalTokens.HEADER, token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"ci\",\"scopes\":[\"ci:check\"]}"))
+            .andReturn().getResponse().getStatus();
+        int delete = mvc.perform(request(HttpMethod.DELETE, "/api-keys/" + UUID.randomUUID())
+                .header("X-Tenant-Id", tenant.toString())
+                .header(InternalTokens.HEADER, token))
+            .andReturn().getResponse().getStatus();
+
+        assertThat(post).as("POST /api-keys as " + role).isEqualTo(403);
+        assertThat(delete).as("DELETE /api-keys/{id} as " + role).isEqualTo(403);
+    }
 }

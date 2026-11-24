@@ -44,4 +44,14 @@ class RowLevelSecurityIT {
         RlsChecks.assertIsolatesTenants(jdbc, "teams",
                 "INSERT INTO teams (tenant_id, name) VALUES (?, 'rls-' || gen_random_uuid())");
     }
+
+    @Test
+    void apiKeysAreIsolatedByTenant() {
+        RlsChecks.assertIsolatesTenants(jdbc, "api_keys", """
+                INSERT INTO api_keys (tenant_id, name, key_hash, key_prefix, scopes, created_by)
+                SELECT ?, 'rls', md5(gen_random_uuid()::text) || md5(gen_random_uuid()::text), 'cgk_xxxxxxxx',
+                       ARRAY['ci:check'],
+                       (SELECT id FROM users LIMIT 1)
+                """);
+    }
 }
