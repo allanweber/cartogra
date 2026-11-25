@@ -1,0 +1,32 @@
+name: Cartogra Contract Check
+description: Fail a pull request when an OpenAPI change breaks the consumers that Cartogra knows.
+author: allanweber
+branding:
+  icon: shield
+  color: blue
+inputs:
+  api-key:
+    description: A Cartogra API key with the scope ci:check. Keep it in a secret.
+    required: true
+  service:
+    description: The id or the name of the service in Cartogra.
+    required: true
+  spec:
+    description: The path of the OpenAPI file, relative to the workspace.
+    required: true
+  url:
+    description: The base URL of Cartogra. Use https. Plain http is accepted only for localhost.
+    required: false
+    default: https://cartogra.dev
+  fail-on-breaking:
+    description: Fail the step when the change is breaking (true or false).
+    required: false
+    default: 'true'
+outputs:
+  is-breaking:
+    description: true when the change is breaking, else false.
+  changes-count:
+    description: The number of changes that the check found.
+runs:
+  using: node24
+  main: index.mjs

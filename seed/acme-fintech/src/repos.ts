@@ -61,8 +61,28 @@ export function renderRepo(service: SeedService, options: RepoOptions = {}): Rep
     const owner = provider === 'github' && options.githubOrg ? `@${options.githubOrg}/${slug}` : `@${slug}`
     files.set('CODEOWNERS', `* ${owner}\n`)
   }
+  if (provider === 'github') files.set(CHECK_WORKFLOW_PATH, checkWorkflow(service))
   for (const [path, content] of stackFiles(service, stack, port)) files.set(path, content)
   return files
+}
+
+export const CHECK_WORKFLOW_PATH = '.github/workflows/cartogra-check.yml'
+
+/** The Cartogra contract check on each pull request. The key is the org secret CARTOGRA_API_KEY. */
+function checkWorkflow(s: SeedService): string {
+  return `name: Cartogra contract check
+on: pull_request
+jobs:
+  contract-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: allanweber/cartogra-contract-check@v1
+        with:
+          api-key: \${{ secrets.CARTOGRA_API_KEY }}
+          service: ${s.name}
+          spec: openapi.yaml
+`
 }
 
 function readme(s: SeedService): string {

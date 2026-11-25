@@ -97,7 +97,7 @@ See [docs/runbooks/local-development.md](docs/runbooks/local-development.md).
 | ---- | ----- |
 | Pull request required | Yes (0 approvals while there is a single maintainer) |
 | Force pushes / deletion | Blocked |
-| Required status checks | `Gitleaks`, `Backend — Build & Test`, `Frontend — Lint & Test`, `E2E — Playwright`, `Acme seed — Typecheck & Test`, `Container — Build checks` |
+| Required status checks | `Gitleaks`, `Backend — Build & Test`, `Frontend — Lint & Test`, `E2E — Playwright`, `Acme seed — Typecheck & Test`, `GitHub Action — Test`, `Container — Build checks` |
 
 Renaming any of those CI jobs breaks the ruleset — update it in the same PR.
 

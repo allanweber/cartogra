@@ -1,0 +1,90 @@
+# Publishes ci-extensions/github-action to the Marketplace repo allanweber/cartogra-contract-check (ADR-0033).
+# Trigger: push the tag action-vX.Y.Z. The version must equal "version" in ci-extensions/github-action/package.json.
+# Secret ACTION_REPO_TOKEN: a fine-grained PAT with "contents: write" on cartogra-contract-check only.
+name: GitHub Action release
+
+on:
+  push:
+    tags: ['action-v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: action-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Publish the Marketplace copy
+    runs-on: ubuntu-latest
+    env:
+      TARGET_REPO: allanweber/cartogra-contract-check
+      SOURCE_DIR: ci-extensions/github-action
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+
+      - name: Check the tag against package.json
+        run: node "$SOURCE_DIR/scripts/check-version.mjs" "$GITHUB_REF_NAME"
+
+      - name: Test
+        working-directory: ci-extensions/github-action
+        run: node --test
+
+      - name: Set the versions
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#action-v}"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "major=v${VERSION%%.*}" >> "$GITHUB_OUTPUT"
+
+      - name: Clone the Marketplace repo
+        env:
+          ACTION_REPO_TOKEN: ${{ secrets.ACTION_REPO_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          test -n "$ACTION_REPO_TOKEN" || { echo "::error::The secret ACTION_REPO_TOKEN is not set"; exit 1; }
+          git clone --quiet "https://x-access-token:${ACTION_REPO_TOKEN}@github.com/${TARGET_REPO}.git" "$RUNNER_TEMP/target"
+          if [ -n "$(git -C "$RUNNER_TEMP/target" ls-remote --tags origin "refs/tags/${TAG}")" ]; then
+            echo "::error::The tag ${TAG} exists already in ${TARGET_REPO}. Nothing was changed."
+            exit 1
+          fi
+
+      - name: Copy, commit, and tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          MAJOR: ${{ steps.version.outputs.major }}
+          ACTOR: ${{ github.actor }}
+          ACTOR_ID: ${{ github.actor_id }}
+        run: |
+          cd "$RUNNER_TEMP/target"
+          git checkout -B main
+          rsync -a --delete --exclude .git "$GITHUB_WORKSPACE/$SOURCE_DIR/" ./
+          git add -A
+          git -c user.name="$ACTOR" -c user.email="${ACTOR_ID}+${ACTOR}@users.noreply.github.com" \
+            commit --quiet --allow-empty -m "release: ${TAG}" -m "Copy of ${SOURCE_DIR} from ${GITHUB_REPOSITORY}@${GITHUB_SHA}."
+          git tag "$TAG"
+          git tag -f "$MAJOR"
+
+      - name: Push
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          MAJOR: ${{ steps.version.outputs.major }}
+        run: |
+          cd "$RUNNER_TEMP/target"
+          # One atomic push: GitHub updates all three refs, or none. The "+" force-moves only the major tag.
+          git push --quiet --atomic origin HEAD:main "refs/tags/${TAG}" "+refs/tags/${MAJOR}"
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.ACTION_REPO_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh release create "$TAG" --repo "$TARGET_REPO" --title "$TAG" --verify-tag \
+            --notes "Cartogra Contract Check ${TAG}. Source: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${GITHUB_SHA}/${SOURCE_DIR}"

@@ -57,7 +57,12 @@ test('an admin creates a key, sees it one time, sees only the prefix, then revok
   const secret = reveal.getByTestId('api-key-secret')
   await expect(secret).toHaveText(/^cgk_/)
   const fullKey = (await secret.textContent()) ?? ''
-  await expect(reveal.getByRole('button', { name: 'Copy' })).toBeVisible()
+  await expect(reveal.getByRole('button', { name: 'Copy', exact: true })).toBeVisible()
+  const workflow = reveal.getByTestId('api-key-workflow')
+  await expect(workflow).toContainText('uses: allanweber/cartogra-contract-check@v1')
+  await expect(workflow).toContainText('secrets.CARTOGRA_API_KEY')
+  await expect(workflow).not.toContainText(fullKey)
+  await expect(reveal.getByRole('button', { name: 'Copy workflow' })).toBeVisible()
 
   await reveal.getByRole('button', { name: 'Done' }).click()
   await expect(reveal).toHaveCount(0)
