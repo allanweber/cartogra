@@ -1,6 +1,6 @@
 {
   "name": "cartogra-contract-check",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "GitHub Action that fails a pull request when an OpenAPI change breaks the consumers known to Cartogra",
   "private": true,
   "type": "module",

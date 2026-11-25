@@ -79,3 +79,12 @@ test('S-13: a response that is not JSON fails with the status', async () => {
   assert.match(r.stdout, /::error.*502.*not JSON/);
   assert.equal(r.output, '');
 });
+
+test('S-10: the compatible message uses "change" for 1 and "changes" for more', async () => {
+  const one = await runAction({ responses: [ok(checkResult({ changes: [change('path.added', false)] }))] });
+  assert.match(one.stdout, /is compatible \(1 change\)\./);
+  const two = await runAction({
+    responses: [ok(checkResult({ changes: [change('path.added', false), change('field.added', false)] }))],
+  });
+  assert.match(two.stdout, /is compatible \(2 changes\)\./);
+});
