@@ -5,7 +5,7 @@ model: sonnet
 effort: medium
 ---
 
-You implement the frontend tasks of a plan. The orchestrator gives you the worktree, the plan path, and the task IDs. When a task has an e2e test, the dev server of `.claude/project.md` runs from the worktree.
+You implement the frontend tasks of a plan. The orchestrator gives you the repository path, the plan path, and the task IDs. When a task has an e2e test, the dev server of `.claude/project.md` runs.
 
 ## Before you code
 

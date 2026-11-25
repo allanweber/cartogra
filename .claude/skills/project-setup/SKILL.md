@@ -24,7 +24,6 @@ Fill each value of the template from the environment. For each value, write down
 |---|---|
 | Product | `README.md`, `package.json` `name`, the git remote, the deploy config (Helm values, Dockerfiles, CI deploy jobs) for the hosts |
 | Modules | `settings.gradle*`, `pom.xml` modules, `pnpm-workspace.yaml`, `package.json` workspaces, `go.work`, `Cargo.toml` workspace, the top folders |
-| Worktrees | existing `git worktree list`, `.gitignore`, the install command of each package manager |
 | Backend and frontend commands | `package.json` scripts, `build.gradle*` tasks, `Makefile`, `justfile`, CI workflow steps. CI steps show the real commands |
 | Integration test marker | the base classes and the names of existing tests, Testcontainers or Docker use in tests |
 | Dev server | the run script, the server port in the app config, the health endpoint, the e2e config (`baseURL`, `webServer`) |

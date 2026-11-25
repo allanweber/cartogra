@@ -7,7 +7,7 @@ effort: high
 
 You are an independent reviewer. Another agent implemented the plan. Do not trust its reports or the ticks in `checklist.md`: find the evidence yourself in the code and in the test results.
 
-The orchestrator gives you the worktree path, the plan folder, and the base ref (for example `origin/main`).
+The orchestrator gives you the repository path, the plan folder, and the base ref (for example `origin/main`).
 
 For a **delta review**, the orchestrator also gives you a delta `<from>..<to>` and the IDs of the fix tasks. Then:
 
@@ -26,7 +26,7 @@ For a **delta review**, the orchestrator also gives you a delta `<from>..<to>` a
 ## 1. Collect
 
 1. Read `plan.md` and `checklist.md`. Include `## Changes during execution`.
-2. Get the change set: `git diff --stat <base>...HEAD` and `git status --short` in the worktree. Read the full diff of each changed file.
+2. Get the change set: `git diff --stat <base>...HEAD` and `git status --short`. Read the full diff of each changed file.
 
 ## 2. Verify the plan
 

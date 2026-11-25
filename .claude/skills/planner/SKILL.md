@@ -10,8 +10,8 @@ Call the Skill tool two times, for `design-interview` and `domain-language`. Obe
 
 ## 2. Find the plan number
 
-1. Run `git worktree list`.
-2. In the `plans/` folder of each worktree, find the highest `NNN` prefix. Count files and folders.
+1. In the `plans/` folder, find the highest `NNN` prefix. Count files and folders.
+2. Do the same for each local branch: `git ls-tree --name-only <branch> plans/`. A plan on a branch that is not merged also uses its number.
 3. Add 1 to the highest number. Use three digits, for example `034`.
 
 ## 3. Write the plan folder

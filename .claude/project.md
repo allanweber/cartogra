@@ -14,10 +14,6 @@ Each module of a plan task, and the worker for it.
 | frontend | frontend | frontend-dev |
 | docs, infra/*, seed/*, docs/api, CONTEXT.md, .claude/rules | other | orchestrator |
 
-## Worktrees
-- Folder: .claude/worktrees/<N.M>
-- Setup: `pnpm install` in `frontend` and in `seed/acme-fintech`
-
 ## Backend commands
 - Rules to read: .claude/rules/backend.md
 - Unit test of one class: ./gradlew :<module>:test --tests <Class>
@@ -41,7 +37,7 @@ Run in: frontend
 - Note: uses the dev infra of Docker Compose (the user starts it) and starts no containers
 
 ## Final checks
-In order, in the worktree:
+In order:
 1. ./gradlew build
 2. cd frontend && pnpm lint && pnpm typecheck && pnpm test && pnpm build
 3. cd seed/acme-fintech && pnpm typecheck && pnpm test
