@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { breakingVersion, openapiSpec, parseRepoArgs, remoteFor, renderRepo, routesFor, teamSlug } from '../src/repos.ts'
+import { CHECK_WORKFLOW_PATH, breakingVersion, openapiSpec, parseRepoArgs, remoteFor, renderRepo, routesFor, teamSlug } from '../src/repos.ts'
 import { loadSeedFile, type SeedService } from '../src/schema.ts'
 
 const seed = loadSeedFile(resolve(import.meta.dirname, '../seed-data.json'))
@@ -27,6 +27,16 @@ describe('renderRepo', () => {
     expect(renderRepo(asGithub(byName('payments-service')), { githubOrg: 'acme' }).get('CODEOWNERS')).toBe('* @acme/payments\n')
     expect(renderRepo(byName('billing-service'), { githubOrg: 'acme' }).get('CODEOWNERS')).toBe('* @payments\n')
     expect(renderRepo(byName('legacy-batch')).has('CODEOWNERS')).toBe(false)
+  })
+
+  it('writes the Cartogra check workflow only for GitHub repos', () => {
+    const workflow = renderRepo(asGithub(byName('ledger-service')), { githubOrg: 'acme-fintech' }).get(CHECK_WORKFLOW_PATH)
+    expect(workflow).toContain('on: pull_request')
+    expect(workflow).toContain('uses: allanweber/cartogra-contract-check@v1')
+    expect(workflow).toContain('service: ledger-service')
+    expect(workflow).toContain('spec: openapi.yaml')
+    expect(workflow).toContain('api-key: ${{ secrets.CARTOGRA_API_KEY }}')
+    expect(renderRepo(byName('ledger-service')).has(CHECK_WORKFLOW_PATH)).toBe(false)
   })
 
   it('emits a valid-looking openapi with the service routes', () => {

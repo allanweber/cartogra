@@ -319,6 +319,20 @@ Clean up the scratch namespaces: `kubectl delete namespace no-tenant late-adopte
 | `ACME_CLUSTER_NAME`, `ACME_K8S_API`, `ACME_K8S_TOKEN_FILE`, `ACME_K8S_CA_FILE` | `production`, `https://kubernetes.default.svc`, `/var/run/acme-reader/{token,ca.crt}` | `bootstrap` |
 | `ACME_BOOTSTRAP_TIMEOUT_MS` | `900000` | `bootstrap`: login and discovery wait |
 
+## Contract check on the GitHub mirror
+
+`pnpm acme repos --provider github` writes `.github/workflows/cartogra-check.yml` in each repo. The workflow runs the Action `allanweber/cartogra-contract-check@v1` on each pull request. Azure DevOps repos get no workflow file.
+
+Before the test, do these steps:
+
+1. Make sure that the release `v1` of `allanweber/cartogra-contract-check` exists. The workflow uses `@v1`.
+2. In Cartogra (production), create an API key with the scope `ci:check` for the Acme tenant.
+3. Add the key as the org secret `CARTOGRA_API_KEY` on the Acme GitHub org.
+4. Make sure that the git token has the `workflow` scope. GitHub refuses a push of a workflow file without it.
+5. Run `pnpm acme repos --provider github`.
+
+To test the check, open a pull request on a mirror repo that removes a response field or a path from `openapi.yaml`. The check fails. Do not remove only a request field: under the compatibility rules, a removed request field is compatible.
+
 ## How the simulation works
 
 Every pod runs the same image (`app/server.ts`) configured by env. Each pod calls its downstream services on a

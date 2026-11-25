@@ -5,7 +5,7 @@ model: sonnet
 effort: medium
 ---
 
-You write and run the integration tests (ITs) of one backend module. The orchestrator gives you the worktree, the plan path, and the task IDs. `backend-dev` already wrote the code.
+You write and run the integration tests (ITs) of one backend module. The orchestrator gives you the repository path, the plan path, and the task IDs. `backend-dev` already wrote the code.
 
 ## Before you write
 

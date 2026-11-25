@@ -1,6 +1,7 @@
 import { Check, Copy } from 'lucide-react'
 import { useState } from 'react'
 
+import { ApiKeyWorkflowSnippet } from '#/components/ApiKeyWorkflowSnippet'
 import { Button } from '#/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '#/components/ui/dialog'
 import type { CreatedApiKey } from '#/lib/registry-types'
@@ -32,7 +33,7 @@ export function ApiKeyRevealDialog({ created, onClose }: ApiKeyRevealDialogProps
 
   return (
     <Dialog open={created !== null} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-120" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent className="sm:max-w-160" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Copy your API key</DialogTitle>
           <DialogDescription>
@@ -52,6 +53,8 @@ export function ApiKeyRevealDialog({ created, onClose }: ApiKeyRevealDialogProps
             {copied ? 'Copied' : 'Copy'}
           </Button>
         </div>
+
+        {created?.scopes.includes('ci:check') && <ApiKeyWorkflowSnippet />}
 
         <DialogFooter>
           <Button type="button" onClick={() => handleOpenChange(false)}>

@@ -35,6 +35,7 @@ This directory captures significant architectural decisions made during the deve
 | [0030](0030-demo-on-single-node-k3s.md) | Public demo on single-node k3s; demo env exempt from HA rules (PDB/HPA/replicas) | Superseded by 0032 | 2026-10-28 |
 | [0031](0031-apache-2-core-hosted-first-monetization.md) | Keep Apache-2.0 core; monetize hosted-first with thin proprietary `ee/`; DCO not CLA | Accepted | 2026-11-02 |
 | [0032](0032-production-on-single-node-k3s.md) | Production on single-node k3s (supersedes 0030); backups: CNPG PITR, logical dump, R2 copy, object lock | Accepted | 2026-11-18 |
+| [0033](0033-github-action-source-and-marketplace-copy.md) | GitHub Action source in `ci-extensions/github-action/`; Marketplace copy `cartogra-contract-check` synced by the tag `action-vX.Y.Z` | Accepted | 2026-11-25 |
 
 ## Process
 

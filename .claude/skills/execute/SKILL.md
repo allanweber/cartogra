@@ -14,9 +14,8 @@ You are the **orchestrator**. The workers write the code and the tests. You read
 1. Find the plan folder. If it does not exist, stop and tell the user.
 2. Read `plan.md` and `checklist.md`. Get the branch name from the header of `plan.md`.
 3. Read `.claude/project.md`. It gives the modules, the commands, the dev server, and the final checks. If it does not exist, stop and tell the user to run `/project-setup`.
-4. Find the story worktree in `git worktree list`. If it does not exist, create it in the "Worktrees" folder, on the branch, from `origin/main`. Run the "Setup" commands.
-5. Do all the next steps in the worktree.
-6. **Resume.** If some lines in `checklist.md` are ticked, run the tests of the ticked tasks. If they pass, continue from the first unticked task. If they fail, go to step 4 (Failures).
+4. Check out the branch in the current checkout. If the branch does not exist, create it from `origin/main`. If the working tree has changes that are not part of this plan, stop and ask the user.
+5. **Resume.** If some lines in `checklist.md` are ticked, run the tests of the ticked tasks. If they pass, continue from the first unticked task. If they fail, go to step 4 (Failures).
 
 ## 2. Plan the workers
 
@@ -32,7 +31,7 @@ You are the **orchestrator**. The workers write the code and the tests. You read
 
 Send each worker with the Agent tool and its `subagent_type`. Give the worker:
 
-- The worktree path, the plan path, and the task IDs of its module.
+- The repository path, the plan path, and the task IDs of its module.
 - The test names from `checklist.md` for those tasks.
 
 Use the "Modules" table of `.claude/project.md`:
@@ -56,7 +55,7 @@ Before the first `frontend-dev` that has an e2e task, start the "Dev server":
 
 1. Make sure that all backend modules are complete.
 2. If a process uses the "Port", stop and ask the user. That process belongs to the user.
-3. In the worktree, run the "Start" command in the background.
+3. Run the "Start" command in the background.
 4. Wait until `curl -sf <Health URL>` succeeds.
 
 After each worker:
@@ -82,7 +81,7 @@ When the user decides a fix to the plan:
 
 ## 5. Final checks
 
-Run each command of "Final checks" in the worktree, in order.
+Run each command of "Final checks", in order.
 
 In a fix round, run only the checks of the modules that the fix tasks change:
 

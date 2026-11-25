@@ -479,9 +479,45 @@ jobs:
         if: steps.changes.outputs.changed == 'true'
         run: pnpm test
 
+  github-action:
+    name: GitHub Action — Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ci-extensions/github-action
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect GitHub Action changes
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            CHANGED=$(git diff "origin/${{ github.base_ref }}" --name-only)
+          elif [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            CHANGED=$(git diff --name-only $(git hash-object -t tree /dev/null))
+          else
+            CHANGED=$(git diff "${{ github.event.before }}" "${{ github.sha }}" --name-only)
+          fi
+          if echo "$CHANGED" | grep -qE 'ci-extensions/github-action/|\.github/workflows/action-release\.yml'; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: steps.changes.outputs.changed == 'true'
+        with:
+          node-version: '24'
+
+      - name: Test
+        if: steps.changes.outputs.changed == 'true'
+        run: node --test
+
   container-build:
     name: Container — Build checks
-    needs: [backend, frontend, acme-seed]
+    needs: [backend, frontend, acme-seed, github-action]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4

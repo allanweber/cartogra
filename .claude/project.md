@@ -14,10 +14,6 @@ Each module of a plan task, and the worker for it.
 | frontend | frontend | frontend-dev |
 | docs, infra/*, seed/*, docs/api, CONTEXT.md, .claude/rules | other | orchestrator |
 
-## Worktrees
-- Folder: .claude/worktrees/<N.M>
-- Setup: `pnpm install` in `frontend` and in `seed/acme-fintech`
-
 ## Backend commands
 - Rules to read: .claude/rules/backend.md
 - Unit test of one class: ./gradlew :<module>:test --tests <Class>
@@ -41,14 +37,13 @@ Run in: frontend
 - Note: uses the dev infra of Docker Compose (the user starts it) and starts no containers
 
 ## Final checks
-In order, in the worktree:
+In order:
 1. ./gradlew build
 2. cd frontend && pnpm lint && pnpm typecheck && pnpm test && pnpm build
 3. cd seed/acme-fintech && pnpm typecheck && pnpm test
 4. cd frontend && pnpm test:e2e
 
 ## Forbidden actions
-- Do not run `infra/helm/local-test.sh`. k3d runs are the `k3d-verify` step.
 - Do not start containers outside Testcontainers.
 - Do not run tests, scripts, the browser, or a guest login against cartogra.dev. It is production.
 - Do not install or change anything on the production cluster. Do not use the `~/.kube/cartogra-demo` kubeconfig.

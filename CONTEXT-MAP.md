@@ -13,7 +13,7 @@
 | **Service Catalog** | `services/registry` | Live (Phase 0/1) |
 | **Ingestion** | `services/ingestion` | Live (Phase 0/1) |
 | **Topology** | `services/topology` | Live (Phase 1 complete — backfill, dependency CRUD, graph read; Phase 2 mostly complete — blast radius [2.1], impact panel [2.2], cycles [2.3], SPOFs [2.4], risks [2.5] shipped; performance evidence [2.6] in progress) |
-| **Contract** | `services/contract` | Live (Phase 5 — contract store [5.1], diff + timeline [5.2], breaking-change engine [5.3], consumers from the graph [5.4], CI check [5.5], spec discovery [5.8]) |
+| **Contract** | `services/contract` | Live (Phase 5 — contract store [5.1], diff + timeline [5.2], breaking-change engine [5.3], consumers from the graph [5.4], CI check [5.5], GitHub Action [5.6, `ci-extensions/github-action/`], spec discovery [5.8]) |
 | **Intelligence** | `services/intelligence` | Empty directory (Phase 6) |
 | **Frontend Shell** | `frontend/` | Partial (Phase 1) |
 | **Shared Kernel** | `shared/common` | Live |

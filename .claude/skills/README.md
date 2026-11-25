@@ -20,9 +20,9 @@ Each project needs a `.claude/project.md` file. Run `/project-setup` one time to
         └── checklist.md   test record for each task, scenario, and rule
 
 /execute NNN
-  ├── worktree + branch from plan.md
+  ├── branch from plan.md
   ├── for each backend module:  backend-dev → integration-tester
-  ├── dev server from the worktree (project.md)
+  ├── dev server (project.md)
   ├── frontend:                 frontend-dev (code, unit tests, e2e)
   ├── final checks from project.md
   └── report, then wait for "commit"

@@ -23,20 +23,20 @@ A **delta** call runs only the change review, and makes no PDF. The full audit o
 ## 1. Prepare
 
 1. If a plan number is given:
-   1. Find `plans/<NNN>-<slug>/` in the worktrees of `git worktree list`. If it does not exist, stop and tell the user.
-   2. Get the branch from the header of `plan.md`, and find its worktree. If the branch has no worktree, use the main checkout and tell the user which branch is checked out.
+   1. Find `plans/<NNN>-<slug>/`. If it does not exist, stop and tell the user.
+   2. Get the branch from the header of `plan.md`. If a different branch is checked out, tell the user and ask before you continue.
    3. Use `origin/main` as the base ref, unless the user gives a different base.
 2. Set the output folder: `docs/security-audit/<YYYY-MM-DD>/`, `docs/security-audit/<YYYY-MM-DD>-<NNN>/` for a plan, or `docs/security-audit/<YYYY-MM-DD>-<NNN>-delta/` for a delta. If the folder exists, add `-2`, `-3`, and so on.
 
 ## 2. Start the category audit
 
-Send the `security-auditor` agent with the Agent tool. Give it the scope, the worktree path, the base ref (for a plan), and the path `<output folder>/findings.json`. It runs in the background.
+Send the `security-auditor` agent with the Agent tool. Give it the scope, the repository path, the base ref (for a plan), and the path `<output folder>/findings.json`. It runs in the background.
 
 ## 3. Run the change review
 
-While the agent runs, call the Skill tool with `security-review`, and obey it in the worktree.
+While the agent runs, call the Skill tool with `security-review`, and obey it.
 
-- For a delta, review only `git -C <worktree> diff <from> <to>`. Do not use the diff of the branch that the skill shows.
+- For a delta, review only `git diff <from> <to>`. Do not use the diff of the branch that the skill shows.
 - If the branch has no changes from `origin/main`, skip this step. Record the reason for the report.
 - Keep each finding: the file, the lines, the description, the exploit, and the severity.
 

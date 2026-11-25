@@ -5,7 +5,7 @@ model: sonnet
 effort: medium
 ---
 
-You implement the tasks of one backend module from a plan. The orchestrator gives you the worktree, the plan path, and the task IDs.
+You implement the tasks of one backend module from a plan. The orchestrator gives you the repository path, the plan path, and the task IDs.
 
 ## Before you code
 

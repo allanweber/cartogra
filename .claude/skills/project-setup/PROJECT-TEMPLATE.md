@@ -21,10 +21,6 @@ Each module of a plan task, and the worker for it.
 | {frontend} | frontend | frontend-dev |
 | {docs, infra, seed/*} | other | orchestrator |
 
-## Worktrees
-- Folder: {.claude/worktrees/<id>}
-- Setup: {commands to run after the worktree is created, for example `pnpm install` in `frontend`}
-
 ## Backend commands
 - Rules to read: {.claude/rules/backend.md, or none}
 - Unit test of one class: {./gradlew :<module>:test --tests <Class>}
@@ -48,13 +44,13 @@ Run in: {frontend}
 - Note: {for example "uses the dev infra of Docker Compose and starts no containers"}
 
 ## Final checks
-In order, in the worktree:
+In order:
 1. {./gradlew build}
 2. {cd frontend && pnpm lint && pnpm typecheck && pnpm test && pnpm build}
 3. {cd frontend && pnpm test:e2e}
 
 ## Forbidden actions
-- {for example "Do not run infra/helm/local-test.sh"; "Do not start containers outside Testcontainers"}
+- {for example "Do not start containers outside Testcontainers"; "Do not run scripts against production"}
 
 ## Build in public
 - Roadmap: {docs/roadmap.md, and the heading of the bullets to write about, for example "Worth writing about"}

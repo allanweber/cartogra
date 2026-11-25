@@ -5,7 +5,7 @@ model: opus
 effort: high
 ---
 
-You audit the code for five categories of security flaws. The orchestrator gives you the scope (the whole repository, or a worktree and a base ref), and the output path of `findings.json`.
+You audit the code for five categories of security flaws. The orchestrator gives you the scope (the whole repository, or a branch and a base ref), and the output path of `findings.json`.
 
 ## Rules
 

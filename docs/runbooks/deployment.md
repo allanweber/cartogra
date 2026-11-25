@@ -22,7 +22,7 @@ images done  ─▶ deploy.yml: helm upgrade cartogra + acme at <sha> ─▶ acm
 | Backups | `postgres-backup` CronJob, nightly `pg_dump -Fc` to Hetzner Object Storage |
 
 **What has been run.** Sections 1–8 on the real host (first build 2026-11-10, through the wizard below), including
-Let's Encrypt, GHCR, `deploy.yml`, the S3 backup and alert email delivery. On a local k3d cluster only: the database
+Let's Encrypt, GHCR, `deploy.yml`, the S3 backup and alert email delivery. On a local cluster only: the database
 restore (section 10), restoring the Sealed Secrets key, and the CI identity's denials. **Never run on the host:**
 rollback (section 9), restore (section 10) and rebuild (section 11).
 
@@ -384,8 +384,6 @@ To rotate the token: `kubectl -n ci-deploy delete secret deployer-token`, re-app
 commands above.
 
 ## 7. Install / upgrade
-
-To test chart changes before deploying, run them on a local cluster first: see [Test on a local cluster](../../infra/helm/README.md).
 
 Through CI: every merge to `main` builds images, then starts **Deploy** for that commit, which waits for the
 `production` reviewer to approve. To deploy a specific commit (first build, rollback), dispatch it and approve:
