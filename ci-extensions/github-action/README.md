@@ -75,7 +75,8 @@ Each error message has the HTTP status, the error code, and the message from Car
 
 - The Action masks the key in the log before it writes other output.
 - The Action sends the key only in the header `X-Cartogra-Api-Key`.
-- The Action refuses a `url` with plain `http`, except to `localhost`.
+- The Action refuses a `url` with plain `http`, except to `localhost` and `127.0.0.1`.
+- The Action does not follow a redirect, so the key cannot go to a second host. Set `url` to the final address.
 
 ## Development
 

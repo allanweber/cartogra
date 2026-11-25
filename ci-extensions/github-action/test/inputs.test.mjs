@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { runAction, ok, checkResult } from './helpers.mjs';
+import { runAction, ok, checkResult, response } from './helpers.mjs';
 import { MAX_SPEC_CHARS } from '../index.mjs';
 
 test('S-1: an empty required input fails before a call', async () => {
@@ -72,4 +72,12 @@ test('S-6: a spec of exactly 1,048,576 characters is sent', async () => {
   const r = await runAction({ spec: 'a'.repeat(MAX_SPEC_CHARS), responses: [ok(checkResult())] });
   assert.equal(r.exitCode, 0);
   assert.equal(r.requests.length, 1);
+});
+
+test('S-7: a redirect is not followed, so the key does not go to a second host', async () => {
+  const r = await runAction({ responses: [response(301, '', { Location: 'http://other.example.com/api/v1/contracts/check' })] });
+  assert.equal(r.requests.length, 1);
+  assert.equal(r.requests[0].init.redirect, 'manual');
+  assert.equal(r.exitCode, 1);
+  assert.match(r.stdout, /::error.*HTTP 301.*does not follow redirects/);
 });

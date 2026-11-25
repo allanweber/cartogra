@@ -25,7 +25,7 @@ class StepError extends Error {}
  */
 export async function run({ env, fetch, readFile, stdout, sleep }) {
   const apiKey = input(env, 'api-key');
-  // The mask must come before any other output (BR-4).
+  // The mask must come before any other output, so that no line can show the key.
   if (apiKey) stdout(`::add-mask::${apiKey}\n`);
   const out = (text) => stdout(apiKey ? text.replaceAll(apiKey, '***') : text);
 
@@ -74,7 +74,7 @@ function checkUrl(raw) {
   }
   const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && local)) {
-    throw new StepError(`Input url must use https (http is accepted only for localhost): ${raw}`);
+    throw new StepError(`Input url must use https (http is accepted only for localhost and 127.0.0.1): ${raw}`);
   }
   return raw.replace(/\/+$/, '') + CHECK_PATH;
 }
@@ -95,7 +95,7 @@ function readSpec(env, readFile, specPath) {
   return spec;
 }
 
-/** Sends the request with the retries of BR-8. Returns { status, body } of the last response that does not retry. */
+/** Sends the request. It retries on 429, 5xx, a network error, and a timeout, with a maximum of 3 tries. Returns { status, body } of the last response that does not retry. */
 async function check(config, fetch, sleep) {
   const body = JSON.stringify({ service: config.service, spec: config.spec });
   let failure = '';
@@ -109,12 +109,19 @@ async function check(config, fetch, sleep) {
         headers: { 'Content-Type': 'application/json', 'X-Cartogra-Api-Key': config.apiKey },
         body,
         signal: AbortSignal.timeout(TRY_TIMEOUT_MS),
+        // fetch keeps the key header on a redirect to a different host, and it follows https to http. Do not follow.
+        redirect: 'manual',
       });
       const status = response.status;
+      if (status >= 300 && status < 400) {
+        throw new StepError(`Cartogra contract check failed: HTTP ${status}, a redirect to ${response.headers?.get?.('location') ?? 'an unknown location'}.`
+          + ' The Action does not follow redirects. Set url to the final address');
+      }
       const retries = status === 429 || status >= 500;
       if (!retries || last) return { status, body: await parseJson(response) };
       wait = status === 429 ? retryAfterMs(response) : BACKOFF_MS[attempt - 1];
     } catch (e) {
+      if (e instanceof StepError) throw e;
       const timeout = e?.name === 'TimeoutError' || e?.name === 'AbortError';
       failure = timeout ? `Timeout after ${TRY_TIMEOUT_MS / 1000} s` : `Network error: ${e?.message ?? e}`;
       if (last) break;
@@ -167,7 +174,11 @@ function reportResult(config, data, env, out) {
   const changes = Array.isArray(data.changes) ? data.changes : [];
   const consumers = Array.isArray(data.affectedConsumers) ? data.affectedConsumers : [];
   writeOutputs(env, data.isBreaking, changes.length);
-  writeSummary(env, summary(config.service, data, changes, consumers));
+  // The values come from the server. Remove the key from them before the summary escapes them.
+  const safe = (value) => (typeof value === 'string' ? value.replaceAll(config.apiKey, '***') : value);
+  const clean = (item) => (item && typeof item === 'object'
+    ? Object.fromEntries(Object.entries(item).map(([k, v]) => [k, safe(v)])) : item);
+  writeSummary(env, summary(config.service, clean(data), changes.map(clean), consumers.map(clean)));
 
   if (!data.isBreaking) {
     out(`Cartogra contract check: ${config.service} is compatible (${changes.length} changes).\n`);

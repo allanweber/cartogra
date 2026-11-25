@@ -15,7 +15,7 @@ inputs:
     description: The path of the OpenAPI file, relative to the workspace.
     required: true
   url:
-    description: The base URL of Cartogra. Use https. Plain http is accepted only for localhost.
+    description: The base URL of Cartogra. Use https. Plain http is accepted only for localhost and 127.0.0.1.
     required: false
     default: https://cartogra.dev
   fail-on-breaking:

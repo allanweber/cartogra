@@ -64,3 +64,14 @@ test('S-17: the summary escapes link and emphasis syntax in response values', as
   assert.ok(r.summary.includes('&#42;&#42;bold&#42;&#42;'));
   assert.ok(r.summary.includes('&#95;svc&#95;&#126;&#126;old&#126;&#126;&#92;'));
 });
+
+test('S-7: a key that the server sends back is not in the summary', async () => {
+  const r = await runAction({
+    responses: [ok(checkResult({ isBreaking: true,
+      changes: [{ ...change('rule ck_test'), location: 'at ck_test' }],
+      consumers: [consumer('svc-ck_test')] }))],
+  });
+  assert.ok(!r.summary.includes('ck_test'));
+  assert.ok(!r.summary.includes('ck&#95;test'));
+  assert.ok(r.summary.includes('***') || r.summary.includes('&#42;&#42;&#42;'));
+});
