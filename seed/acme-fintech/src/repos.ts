@@ -76,7 +76,7 @@ jobs:
   contract-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: allanweber/cartogra-contract-check@v1
         with:
           api-key: \${{ secrets.CARTOGRA_API_KEY }}

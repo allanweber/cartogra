@@ -181,7 +181,7 @@ function reportResult(config, data, env, out) {
   writeSummary(env, summary(config.service, clean(data), changes.map(clean), consumers.map(clean)));
 
   if (!data.isBreaking) {
-    out(`Cartogra contract check: ${config.service} is compatible (${changes.length} changes).\n`);
+    out(`Cartogra contract check: ${config.service} is compatible (${changes.length} ${changes.length === 1 ? 'change' : 'changes'}).\n`);
     return 0;
   }
 
