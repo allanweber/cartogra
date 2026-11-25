@@ -27,6 +27,11 @@ class RowLevelSecurityIT extends AbstractTopologyIT {
     }
 
     @Test
+    void theAppRoleCanUseEveryTableButNotTheMigrationHistory() {
+        RlsChecks.assertAppRoleHasDmlOnEveryTable(jdbc);
+    }
+
+    @Test
     void everyTenantTableForcesRls() {
         RlsChecks.assertEveryTenantTableForcesRls(jdbc);
     }
