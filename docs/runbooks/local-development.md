@@ -144,9 +144,6 @@ cd frontend && pnpm test
 
 Testcontainers starts temporary Postgres and Kafka containers. Docker must be running.
 
-The full check on Kubernetes (k3d, production values, Acme seed, e2e) is `infra/helm/local-test.sh`. See
-[`infra/helm/README.md`](../../infra/helm/README.md).
-
 ---
 
 ## 10. Common issues
@@ -375,5 +372,4 @@ Two separate paths:
   [`seed/install-kind-kubectl.md`](../../seed/install-kind-kubectl.md), then
   [`seed/acme-fintech/README.md`](../../seed/acme-fintech/README.md). Register the cluster per
   [`connections.md`](connections.md#local-kind).
-- **Run Cartogra itself on Kubernetes**: `infra/helm/local-test.sh` on k3d (see §9). Production:
-  [`deployment.md`](deployment.md).
+- **Run Cartogra itself on Kubernetes**: production only. See [`deployment.md`](deployment.md).

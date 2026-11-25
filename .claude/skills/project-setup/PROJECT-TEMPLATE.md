@@ -50,7 +50,7 @@ In order:
 3. {cd frontend && pnpm test:e2e}
 
 ## Forbidden actions
-- {for example "Do not run infra/helm/local-test.sh"; "Do not start containers outside Testcontainers"}
+- {for example "Do not start containers outside Testcontainers"; "Do not run scripts against production"}
 
 ## Build in public
 - Roadmap: {docs/roadmap.md, and the heading of the bullets to write about, for example "Worth writing about"}

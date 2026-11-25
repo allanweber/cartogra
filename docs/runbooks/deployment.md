@@ -385,8 +385,6 @@ commands above.
 
 ## 7. Install / upgrade
 
-To test chart changes before deploying, run them on a local cluster first: see [Test on a local cluster](../../infra/helm/README.md).
-
 Through CI: every merge to `main` builds images, then starts **Deploy** for that commit, which waits for the
 `production` reviewer to approve. To deploy a specific commit (first build, rollback), dispatch it and approve:
 

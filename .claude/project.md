@@ -44,7 +44,6 @@ In order:
 4. cd frontend && pnpm test:e2e
 
 ## Forbidden actions
-- Do not run `infra/helm/local-test.sh`. k3d runs are the `k3d-verify` step.
 - Do not start containers outside Testcontainers.
 - Do not run tests, scripts, the browser, or a guest login against cartogra.dev. It is production.
 - Do not install or change anything on the production cluster. Do not use the `~/.kube/cartogra-demo` kubeconfig.

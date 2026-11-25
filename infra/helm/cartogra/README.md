@@ -71,7 +71,3 @@ helm template cartogra infra/helm/cartogra -f infra/helm/cartogra/values-product
 ```
 
 CI runs both for the HA defaults and the production values (`.github/workflows/helm.yml`).
-
-## Test on a local cluster
-
-See [`infra/helm/README.md`](../README.md).
