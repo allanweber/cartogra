@@ -32,7 +32,7 @@ Plan: [plan.md](./plan.md)
 - [x] S-16 No retry on 4xx: unit `retry.test.mjs`
 - [x] S-17 Summary escapes response text: unit `summary.test.mjs`
 - [x] S-18 Version mismatch blocks the release: unit `check-version.test.mjs`
-- [ ] S-19 Release publishes and moves the major tag: manual, first release `action-v1.0.0`
+- [x] S-19 Release publishes and moves the major tag: manual, first release `action-v1.0.0`
 - [x] S-20 Snippet for a ci:check key: unit `workflow-snippet.test.ts`, `ApiKeyRevealDialog.test.tsx`; e2e `api-keys.spec.ts`
 - [x] S-21 Snippet on a self-hosted origin: unit `workflow-snippet.test.ts`
 - [x] S-22 No snippet without ci:check: unit `ApiKeyRevealDialog.test.tsx`
@@ -50,7 +50,7 @@ Plan: [plan.md](./plan.md)
 - [x] BR-8: scenarios S-14, S-15, S-16 pass
 - [x] BR-9: scenarios S-8, S-10, S-11, S-12 pass
 - [x] BR-10: scenarios S-8, S-10, S-17 pass
-- [ ] BR-11: scenarios S-18, S-19 pass
+- [x] BR-11: scenarios S-18, S-19 pass
 - [x] BR-12: scenarios S-20, S-21, S-22 pass
 - [x] BR-13: scenarios S-23, S-24 pass
 
@@ -61,15 +61,15 @@ Plan: [plan.md](./plan.md)
 - [x] AC-4 The summary lists the changes and the consumers, escaped
 - [x] AC-5 The key is masked, in the header only, https only
 - [x] AC-6 Retry on 429 and 5xx, 3 tries
-- [ ] AC-7 The tag release updates the Marketplace repo, tags, and Release
+- [x] AC-7 The tag release updates the Marketplace repo, tags, and Release
 - [x] AC-8 The dialog shows the snippet for a ci:check key
 - [x] AC-9 The Acme GitHub mirror repos have the workflow
-- [ ] AC-11 A mirror pull request that removes a response field fails (manual)
+- [x] AC-11 A mirror pull request that removes a response field fails (manual)
 
 ## Verification
 - [x] `cd ci-extensions/github-action && node --test` passes
 - [x] `./gradlew build` passes
 - [x] `cd frontend && pnpm lint && pnpm typecheck && pnpm test && pnpm build` passes
 - [x] `cd seed/acme-fintech && pnpm typecheck && pnpm test` passes
-- [ ] `cd frontend && pnpm test:e2e` passes
+- [x] `cd frontend && pnpm test:e2e` passes
 - [ ] `actionlint .github/workflows/ci.yml .github/workflows/action-release.yml` passes
