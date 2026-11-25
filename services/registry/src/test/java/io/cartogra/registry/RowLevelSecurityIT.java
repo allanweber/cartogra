@@ -35,6 +35,11 @@ class RowLevelSecurityIT {
     }
 
     @Test
+    void theAppRoleCanUseEveryTableButNotTheMigrationHistory() {
+        RlsChecks.assertAppRoleHasDmlOnEveryTable(jdbc);
+    }
+
+    @Test
     void everyTenantTableForcesRls() {
         RlsChecks.assertEveryTenantTableForcesRls(jdbc);
     }
@@ -48,10 +53,15 @@ class RowLevelSecurityIT {
     @Test
     void apiKeysAreIsolatedByTenant() {
         RlsChecks.assertIsolatesTenants(jdbc, "api_keys", """
+                WITH creator AS (
+                    INSERT INTO users (tenant_id, email, auth_provider, roles)
+                    VALUES (?, 'rls-' || gen_random_uuid() || '@cartogra.test', 'local', ARRAY['ADMIN'])
+                    RETURNING id, tenant_id
+                )
                 INSERT INTO api_keys (tenant_id, name, key_hash, key_prefix, scopes, created_by)
-                SELECT ?, 'rls', md5(gen_random_uuid()::text) || md5(gen_random_uuid()::text), 'cgk_xxxxxxxx',
-                       ARRAY['ci:check'],
-                       (SELECT id FROM users LIMIT 1)
+                SELECT tenant_id, 'rls', md5(gen_random_uuid()::text) || md5(gen_random_uuid()::text), 'cgk_xxxxxxxx',
+                       ARRAY['ci:check'], id
+                FROM creator
                 """);
     }
 }

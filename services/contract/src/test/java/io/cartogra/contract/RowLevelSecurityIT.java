@@ -18,6 +18,11 @@ class RowLevelSecurityIT extends AbstractContractIT {
     }
 
     @Test
+    void theAppRoleCanUseEveryTableButNotTheMigrationHistory() {
+        RlsChecks.assertAppRoleHasDmlOnEveryTable(jdbc);
+    }
+
+    @Test
     void everyTenantTableForcesRls() {
         RlsChecks.assertEveryTenantTableForcesRls(jdbc);
     }

@@ -29,6 +29,33 @@ public final class RlsChecks {
         assertThat(role.get("rolbypassrls")).isEqualTo(false);
     }
 
+    /**
+     * The application role can read and write each base table and use each sequence of the current schema,
+     * and it has no right on the Flyway history.
+     */
+    public static void assertAppRoleHasDmlOnEveryTable(JdbcTemplate jdbc) {
+        List<String> missing = jdbc.queryForList("""
+                SELECT tablename FROM pg_tables
+                WHERE schemaname = current_schema() AND tablename NOT LIKE 'flyway_schema_history%'
+                  AND NOT has_table_privilege(current_user, quote_ident(schemaname) || '.' || quote_ident(tablename),
+                                              'SELECT, INSERT, UPDATE, DELETE')
+                UNION ALL
+                SELECT sequence_name FROM information_schema.sequences
+                WHERE sequence_schema = current_schema()
+                  AND NOT has_sequence_privilege(current_user,
+                          quote_ident(sequence_schema) || '.' || quote_ident(sequence_name), 'USAGE')
+                """, String.class);
+        assertThat(missing).as("tables and sequences that the application role cannot use").isEmpty();
+
+        List<String> history = jdbc.queryForList("""
+                SELECT tablename FROM pg_tables
+                WHERE schemaname = current_schema() AND tablename LIKE 'flyway_schema_history%'
+                  AND has_table_privilege(current_user, quote_ident(schemaname) || '.' || quote_ident(tablename),
+                                          'SELECT, INSERT, UPDATE, DELETE, TRUNCATE')
+                """, String.class);
+        assertThat(history).as("Flyway history tables that the application role can use").isEmpty();
+    }
+
     /** Each base table with a tenant_id column in the current schema has RLS enabled and forced. */
     public static void assertEveryTenantTableForcesRls(JdbcTemplate jdbc) {
         List<String> tenantTables = jdbc.queryForList("""
