@@ -352,7 +352,7 @@ update topology.unresolved_span_services set deleted_at = now() where deleted_at
 
 - `cartogra.tenant.id` is **unauthenticated**: anyone who can reach the collector or the Kafka topic can attribute spans to any tenant UUID that has live nodes. Keep ports 4317/4318 on localhost.
 - One collector = one tenant. Multi-tenant intake and the Settings → Connections → OpenTelemetry card (currently an inactive placeholder) arrive with roadmap 5.9 (`X-Cartogra-Api-Key`, scope `spans:write`).
-- Cartogra's own services mostly emit no CLIENT spans yet (roadmap 7.9), so the dev stack won't produce edges by itself; use the fixtures or your own instrumented services.
+- Cartogra's own services mostly emit no CLIENT spans yet (roadmap 8.9), so the dev stack won't produce edges by itself; use the fixtures or your own instrumented services.
 
 ## To remove the database container + volume and recreate it
 

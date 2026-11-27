@@ -42,7 +42,7 @@ The backup in place on 2026-11-18 was one nightly `pg_dump` to one Hetzner bucke
 
 ### Negative / Trade-offs
 
-- One node: any node failure or k3s upgrade causes downtime. This is a known risk for production. HA is out of scope until there are paying tenants (Phase 7).
+- One node: any node failure or k3s upgrade causes downtime. This is a known risk for production. HA is out of scope until there are paying tenants (Phase 8).
 - Up to 1 hour of data loss, and no point-in-time restore.
 - A node loss also loses the database disk. The recovery is a new host plus a restore from the newest dump.
 - Three external services (healthchecks.io, Cloudflare R2, Hetzner Object Storage) must stay paid and reachable.

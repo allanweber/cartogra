@@ -40,7 +40,7 @@ ADR-0016 proposed an OTel Collector `kafka` exporter feeding `cartogra.observabi
 
 - Tenant attribution is spoofable until 5.9; the public environment must not expose the collector until then.
 - The topic breaks the envelope rule, so no `event_id`-based dedupe: idempotency comes from the edge upsert instead.
-- Cartogra's own services do not emit CLIENT spans yet (roadmap 7.9); only instrumented customer services produce edges.
+- Cartogra's own services do not emit CLIENT spans yet (roadmap 8.9); only instrumented customer services produce edges.
 
 ### Neutral
 
@@ -59,5 +59,5 @@ ADR-0016 proposed an OTel Collector `kafka` exporter feeding `cartogra.observabi
 ## References
 
 - ADR-0016, ADR-0028
-- `docs/roadmap.md` 3.1, 3.3, 3.6, 3.7, 5.9, 7.9
+- `docs/roadmap.md` 3.1, 3.3, 3.6, 3.7, 5.9, 8.9
 - `plans/012-observed-edges-from-traces.md`
