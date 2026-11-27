@@ -17,7 +17,7 @@ Ingestion is Cartogra's bridge between the external world (SCM providers, Kubern
 | **Sync Job** | A tracked unit of work representing one full scan of an SCM Connection; lifecycle: `PENDING → RUNNING → COMPLETED / FAILED` |
 | **SCM Connection** | The configuration (credentials, provider type) for a connected source-code provider; ID sourced from Registry |
 | **SCM Repository** | A repository returned by an SCM provider during a sync scan |
-| **Provider** | An implementation of the `ScmProvider` SPI: `github` or `azure_devops` |
+| **Provider** | An implementation of the `ScmProvider` SPI: `github` or `azuredevops` |
 | **Service Discovered** | A Kafka event emitted when a repository or K8s Service warrants a registry entry |
 | **Ownership Resolved** | A Kafka event emitted when a repository's CODEOWNERS (or K8s namespace label) maps to a team |
 | **Tech Stack** | Set of detected build technologies from repository file presence (e.g., `java`, `spring-boot`, `go`) |
@@ -27,6 +27,12 @@ Ingestion is Cartogra's bridge between the external world (SCM providers, Kubern
 | **Sync Command** | Kafka message from Registry instructing Ingestion to start a sync job for a given connection |
 | **Spec Discovered** | A Kafka event emitted when a sync finds an OpenAPI file at a probe path of a repository (5.8) |
 | **Spec Path** | A repository-relative probe path for the OpenAPI file. Five built-in defaults, plus up to 10 custom paths per tenant that an admin adds; custom paths are probed first, the first hit wins |
+| **Change Event** | (Phase 6, planned) A webhook delivery from the SCM that Cartogra accepts and acts on: a push to the default branch, or a repository created, renamed, archived, or deleted. Pushes to other branches and pull request events are not Change Events |
+| **Repository Sync** | (Phase 6, planned) A sync of one repository, started by a Change Event. Different from a Sync Job, which scans all the repositories of a connection |
+| **Webhook Reject** | (Phase 6, planned) A webhook delivery that Cartogra refuses, for example for a bad signature. Kept per connection as a time and a reason, never the payload |
+| **Setup Path** | (Phase 6, planned) How a connection gets Change Events. *Manual*: the admin makes the webhook in the SCM. *Automatic*: Cartogra gets them with no hook to make (GitHub App) or makes the hooks itself (Azure DevOps, opt-in). See ADR-0034 |
+| **App Installation** | (Phase 6, planned) The Cartogra GitHub App installed on one GitHub organization, on all or on selected repositories. It is an SCM Connection with the auth mode `app`, and it links to exactly one tenant |
+| **Repository Id** | (Phase 6, planned) The stable id that the provider gives a repository (GitHub number, Azure DevOps GUID). It does not change when the repository is renamed or moved. It replaces the path as the External ID (ADR-0021, amended) |
 
 ---
 
@@ -63,7 +69,7 @@ SyncJob  ──  (tenant_id, connection_id, provider_type, status, counters)
 
 | Method | Returns | Notes |
 |---|---|---|
-| `providerType()` | `String` | `"github"` or `"azure_devops"` |
+| `providerType()` | `String` | `"github"` or `"azuredevops"` |
 | `listRepositories(config)` | `List<ScmRepository>` | All non-archived repos |
 | `getFileContents(config, repo, path)` | `Optional<String>` | Single file; used for CODEOWNERS |
 | `getLastCommit(config, repo)` | `CommitInfo(sha, committedAt)` | HEAD commit of default branch |

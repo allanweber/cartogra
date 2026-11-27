@@ -14,7 +14,7 @@
 | **Ingestion** | `services/ingestion` | Live (Phase 0/1) |
 | **Topology** | `services/topology` | Live (Phase 1 complete — backfill, dependency CRUD, graph read; Phase 2 mostly complete — blast radius [2.1], impact panel [2.2], cycles [2.3], SPOFs [2.4], risks [2.5] shipped; performance evidence [2.6] in progress) |
 | **Contract** | `services/contract` | Live (Phase 5 — contract store [5.1], diff + timeline [5.2], breaking-change engine [5.3], consumers from the graph [5.4], CI check [5.5], GitHub Action [5.6, `ci-extensions/github-action/`], spec discovery [5.8]) |
-| **Intelligence** | `services/intelligence` | Empty directory (Phase 6) |
+| **Intelligence** | `services/intelligence` | Empty directory (Phase 7) |
 | **Frontend Shell** | `frontend/` | Partial (Phase 1) |
 | **Shared Kernel** | `shared/common` | Live |
 
@@ -50,7 +50,7 @@
                          ▼
                 ╔═════════════════╗
                 ║  Intelligence   ║  ← Conformist consumer
-                ║   (Ph. 6)       ║    (reads from all others)
+                ║   (Ph. 7)       ║    (reads from all others)
                 ╚═════════════════╝
 
   ╔═══════════════╗
@@ -82,15 +82,15 @@
 | Identity & Access | Service Catalog | **Open Host Service / Conformist** | Declarative reverse proxy (Spring Cloud Gateway route, circuit-breaker guarded); Gateway forwards `X-Tenant-Id` derived from JWT |
 | Identity & Access | Topology | Open Host Service / Conformist | Declarative reverse proxy (`gateway/application.yml`, `Path=/api/v1/topology/**`); backfill, dependency CRUD, graph read, blast radius, cycles, SPOFs, and risks are all live behind it — [1.1]–[1.6], [2.1]–[2.5] |
 | Identity & Access | Contract | Open Host Service / Conformist | Declarative reverse proxy (`gateway/application.yml`, `Path=/api/v1/contracts/**`, breaker `contract`) — [5.1]. Live (5.5): an API key with scope `ci:check` (`X-Cartogra-Api-Key`) authenticates only `POST /api/v1/contracts/check`; the gateway finds the key in the registry `api_keys` table and sends role `CI_CHECK` in the internal token |
-| Identity & Access | Intelligence | Open Host Service / Conformist | Declarative reverse proxy (Phase 6 — route not yet created) |
+| Identity & Access | Intelligence | Open Host Service / Conformist | Declarative reverse proxy (Phase 7 — route not yet created) |
 | Service Catalog (U) | Topology (D) | **Customer / Supplier** | Live: Kafka `cartogra.registry.service.changed` (`event_type` `service.{registered,updated,deleted}`), consumed by `GraphNodeEventConsumer` to project `graph_nodes` (including `team_id`/`tier`, used for orphan risk and SPOF scoring — ADR-0028). No separate `ownership-changed` topic exists or is needed (ADR-0028 supersedes ADR-0027's plan to add one) |
 | Service Catalog (U) | Contract (D) | Customer / Supplier | Live: Kafka `cartogra.registry.service.changed`, consumed by `ServiceEventConsumer`: names and `externalId` from `service.registered`/`updated` (which also apply PENDING discovered specs), and `service.deleted` (soft-deletes the contract, tombstones the service) |
-| Service Catalog (U) | Intelligence (D) | Customer / Supplier | Planned, Phase 6: Kafka registry events |
+| Service Catalog (U) | Intelligence (D) | Customer / Supplier | Planned, Phase 7: Kafka registry events |
 | Ingestion (U) | Service Catalog (D) | **Published Language** | Live today: Kafka `cartogra.ingestion.service.changed`, `ownership.resolved` |
 | Ingestion (U) | Contract (D) | Published Language | Live (5.8): Kafka `cartogra.ingestion.spec.discovered`, consumed by `SpecDiscoveredConsumer`. The payload has no service id; Contract resolves the repository through its `services.external_id` projection or Registry `GET /internal/services/by-external-id` (ADR-0018) |
 | Topology (U) | Contract (D) | Customer / Supplier | Live (5.4): Kafka `cartogra.topology.dependency.changed` (`dependency.{declared,observed,removed}`, keyed by edge id), sent through Topology's transactional outbox, consumed by `DependencyEventConsumer` into `inbound_edges` to name Consumers |
-| Topology (U) | Intelligence (D) | Customer / Supplier | Planned, deferred to Phase 6 per roadmap 3.5 — exact topic names TBD, see `docs/roadmap.md` §6/§9 |
-| Contract (U) | Intelligence (D) | Customer / Supplier | Planned, Phase 6 — no topic names committed yet in `docs/roadmap.md` |
+| Topology (U) | Intelligence (D) | Customer / Supplier | Planned, deferred to Phase 7 per roadmap 3.5 — exact topic names TBD, see `docs/roadmap.md` Phase 7 |
+| Contract (U) | Intelligence (D) | Customer / Supplier | Planned, Phase 7 — no topic names committed yet in `docs/roadmap.md` |
 | Shared Kernel | All JVM modules | **Shared Kernel** | Gradle dep `:shared:common` |
 
 **Breaking-check notifications (5.7).** Contract sends to Slack, Teams, and email from one Notification Rule per tenant and an optional Service scope. A breaking check returns before delivery starts on a virtual thread. Contract calls the providers directly and records each delivery attempt. No Kafka topic carries a check result or a delivery attempt.
@@ -130,7 +130,7 @@ history table is simply `flyway_schema_history` — scoping comes from the schem
 | Ingestion | `ingestion` | `flyway_schema_history` (in `ingestion`) |
 | Topology | `topology` — already dedicated, not a future-phase item; `dependencies`, `dependency_drifts`, `dependency_graph_edges` MV exist there today | `flyway_schema_history` (in `topology`) |
 | Contract | `contract` | `flyway_schema_history` (in `contract`) |
-| Intelligence | Not created yet (Phase 6) | — |
+| Intelligence | Not created yet (Phase 7) | — |
 
 > **Phase 0 compromise**: Gateway reads the `registry` schema's `users`, `tenants`, `refresh_tokens`, and `tenant_oidc_configs` tables directly. This avoids a premature auth microservice. Tracked in ADR-0010.
 

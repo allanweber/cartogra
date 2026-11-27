@@ -36,7 +36,7 @@ Topology maintains the live dependency graph of all Services within a tenant. It
 4. **Cycle detection** — recursive CTE looking for back-edges
 5. **Drift detection** — `DriftService` owns the lifecycle: a sweep (one instance at a time, REPEATABLE READ per tenant) compares declared vs. observed pairs and raises *undeclared* (observed within `topology.drift.missing-after`, never declared) or *missing* (declared longer than that, not observed since); users accept/remove/dismiss; dependency changes go through `DependencyService` pair operations
 6. **SPOF scoring** — identify highly-connected nodes on critical paths
-7. **Graph events** — *deferred to Phase 6 (roadmap 3.5 → 6.7)*: `graph.updated`, `drift.detected`, `cycle.detected` are not produced until Intelligence consumes them
+7. **Graph events** — *deferred to Phase 7 (roadmap 3.5 → 7.7)*: `graph.updated`, `drift.detected`, `cycle.detected` are not produced until Intelligence consumes them
 8. **Orphan flagging** — read `team_id IS NULL` off the existing `graph_nodes` projection (ADR-0028) to flag orphan status; no separate ownership topic
 9. **Risk aggregation** — combine SPOF + cycle + drift + orphan into the paginated `/v1/risks` list — [2.4]/[2.5]
 
@@ -101,7 +101,7 @@ Implemented: dependency CRUD, graph read (`[1.1]`–`[1.3]`), blast radius (`[2.
 |---|---|
 | `cartogra.topology.dependency.changed` | Every write to `dependencies` (5.4): create, update of source/target/protocol, delete, drift accept/remove, observed insert (not the refresh), and the `service.deleted` cascade. One event per edge row, keyed by edge id: `dependency.{declared,observed,removed}`. Written to the `outbox` table in the same transaction; `OutboxRelayScheduler` sends the rows in order (`topology.outbox.*`) |
 
-Other lifecycle events are deferred to Phase 6 (roadmap 6.7) until a consumer exists:
+Other lifecycle events are deferred to Phase 7 (roadmap 7.7) until a consumer exists:
 
 | Topic (deferred) | Trigger |
 |---|---|

@@ -8,13 +8,13 @@
 
 ## Context
 
-Phase 4 puts Acme Fintech behind a public URL. The roadmap said "compose on one host; Kubernetes waits for Phase 7". But Acme is not portable to compose: its catalog comes from K8s discovery and its observed edges from fake services running as pods. On compose, discovery would be frozen and Acme would need a snapshot.
+Phase 4 puts Acme Fintech behind a public URL. The roadmap said "compose on one host; Kubernetes waits for Phase 7" (now Phase 8). But Acme is not portable to compose: its catalog comes from K8s discovery and its observed edges from fake services running as pods. On compose, discovery would be frozen and Acme would need a snapshot.
 
 `.claude/rules/infra.md` mandates `PodDisruptionBudget minAvailable: 2`, an HPA with `minReplicas ≥ 2`, and `maxUnavailable: 0` rolling updates. On one node with one replica per service these are impossible or meaningless.
 
 ## Decision
 
-- The public demo runs on **single-node k3s** on one **ARM** VM (Hetzner CAX21: 4 vCPU, 8GB; resize to CAX31 16GB only if `kubectl top` shows pressure), deployed with the Helm charts from roadmap 7.1, which moves into Phase 4.
+- The public demo runs on **single-node k3s** on one **ARM** VM (Hetzner CAX21: 4 vCPU, 8GB; resize to CAX31 16GB only if `kubectl top` shows pressure), deployed with the Helm charts from roadmap 8.1, which moves into Phase 4.
 - Acme runs live in the same cluster (namespace `acme`); Cartogra discovers it through a read-only ServiceAccount.
 - Postgres, Kafka and Valkey run in-cluster as single-replica StatefulSets.
 - Images are multi-arch (`linux/amd64` + `linux/arm64`) so the demo can run on ARM, which costs about half as much per GB.
@@ -30,8 +30,8 @@ Phase 4 puts Acme Fintech behind a public URL. The roadmap said "compose on one 
   | Prometheus + Alertmanager (guest abuse alerts, email through Resend SMTP) | 256Mi limit, ~40Mi used in a local test |
   | 21 Acme Node pods | ~50MB each, ~1GB |
 
-  SerialGC is a demo-only choice for low traffic; Phase 7 values keep the default collector.
-- The **demo environment is exempt** from infra.md's HA rules: `values-demo.yaml` sets 1 replica and no PDB/HPA. The charts still support them through values for Phase 7.
+  SerialGC is a demo-only choice for low traffic; Phase 8 values keep the default collector.
+- The **demo environment is exempt** from infra.md's HA rules: `values-demo.yaml` sets 1 replica and no PDB/HPA. The charts still support them through values for Phase 8.
 - Not exempt: probes, resource requests + limits, pod/container securityContext, secrets as volumes (Sealed Secrets), required labels, no `latest` tags.
 
 ## Consequences
@@ -39,12 +39,12 @@ Phase 4 puts Acme Fintech behind a public URL. The roadmap said "compose on one 
 ### Positive
 
 - Acme is live: discovery, health, spans and drift all run, rather than a snapshot ageing out.
-- Phase 7 starts from working charts instead of writing them cold.
+- Phase 8 starts from working charts instead of writing them cold.
 
 ### Negative / Trade-offs
 
 - Phase 4 grows from ≈4 to ≈6 weeks.
-- One node: any node failure or upgrade is downtime. Acceptable for a demo; not acceptable for paying tenants (Phase 7).
+- One node: any node failure or upgrade is downtime. Acceptable for a demo; not acceptable for paying tenants (Phase 8).
 - In-cluster Postgres needs its own backup (nightly `pg_dump`); Hetzner's paid backup add-on is not used.
 - CI builds every image for two architectures (`docker buildx`), which is slower.
 - If 8GB proves tight, the next cut before upsizing is Acme on `pause`-image Deployments (discovery still sees 21 services) with one pod emitting spans for all of them (~1GB saved; health then reflects pause containers).
@@ -66,6 +66,6 @@ Phase 4 puts Acme Fintech behind a public URL. The roadmap said "compose on one 
 
 ## References
 
-- `docs/roadmap.md` Phase 4 (4.5) and 7.1
+- `docs/roadmap.md` Phase 4 (4.5) and 8.1
 - `.claude/rules/infra.md` — Kubernetes
 - `plans/021-phase4-public-demo.md`

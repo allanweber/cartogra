@@ -12,7 +12,8 @@
 | Gateway, Registry, Ingestion | Live: auth, catalog, SCM and Kubernetes discovery, ownership, audit trail, guest mode |
 | Topology | Live: dependency graph, blast radius, SPOF, observed edges from OTel spans, drift |
 | Contract | Phase 5 in progress: store, diff, breaking-change engine, spec discovery and consumers are done; CI check, GitHub Action, Slack and trusted OTLP intake are open |
-| Intelligence | Phase 6: no code |
+| Live SCM | Phase 6: webhook receiver exists (full sync on each event); no UI, no App, no SCM removal |
+| Intelligence | Phase 7: no code |
 | Production | `cartogra.dev`, single-node k3s (ADR-0032) |
 
 ---
@@ -142,13 +143,13 @@ No user-facing value. It exists because the next phases are unverifiable without
 
 ## ✅ Phase 4 — A product a stranger can try DONE
 
-**Goal:** the first public artifact. Moved forward from the old plan's Phase 5 — nothing is validated until someone outside can click it. It runs on k3s with 7.1's Helm charts pulled in (ADR-0030). Plan: `plans/021-phase4-public-demo.md`.
+**Goal:** the first public artifact. Moved forward from the old plan's Phase 5 — nothing is validated until someone outside can click it. It runs on k3s with 8.1's Helm charts pulled in (ADR-0030). Plan: `plans/021-phase4-public-demo.md`.
 
 - [x] **4.1 — Audit trail.**
 - [x] **4.2 — Dashboard on real data.**
 - [x] **4.3 — Guest read-only mode.**
 - [x] **4.4 — Collector in the deployable compose.**
-- [x] **7.1 — Helm charts (pulled forward from Phase 7).**
+- [x] **8.1 — Helm charts (pulled forward from Phase 8).**
 - [x] **4.5 — One public environment.**
 
 **Demo:** send someone a link. They browse Acme Fintech, run a blast radius, and cannot change anything.
@@ -178,7 +179,7 @@ Stories are listed in execution order; numbers are kept stable for their issues,
   *Acme test:* ✅ `pnpm acme load --breaking` publishes ledger-service v3 (one v1 path removed, a required `currency` query parameter added); `pnpm acme verify --breaking` asserts v3 is breaking with `path-removed` and `parameter-required-added`, v2 is compatible (`path-added`), and `?status=breaking` lists ledger-service.
 - [x] **5.8 — Spec discovery.** Ingestion publishes `cartogra.ingestion.spec.discovered` after each sync, with no `service_id`: ingestion cannot know it (Registry makes random ids keyed by `external_id`, ADR-0021). Contract resolves the repository to a service through its `services.external_id` projection or a Registry lookup, keeps a spec that comes before its service as PENDING, and skips a spec only when it equals the last spec seen for `(tenant_id, repository_full_name, file_path)` (a revert publishes again), into 5.1 (ADR-0018, amended). Runs before 5.5 so a merged change becomes the next baseline without a manual `POST /versions`. Admins add custom probe paths in Settings → SCM Configuration.
   *Acme test:* ✅ `verifySpecDiscovery`: with an SCM connection, each seed service has a contract, and each service with no manual seed versions has a `source=discovery` version; with no SCM connection it prints SKIP.
-- [x] **5.4 — Consumers from the graph.** No manual consumer table: affected consumers are the services with inbound declared or observed edges to the contract's service. Topology publishes `dependency.{declared,observed,removed}` on one topic, `cartogra.topology.dependency.changed`, keyed by edge id (5.10's rule; pulled forward from 6.7; contract is the consumer, so rule 4 holds); contract projects them into a local inbound-edge table (`inbound_edges`), idempotent on edge id. Topology writes them through a transactional outbox in `shared/web`, and a one-time migration backfilled the edges that existed before the topic. A Consumer is a live `http` or `grpc` edge; kafka and db edges do not call the API. Surfaced in contract detail and feeding `affected_consumers`. Endpoint-level matching (which consumer calls which path) is 6.6.
+- [x] **5.4 — Consumers from the graph.** No manual consumer table: affected consumers are the services with inbound declared or observed edges to the contract's service. Topology publishes `dependency.{declared,observed,removed}` on one topic, `cartogra.topology.dependency.changed`, keyed by edge id (5.10's rule; pulled forward from 7.7; contract is the consumer, so rule 4 holds); contract projects them into a local inbound-edge table (`inbound_edges`), idempotent on edge id. Topology writes them through a transactional outbox in `shared/web`, and a one-time migration backfilled the edges that existed before the topic. A Consumer is a live `http` or `grpc` edge; kafka and db edges do not call the API. Surfaced in contract detail and feeding `affected_consumers`. Endpoint-level matching (which consumer calls which path) is 6.6.
   *Acme test:* ✅ `verify` checks it: the 43 declared edges give each contract its consumers (`ledger-service` has 12).
 - [x] **5.5 — CI check.** Tenant API keys (hashed, scoped, create/revoke audited; the migration lands in the **registry** schema — the gateway has no Flyway setup today, contrary to the old plan) + `POST /v1/contracts/check` authenticated by `X-Cartogra-Api-Key` with scope `ci:check`. Body `{service, spec}` (service id or slug); diffs the candidate against the latest stored version and returns `{is_breaking, changes[], affected_consumers[]}`; records a `contract_checks` row (table created in this story), never creates a version; 404 when the service has no baseline. API key management page replaces the "coming soon" stub.
   *Acme test:* ✅ `verify` posts the `--breaking` spec to `/v1/contracts/check` and asserts `is_breaking` and the consumers named.
@@ -222,26 +223,81 @@ Stories are listed in execution order; numbers are kept stable for their issues,
 
 ---
 
-## ⬜ Phase 6 — Intelligence
+## ⬜ Phase 6 — Live SCM
+
+**Goal:** the catalog follows the SCM in seconds, not at the next poll. A change event updates only the repository that changed. The poll stays as a safety net. Source: `/grill-with-docs` session 2026-11-27. Decisions: ADR-0034 (setup paths for each provider), ADR-0021 (amended: key on the stable repository id).
+
+Current state: `POST /api/v1/ingestion/webhooks/{provider}/{connectionId}` exists and checks the GitHub HMAC signature or the Azure DevOps Basic auth. Each accepted event starts a full sync of the connection. The UI cannot set the webhook secret and does not show the URL. SCM sync never removes a service, and a repository rename makes a second service row.
+
+Setup paths (ADR-0034):
+
+| Provider | Manual | Automatic |
+|---|---|---|
+| GitHub | A read-only fine-grained token for reads. The admin makes one org webhook. | The Cartogra GitHub App, installed on all or on selected repositories. No token is stored. |
+| Azure DevOps | The admin makes the service hooks in each project. | Opt-in. The connection credential also gets the right to write service hooks, and Cartogra manages the subscriptions. |
+
+A token that lets Cartogra make the GitHub org webhook is not a path: it needs write access to the org webhooks and saves only one copy-paste.
+
+- [ ] **6.1 — Stable repository identity and SCM removal.** The discovery key changes from the repository path to the provider repository id (GitHub numeric id, Azure DevOps GUID), so a rename updates the same row (ADR-0021 amended). A backfill writes the id to the existing rows at the first sync. A deleted, archived, or deselected repository clears the SCM fields and keeps the owner and the history, as plan 030 does for Kubernetes. After each full sync, ingestion sends the set of present repositories, with the `observedAt` guard of plan 030. A sync with a failed list call sends no set.
+  *Acme test:* ✅ rename one Acme repository: the service id stays the same and the name changes. Archive one repository: its SCM fields clear.
+- [ ] **6.2 — Event-driven repository sync.** A push to the default branch syncs only that repository: CODEOWNERS, tech stack, OpenAPI spec (5.8), and last commit. Repository created, renamed, archived, or deleted events add, update, or remove the service. Pull request events and pushes to other branches are ignored. A repeated delivery id is processed once. Each connection keeps its webhook status: the time of the last accepted event, and the time and reason of the last rejected event (no payload). When webhooks are on, the default poll interval is 24 h, and the admin can change it. If no event arrives for 7 days and the poll finds new commits, the connection shows a warning.
+  *Acme test:* 🔎 push a CODEOWNERS change to `main` of one Acme repository: the owner changes in less than 60 s.
+- [ ] **6.3 — Manual webhook setup.** Settings → SCM Configuration → "Enable webhooks" on a connection. Cartogra makes a strong random secret (Azure DevOps: a Basic-auth user and password), shows it once with the webhook URL, and gives copy-paste steps for a GitHub org webhook or for Azure DevOps service hooks. "Rotate" makes a new secret. The connection card shows the status from 6.2.
+  *Acme test:* 🔎 enable webhooks on the Acme Azure DevOps connection and make the service hooks by hand.
+- [ ] **6.4 — Azure DevOps automatic hooks.** An opt-in switch on an Azure DevOps connection. Cartogra makes the service hook subscriptions in each project with the connection credential (PAT or service principal). The poll adds subscriptions for new projects. A secret rotation updates the subscriptions. If the admin turns the switch off or deletes the connection, Cartogra deletes the subscriptions that it made. A missing write right gives a clear error on the connection, not a quiet failure.
+  *Acme test:* 🔎 manual: turn on the switch on the Acme Azure DevOps connection; the subscriptions appear in the project, and they go away when the switch is turned off.
+- [ ] **6.5 — GitHub App.** A new auth mode `app` of a GitHub SCM Connection. Reads use installation tokens that expire after 1 hour. cartogra.dev has one public App with one webhook URL; Cartogra maps each installation id to one tenant. The install flow sends a one-time state value tied to the admin session. On return, a GitHub OAuth step checks that the GitHub user can access the installation. One installation links to one tenant only. Installation events: `deleted` and `suspend` disable the connection, `unsuspend` enables it, and a change to the repository selection adds or removes services. A self-hosted Cartogra registers its own App from a manifest; a `/wizard` guides the admin, and the App id, private key, and webhook secret come from config.
+  *Acme test:* ✅ `verifyWebhooks`: with the App installed on the Acme GitHub mirror, the connection has a recent accepted event; without the App it prints SKIP.
+
+**Demo:** on the Acme GitHub mirror, install the App and edit CODEOWNERS on `main` of one repository. The owner changes in Cartogra in less than 60 s. Rename a repository: the same service shows the new name. Archive a repository: its SCM fields clear.
+
+**Gate**
+
+- [ ] A bad signature gives 401, and the connection shows the rejected event with its reason.
+- [ ] A repeated delivery id is processed once.
+- [ ] A forged `installation_id` on the App setup return links no installation.
+- [ ] One installation cannot link to two tenants.
+- [ ] Azure DevOps automatic hooks are made when the switch is turned on and deleted when the connection is deleted (IT against a stub server, plus one manual Acme run).
+- [ ] With webhooks on, the default poll interval is 24 h.
+- [ ] A repository rename keeps the service id; a deleted repository clears the SCM fields.
+- [ ] A push to a branch that is not the default branch starts no sync.
+
+*Standing checks (§2 — Definition of done):*
+
+- [ ] Every story in this phase passed `/code-review` and `/security-review` before merge.
+- [ ] `/impeccable audit` run over every screen this phase touched; findings fixed or recorded.
+- [ ] `/impeccable critique` run over every screen this phase touched; findings fixed or recorded.
+- [ ] `/improve` run over the services this phase touched; its plans triaged, blockers fixed.
+- [ ] `/improve-codebase-architecture` run; findings fixed or captured in an ADR.
+
+**Worth writing about**
+
+- A GitHub App or a token: what a security team accepts, and why we did not build the token that makes webhooks. (article)
+- From a 15-minute poll to events: the poll as a safety net. (short post)
+- Repository identity: why a path is not a key. (short post)
+
+---
+
+## ⬜ Phase 7 — Intelligence
 
 **Goal:** explanation on top of evidence. Deliberately after Phases 1–5, because an LLM narrating an empty graph is a demo, not a product.
 
-- [ ] **6.1 — Deterministic findings.** Intelligence service + `analysis_runs`, `anti_pattern_findings`. Circular dependency, god service, orphaned service — each with structured evidence (cycle path, fan-in count, days since last commit). Fixture ITs assert exact findings on known shapes.
+- [ ] **7.1 — Deterministic findings.** Intelligence service + `analysis_runs`, `anti_pattern_findings`. Circular dependency, god service, orphaned service — each with structured evidence (cycle path, fan-in count, days since last commit). Fixture ITs assert exact findings on known shapes.
   *Acme test:* ✅ circular (2 cycles), god service (`ledger-service`), orphans (3). ❌ "days since last commit": all repos have one fresh commit; backdate one.
-- [ ] **6.2 — Narrative layer.** Claude client with externalized prompts, Redis cache, per-tenant rate limits, token/latency persisted per request. The model writes prose over 6.1's evidence and never invents a fact. ADR-0031.
-  *Acme test:* 🔎 shares 6.1's findings as input.
-- [ ] **6.3 — Findings feed.** `POST /v1/intelligence/analyze`, `GET /findings`, acknowledge/resolve. `intelligence.tsx` replaces its placeholder.
-  *Acme test:* 🔎 shares 6.1's findings as input.
-- [ ] **6.4 — NL query, guarded.** Allowlisted views only, read-only role, bound parameters, row limit, statement timeout. `POST /v1/intelligence/query` returns `{answer, data?, generated_sql?, query_id}` + feedback endpoint. Committed eval set under `src/test/resources/nl-eval/` with a stated pass bar.
+- [ ] **7.2 — Narrative layer.** Claude client with externalized prompts, Redis cache, per-tenant rate limits, token/latency persisted per request. The model writes prose over 7.1's evidence and never invents a fact. ADR-0031.
+  *Acme test:* 🔎 shares 7.1's findings as input.
+- [ ] **7.3 — Findings feed.** `POST /v1/intelligence/analyze`, `GET /findings`, acknowledge/resolve. `intelligence.tsx` replaces its placeholder.
+  *Acme test:* 🔎 shares 7.1's findings as input.
+- [ ] **7.4 — NL query, guarded.** Allowlisted views only, read-only role, bound parameters, row limit, statement timeout. `POST /v1/intelligence/query` returns `{answer, data?, generated_sql?, query_id}` + feedback endpoint. Committed eval set under `src/test/resources/nl-eval/` with a stated pass bar.
   *Acme test:* 🔎 manual queries over the Acme tenant ("which services have no owner?" → 3).
-- [ ] **6.5 — Health score + weekly digest**, persisted as trends, surfaced in the same panel.
+- [ ] **7.5 — Health score + weekly digest**, persisted as trends, surfaced in the same panel.
   *Acme test:* 🔎 a score over the Acme tenant; trends need repeated runs.
-- [ ] **6.6 — Endpoint-level consumers** (refines 5.4): match span `url.full` against each contract's servers and paths, so a breaking change names only the consumers that call the changed operation, not every service with an edge.
+- [ ] **7.6 — Endpoint-level consumers** (refines 5.4): match span `url.full` against each contract's servers and paths, so a breaking change names only the consumers that call the changed operation, not every service with an edge.
   *Acme test:* ❌ spans carry no `url.full`; add it (paths match each repo's `openapi.yaml`).
-- [ ] **6.7 — `drift.detected` published** (deferred from 3.5), now that Intelligence consumes it. `dependency.{declared,observed,removed}` already ship in 5.4.
+- [ ] **7.7 — `drift.detected` published** (deferred from 3.5), now that Intelligence consumes it. `dependency.{declared,observed,removed}` already ship in 5.4.
   *Acme test:* n/a: deferred.
 
-- [ ] **6.8 — Deployed contract version** (refines 5.4). A consumer does not select a contract version: it calls the version that is deployed. Contract shows which version runs, for example "v3 is published, v2 is deployed, so v3's breaking change has not reached the 12 consumers yet". K8s discovery reads the container image tag of each workload and an optional annotation `cartogra.dev/contract-version`. Without the annotation, contract matches the image tag to the spec `info.version` of a stored version. If nothing matches, the deployed version is "unknown", never a guess. Contract detail shows a "deployed" marker on the timeline, and 5.5's check can tell whether the breaking change compares with the deployed version or with a version that is not deployed. Prerequisite: K8s discovery does not read images today, and there is no deploy history (see the anomaly-detection cut below). This story keeps only the current deployed version, not a history.
+- [ ] **7.8 — Deployed contract version** (refines 5.4). A consumer does not select a contract version: it calls the version that is deployed. Contract shows which version runs, for example "v3 is published, v2 is deployed, so v3's breaking change has not reached the 12 consumers yet". K8s discovery reads the container image tag of each workload and an optional annotation `cartogra.dev/contract-version`. Without the annotation, contract matches the image tag to the spec `info.version` of a stored version. If nothing matches, the deployed version is "unknown", never a guess. Contract detail shows a "deployed" marker on the timeline, and 5.5's check can tell whether the breaking change compares with the deployed version or with a version that is not deployed. Prerequisite: K8s discovery does not read images today, and there is no deploy history (see the anomaly-detection cut below). This story keeps only the current deployed version, not a history.
   *Acme test:* ❌ the acme fake-service Deployments use one generic image; add a per-service image tag or the annotation so that `ledger-service` reports a deployed version.
 
 **Cut from the old plan, with reasons:** *AI ownership suggestions* assumed `ScmProvider.getCommitHistory` — the interface has `getLastCommit` only, so the prerequisite is a new SCM API and 90 days of commit aggregation; it is not a story until someone builds that. *Anomaly detection* assumed `services.last_deploy_at` history — no such column, no deploy-event ingestion, no history table. Both return as candidates once their data sources exist.
@@ -273,20 +329,20 @@ Stories are listed in execution order; numbers are kept stable for their issues,
 
 ---
 
-## ⬜ Phase 7 — Production hardening
+## ⬜ Phase 8 — Production hardening
 
 Triggered by real users, not by a calendar. Before this, Phase 4's single-node k3s host is enough.
 
-- [ ] ~~**7.1** Helm charts per service + umbrella~~ — moved into Phase 4 (ADR-0030); Phase 7 adds staging values and HA settings.
-- [ ] **7.2** Terraform modules + one staging environment + remote state (S3 + DynamoDB lock + encryption + versioning).
-- [ ] **7.3** Staging deploy pipeline + `:smoke:test` (readiness on every service, one authenticated call each, envelope conformance) gating the deploy.
-- [ ] **7.4** NetworkPolicy restricting services to gateway-namespace ingress + short-lived `X-Gateway-Token` validated by a shared filter in `shared:common`; IT proves direct access is rejected.
-- [ ] **7.5** DLQ (`cartogra.platform.dead-letter`) + admin replay writing audit events; IT proves poison → DLQ → replay.
-- [ ] **7.6** Grafana dashboards auto-provisioned per service + platform overview; alerts on consumer lag, error rate, MV refresh duration.
-- [ ] **7.7** Playwright E2E (guest browse, graph exploration, contract check, one NL query) + k6 thresholds committed under `infra/perf/results/`.
-- [ ] **7.8** Docs site with the ADR index and runbooks.
+- [ ] ~~**8.1** Helm charts per service + umbrella~~ — moved into Phase 4 (ADR-0030); Phase 8 adds staging values and HA settings.
+- [ ] **8.2** Terraform modules + one staging environment + remote state (S3 + DynamoDB lock + encryption + versioning).
+- [ ] **8.3** Staging deploy pipeline + `:smoke:test` (readiness on every service, one authenticated call each, envelope conformance) gating the deploy.
+- [ ] **8.4** NetworkPolicy restricting services to gateway-namespace ingress + short-lived `X-Gateway-Token` validated by a shared filter in `shared:common`; IT proves direct access is rejected.
+- [ ] **8.5** DLQ (`cartogra.platform.dead-letter`) + admin replay writing audit events; IT proves poison → DLQ → replay.
+- [ ] **8.6** Grafana dashboards auto-provisioned per service + platform overview; alerts on consumer lag, error rate, MV refresh duration.
+- [ ] **8.7** Playwright E2E (guest browse, graph exploration, contract check, one NL query) + k6 thresholds committed under `infra/perf/results/`.
+- [ ] **8.8** Docs site with the ADR index and runbooks.
 
-- [ ] **7.9** Cartogra emits its own CLIENT spans. Replace the static `RestClient.builder()` calls (topology `RegistryMembershipClient`, contract `RegistryNameClient`, ingestion `RegistryPlanLimitClient`, registry `HttpClientConfig`) with the injected, instrumented `RestClient.Builder`; drop the gateway `AppConfig` builder override; turn on Kafka template/listener observation. IT asserts a CLIENT span with `server.address`.
+- [ ] **8.9** Cartogra emits its own CLIENT spans. Replace the static `RestClient.builder()` calls (topology `RegistryMembershipClient`, contract `RegistryNameClient`, ingestion `RegistryPlanLimitClient`, registry `HttpClientConfig`) with the injected, instrumented `RestClient.Builder`; drop the gateway `AppConfig` builder override; turn on Kafka template/listener observation. IT asserts a CLIENT span with `server.address`.
 
 **Demo:** kill a pod mid-demo; readiness pulls it, Grafana shows it, nothing user-visible breaks.
 
@@ -315,13 +371,13 @@ Triggered by real users, not by a calendar. Before this, Phase 4's single-node k
 
 ---
 
-## ⬜ Phase 8 — Commercial (only when someone wants to pay)
+## ⬜ Phase 9 — Commercial (only when someone wants to pay)
 
 Partially built already: `billing_plans` (V010/V013), `tenants.plan_id` (V011), `PlanLimitService`, and the plan-limit advisory lock exist.
 
-- [ ] **8.1** Stripe checkout + customer portal + webhook receiver; `tenant_subscriptions`, `billing_events`; `PlanEnforcementFilter` with a Redis-cached plan tier returning 402 on overage.
-- [ ] **8.2** `/settings/billing` page.
-- [ ] **8.3** GDPR erasure: admin + re-auth, anonymize users and audit events, `tenant.erased` event, 30-day hard delete, signed receipt.
+- [ ] **9.1** Stripe checkout + customer portal + webhook receiver; `tenant_subscriptions`, `billing_events`; `PlanEnforcementFilter` with a Redis-cached plan tier returning 402 on overage.
+- [ ] **9.2** `/settings/billing` page.
+- [ ] **9.3** GDPR erasure: admin + re-auth, anonymize users and audit events, `tenant.erased` event, 30-day hard delete, signed receipt.
 
 Moved out of the old Phase 3 because none of it tests the product hypothesis, and all of it blocked contract work behind Stripe.
 
@@ -376,12 +432,14 @@ P0 repo truth  →  P1 see the map  →  P2 answer impact  →  P3 self-maintain
                                                  │
                                      P5 contracts + CI check
                                                  │
-                                        P6 intelligence
+                                          P6 live SCM
                                                  │
-                                    P7 production   →   P8 commercial
+                                        P7 intelligence
+                                                 │
+                                    P8 production   →   P9 commercial
 ```
 
-**P0–P4** deliver a public, self-maintaining dependency map with an audit trail — the smallest thing that is recognisably Cartogra rather than a catalog. P5 adds the contract pillar, P6 the intelligence pillar.
+**P0–P4** deliver a public, self-maintaining dependency map with an audit trail — the smallest thing that is recognisably Cartogra rather than a catalog. P5 adds the contract pillar, P6 keeps the SCM data live, P7 adds the intelligence pillar.
 
 No time estimates: the work is executed by AI agents, so human-pace weeks mean nothing. If scope must shrink, cut Phase 5 to 5.10, 5.1, 5.3, 5.8, 5.5, 5.6 (topics, store, engine, discovery, check, Action) rather than thinning every story.
 

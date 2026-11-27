@@ -44,3 +44,11 @@ enforces uniqueness. The upsert implementation uses find-then-update-or-insert r
 - Discovery events moved to `cartogra.ingestion.service.changed`. A Service that is deleted sends `service.removed`. Each full resync sends `service.resynced` with the set of present Services.
 - The registry keeps the row of a Service that is gone. It sets the K8s fields to NULL and the health to `UNKNOWN`. Thus `k8s_cluster IS NOT NULL` means "in the cluster now".
 - The registry changes only rows with `updated_at < observedAt`. This prevents a race with a Service that was created after the resync list.
+
+## Update — SCM key on the stable repository id (2026-11-27, roadmap 6.1, planned)
+
+- For SCM sources, `externalId` changes from the repository path to the stable repository id of the provider: the GitHub numeric id, or the Azure DevOps repository GUID. The id does not change when a repository is renamed or moved.
+- This removes the negative consequence "Repository renames in SCM break the key". A rename updates the same row and its name.
+- Backfill: the first sync after the change finds the row by the old path and writes the id. Rows that no sync finds keep the path.
+- SCM removal follows the K8s rules of the update above. A deleted, archived, or deselected repository clears the SCM fields and keeps the row. After each full sync, ingestion sends the set of present repositories, with the `observedAt` guard.
+- Reason: Phase 6 handles rename events (ADR-0034). With the path as the key, each rename would make a second service row.
