@@ -4,7 +4,7 @@ Secrets are NOT created by this chart. Before pods can start, apply SealedSecret
   gateway-secrets    DB_USERNAME DB_PASSWORD JWT_SECRET INTERNAL_TOKEN_KEY RESEND_API_KEY GOOGLE_CLIENT_SECRET GITHUB_CLIENT_SECRET{{ if .Values.gateway.env.BOOTSTRAP_TENANT_ID }} BOOTSTRAP_ADMIN_PASSWORD{{ end }}
   registry-secrets   DB_USERNAME DB_PASSWORD INTERNAL_TOKEN_KEY
   topology-secrets   DB_USERNAME DB_PASSWORD INTERNAL_TOKEN_KEY
-  contract-secrets   DB_USERNAME DB_PASSWORD INTERNAL_TOKEN_KEY
+  contract-secrets   DB_USERNAME DB_PASSWORD INTERNAL_TOKEN_KEY RESEND_API_KEY
   ingestion-secrets  DB_USERNAME DB_PASSWORD INTERNAL_TOKEN_KEY CLUSTER_CREDENTIALS_KEY
   postgres-secrets   DB_USERNAME DB_PASSWORD
 INTERNAL_TOKEN_KEY must have the same value in the five service Secrets.

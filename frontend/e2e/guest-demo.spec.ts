@@ -89,7 +89,9 @@ test.describe('guest demo', () => {
       await page.getByRole('link', { name: 'Graph', exact: true }).click()
       const node = page.getByRole('button', { name: new RegExp(`^${downstream},`) })
       await waitForGraphSettled(page)
-      await node.locator('circle.graph-node-hit').click({ timeout: 2_000 })
+      // The graph can place a node outside the viewport. Focus the button and press Enter.
+      await node.focus({ timeout: 2_000 })
+      await page.keyboard.press('Enter')
       await expect(page.getByRole('tabpanel').getByText(upstream).first()).toBeVisible({ timeout: 2_000 })
     }).toPass({ timeout: 60_000, intervals: [2_000] })
 

@@ -10,6 +10,9 @@ import io.cartogra.contract.domain.exception.ContractNotFoundException;
 import io.cartogra.contract.domain.exception.InvalidParameterException;
 import io.cartogra.contract.domain.exception.InvalidSpecException;
 import io.cartogra.contract.domain.exception.MissingFieldException;
+import io.cartogra.contract.domain.exception.NotificationRuleConflictException;
+import io.cartogra.contract.domain.exception.NotificationRuleDisabledException;
+import io.cartogra.contract.domain.exception.NotificationRuleNotFoundException;
 import io.cartogra.contract.domain.exception.RegistryUnavailableException;
 import io.cartogra.contract.domain.exception.ServiceAmbiguousException;
 import io.cartogra.contract.domain.exception.ServiceDeletedException;
@@ -107,6 +110,21 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiErrorResponse> handleAccessDenied(AccessDeniedException ex) {
         return respond(HttpStatus.FORBIDDEN, ErrorCodes.FORBIDDEN, ex.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(NotificationRuleNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleRuleNotFound(NotificationRuleNotFoundException ex) {
+        return respond(HttpStatus.NOT_FOUND, ErrorCodes.NOT_FOUND, ex.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(NotificationRuleConflictException.class)
+    public ResponseEntity<ApiErrorResponse> handleRuleConflict(NotificationRuleConflictException ex) {
+        return respond(HttpStatus.CONFLICT, ErrorCodes.CONFLICT, ex.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(NotificationRuleDisabledException.class)
+    public ResponseEntity<ApiErrorResponse> handleRuleDisabled(NotificationRuleDisabledException ex) {
+        return respond(HttpStatus.CONFLICT, ErrorCodes.VALIDATION_ERROR, ex.getMessage(), Map.of());
     }
 
     @ExceptionHandler(DuplicateKeyException.class)

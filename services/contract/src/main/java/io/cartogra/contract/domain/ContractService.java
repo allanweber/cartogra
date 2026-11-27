@@ -16,10 +16,15 @@ import org.jspecify.annotations.Nullable;
 import io.cartogra.contract.repository.ContractRepository;
 import io.cartogra.contract.repository.ContractVersionRepository;
 import io.cartogra.contract.repository.ServiceProjectionRepository;
+import io.cartogra.web.tenant.TenantContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
@@ -33,6 +38,8 @@ public class ContractService {
 
     static final int MAX_PAGE_SIZE = 100;
 
+    private static final Logger log = LoggerFactory.getLogger(ContractService.class);
+
     private final ContractRepository contractRepository;
     private final ContractVersionRepository versionRepository;
     private final ServiceProjectionRepository serviceProjectionRepository;
@@ -40,6 +47,8 @@ public class ContractService {
     private final SpecParser specParser;
     private final SpecDiffer specDiffer;
     private final BreakingChangeEngine engine;
+    private final ConsumerService consumerService;
+    private final BreakingChangeNotifier notifier;
     private final AuditEventPort auditEventPort;
     private final TransactionTemplate transactionTemplate;
 
@@ -50,6 +59,8 @@ public class ContractService {
                            SpecParser specParser,
                            SpecDiffer specDiffer,
                            BreakingChangeEngine engine,
+                           ConsumerService consumerService,
+                           BreakingChangeNotifier notifier,
                            AuditEventPort auditEventPort,
                            PlatformTransactionManager transactionManager) {
         this.contractRepository = contractRepository;
@@ -59,6 +70,8 @@ public class ContractService {
         this.specParser = specParser;
         this.specDiffer = specDiffer;
         this.engine = engine;
+        this.consumerService = consumerService;
+        this.notifier = notifier;
         this.auditEventPort = auditEventPort;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
@@ -125,13 +138,53 @@ public class ContractService {
             return new VersionPublication(latest, false);
         }
         Instant now = Instant.now();
-        boolean breaking = engine.compare(latest.specCanonical(), parsed.canonical()).isBreaking();
-        ContractVersion version = newVersion(contract, latest.versionNumber() + 1, raw, parsed, breaking, now,
-                source, discoveredSpecId);
+        Compatibility compatibility = engine.compare(latest.specCanonical(), parsed.canonical());
+        ContractVersion version = newVersion(contract, latest.versionNumber() + 1, raw, parsed,
+                compatibility.isBreaking(), now, source, discoveredSpecId);
         versionRepository.insert(version);
         contractRepository.touch(tenantId, contractId, now);
         audit(contract, "version_published", actor, version);
+        scheduleNotification(tenantId, contract.serviceId(), contractId, latest.versionNumber(), compatibility);
         return new VersionPublication(version, true);
+    }
+
+    /** Sends after commit, so a rolled-back version never triggers a notification. */
+    private void scheduleNotification(UUID tenantId, UUID serviceId, UUID contractId, int baselineVersion,
+                                      Compatibility compatibility) {
+        if (!compatibility.isBreaking()) {
+            return;
+        }
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    startDelivery(tenantId, serviceId, contractId, baselineVersion, compatibility);
+                }
+            });
+        } else {
+            startDelivery(tenantId, serviceId, contractId, baselineVersion, compatibility);
+        }
+    }
+
+    private void startDelivery(UUID tenantId, UUID serviceId, UUID contractId, int baselineVersion,
+                               Compatibility compatibility) {
+        Thread.ofVirtual().name("contract-notification").start(() -> {
+            try {
+                TenantContext.runAs(tenantId, () -> deliver(tenantId, serviceId, contractId, baselineVersion,
+                        compatibility));
+            } catch (Exception _) {
+                log.warn("Notification delivery failed for published version of contract {}", contractId);
+            }
+        });
+    }
+
+    /** Sends one breaking publication to every enabled matching rule. */
+    void deliver(UUID tenantId, UUID serviceId, UUID contractId, int baselineVersion,
+                 Compatibility compatibility) {
+        String serviceName = serviceProjectionService.nameOf(tenantId, serviceId).orElse(serviceId.toString());
+        List<Consumer> consumers = consumerService.allConsumersOfService(tenantId, serviceId);
+        CheckResult result = new CheckResult(true, baselineVersion, compatibility.changes(), consumers);
+        notifier.notifyBreaking(tenantId, serviceId, contractId, serviceName, null, result);
     }
 
     public PublishedContract get(UUID tenantId, UUID contractId) {

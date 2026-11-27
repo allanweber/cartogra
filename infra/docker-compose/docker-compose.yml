@@ -277,6 +277,8 @@ services:
       FLYWAY_PASSWORD: ${CARTOGRA_OWNER_PASSWORD:?Set CARTOGRA_OWNER_PASSWORD (see infra/docker-compose/.env.example)}
       SPRING_FLYWAY_TABLE: flyway_schema_history_contract
       INTERNAL_TOKEN_KEY: ${INTERNAL_TOKEN_KEY:?Set INTERNAL_TOKEN_KEY to at least 32 random bytes (openssl rand -base64 48)}
+      RESEND_API_KEY: ${RESEND_API_KEY:-re_placeholder}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-no-reply@cartogra.dev}
       REGISTRY_URI: http://registry:8081
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info
