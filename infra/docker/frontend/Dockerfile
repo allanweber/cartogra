@@ -54,8 +54,10 @@ RUN pnpm install --frozen-lockfile --prod --ignore-scripts \
 # CVE-2026-89161) for whatever's already on the base image, without a general
 # `apt-get upgrade -y` pulling in unrelated package churn. perl-base likewise
 # (CVE-2026-13221, CVE-2026-8376 and others fixed in 5.36.0-7+deb12u4).
+# The libpam packages get CVE-2025-6020 (fixed in 1.5.2-6+deb12u3).
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && apt-get install -y --only-upgrade libpcre2-8-0 perl-base \
+    libpam-modules libpam-modules-bin libpam-runtime libpam0g \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder --chown=node:node /app/frontend/dist ./dist
