@@ -7,6 +7,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import tools.jackson.databind.ObjectMapper;
 
 import java.net.http.HttpResponse;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -135,6 +136,35 @@ class ContractEnvelopeContractTest extends AbstractContractIT {
         String path = "/api/v1/contracts/" + id + "/consumers";
         assertConforms("GET", path, http.read(tenant, "/" + id + "/consumers"), 200);
         assertConforms("GET", path, http.read(UUID.randomUUID(), "/" + id + "/consumers"), 404);
+    }
+
+    @Test
+    void ruleEndpointsMatchOpenApi() {
+        String listPath = "/api/v1/contracts/notification-rules";
+        UUID serviceId = UUID.randomUUID();
+        String valid = ContractHttp.notificationRuleBody(serviceId, "http://127.0.0.1:1/hook", null, List.of(), true);
+
+        HttpResponse<String> created = http.createNotificationRule(tenant, "ADMIN", valid);
+        assertConforms("POST", listPath, created, 201);
+        String id = objectMapper.readTree(created.body()).get("data").get("id").stringValue();
+        String itemPath = listPath + "/" + id;
+
+        assertConforms("GET", itemPath, http.notificationRules(tenant, "/" + id), 200);
+        assertConforms("GET", listPath, http.notificationRules(tenant, ""), 200);
+        assertConforms("PUT", itemPath, http.putNotificationRule(tenant, "ADMIN", "/" + id, valid), 200);
+        assertConforms("POST", listPath, http.createNotificationRule(tenant, "ADMIN", valid), 409);
+
+        String invalid = ContractHttp.notificationRuleBody(serviceId, "http://example.com/hook", null, List.of(), true);
+        assertConforms("POST", listPath, http.createNotificationRule(tenant, "ADMIN", invalid), 400);
+        assertConforms("POST", listPath, http.createNotificationRule(tenant, "GUEST", valid), 403);
+        UUID unknown = UUID.randomUUID();
+        assertConforms("GET", listPath + "/" + unknown, http.notificationRules(tenant, "/" + unknown), 404);
+
+        assertConforms("POST", itemPath + "/disable", http.postNotificationRule(tenant, "ADMIN", "/" + id + "/disable", ""), 200);
+        assertConforms("POST", itemPath + "/test", http.postNotificationRule(tenant, "ADMIN", "/" + id + "/test", ""), 409);
+        assertConforms("POST", itemPath + "/enable", http.postNotificationRule(tenant, "ADMIN", "/" + id + "/enable", ""), 200);
+        assertConforms("POST", itemPath + "/test", http.postNotificationRule(tenant, "ADMIN", "/" + id + "/test", ""), 200);
+        assertConforms("GET", itemPath + "/attempts", http.notificationRules(tenant, "/" + id + "/attempts"), 200);
     }
 
     private String contractId() {

@@ -8,9 +8,12 @@ import io.cartogra.contract.repository.ContractCheckRepository;
 import io.cartogra.contract.repository.ContractRepository;
 import io.cartogra.contract.repository.ContractVersionRepository;
 import io.cartogra.contract.repository.ServiceProjectionRepository;
+import io.cartogra.web.tenant.TenantContext;
 import org.jspecify.annotations.Nullable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -24,6 +27,8 @@ import java.util.UUID;
 @Service
 public class ContractCheckService {
 
+    private static final Logger log = LoggerFactory.getLogger(ContractCheckService.class);
+
     private final ServiceProjectionRepository serviceRepository;
     private final ContractRepository contractRepository;
     private final ContractVersionRepository versionRepository;
@@ -31,6 +36,7 @@ public class ContractCheckService {
     private final ConsumerService consumerService;
     private final SpecParser specParser;
     private final BreakingChangeEngine engine;
+    private final BreakingChangeNotifier notifier;
 
     public ContractCheckService(ServiceProjectionRepository serviceRepository,
                                 ContractRepository contractRepository,
@@ -38,7 +44,8 @@ public class ContractCheckService {
                                 ContractCheckRepository checkRepository,
                                 ConsumerService consumerService,
                                 SpecParser specParser,
-                                BreakingChangeEngine engine) {
+                                BreakingChangeEngine engine,
+                                BreakingChangeNotifier notifier) {
         this.serviceRepository = serviceRepository;
         this.contractRepository = contractRepository;
         this.versionRepository = versionRepository;
@@ -46,6 +53,7 @@ public class ContractCheckService {
         this.consumerService = consumerService;
         this.specParser = specParser;
         this.engine = engine;
+        this.notifier = notifier;
     }
 
     /** {@code serviceRef} is a service id, or a service name that is matched not case-sensitive. */
@@ -65,11 +73,25 @@ public class ContractCheckService {
         List<Consumer> consumers = compatibility.isBreaking()
                 ? consumerService.allConsumersOfService(tenantId, serviceId)
                 : List.of();
-        checkRepository.insert(new ContractCheck(UUID.randomUUID(), tenantId, serviceId, contract.id(),
+        UUID checkId = UUID.randomUUID();
+        checkRepository.insert(new ContractCheck(checkId, tenantId, serviceId, contract.id(),
                 baseline.id(), candidate.hash(), compatibility.isBreaking(), compatibility.changes(),
                 consumers.stream().map(Consumer::serviceId).toList(), apiKeyId, Instant.now()));
-        return new CheckResult(compatibility.isBreaking(), baseline.versionNumber(), compatibility.changes(),
-                consumers);
+        CheckResult result = new CheckResult(compatibility.isBreaking(), baseline.versionNumber(),
+                compatibility.changes(), consumers);
+        if (compatibility.isBreaking()) {
+            String serviceName = serviceRepository.findName(tenantId, serviceId).orElse(serviceId.toString());
+            UUID contractId = contract.id();
+            Thread.ofVirtual().start(() -> {
+                try {
+                    TenantContext.runAs(tenantId, () -> notifier.notifyBreaking(tenantId, serviceId, contractId,
+                            serviceName, checkId, result));
+                } catch (Exception _) {
+                    log.warn("Notification delivery failed for check {}", checkId);
+                }
+            });
+        }
+        return result;
     }
 
     private UUID resolveService(UUID tenantId, String ref) {

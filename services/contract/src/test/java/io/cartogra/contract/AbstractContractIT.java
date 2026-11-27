@@ -50,5 +50,6 @@ public abstract class AbstractContractIT {
         registry.add("spring.flyway.password", () -> PostgresTestSupport.OWNER_PASSWORD);
         registry.add("spring.kafka.bootstrap-servers", KafkaTestSupport.KAFKA::getBootstrapServers);
         registry.add("spring.kafka.consumer.group-id", () -> "contract-it-" + UUID.randomUUID());
+        registry.add("contract.notifications.allow-local-webhooks", () -> "true");
     }
 }

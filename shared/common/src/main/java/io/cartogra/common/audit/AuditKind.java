@@ -29,7 +29,8 @@ public enum AuditKind {
     USER("user", Set.of()),
     INVITATION("invitation", Set.of()),
     OIDC_CONFIG("oidc_config", Set.of()),
-    API_KEY("api_key", Set.of());
+    API_KEY("api_key", Set.of()),
+    NOTIFICATION_RULE("notification_rule", Set.of());
 
     private static final String CHANGES = "changes";
 

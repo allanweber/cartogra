@@ -94,3 +94,46 @@ export interface ContractConsumer {
 }
 
 export type ContractConsumersPage = PageResult<ContractConsumer>
+
+/** Every destination in this type is already masked by the backend. */
+export interface NotificationRule {
+  id: string
+  serviceId: string | null
+  enabled: boolean
+  slackWebhookUrl: string | null
+  teamsWebhookUrl: string | null
+  emailAddresses: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export type NotificationRulePage = PageResult<NotificationRule>
+
+export interface NotificationRuleRequest {
+  serviceId?: string | null
+  slackWebhookUrl?: string | null
+  teamsWebhookUrl?: string | null
+  emailAddresses?: string[]
+  enabled?: boolean
+}
+
+export type NotificationAttemptChannel = 'slack' | 'teams' | 'email'
+export type NotificationAttemptOutcome = 'pending' | 'sent' | 'failed'
+
+/** The destination hint in this type is already masked by the backend. */
+export interface NotificationAttempt {
+  id: string
+  ruleId: string
+  checkId: string | null
+  attempt: number
+  channel: NotificationAttemptChannel
+  destinationHint: string | null
+  waitMs: number
+  statusCode: number | null
+  errorCode: string | null
+  outcome: NotificationAttemptOutcome
+  createdAt: string
+  finishedAt: string | null
+}
+
+export type NotificationAttemptPage = PageResult<NotificationAttempt>

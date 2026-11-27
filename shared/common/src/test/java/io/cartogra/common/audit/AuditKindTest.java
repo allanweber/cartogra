@@ -54,4 +54,21 @@ class AuditKindTest {
         assertThat(AuditKind.fromEntityType("api_key")).contains(AuditKind.API_KEY);
         assertThat(AuditKind.API_KEY.guestPayload(Map.of("name", "ci", "prefix", "cgk_ab"))).isEmpty();
     }
+
+    @Test
+    void notificationRuleIsHiddenFromGuests() {
+        Map<String, Object> payload = Map.of(
+                "ruleId", "r-1",
+                "action", "disabled",
+                "slackSet", true,
+                "teamsSet", true,
+                "emailCount", 3,
+                "slackWebhookUrl", "https://hooks.slack.test/a/b/c",
+                "teamsWebhookUrl", "https://hooks.teams.test/a/b/c",
+                "emailAddresses", "a@x");
+
+        assertThat(AuditKind.guestVisibleEntityTypes()).doesNotContain("notification_rule");
+        assertThat(AuditKind.fromEntityType("notification_rule")).contains(AuditKind.NOTIFICATION_RULE);
+        assertThat(AuditKind.NOTIFICATION_RULE.guestPayload(payload)).isEmpty();
+    }
 }

@@ -13,6 +13,7 @@ import io.cartogra.contract.domain.exception.ServiceNotFoundException;
 import io.cartogra.contract.repository.ContractRepository;
 import io.cartogra.contract.repository.ContractVersionRepository;
 import io.cartogra.contract.repository.ServiceProjectionRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,6 +21,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.List;
@@ -30,7 +33,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -49,15 +54,23 @@ class ContractServiceTest {
     @Mock ServiceProjectionService serviceProjectionService;
     @Mock AuditEventPort auditEventPort;
     @Mock PlatformTransactionManager transactionManager;
+    @Mock ConsumerService consumerService;
+    @Mock BreakingChangeNotifier notifier;
 
     private final SpecParser specParser = new SpecParser();
     private ContractService service;
 
     @BeforeEach
     void setUp() {
+        TransactionSynchronizationManager.initSynchronization();
         service = new ContractService(contractRepository, versionRepository, serviceProjectionRepository,
-                serviceProjectionService, specParser,
-                new SpecDiffer(new BreakingChangeEngine()), new BreakingChangeEngine(), auditEventPort, transactionManager);
+                serviceProjectionService, specParser, new SpecDiffer(new BreakingChangeEngine()),
+                new BreakingChangeEngine(), consumerService, notifier, auditEventPort, transactionManager);
+    }
+
+    @AfterEach
+    void clearSynchronization() {
+        TransactionSynchronizationManager.clearSynchronization();
     }
 
     @Test
@@ -179,6 +192,66 @@ class ContractServiceTest {
 
         assertThat(removed.version().breaking()).isTrue();
         verify(versionRepository).insert(removed.version());
+    }
+
+    @Test
+    void breakingPublishNotifiesAfterCommit() {
+        UUID id = UUID.randomUUID();
+        String withRefunds = SpecParserTest.YAML_30.replace("""
+                paths:
+                """, """
+                paths:
+                  /refunds:
+                    get:
+                      responses:
+                        '200':
+                          description: ok
+                """);
+        when(contractRepository.lockLive(TENANT, id)).thenReturn(Optional.of(contract(id)));
+        when(versionRepository.findLatest(TENANT, id))
+                .thenReturn(Optional.of(version(id, 1, specParser.parse(withRefunds))));
+        when(serviceProjectionService.nameOf(TENANT, SERVICE)).thenReturn(Optional.of("ledger-service"));
+        when(consumerService.allConsumersOfService(TENANT, SERVICE)).thenReturn(List.of());
+
+        VersionPublication result = service.publishVersion(TENANT, USER, id,
+                new ContractRequest(null, SpecParserTest.YAML_30));
+
+        assertThat(result.version().breaking()).isTrue();
+        verifyNoInteractions(notifier);
+        assertThat(TransactionSynchronizationManager.isSynchronizationActive()).isTrue();
+        assertThat(TransactionSynchronizationManager.getSynchronizations()).isNotEmpty();
+        TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+
+        ArgumentCaptor<CheckResult> captor = ArgumentCaptor.forClass(CheckResult.class);
+        verify(notifier, timeout(3000)).notifyBreaking(eq(TENANT), eq(SERVICE), eq(id), eq("ledger-service"),
+                isNull(), captor.capture());
+        assertThat(captor.getValue().isBreaking()).isTrue();
+        assertThat(captor.getValue().baselineVersion()).isEqualTo(1);
+        assertThat(captor.getValue().changes()).isNotEmpty();
+    }
+
+    @Test
+    void compatiblePublishDoesNotNotify() {
+        UUID id = UUID.randomUUID();
+        String withRefunds = SpecParserTest.YAML_30.replace("""
+                paths:
+                """, """
+                paths:
+                  /refunds:
+                    get:
+                      responses:
+                        '200':
+                          description: ok
+                """);
+        when(contractRepository.lockLive(TENANT, id)).thenReturn(Optional.of(contract(id)));
+        when(versionRepository.findLatest(TENANT, id))
+                .thenReturn(Optional.of(version(id, 1, specParser.parse(SpecParserTest.YAML_30))));
+
+        VersionPublication result = service.publishVersion(TENANT, USER, id, new ContractRequest(null, withRefunds));
+
+        assertThat(result.version().breaking()).isFalse();
+        assertThat(TransactionSynchronizationManager.getSynchronizations()).isEmpty();
+        verifyNoInteractions(notifier);
     }
 
     @Test

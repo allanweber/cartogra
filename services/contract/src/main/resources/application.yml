@@ -41,6 +41,12 @@ contract:
   registry:
     base-url: ${REGISTRY_URI:http://localhost:8081}/api/v1/registry
     timeout: ${CONTRACT_REGISTRY_TIMEOUT:PT3S}
+  resend:
+    api-key: ${RESEND_API_KEY:}
+    from-address: ${RESEND_FROM_EMAIL:no-reply@cartogra.dev}
+    base-url: ${RESEND_BASE_URL:https://api.resend.com}
+  notifications:
+    allow-local-webhooks: ${CONTRACT_NOTIFICATIONS_ALLOW_LOCAL_WEBHOOKS:false}
 
 server:
   port: 8083

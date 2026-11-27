@@ -6,7 +6,7 @@
 
 ## Purpose
 
-The Contract context is Cartogra's API compatibility guardian. It stores the OpenAPI specification of every Service, checks a candidate spec against the stored baseline before merge, names the Services that consume the changed contract, and notifies teams of breaking changes before they reach production.
+The Contract context is Cartogra's API compatibility guardian. It stores the OpenAPI specification of every Service, checks a candidate spec against the stored baseline before merge, names the Services that consume the changed contract, and sends breaking-change messages to configured destinations before they reach production.
 
 ---
 
@@ -32,6 +32,8 @@ The Contract context is Cartogra's API compatibility guardian. It stores the Ope
 | **Breaking Change** | A direction-aware contract mutation that would break a Consumer (removed path or operation, removed response field, type change, new required request field or parameter, enum value removed from a request or added to a response) |
 | **Change** | One classified difference found during a Contract Check |
 | **Affected Consumers** | The Consumers named by a breaking Contract Check |
+| **Notification Rule** | A tenant rule with Slack, Teams, and email destinations for a breaking Contract Check. The rule can name one Producer; without one it applies to all Producers in the tenant. _Avoid_: delivery rule, alert rule |
+| **Delivery Attempt** | One try to send a Notification Rule for a Contract Check, with its wait, status, and outcome. _Avoid_: notification log entry |
 
 ---
 
@@ -41,7 +43,7 @@ The Contract context is Cartogra's API compatibility guardian. It stores the Ope
 2. **Compatibility checks** — compare candidate vs. Baseline; classify each change as breaking or compatible
 3. **Consumer projection** — project Topology `dependency.*` events into a local inbound-edge table to name Affected Consumers
 4. **Service cleanup** — soft-delete a Service's contract and versions on `service.deleted`
-5. **Breaking-change alerting** — send Slack notifications in-process when a check is breaking, per tenant notification rules
+5. **Breaking-change alerting** — send a summary in-process when a check is breaking, per tenant Notification Rule and destination
 
 ---
 
@@ -51,7 +53,7 @@ The Contract context is Cartogra's API compatibility guardian. It stores the Ope
 Service (ID ref) ──1 ApiContract ──< ContractVersion
 ApiContract ──< ContractCheck
 Service (ID ref) ──< InboundEdge ──> Service (ID ref, consumer)   (projection of Topology edges)
-Tenant ──< NotificationRule ──< NotificationLog
+Tenant ──< NotificationRule ──< DeliveryAttempt
 ```
 
 All cross-context Service references stored as UUIDs only.
@@ -66,8 +68,8 @@ All cross-context Service references stored as UUIDs only.
 | `services` | Live (5.2) | Projection of Registry services: name for the contract list (from `service.registered`/`updated`; a service with no name yet is looked up once via Registry `POST /internal/services/names` and stored), `deleted_at` tombstone from `service.deleted` (replaced 5.1's `deleted_services`). `external_id` (5.8, SCM repository full path, unique per live service) from `service.registered`/`updated` or a Registry `GET /internal/services/by-external-id` lookup |
 | `contract_checks` | Live (5.5, V007) | One row per completed CI check: service, contract, `baseline_version_id`, `candidate_hash`, `is_breaking`, `changes` JSONB, `affected_consumer_ids`, `api_key_id`. A failed check writes no row. V007 also indexes `services (tenant_id, lower(name))` for the check by name |
 | `inbound_edges` | Live (5.4) | Topology edges projected from `dependency.changed`, PK `(tenant_id, edge_id)`; all protocols stored. `removed_at` is final, so a replayed or late event cannot bring a removed edge back |
-| `notification_rules` | Planned (5.7) | Per-tenant Slack delivery rules |
-| `notification_log` | Planned (5.7) | Every delivery attempt, with retry/backoff outcome |
+| `notification_rules` | Planned (5.7) | Per-tenant rules with an optional Producer, one Slack URL, one Teams URL, and a list of email addresses |
+| `notification_log` | Planned (5.7) | Every delivery attempt, with wait, status, and outcome |
 
 ---
 

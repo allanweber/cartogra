@@ -66,4 +66,21 @@ class RowLevelSecurityIT extends AbstractContractIT {
                 FROM v
                 """);
     }
+
+    @Test
+    @NoTenantScope
+    void notificationTablesAreTenantIsolated() {
+        RlsChecks.assertIsolatesTenants(jdbc, "notification_rules", """
+                INSERT INTO notification_rules (tenant_id, email_addresses)
+                VALUES (?, '[]'::jsonb)
+                """);
+        RlsChecks.assertIsolatesTenants(jdbc, "notification_log", """
+                WITH r AS (
+                    INSERT INTO notification_rules (tenant_id, email_addresses)
+                    SELECT ?, '[]'::jsonb RETURNING id, tenant_id
+                )
+                INSERT INTO notification_log (tenant_id, rule_id, attempt, channel, outcome)
+                SELECT tenant_id, id, 1, 'slack', 'pending' FROM r
+                """);
+    }
 }

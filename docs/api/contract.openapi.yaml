@@ -32,6 +32,8 @@ tags:
     description: API contracts and their versions
   - name: ci
     description: CI check of a candidate spec — API key only
+  - name: notifications
+    description: Notification rules for breaking checks, their attempts, and a test endpoint
 
 paths:
   /contracts:
@@ -344,6 +346,272 @@ paths:
         "422":
           $ref: "#/components/responses/InvalidSpec"
 
+  /contracts/notification-rules:
+    get:
+      summary: List the tenant's notification rules
+      description: |
+        Notification Rules in the tenant, most recently changed first. Webhooks and email addresses are
+        masked in the backend response. Reads require an authenticated user.
+      operationId: listNotificationRules
+      tags: [notifications]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/OffsetParam"
+      responses:
+        "200":
+          description: A page of notification rules
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationRulePageEnvelope"
+    post:
+      summary: Create a notification rule
+      description: |
+        One active rule is allowed per scope. A rule has no `serviceId` for the tenant-wide scope, or one
+        `serviceId` for a Service scope. At least one destination is required. A webhook uses `https`, except
+        that `http` is allowed on `localhost` and `127.0.0.1`. At most 20 email addresses are allowed.
+        The response masks every destination; write a destination again to replace it.
+      operationId: createNotificationRule
+      tags: [notifications]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationRuleRequest"
+      responses:
+        "201":
+          description: Rule created and enabled
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationRuleEnvelope"
+        "400":
+          $ref: "#/components/responses/NotificationRuleBadRequest"
+        "403":
+          $ref: "#/components/responses/NotificationRuleForbidden"
+        "409":
+          $ref: "#/components/responses/NotificationRuleConflict"
+
+  /contracts/notification-rules/{ruleId}:
+    parameters:
+      - $ref: "#/components/parameters/RuleIdParam"
+    get:
+      summary: Read a notification rule
+      operationId: getNotificationRule
+      tags: [notifications]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The rule with masked destinations
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationRuleEnvelope"
+        "404":
+          $ref: "#/components/responses/NotificationRuleNotFound"
+    put:
+      summary: Replace a notification rule
+      description: Saved destinations are replaced by the request. A read never returns a raw destination.
+      operationId: updateNotificationRule
+      tags: [notifications]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationRuleRequest"
+      responses:
+        "200":
+          description: The updated rule with masked destinations
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationRuleEnvelope"
+        "400":
+          $ref: "#/components/responses/NotificationRuleBadRequest"
+        "403":
+          $ref: "#/components/responses/NotificationRuleForbidden"
+        "404":
+          $ref: "#/components/responses/NotificationRuleNotFound"
+        "409":
+          $ref: "#/components/responses/NotificationRuleConflict"
+    patch:
+      summary: Enable or disable a notification rule
+      operationId: patchNotificationRule
+      tags: [notifications]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationRulePatchRequest"
+      responses:
+        "200":
+          description: The rule with its new enabled state
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationRuleEnvelope"
+        "400":
+          $ref: "#/components/responses/NotificationRuleBadRequest"
+        "403":
+          $ref: "#/components/responses/NotificationRuleForbidden"
+        "404":
+          $ref: "#/components/responses/NotificationRuleNotFound"
+    delete:
+      summary: Soft-delete a notification rule
+      operationId: deleteNotificationRule
+      tags: [notifications]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Rule deleted
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+        "403":
+          $ref: "#/components/responses/NotificationRuleForbidden"
+        "404":
+          $ref: "#/components/responses/NotificationRuleNotFound"
+
+  /contracts/notification-rules/{ruleId}/enable:
+    post:
+      summary: Enable a notification rule
+      operationId: enableNotificationRule
+      tags: [notifications]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RuleIdParam"
+      responses:
+        "200":
+          description: The enabled rule
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationRuleEnvelope"
+        "403":
+          $ref: "#/components/responses/NotificationRuleForbidden"
+        "404":
+          $ref: "#/components/responses/NotificationRuleNotFound"
+
+  /contracts/notification-rules/{ruleId}/disable:
+    post:
+      summary: Disable a notification rule
+      description: A disabled rule sends nothing on a check and refuses a test. Its settings stay saved.
+      operationId: disableNotificationRule
+      tags: [notifications]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RuleIdParam"
+      responses:
+        "200":
+          description: The disabled rule
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationRuleEnvelope"
+        "403":
+          $ref: "#/components/responses/NotificationRuleForbidden"
+        "404":
+          $ref: "#/components/responses/NotificationRuleNotFound"
+
+  /contracts/notification-rules/{ruleId}/test:
+    post:
+      summary: Test every destination of a saved rule
+      description: |
+        Sends one test message to each saved destination of this rule. A disabled rule returns 409
+        `VALIDATION_ERROR` and sends nothing. The response lists the Delivery Attempt rows written by this test,
+        one row per delivery try. A destination that needs a retry has one row for each try.
+      operationId: testNotificationRule
+      tags: [notifications]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RuleIdParam"
+      responses:
+        "200":
+          description: The attempt rows written by this test, one row per delivery try
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTestEnvelope"
+        "403":
+          $ref: "#/components/responses/NotificationRuleForbidden"
+        "404":
+          $ref: "#/components/responses/NotificationRuleNotFound"
+        "409":
+          $ref: "#/components/responses/NotificationRuleDisabled"
+
+  /contracts/notification-rules/{ruleId}/attempts:
+    get:
+      summary: List the latest delivery attempts of a rule
+      description: The newest 50 Delivery Attempts, newest first, in a shared page with offset zero.
+      operationId: listNotificationAttempts
+      tags: [notifications]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RuleIdParam"
+      responses:
+        "200":
+          description: A page of the latest 50 attempts
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/XTraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationAttemptPageEnvelope"
+        "404":
+          $ref: "#/components/responses/NotificationRuleNotFound"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -370,6 +638,14 @@ components:
   parameters:
     ContractIdParam:
       name: contractId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    RuleIdParam:
+      name: ruleId
       in: path
       required: true
       schema:
@@ -782,6 +1058,178 @@ components:
         traceId:
           $ref: "#/components/schemas/TraceId"
 
+    NotificationRuleRequest:
+      type: object
+      description: |
+        Every field is optional. A rule needs at least one destination. A write replaces the saved value;
+        a response returns a mask, never the raw destination.
+      properties:
+        serviceId:
+          type: [string, "null"]
+          format: uuid
+          description: Null for the tenant-wide scope; a Service id for a Service scope
+        slackWebhookUrl:
+          type: [string, "null"]
+          description: One Slack webhook; `https`, or `http` on localhost or 127.0.0.1
+        teamsWebhookUrl:
+          type: [string, "null"]
+          description: One Teams webhook; `https`, or `http` on localhost or 127.0.0.1
+        emailAddresses:
+          type: [array, "null"]
+          maxItems: 20
+          description: At most 20 addresses of at most 255 characters each
+          items:
+            type: string
+            format: email
+            maxLength: 255
+        enabled:
+          type: [boolean, "null"]
+          description: Ignored on create and update; required on patch. A new rule is enabled.
+
+    NotificationRulePatchRequest:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+
+    NotificationRule:
+      type: object
+      required: [id, serviceId, enabled, slackWebhookUrl, teamsWebhookUrl, emailAddresses, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        serviceId:
+          type: [string, "null"]
+          format: uuid
+        enabled:
+          type: boolean
+        slackWebhookUrl:
+          type: [string, "null"]
+          description: Masked Slack webhook; host and path prefix with a mask, or null
+        teamsWebhookUrl:
+          type: [string, "null"]
+          description: Masked Teams webhook; host and path prefix with a mask, or null
+        emailAddresses:
+          type: array
+          description: Masked addresses; the first character and domain with a mask
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    NotificationRuleEnvelope:
+      type: object
+      required: [data, traceId]
+      properties:
+        data:
+          $ref: "#/components/schemas/NotificationRule"
+        traceId:
+          $ref: "#/components/schemas/TraceId"
+
+    NotificationRulePageEnvelope:
+      type: object
+      required: [data, traceId]
+      properties:
+        data:
+          type: object
+          required: [items, total, limit, offset]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/NotificationRule"
+            total:
+              type: integer
+            limit:
+              type: integer
+            offset:
+              type: integer
+        traceId:
+          $ref: "#/components/schemas/TraceId"
+
+    NotificationAttempt:
+      type: object
+      required: [id, ruleId, checkId, attempt, channel, destinationHint, waitMs, statusCode, errorCode, outcome, createdAt, finishedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        ruleId:
+          type: string
+          format: uuid
+        checkId:
+          type: [string, "null"]
+          format: uuid
+          description: Null for a test message
+        attempt:
+          type: integer
+          minimum: 1
+          maximum: 3
+        channel:
+          type: string
+          enum: [slack, teams, email]
+        destinationHint:
+          type: [string, "null"]
+          description: Masked destination; never a raw webhook or address
+        waitMs:
+          type: integer
+          minimum: 0
+        statusCode:
+          type: [integer, "null"]
+          description: HTTP status of the provider response
+        errorCode:
+          type: [string, "null"]
+          description: Provider or network error code
+        outcome:
+          type: string
+          enum: [pending, sent, failed]
+        createdAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: [string, "null"]
+          format: date-time
+          description: Null while the attempt is pending
+
+    NotificationTestEnvelope:
+      type: object
+      required: [data, traceId]
+      properties:
+        data:
+          type: array
+          description: The rows written by this test; one row per delivery try
+          items:
+            $ref: "#/components/schemas/NotificationAttempt"
+        traceId:
+          $ref: "#/components/schemas/TraceId"
+
+    NotificationAttemptPageEnvelope:
+      type: object
+      required: [data, traceId]
+      properties:
+        data:
+          type: object
+          required: [items, total, limit, offset]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/NotificationAttempt"
+            total:
+              type: integer
+            limit:
+              type: integer
+            offset:
+              type: integer
+        traceId:
+          $ref: "#/components/schemas/TraceId"
+
   responses:
     BadRequest:
       description: |
@@ -830,6 +1278,58 @@ components:
       description: |
         `INVALID_SPEC` — not YAML/JSON, not OpenAPI 3.x (Swagger 2.0, AsyncAPI), or fails OpenAPI validation.
         `details.messages` lists up to 50 parser messages.
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/XTraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
+    NotificationRuleBadRequest:
+      description: |
+        `VALIDATION_ERROR` — no destination, more than 20 addresses, an invalid address, or a webhook that
+        does not use `https` on a remote host.
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/XTraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
+    NotificationRuleForbidden:
+      description: "`FORBIDDEN` — a GUEST, VIEWER, or check API key cannot write a notification rule"
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/XTraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
+    NotificationRuleNotFound:
+      description: "`NOT_FOUND` — the notification rule is not in this tenant, or was deleted"
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/XTraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
+    NotificationRuleConflict:
+      description: "`CONFLICT` — an active rule already exists for this scope"
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/XTraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
+    NotificationRuleDisabled:
+      description: "`VALIDATION_ERROR` — the rule is disabled and cannot be tested"
       headers:
         X-Trace-Id:
           $ref: "#/components/headers/XTraceId"

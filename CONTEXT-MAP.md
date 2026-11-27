@@ -93,6 +93,8 @@
 | Contract (U) | Intelligence (D) | Customer / Supplier | Planned, Phase 6 — no topic names committed yet in `docs/roadmap.md` |
 | Shared Kernel | All JVM modules | **Shared Kernel** | Gradle dep `:shared:common` |
 
+**Breaking-check notifications (5.7).** Contract sends to Slack, Teams, and email from one Notification Rule per tenant and an optional Service scope. A breaking check returns before delivery starts on a virtual thread. Contract calls the providers directly and records each delivery attempt. No Kafka topic carries a check result or a delivery attempt.
+
 **Observed dependencies (Phase 3) no longer route through Ingestion.** Earlier drafts of this map had
 Ingestion publish `cartogra.ingestion.dependency.observed` for Topology to consume. The current plan of
 record (`docs/roadmap.md` 3.1) instead has the OTel Collector export spans directly to

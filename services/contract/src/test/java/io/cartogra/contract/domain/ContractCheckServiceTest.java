@@ -24,7 +24,11 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -71,13 +75,14 @@ class ContractCheckServiceTest {
     @Mock ContractVersionRepository versionRepository;
     @Mock ContractCheckRepository checkRepository;
     @Mock ConsumerService consumerService;
+    @Mock BreakingChangeNotifier notifier;
 
     private final SpecParser parser = new SpecParser();
     private final BreakingChangeEngine engine = new BreakingChangeEngine();
 
     private ContractCheckService service() {
         return new ContractCheckService(serviceRepository, contractRepository, versionRepository, checkRepository,
-                consumerService, parser, engine);
+                consumerService, parser, engine, notifier);
     }
 
     private void givenBaseline() {
@@ -170,5 +175,38 @@ class ContractCheckServiceTest {
         assertThatThrownBy(() -> service().check(TENANT, Actor.admin(UUID.randomUUID()), "x", BASELINE))
                 .isInstanceOf(AccessDeniedException.class);
         verifyNoInteractions(serviceRepository, checkRepository);
+    }
+
+    @Test
+    void schedulesNotifierOnlyForBreakingChecks() {
+        when(serviceRepository.findLiveId(TENANT, SERVICE)).thenReturn(Optional.of(SERVICE));
+        when(serviceRepository.findName(TENANT, SERVICE)).thenReturn(Optional.of("ledger-service"));
+        givenBaseline();
+        when(consumerService.allConsumersOfService(TENANT, SERVICE)).thenReturn(List.of());
+
+        CheckResult breaking = service().check(TENANT, ACTOR, SERVICE.toString(), BREAKING);
+
+        assertThat(breaking.isBreaking()).isTrue();
+        verify(notifier, timeout(3000)).notifyBreaking(eq(TENANT), eq(SERVICE), any(), eq("ledger-service"), any(),
+                any());
+        clearInvocations(notifier);
+
+        service().check(TENANT, ACTOR, SERVICE.toString(), COMPATIBLE);
+        verifyNoInteractions(notifier);
+    }
+
+    @Test
+    void aNotifierFailureDoesNotChangeTheCheckResult() {
+        when(serviceRepository.findLiveId(TENANT, SERVICE)).thenReturn(Optional.of(SERVICE));
+        when(serviceRepository.findName(TENANT, SERVICE)).thenReturn(Optional.of("ledger-service"));
+        givenBaseline();
+        when(consumerService.allConsumersOfService(TENANT, SERVICE)).thenReturn(List.of());
+        doThrow(new IllegalStateException("provider down")).when(notifier)
+                .notifyBreaking(any(), any(), any(), any(), any(), any());
+
+        CheckResult result = service().check(TENANT, ACTOR, SERVICE.toString(), BREAKING);
+
+        assertThat(result.isBreaking()).isTrue();
+        verify(notifier, timeout(3000)).notifyBreaking(any(), any(), any(), any(), any(), any());
     }
 }
